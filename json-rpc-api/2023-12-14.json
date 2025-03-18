@@ -1,0 +1,330 @@
+[
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Why does `GenericTransaction` exist at all?  Feels like it should just be deleted in favor of the union types.",
+        "created_at": "2023-12-14T06:30:49.452000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "It also seems to currently be inconsistent (the reason de-normalized data is a bad idea), as `GenericTransaction` includes a `blobs` field while `Transaction4844Unsigned` doesn't have a `blobs` field.",
+        "created_at": "2023-12-14T06:31:41.495000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "killari.",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "it exists because `eth_call` ,`eth_estimateGas` and `eth_sendTransaction` all can take in an unsigned transaction that is missing fields. So we would need to replace it with object that is `TransactionUnsigned`, but would allow missing fields",
+        "created_at": "2023-12-14T07:01:04.186000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I don't think the fields on GenericTransaction are marked as optional either?  If we really want that, we should duplicate the whole Union and Mark some as optional for certain endpoints.",
+        "created_at": "2023-12-14T08:32:27.445000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "killari.",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "they are. In the spec you have to mark fields as required, and none of them are marked",
+        "created_at": "2023-12-14T08:37:21.330000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "killari.",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "this is how requireds are marked:\n```ts\nrequired:\n        - yParity\n        - r\n        - s\n```",
+        "created_at": "2023-12-14T08:38:21.444000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "killari.",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I think the best solution is to make copies of unsigned transaction types that are the same except without requires and then make the generic transaction as union of those",
+        "created_at": "2023-12-14T08:38:58.994000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Hmm, could we add the required in a derived type?",
+        "created_at": "2023-12-14T08:40:03.964000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "killari.",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I think it should be called something else than `genericTransaction` too 🤔",
+        "created_at": "2023-12-14T08:40:17.663000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "killari.",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "hmm maybe",
+        "created_at": "2023-12-14T08:40:29.787000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "```\nUnsigned1559TransactionStrict extends Unsigned1559Transaction {\n    required: ... \n}\n```",
+        "created_at": "2023-12-14T08:41:05.166000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "killari.",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I think thats possible with `$ref` but not sure",
+        "created_at": "2023-12-14T08:42:05.382000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "yeah we could probably have a bit more type safety per method but it's kind of a mess imo",
+        "created_at": "2023-12-14T14:06:15.005000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "i think `GenericTransaction` is more than fine for these methods",
+        "created_at": "2023-12-14T14:06:33.614000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "It is just a poor duplicate of the unions though, and at the moment out of sync with them even.",
+        "created_at": "2023-12-14T14:29:29.854000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Feels like a bad idea to maintain both.  I would rather just list everything on the union as optional than have denormalized structures like this.",
+        "created_at": "2023-12-14T14:30:03.213000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "you're proposing maintaining many different types though? the types like \"Signed1559Transactions\" have pretty strict requirement on what values should be present, so we'd have to duplicate them",
+        "created_at": "2023-12-14T14:33:21.045000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "My hope is that we can put only the requirements into a separate derived type, that way we duplicate nothing.",
+        "created_at": "2023-12-14T14:34:05.707000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "That needs to be tested/investigated with openrpc first though.",
+        "created_at": "2023-12-14T14:34:17.640000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "If that fails, my preference is either to leave everything required, or move everything to optional, or duplicate the unions (last option).  That is to say, if we are going to denormalize the structures, we should at least have both copies be correct.",
+        "created_at": "2023-12-14T14:35:16.740000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "yeah i'm not sure if what you're describing is possible in the current type system",
+        "created_at": "2023-12-14T14:35:17.469000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Currently the generic transaction isn't accurate, as it doesn't make sense to include gasPrice and maxFeePerGas in the same transaction.",
+        "created_at": "2023-12-14T14:36:10.800000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "what isn't accurate about it?",
+        "created_at": "2023-12-14T14:36:22.346000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "It doesn't tell you that you can't have a gasPrice with type 2 transaction (for example).",
+        "created_at": "2023-12-14T14:37:48.497000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "the inputs don't have that level of type safety though",
+        "created_at": "2023-12-14T14:38:15.578000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "it would be nice to get to that point eventually, but isn't how client implement the methods",
+        "created_at": "2023-12-14T14:38:32.665000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "that is a valid input to `eth_call` for example, the method will see the user is trying to use two different fee mechanisms and return an error",
+        "created_at": "2023-12-14T14:38:57.677000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "killari.",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "there's no spec that says that should return error for that tho",
+        "created_at": "2023-12-14T14:39:45.361000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I think your definition of \"valid input\" may be different from mine... if you get an invalid parameters error, that sounds like invalid input to me.",
+        "created_at": "2023-12-14T14:39:48.445000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "if you can send the inputs to the method and it can interpret both, then it is a valid input to the json-rpc method, that isn't really up for debate",
+        "created_at": "2023-12-14T14:40:54.963000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "if it were \"invalid\" then the json parsing library would fail early and say the shape of the object was incorrect",
+        "created_at": "2023-12-14T14:41:21.864000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "i get that semantically, it is an invalid input, but that isn't what the spec defines",
+        "created_at": "2023-12-14T14:41:45.235000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Eh, I disagree with that delineation pretty strongly.  It is definitely up for debate at the least!",
+        "created_at": "2023-12-14T14:42:14.027000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "One can use a JSON parser that simultaneously does input validation, then it would fail at the same point in the pipeline.",
+        "created_at": "2023-12-14T14:42:53.741000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "And the spec, minus GenericTransaction, does in fact specify this clearly.",
+        "created_at": "2023-12-14T14:43:06.408000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "that's not how clients implement it though",
+        "created_at": "2023-12-14T14:43:07.442000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Are you sure?  Including EthereumJS?  Also, how current clients implement things today doesn't matter.  What matters is that the inputs are invalid and an error is returned if you try them.",
+        "created_at": "2023-12-14T14:43:48.946000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "killari.",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I feel the clients should take the spec files directly and parse based on them.",
+        "created_at": "2023-12-14T14:43:49.888000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I think we are a ways away from that, though with OpenRPC it is possible.",
+        "created_at": "2023-12-14T14:44:12.573000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "okay sorry i actually need to go do some other stuff 😂  PRs are welcome! i'm not going to update this on my own in the near future",
+        "created_at": "2023-12-14T14:44:22.642000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "killari.",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "but now I am hearing thats not even the idealistic goal",
+        "created_at": "2023-12-14T14:44:26.981000+00:00",
+        "attachments": []
+    }
+]

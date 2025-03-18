@@ -1,0 +1,170 @@
+[
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cnero_eth\u003e Why wouldn't you sign the summary?",
+        "created_at": "2024-09-18T05:27:26.587000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "soispoke",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I thought of the summary as one object that represents all txns, not as 1 txn = 1 summary. So the IL committee member would just have to sign the one summary encompassing all txns in its local list",
+        "created_at": "2024-09-18T07:17:58.587000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "julianma_",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I must be missing something but why do local ILs have to be built upon a head? Local ILs do not have to be valid so I don't see why they would need a head",
+        "created_at": "2024-09-18T09:03:35.029000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "terence0083",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The current idea is to sign one summary list per valiator. I specified that in the spec, but I realized it doesn't work if you want to aggregate the inclusion list summary to represent individual summaries. A better example would be:  \n- Validator1: `{[s1, s2, s3], signature1}`  \n- Validator2: `{[s2, s3, s4], signature2}`  \n- Summary2 aggregate: `{s2, 0x11, aggregate_signature}`  \n\nThe problem here is that I won't be able to construct `aggregate_signature` based on `signature1` and `signature2`, unless the validator signs over individual summaries",
+        "created_at": "2024-09-18T13:46:21.662000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "terence0083",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "My current view is that inclusion list transactions can be invalidated:\n\n1. Once they're placed next to the other local inclusion lists because inclusion list transactions can invalidate each other.\n2. Once they're inserted in the block by the builder or proposer because existing block transactions can invalidate local inclusion list transactions.\n\nHowever, from the perspective of local inclusion lists as independent entities, they should be valid since the nodes will verify them and only import them (that is, record which ones are aggregated) if they are valid individually.",
+        "created_at": "2024-09-18T13:51:48.462000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "terence0083",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@981249983196041218\u003e  I just went over your [comments](https://hackmd.io/zhDEoj4KR5K8xXeubX0MRA?view).. can bring the convo here\n- Would you say we should remove the proposer releasing IL aggregate step before releasing the block? If yes, I completely agree with you. I always found that step a little odd and extra. If it's to alert the builder, this can be handled by the builder API. We shouldn't use p2p gossip for builder-related stuff.\n- I think IL needs to be branch-dependent. Imagine there are two block branches going on, `a` and `b`, the IL committee should only release ILs based on their current head view, and everyone else should validate and filter based on the head view. This intuitively feels cleaner and right. That's how we saw it in EIP-7547.\n- I think local IL needs to be validated, meaning it's well-constructed, EVM-executable, and doesn't revert. I think whatever is cached or seen on the local node should be valid independently. The local IL could be invalidated when placed next to other ILs or other block txs, and that's ok. The verifying nodes of `n+1` will filter it out accordingly.",
+        "created_at": "2024-09-18T15:02:31.224000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "julianma_",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Could you maybe provide some insights into how important these decisions are?\n\nTo me, it seems like a trade-off between bandwidth and computation. In your proposal, invalidation happens three times, which seems inefficient in terms of computation because you could also only do it in the second step you describe, namely when the existing block payload and inclusion list merge. However, then invalid transactions need to be gossiped which means there is more bandwidth required. Is this the problem and is this a big problem?\n\nAre there other options? Could local ILs used in the nth slot be built upon the parent block in slot n - 2? Is it likely often a problem that the local ILs refer to a different parent block than the beacon block would?",
+        "created_at": "2024-09-18T15:04:24.434000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "julianma_",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes I think that extra step should be removed, totally agree! The IL aggregate can just be released when the execution payload/beacon block is released. The attester view freeze deadline should be some time before this to prevent an IL committee member splitting the view of the attesters and the block producer",
+        "created_at": "2024-09-18T15:06:46.293000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "julianma_",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We should have more of a discussion around the invalidation and this reply is also to that part 🙂",
+        "created_at": "2024-09-18T15:07:21.850000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "soispoke",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This is what I had in mind:\n\nValidator1 Local IL: `{[(FromA, GasLimitA), (FromB, GasLimitB)), (FromC, GasLimitC))], signature1}`\nValidator2 Local IL: `{[(FromB, GasLimitB), (FromC, GasLimitC)), (FromD, GasLimitD))], signature2}`\n\nIL aggregate: `{[(txnA, bitlist:10),(txnB, bitlist:11),(txnC, bitlist:11),(txnC, bitlist:10)], [signature 1, signature 2]}`",
+        "created_at": "2024-09-18T15:22:44.100000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "terence0083",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "But now imagine I'm a node. I received `block`, and in `block.body`, I process `il_aggregate`. I want to verify `signature1`. How do I know who signed the signature and what the message was that the signature signed over?",
+        "created_at": "2024-09-18T15:28:44.087000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "soispoke",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "About  the proposer releasing IL aggregate step, it was definitely about broadcasting it so the builder can see it, so if we can do it using the builder API that's totally fine",
+        "created_at": "2024-09-18T15:29:02.966000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "soispoke",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "could you not go back to the Local ILs to check that it matches?",
+        "created_at": "2024-09-18T15:30:20.724000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "terence0083",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It could work but it's ugly for a pure state transition function to do this. \nThis won't work for a syncing node. My node is two weeks old, my peer serves me historical block and I just want to verify il aggregate field as it is",
+        "created_at": "2024-09-18T15:31:56.913000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "soispoke",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I guess I'm wondering why you would want to just verify an IL aggregate field as it is, attesters reconstruct their local IL aggregate based on their subjective views just to check if the IL aggregate from the proposer was constructed properly and according to the rules so they can then cast their votes on the whole payload (if valid)",
+        "created_at": "2024-09-18T15:34:41.198000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "soispoke",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I saw it more as almost a temporary object to make sure everything is done right, rather than a permanent object nodes would want to check independently (I see your point though, agree it's not very most elegant )",
+        "created_at": "2024-09-18T15:36:06.498000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "terence0083",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "If we want to include IL aggregate in the block body, it needs to be verified, or else the proposer could add random data. If we don’t include IL aggregate in the block body, it’s a different story. I don’t have a strong reason for why we would include IL aggregate in the block body, except for rewarding",
+        "created_at": "2024-09-18T15:36:39.065000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "soispoke",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "ah interesting it brings us back to this 🙂 \nWithout rewards I don't see a big reason why we would have it as part of the block body but I need to think about it a bit more\n\nhow confident are you it'll be very difficult to deal with the signature/aggregates/verify part?",
+        "created_at": "2024-09-18T15:39:13.178000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "terence0083",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think there’s something clever to be done here. I haven’t fully used all my brain power on this yet, but I think for your EIP, it might make sense to do the following:\n\n- No IL aggregate in the body, no reward. Reward is an ongoing discussion.\n- No IL aggregate release over P2P.\n- IL committee only sends the inclusion list based on the head view. Proposers only need to satisfy the inclusion list based on their head view, and attesters evaluate based on their head view.\n- Local IL itself doesn’t need to be validated by the EL. It only needs to be validated once it’s inserted in the block by the EL, where we also check invalidations (as Julian suggested). I’m not convinced this is fine yet, but it’ll take me some time to sort this out.",
+        "created_at": "2024-09-18T15:45:06.564000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "soispoke",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Ok I agree this makes sense for now, maybe we could have a few more eyes on this before we decide to include it in the EIP \u003c@520034910149410861\u003e \u003c@486501030046203915\u003e\u003c@672060238475558934\u003e \u003c@845691100072509460\u003e \u003c@981249983196041218\u003e",
+        "created_at": "2024-09-18T15:49:12.876000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "terence0083",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Sweet. Once we decide the parameters above, I'll need to rewrite the specs. Updating them will be quicker as it's mostly removing stuff",
+        "created_at": "2024-09-18T15:53:54.711000+00:00",
+        "attachments": []
+    }
+]

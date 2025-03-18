@@ -1,0 +1,98 @@
+[
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "It doesn't do anything special, just runs hive like you also would",
+        "created_at": "2025-01-21T12:30:24.228000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "ahh, I have a suspicion why it's not working",
+        "created_at": "2025-01-21T12:31:05.318000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "the ethereumjs dockerfile builds from source",
+        "created_at": "2025-01-21T12:31:19.303000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "this means Docker will cache the results and won't update",
+        "created_at": "2025-01-21T12:31:34.575000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "version is created here: https://github.com/ethereum/hive/blob/master/clients/ethereumjs/Dockerfile#L15",
+        "created_at": "2025-01-21T12:32:04.401000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Ohhh ok 😮 That would make a lot of sense. I'll locally retry with `-docker.nocache ethereumjs`",
+        "created_at": "2025-01-21T13:46:13.143000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "If I use `docker.nocache` then it seems that it rebuilds ethereumjs but I still get the tests to run (do not run into the hive error)",
+        "created_at": "2025-01-21T13:49:40.077000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Can finally reproduce! Had to run with `docker.pull` and `docker.nocache`",
+        "created_at": "2025-01-21T14:17:51.866000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003c@194432762315407360\u003e we are currently figuring out why EthJS immediately exits the client. The problem is the initial blockchain import. We import all blocks just fine, but the block created from the genesis file does not have the hash which is pointed to by the first blocks' `parentHash`. I believe this is because the supplied genesis has:\n\n```\n...\n[27cf5c8a]     \"londonBlock\": 0,\n[27cf5c8a]     \"arrowGlacierBlock\": 0,\n[27cf5c8a]     \"grayGlacierBlock\": 0,\n[27cf5c8a]     \"mergeNetsplitBlock\": 0,\n[27cf5c8a]     \"shanghaiTime\": 0,\n[27cf5c8a]     \"cancunTime\": 0,\n[27cf5c8a]     \"pragueTime\": 0,\n[27cf5c8a]     \"terminalTotalDifficulty\": 131072,\n[27cf5c8a]     \"depositContractAddress\": \"0x0000000000000000000000000000000000000000\",\n[27cf5c8a]     \"ethash\": {}\n[27cf5c8a]   },\n```\n\n(So the genesis block is a Prague block)\n\nThe original genesis file (that is: the file before being passed to `jq`) also has:\n\n```\n[27cf5c8a]   \"excessBlobGas\": null,\n[27cf5c8a]   \"blobGasUsed\": null\n```\n\nSo this does not seem correct to me, for a Prague genesis (or: a Cancun genesis) we should want that those fields are present and set, right?\n\nI think when these tests were written, we were at a fork like London, but it seems like genesis files get auto-updated to include things which affect blocks like Blobs.",
+        "created_at": "2025-01-21T18:44:21.068000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Ok, nvm, just checked on hive2 https://hivetests2.ethdevops.io/suite.html?suiteid=1737473064-9e2ade400af4bc95185d02c24b7fe880.json\u0026suitename=rpc-compat#test-33\n\nGeth returns Prague blocks here, `\"requestsHash\":\"0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"`\n\nI think we might have a problem specifically in the genesis block import",
+        "created_at": "2025-01-21T18:51:35.126000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "False alarm, just found a Prague-specific bug in our implementation 🙂 In our blockchain, specifically at the genesis handler, we used the sha256 hash of 0x000102 for the default (old version of requests hash), it should be sha256(). We can now run the tests 😄",
+        "created_at": "2025-01-21T19:08:28.899000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Very nice!",
+        "created_at": "2025-01-21T19:16:51.294000+00:00",
+        "attachments": []
+    }
+]

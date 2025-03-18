@@ -1,0 +1,802 @@
+[
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "just forwarding these msgs i posted in acd for \u003c@456226577798135808\u003e:\n\n\u003e how do you expect the data for the sponsored txs to be authenticated? if they sign the outer tx, i the data will be inside somewhere i'm just not sure how it should be authenticated\n\u003e basically, how is malleability avoided where the sponsor can make a different call than the user anticipated",
+        "created_at": "2021-03-18T16:11:19.485000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "for example, let's say there is user U and sponsor S. U tells S they want to buy a mooncat and gives them the data. S crafts a transaction to make this work (i expect they would have a tx that sends a call to a contract that uses `call2` ). S sends it back to U and asks them to sign the tx. Now S signs the tx. Now this is a valid tx to send to the network. The question is, how is the user protected from malleability? We'll assume contract can't selfdestruct or be upgraded. I guess that we can trust if the user signed the outer tx, they're okay with the result?",
+        "created_at": "2021-03-18T16:15:48.979000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "that seems like it protects the user okay",
+        "created_at": "2021-03-18T16:17:34.720000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the contract with `call2` we can say is the \"invoker\" contract - it can implement some things based on the calldata like a nonce check. this could allow the sponsee to send a tx to get out a bad sponsor relationship (e.g. they signed a tx for a sponsor, but the sponsor is holding on to it and there should be a way to invalidate the tx)",
+        "created_at": "2021-03-18T16:18:55.986000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "one issue with this tx is that it doesn't easily allow sponsored txs from other users - with 3074 the user can immediately sign a message and the relayer can include it as soon as it can and the user can go offline \n\nin this case, the sponsee needs to stay online until the sponsor has built a \"full\" sponsored tx. in practice this may be like:\nat 12:00:01 i request a sponsor to send my tx\nat 12:00:02 they say they will\nat 12:00:45 they \"ok, bundle ready i've got 10 other txs from 10 other accounts here, i need everyone to sign\"\nat 12:00:46 I sign\nat 12:01:25 everyone has signed (there was latency) and the tx is submitted\n\ntherefore i had to be online for that whole minute and half ready to sign a batch (it's possible i would've needed to sign another batch if one user in the old batch stopped responding)",
+        "created_at": "2021-03-18T16:23:07.503000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the nice property of this scheme is that due to the sponsor's nonce being incremented, the signatures from the users *cannot* be replayed even if the invoker is bad",
+        "created_at": "2021-03-18T16:23:57.999000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "other than that, i don't see how this protects users anymore -- if they can be convinced to sign something bad, they're entire account can be stolen (if batching via call2 is allowed) or their most valuable asset can be stolen if not",
+        "created_at": "2021-03-18T16:25:23.592000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "it also doesn't solve any annoyances with 3074:\n* you can't \"self-sponsor\"\n* you can't transfer value from the account (this would make mempools much more complex)\n* there isn't a protocol commitment to what is going to be done by the EOA - it's possible the invoker could be malicious and it could do arbitrary things with the user's account",
+        "created_at": "2021-03-18T16:28:01.400000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So by malleability you mean that one can add and remove signatures at will, without invalidating the transaction?",
+        "created_at": "2021-03-18T16:31:14.073000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "One solution I see (which also has some added benefits) is to include signer addresses into the signed payload. The extra benefits is that you don't have to always keep recover the signer addresses from signatures if you have already done so (we do it in turbo-geth, for example, and store signers in a separate table)",
+        "created_at": "2021-03-18T16:33:05.525000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "malleability i mean, user 1 wanted to mint a cryptokitty, but there is nothing in the protocol that forces the sponsor to make that action happen in the tx",
+        "created_at": "2021-03-18T16:34:11.862000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "or maybe they can change the amount of gas that the call sends (so it fails) and grief the user out of their funds",
+        "created_at": "2021-03-18T16:34:37.378000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the user can run the tx locally and see that it does do what they want, but maybe the invoker contract is upgraded or selfdestruct and then it does something different",
+        "created_at": "2021-03-18T16:35:50.505000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ok, I think I am starting to understand. I think then the `CALL2` opcode is not required, and no need for the invoker contract",
+        "created_at": "2021-03-18T16:36:12.002000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "so the tx would start out immediately calling as the user with sponsor paying the gas?",
+        "created_at": "2021-03-18T16:36:38.935000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yes",
+        "created_at": "2021-03-18T16:36:46.363000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "so in this case, we'd imagine this as the transaction just has a \"gas_payer\" signature appended on",
+        "created_at": "2021-03-18T16:37:27.398000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "and if you specify the same signer for number 1 and 2, you get our usual transactions",
+        "created_at": "2021-03-18T16:37:45.847000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "later, we can add opcodes to inspect all the signers from the contract",
+        "created_at": "2021-03-18T16:38:20.124000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "one unfortunate outcome of this is that a user could get a sponsor to sign a msg and never send it onchain",
+        "created_at": "2021-03-18T16:38:31.193000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "eh i guess the sponsor signed it so they could just relay it",
+        "created_at": "2021-03-18T16:38:48.449000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "sponsor can require the user to sign first",
+        "created_at": "2021-03-18T16:39:19.178000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yep",
+        "created_at": "2021-03-18T16:39:29.203000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "so that they cannot be DOSed by the user",
+        "created_at": "2021-03-18T16:39:32.769000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "because sponsor's nonces do get incremented, but other signers' nonces - do not",
+        "created_at": "2021-03-18T16:40:00.421000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "this will definitely work and was the original vision for 2711 (a few extra things were added, but this is still the core)",
+        "created_at": "2021-03-18T16:40:01.534000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "and what happened to 2711?",
+        "created_at": "2021-03-18T16:40:19.889000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!301186049323958275\u003e",
+        "created_at": "2021-03-18T16:40:30.403000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "was it too complicated?",
+        "created_at": "2021-03-18T16:40:32.039000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Not too complicated per say, but each of the features it proposed ran into problems or there were better solutions found.",
+        "created_at": "2021-03-18T16:41:12.146000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "ValidUntil, for example, has potential to open up a spam vector.  You can create transactions that you are pretty confident won't ever get mined, and also won't jam up your account (won't consume a nonce).",
+        "created_at": "2021-03-18T16:42:15.337000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "e.g., valid until next block, but with gas price too low to reasonably mine next block.",
+        "created_at": "2021-03-18T16:42:29.728000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "In theory that could be solved with more complex propagation logic, but that was unexpected work when I originally put together the EIP.",
+        "created_at": "2021-03-18T16:42:53.938000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "2711 is much less flexible than 3074, but it does have the nice property that it binds via consensus rules to actions",
+        "created_at": "2021-03-18T16:43:36.367000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "where 3074 is up to interpretation by the invoker",
+        "created_at": "2021-03-18T16:43:49.144000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "2711 was where we started, and after a *lot* of discussion on various strategies we kind of ended up with 3074.",
+        "created_at": "2021-03-18T16:45:17.647000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i think 3074 is a much better approach because it is *very* extensible and imo better represents the original ethereum vision of programmable consensus rules",
+        "created_at": "2021-03-18T16:45:29.584000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "There are 2 or 3 other proposals we have passed over along the way.",
+        "created_at": "2021-03-18T16:45:30.998000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I don't remember specifically what it was about transaction sponsorship that caused pushback.  🤔",
+        "created_at": "2021-03-18T16:46:29.872000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "No problem",
+        "created_at": "2021-03-18T16:46:40.227000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "originally, the issue was that if gas became unobservable in the evm it wouldn't be possible to know how much an inner call used to pay the sponsor",
+        "created_at": "2021-03-18T16:47:05.910000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think it was the age old problem of core devs not wanting `value` changes for an account when anyone *other* than the transaction signer does something.",
+        "created_at": "2021-03-18T16:47:08.690000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ah, right.  Gas observability was another issue.",
+        "created_at": "2021-03-18T16:47:22.770000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "(at least how i remember)",
+        "created_at": "2021-03-18T16:47:24.589000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Though, I think most of these solutions break one or both of those things.",
+        "created_at": "2021-03-18T16:47:36.265000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It is just the nature of sponsorship.",
+        "created_at": "2021-03-18T16:47:42.916000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And I think that we *should* be willing to break those invariants here because the gains are so nice.",
+        "created_at": "2021-03-18T16:48:00.639000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the reason I was going to suggest the multi-sig-based sponsored transactions is to stay constructive in my criticism of EIP-3074, but I do not have capacity of doing EIP on my own",
+        "created_at": "2021-03-18T16:49:15.791000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "so I do not have specific agenda",
+        "created_at": "2021-03-18T16:49:28.933000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think your concern about 3074 is understood and valid, I just don't think it is strong enough given the benefits.",
+        "created_at": "2021-03-18T16:49:43.613000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This is up to the opinions 🙂",
+        "created_at": "2021-03-18T16:50:06.917000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It *does* create a new way for users to shoot themselves in the foot if wallets allow for it, but I think the benefits it provides are good enough especially since wallet providers *can* protect users from the foot gun.",
+        "created_at": "2021-03-18T16:50:24.278000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I don't think the EVM is the right place to be protecting users from foot guns, I think that is up to other layers.",
+        "created_at": "2021-03-18T16:50:40.675000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The EVM is the place to provide powerful tools, and then it is up to Solidity + Wallets to make those tools safely useable.",
+        "created_at": "2021-03-18T16:51:03.422000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "it does however create a very lucrative scheme of rouge wallet provider who can harvest user's signatures for a while and then \"upgrade\" their contract",
+        "created_at": "2021-03-18T16:51:26.447000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "By default, no user will reasonably have access to auth transactions, so we don't have to worry about some wallet \"accidentally\" screwing their users.",
+        "created_at": "2021-03-18T16:51:38.327000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Do you mean rogue contracts?",
+        "created_at": "2021-03-18T16:51:53.116000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "can't rouge wallet providers already have immediate access to the users private key?",
+        "created_at": "2021-03-18T16:51:55.724000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Sorry, I meant rouge invoker",
+        "created_at": "2021-03-18T16:52:18.856000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i.e. sponsor",
+        "created_at": "2021-03-18T16:52:36.637000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think it is up to wallets to protect users from that.  The easiest solution would be for wallets to whitelist invokers.",
+        "created_at": "2021-03-18T16:52:37.573000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "ah gotcha - yeah agreed, wallets should ship with trusted invokers sort of like computers ship with trusted certificate authorities",
+        "created_at": "2021-03-18T16:53:10.520000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I mean someone comes with with an invoker, runs an advertising campagn offering 0% fees for 6 months, and some rumours of Uniswap-like airdrop for all users",
+        "created_at": "2021-03-18T16:53:29.090000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Wouldn't matter if no wallet adds support for them.",
+        "created_at": "2021-03-18T16:53:44.339000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the wallets should simply not allow users to sign a message to an untrusted invoker",
+        "created_at": "2021-03-18T16:53:48.705000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "an invoker is like a wallet extension",
+        "created_at": "2021-03-18T16:53:55.202000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "and then, when they harvested enough signatures, they can upgrade the invoker and steal all their customer's tokens",
+        "created_at": "2021-03-18T16:54:07.013000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Your wallet allowing you to sign such a thing would be akin to your wallet handing out your private keys to a sketchy third party.  🙂",
+        "created_at": "2021-03-18T16:54:31.197000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "No, because I use metamask without giving it my private keys, for example",
+        "created_at": "2021-03-18T16:55:14.998000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Via hardware wallet you mean?",
+        "created_at": "2021-03-18T16:55:30.972000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "so if someone creates an alternative to metamask, but with sponsored txs",
+        "created_at": "2021-03-18T16:55:41.936000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yes, with the hardware wallet",
+        "created_at": "2021-03-18T16:55:49.966000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "hardware wallets should also not allow untrusted invokers",
+        "created_at": "2021-03-18T16:55:57.375000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "you are assuming that there cannot be new wallets",
+        "created_at": "2021-03-18T16:56:02.787000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The hardware wallet is the thing that would need to support signing a particular invoker.  MetaMask cannot do it without ledger adding support.",
+        "created_at": "2021-03-18T16:56:26.961000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Now you are turning this around - now hardware providers have to hard-code invokers, ok",
+        "created_at": "2021-03-18T16:56:47.442000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i think this has been expected for a while",
+        "created_at": "2021-03-18T16:57:00.516000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Not turning it around, improving clarity on the constraints.  🙂",
+        "created_at": "2021-03-18T16:57:01.393000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I am not going to argue anymore, need to do something else 🙂",
+        "created_at": "2021-03-18T16:57:11.520000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Basically, whatever has your private keys is the thing that needs to be updated to support signing a new transaction type.  When a wallet (hardware or software) adds support for the 3074 type, they would (if they are an honest wallet) create protections for the user to limit what invokers they can sign over (or some other novel protection scheme).",
+        "created_at": "2021-03-18T16:57:53.564000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If the wallet with your keys (hardware or software) doesn't add 3074 support, then it will be unable to sign 3074 transactions and the user is protected by default.",
+        "created_at": "2021-03-18T16:58:27.619000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If the wallet with your keys (hardware or software) adds 3074 support in an insecure way, then you will be enabled to shoot yourself in the foot with that wallet.",
+        "created_at": "2021-03-18T16:59:05.253000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "imo thinking of 3074 as a wallet extension is good way to understand how seriously wallets should take signing a tx for certain invoker - a wallet wouldn't allow rouge software to touch your private key",
+        "created_at": "2021-03-18T16:59:17.094000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So the threat model here is something like \"wallet implements 3074 insecurely, then user naively signs over a malicious invoker\".",
+        "created_at": "2021-03-18T16:59:40.590000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "this is the same as \"wallet doesn't show tx parameters on lcd display properly, then user naively signs over malicious tx\"",
+        "created_at": "2021-03-18T17:00:22.964000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "A bit worse than that, because this allows the bad actor to steal *everything*, not just one asset.",
+        "created_at": "2021-03-18T17:00:43.897000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "it is like adding a function into the API, with comment \"don't call this function unless from the code that looks like this\" 🙂",
+        "created_at": "2021-03-18T17:00:54.419000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Slight modification: \"Don't call this function unless you have reviewed and understand the security considerations around it.\"",
+        "created_at": "2021-03-18T17:01:29.855000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "vs not adding such functions in the first place",
+        "created_at": "2021-03-18T17:01:32.410000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If the function added nothing useful I would 100% agree with you.",
+        "created_at": "2021-03-18T17:01:42.308000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "However, in this case it adds a whole bunch of useful features in one small change.",
+        "created_at": "2021-03-18T17:01:57.066000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Sponsorship, batching, and conditional execution.",
+        "created_at": "2021-03-18T17:02:25.090000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I am not arguing against the benefits, I do not like the security compromise. If I find some time to write an alternative EIP, I will",
+        "created_at": "2021-03-18T17:03:22.838000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I am open to seeing alternatives.  Just be aware that this is like the 5th attempt to solve one or more of these particular problems.  🙂  You aren't going into a greenfield space where no one has tried anything else.",
+        "created_at": "2021-03-18T17:04:01.760000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That isn't to say a better solution doesn't exist, but it isn't that it hasn't been found due to lack of effort.",
+        "created_at": "2021-03-18T17:04:41.214000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I don't care. As I said, I do not have an agenda",
+        "created_at": "2021-03-18T17:04:46.205000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@425279588009246720\u003e has a hackmd somewhere that discusses a number of different options, maybe a good place to start.",
+        "created_at": "2021-03-18T17:04:57.274000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "https://notes.ethereum.org/@axic/Hyrc1i7ED",
+        "created_at": "2021-03-18T17:05:48.934000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "imo, the alternative class of solutions that is most promising is a sort of `masqueradecall` that calls as address (not an eoa) generated via a `create2` address scheme",
+        "created_at": "2021-03-18T17:06:19.689000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "that mechanism doesn't support eoas though, which is big downside",
+        "created_at": "2021-03-18T17:06:38.370000+00:00",
+        "attachments": []
+    }
+]

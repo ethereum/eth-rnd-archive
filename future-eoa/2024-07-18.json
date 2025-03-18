@@ -1,0 +1,178 @@
+[
+    {
+        "author": "yoavw",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@411317441688371202\u003e \u003c@317706410680909834\u003e the frontrunning attack I was talking about:\n1. User broadcasts a 7702 transaction that sets the implementation to Safe, and calls `setup()`.\n2. Frontrunner grabs the 7702 signature that sets the account implementation to Safe, and sends a frontrun 7702 transaction with the same signature but a call to `setup()` with different signers.\n\nIf the frontrun succeeds, the attacker now has control of the account.\n\nThe proposed mitigation is to add `calldata` that must be called atomically when setting the code, or to just have `initcode`.\n\nThe other option, as \u003c@543900561460822016\u003e suggested, is that Safe will have a version that removes `setup()` and has **only** `setupWithSignature()` which the user must sign separately from the 7702 auth.  You can't just add this function to the existing Safe because the frontrunner could replace the `setupWithSignature()` call with a regular `setup()`.  This mitigation also works, but means that every account dev has to maintain a version for 7702 and audit to ensure that it can't be set up without signing the setup data.  And users must take care not to use non-7702 accounts (i.e. any existing smart account) with 7702.",
+        "created_at": "2024-07-18T15:37:44.996000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yoavw",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And the DoS attack:\n1. Set the implementation of `N` EOAs to a contract that has a `withdrawAllEth()`. Each of them can withdraw from any of the others.\n2. Propagate `N/2` txns from `N/2` EOAs.  Each txn pulls the eth from all these EOAs and sends it to the other half of the EOAs.  These txns are mutually exclusive because each txn makes the others unable to pay gas.\n3. For each of these EOAs, immediately propagate 62 pending txns (geth default max is 63 IIRC). Make some of them big 4844 blobs for extra effect.\n4. As soon as one of the txns is included (and the others are dropped due to lack of eth), repeat with the other `N/2` which are now funded.\n5. Rinse and repeat.\n\nEffect on the mempool: for each included txn, the mempool had to process and drop `63*N/2-1` transactions, many of which are blobs. The mempool would be saturated.\n\nEffect on block builders: assuming the DoS txns are the highest paying ones, builder includes one and processes and drops many others. For big N, it might miss slots.\n\nThree mitigations have been proposed for this.  All would be effective, we just need to pick one and add it to 7702.",
+        "created_at": "2024-07-18T15:39:57.631000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "for 7702 we'd obviously limit to the number of pending txs so worst case you could cause 1 tx per delegated account to be dropped",
+        "created_at": "2024-07-18T15:42:59.377000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "frangio_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "thanks. yeah i imagine this will affect any smart contract account code. just the fact that no constructor runs can already cause issues so it's hard to imagine that 100% code reuse will be posisble. ideally the signer is taken as `address(this)` rather than reading from storage since it's not necessary",
+        "created_at": "2024-07-18T15:43:01.233000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yoavw",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That's fine.  If that's the mitigation we choose, let's add it to the EIP so we don't forget to do it later.  But I think \u003c@415548822983278593\u003e had a different mitigation to consider.",
+        "created_at": "2024-07-18T15:46:08.639000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yoavw",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, all current smart accounts would be unsafe for use with 7702.  They'll need to `ecrecover` a signature over the config data and compare it to `address(this)`.  My worry is that users will mistakenly try to use existing smart account implementations, or that account maintainers won't realize this issue and will leave a normal setup function lurking.  Adding `calldata` fully mitigates it but adds complexity.",
+        "created_at": "2024-07-18T15:48:40.753000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "frangio_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "could/should the setup() function check if it's executing in the context of a 7702 delegation using codecopy?",
+        "created_at": "2024-07-18T16:05:10.802000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "There is the way of writing an intermediate contract too, right? I.e. a proxy that checks on interaction if it is initialized. This will result in additional gas costs (like 3k or so) but should fix this.",
+        "created_at": "2024-07-18T16:07:04.129000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Don't get me wrong, having calldata is for me the cleaner/ easier approach. It is just that this will be the same/ similar discussion that we had around init code.",
+        "created_at": "2024-07-18T16:12:11.966000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Is that even possible. I thought 7702 will mask all calls, so for onchain actions the address would look fully like a smart contract",
+        "created_at": "2024-07-18T16:13:05.431000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "How much the protocol should protect the user was also a discussion we had before, it feels like we are opening up discussions again. Which is ok, but we should make sure to make clear what has changed since the last time we discussed it.",
+        "created_at": "2024-07-18T16:14:51.790000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "correct",
+        "created_at": "2024-07-18T16:20:33.169000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "EOAs still need a whitelist over which account to sign so i don’t think this is an issue",
+        "created_at": "2024-07-18T16:21:06.189000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yoavw",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It's indistinguishable on-chain, deliberately.",
+        "created_at": "2024-07-18T16:26:19.318000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yoavw",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "How would that proxy work?  In both a normal SafeProxy and a 7702 \"proxy\" the account appears uninitialized.",
+        "created_at": "2024-07-18T16:28:12.018000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yoavw",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "In this case it's not just about protecting users (from signing a normal smart account that isn't 7702-ready and has a `setup()`).  It's also protecting devs from having to maintain a 7702-specific version and ensuring that it doesn't inherit any unsigned setup flows from their normal implementation.  Seems like a footgun but technically it can be mitigated by account devs and wallets so I think the input should come from them (aka you 🙂",
+        "created_at": "2024-07-18T16:30:57.100000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yoavw",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That's true in any case and with any implementation.  Not having calldata just puts more burden on wallet devs, and our job would be to ensure they're aware of the issue",
+        "created_at": "2024-07-18T16:32:18.393000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yoavw",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "To be clear, I support the current version of 7702 (after adding any of the three DoS mitigations), with or without the additional changes.  I think it would be better with these changes but it's good enough either way.",
+        "created_at": "2024-07-18T16:33:56.308000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "why do you think 7702 has a dos problem if we can ensure only one tx per delegated account may be invalidated?",
+        "created_at": "2024-07-18T16:36:44.722000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yoavw",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This change is one of the three mitigations we discussed.  If you add it, there's no dos problem afaik.  But right now it's not in the EIP.",
+        "created_at": "2024-07-18T20:11:36.383000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "tx pool rules are not core changes and usually not included in the EIP. 4844 was an outlier in this sense",
+        "created_at": "2024-07-18T21:11:49.223000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "when we get to impl and clients want to include this language im open to adding it",
+        "created_at": "2024-07-18T21:13:24.608000+00:00",
+        "attachments": []
+    }
+]

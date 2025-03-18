@@ -1,0 +1,162 @@
+[
+    {
+        "author": "rudolf6",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Reminder: Verkle Implementers Call (VIC) #9 starts in ~7 hours \n\nAgenda: https://github.com/ethereum/pm/issues/917\n\nLink: https://meet.google.com/odf-tghm-ttu",
+        "created_at": "2023-12-18T07:00:16.033000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "milos88",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I have one topic I would like to discuss, but maybe I can get an answer here instead. I will add it to the agenda anyway.\nIt's regarding storing and storage size of the Verkle nodes. More specifically:\n- is there some recommended encoding for storing and transfering over network for Verkle nodes? I assume that in many cases (especially for leaves), many values will be 0 and there might be some optimization that can be done (e.g. bitmap, sparse vector)\n- did anybody do analysis on how full archive node would grow in size in Verkle world, comparing to Merkle? I have a feeling grow would be quicker in Verkle case (I can elaborate more on this if needed)",
+        "created_at": "2023-12-18T12:06:08.625000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003casqyzeron\u003e There is no recommended storage method, since this will depend on the database format that people use. I can speak for geth, we are indeed not storing non-nil values using a bitmap and are planning to use some special cases e.g. for accounts to save even more space, although this isn't a priority so we haven't done it yet.\n\nSince we haven't implemented these space savings, we didn't make any analysis of the space saved, but a quick and basic back-of-the-envelope calculation gives a rough saving (without all sparse vectors optimizations) of 9%.",
+        "created_at": "2023-12-18T13:16:59.356000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003casqyzeron\u003e we are close to shadow-forking holesky, it will be easier to give you more accurate estimates then.",
+        "created_at": "2023-12-18T13:17:35.854000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rudolf6",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "VIC starting in 10 min",
+        "created_at": "2023-12-18T13:51:09.582000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "milos88",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Continuation from the call.\n\u003c@353136597522448385\u003e Regarding sending 8K nodes over network, you are right. You don't need to send entire node, you can send the commitment for the next node done the path and proof for it.\nBut to do that, you have to store entire node yourself, and for that you have to receive entire node in the first place.",
+        "created_at": "2023-12-18T15:01:02.497000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "gballet",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yeah that makes sense",
+        "created_at": "2023-12-18T15:02:01.189000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "gballet",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "but you can also update your local copy as you go I guess, one commitment at a time, so even the first time you could start with a partial view of these 8kb, right?",
+        "created_at": "2023-12-18T15:02:52.560000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "milos88",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "well, depends on what you want to store.\nIntuitive idea is to store only nodes whos commitment is close to your NodeId (e.g. using xor as distance), in which case you can't do what you are suggesting.\nOther idea that we were exploring recently in context of Merkle trie was some path-aware distance, but it has _hot-spot_ issues and we decided not to use it (and I believe would apply for Verkle as well). The issue is that some frequently updated values are updated in almost every block and clients close to that spot will have significantly more data to process and store.",
+        "created_at": "2023-12-18T15:09:02.244000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "milos88",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Coming back to something from today's meeting\n- Did I understand correctly that geth with Verkle stores only commitment to inner nodes, and not children commitments?\n- Does it only store the latest value or historical as well?\n- Is it able to answer any historical queries, like \"what is balance of wallet A, 10 blocks ago\" and how?",
+        "created_at": "2023-12-18T21:28:38.506000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jsign",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "- This was mentioned by Guillaume in the context of geth, which implements path base state storage. In that context (which might not apply to other clients), you can do an optimization to avoid storing twice some commitments. In this assumption, every node in the tree has a determined place to look at it in the db so you don't need to use commitments as \"hash references\". That allows you to avoid saving the child commitments. \n- Nodes usually store some historical nodes just for reorg reasons, so they can reorganize the state if some blocks are reverted. The way this is implemented I guess depends on clients, but you can think about them as diff layers.\n- I guess full nodes _might_ be able to do that, if you're in that \"reorg threshold\". If you want all the history, you might need to ask an archive node.\n(Note: all this isn't part of the Verkle Tree EIP requirements/expectation, but might depend on each client impl)",
+        "created_at": "2023-12-18T21:34:50.519000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "milos88",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That's all what I understood as well. Did any client implement archive node for verkle case? The one that can answer questions for blocks outside \"reorg threshold\"?",
+        "created_at": "2023-12-18T21:40:05.371000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "gballet",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "no archive node yet, maybe when erigon has joined the testnet",
+        "created_at": "2023-12-18T21:40:57.739000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "milos88",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Thanks! I'm wondering if archive nodes can avoid storing children's commitment and how would that work. Do you know if anybody started working on Erigon implementation?",
+        "created_at": "2023-12-18T21:44:14.169000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "gballet",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yes Somnath but he's just started",
+        "created_at": "2023-12-18T21:45:12.050000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "gballet",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "and is it possible to avoid storing the commitment for the children? yes, by keeping an index of updates for each path, which is what erigon does",
+        "created_at": "2023-12-18T21:48:51.504000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "gballet",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "geth discontinued archive mode for now, we will re-enable it in the future.",
+        "created_at": "2023-12-18T21:49:46.302000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "gballet",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm talking about `master` geth, not even the verkle version",
+        "created_at": "2023-12-18T21:49:59.834000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "milos88",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "is this something like, for each node (identified by path) and each children, every change that happened (sorted by block)\nand if you need node's value at some point in time, you would binary search changes for each children and combine them together\nor is it something more sophisticated?",
+        "created_at": "2023-12-18T21:57:43.517000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "milos88",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Just realized that \"each node and each child\" actually means historical commitments for each node (since they are already indexed by path) 🙄",
+        "created_at": "2023-12-18T22:31:55.812000+00:00",
+        "attachments": []
+    }
+]

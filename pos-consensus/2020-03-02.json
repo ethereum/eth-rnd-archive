@@ -1,0 +1,458 @@
+[
+    {
+        "author": "agemanning",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Hey guys, I'm still curious about the Fork Version, when used in `Status` and potentially for segregating `Gossipsub` topics. The `state.fork_version` is going to change through time for a syncing peer as its head changes. If a new client starts up, and has only genesis, in a status, should it send the genesis state fork version? \nIf a client were to listen to gossip throughout sync, does it change topics as it's head and state fork version changes? Or do clients also hard-code the current canonical fork version, to join with already sync'd peers?",
+        "created_at": "2020-03-02T05:53:13.893000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I was under the impression we always used genesis fork version, no ? Actually it seems like we always use the head fork version \nhttps://github.com/ethereum/eth2.0-specs/blob/dev/specs/phase0/p2p-interface.md#status",
+        "created_at": "2020-03-02T06:02:52.892000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "This will be problematic if we try syncing from genesis and a fork has already happened",
+        "created_at": "2020-03-02T06:03:12.151000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "all the current peers in the network will reject us",
+        "created_at": "2020-03-02T06:03:33.167000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "```\nIf head_fork_version does not match the expected fork version at the epoch of the head_slot, since the client’s chain is on another fork. head_fork_version can also be used to segregate testnets.\n```\nthis is in the spec ^\n\nSo we would have to keep track of all the fork versions from genesis till the current slot, and their corresponding epochs",
+        "created_at": "2020-03-02T06:05:40.171000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "this isnt something we can get from the state",
+        "created_at": "2020-03-02T06:06:03.965000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Yes, hence my question. I imagine we need a hard-coded fork-version.. or options to set in CLI that we should use.",
+        "created_at": "2020-03-02T06:19:30.588000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Yeah not sure what is a good solution here",
+        "created_at": "2020-03-02T06:20:38.426000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "paulhauner",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I would expect that the latest fork version is hard-coded",
+        "created_at": "2020-03-02T06:20:49.512000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "paulhauner",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Otherwise how do we know which fork to pick?",
+        "created_at": "2020-03-02T06:20:59.498000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "This is my thinking also. It allows us to choose a fork",
+        "created_at": "2020-03-02T06:21:03.286000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "However \u003c@!449019668296892420\u003e PR and the RPC spec's are specific about using `state.fork_version`",
+        "created_at": "2020-03-02T06:21:37.365000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "it would either be in the cli, or config file for choosing a fork version",
+        "created_at": "2020-03-02T06:22:05.570000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I think this is the case currently in eth1",
+        "created_at": "2020-03-02T06:22:21.563000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "paulhauner",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Yeah I think it's actually mandantory that all clients know the linear history of all \"forks\"",
+        "created_at": "2020-03-02T06:23:29.515000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Another small edge case, is signing slots. Typically we want to sign slots in the future, to know if we are aggregators or not.. however the signature will only be valid based on the future slot's state, which could be different after changing forks. We are going to handle this by watching for fork changes and potentially re-adjusting validator duties",
+        "created_at": "2020-03-02T06:23:39.863000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "paulhauner",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Because it's not possible to change the fork with a block, clients will have to have some extra-protocol knowledge that says \"at slot `x`, change the `state.fork` to be something else\"",
+        "created_at": "2020-03-02T06:24:04.540000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "In the context of syncing how would it work ? \nClients have a history of all the \nfork version -\u003e epoch Number\nand then use that to deterimine whether a peer is valid/not",
+        "created_at": "2020-03-02T06:26:49.286000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Sync'd peers should be on the latest fork.. so simply the latest fork version should be sufficient, no?",
+        "created_at": "2020-03-02T06:27:20.710000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "yeap that is correct, but ex: \n-\u003e New Peer joins in with old fork-version",
+        "created_at": "2020-03-02T06:27:56.247000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "how would the synced peer, determine whether the new peer is a valid peer or not",
+        "created_at": "2020-03-02T06:28:12.520000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "they could choose the other side of the fork",
+        "created_at": "2020-03-02T06:28:23.352000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Yeah.. new peer doesn't get any connections.. is invalid... new peer needs to update their client",
+        "created_at": "2020-03-02T06:28:25.256000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "In the context above -\u003e \nNew peer is syncing from genesis",
+        "created_at": "2020-03-02T06:29:02.422000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "so their current fork-version will be the old fork version",
+        "created_at": "2020-03-02T06:29:14.218000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "this is what we are saying. An up-to-date client should have a hard-coded or config parameter set, that has the latest fork version. So they will be broadcasting this, if they are up to date, regardless of their chain",
+        "created_at": "2020-03-02T06:30:19.099000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "call it `target_fork_version`. So the client knows which fork version to switch to when downloading blocks",
+        "created_at": "2020-03-02T06:30:58.874000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "paulhauner",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Yeah, it'd be like trying to sync a pre-Instanbul eth1 node with the current chain -- no bueno",
+        "created_at": "2020-03-02T06:31:01.213000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "paulhauner",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "except perhaps with a bit nicer UX, you'll fail pretty quickly rather than syncing up to the fork block",
+        "created_at": "2020-03-02T06:31:34.664000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "ok so basically we always use a hardcoded fork-version to sync, correct ?",
+        "created_at": "2020-03-02T06:32:02.169000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "if  i am understanding this correctly",
+        "created_at": "2020-03-02T06:32:12.268000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "well, this is my thinking... but wanted to clarify with everyone here. Because the PR's coming out seem to reference `state.fork_version`",
+        "created_at": "2020-03-02T06:32:37.197000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Potentially \u003c@!449019668296892420\u003e wants to weigh in",
+        "created_at": "2020-03-02T06:32:49.678000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "gotcha that makes sense, although it might complicate syncing with peers before a fork. \nif we hardcode the fork versions, we would disconnect with valid peers before the fork. if one peer has fork 0x01 and the other has 0x02, both peers would regard each other as invalid even though at the current moment they are still valid peers to each other as the fork hasnt happened.",
+        "created_at": "2020-03-02T06:40:10.974000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Indeed. It might have to be block/time based. Or potentially a list of compatible fork versions/ chain of fork versions. Curious about everyone's thoughts on this",
+        "created_at": "2020-03-02T06:41:37.129000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "paulhauner",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "The fork struct also has a previous version and an epoch upon which the fork should happen",
+        "created_at": "2020-03-02T06:42:41.890000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I wrote the PR this way simply to be internally consistent - that said, how fork choice works is underspecified and buggy as you point out, for the reasons mentioned above - ie clients must manually manage them - they'll also have to manage \"chains\" of known forks I suspect - relationships between them",
+        "created_at": "2020-03-02T11:19:25.552000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I haven't thought about the problem in depth, but they have in ETH1 - I'd make a study of how chainid etc has evolved over time to make sure we don't make the same mistakes, before making any concrete proposals. for now, perhaps we should PR a `TODO` that hard forking is incomplete",
+        "created_at": "2020-03-02T11:21:26.827000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "alternatively, write up a more solid proposal - I even don't remember the rationale for why the fork fields look the way they do, anyone remembers?",
+        "created_at": "2020-03-02T11:22:11.838000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "It's worth noting that in Eth1 doesn't use chain ID to help filter peers at all.  It uses network ID - for every ETH network I know of they're the same, but they're different for ETC MainNet.  So both ETC and ETH MainNet uses network ID 1 but different chain IDs.  As a result when syncing prior to the dao block you can pull from either ETC or ETH clients successfully.  It becomes a real problem for finding the right head for fast sync though so most clients specifically request the dao block to filter out ETC nodes.",
+        "created_at": "2020-03-02T20:14:40.607000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "EIP2124 has been proposed (and I think deployed) which includes specific information about which fork the client is configured to follow: https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2124.md",
+        "created_at": "2020-03-02T20:15:55.191000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "ETH1 clients would always have a complete list of the forks they're enacting - as someone mentioned previously, you have to have that because the fork can't be triggered from within a block, the client just starts following new rules based on it's config.",
+        "created_at": "2020-03-02T20:16:55.846000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sly_gryphon",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "As per \u003c@361447803194441738\u003e, fork (aka chain id) has both current and previous version, and the switch-over epoch. Validations check either current or previous fork version.\n\nFork version (chain ID) is hard coded, and currently only supports one value (the gensis value of the network - main or test, or custom - that you are on). \n\nWhen a hard fork occurs, and, say, main splits into chain IDs 0x0 and 0x10 to be implemented at epoch 5,000, then clients would need to be updated (like any other hard fork) to accept 0x0 and 0x10 as valid values.\n\nYou are then on the (0x0+0x10,5000) chain id, and incompatible with clients on the (0x0+0x0,0) chain id, because at epoch 5,000+ you have different blocks.\n\nIf all clients update, this is fine; chain ID (fork) is the same, old blocks that sync validate (against fork version 0x0) and new blocks against (0x10).\n\nA client that hasn't updated is not compatible in the long run, but I guess you *could* be lenient and because you share the same fork version up to epoch 5,000, then be happy to trade/sync old blocks up to this block limit.\n\nThe only other issue is if there is a second hard fork to 0x5 at block 8,000, and clients update to chain id (0x10,0x5,8000). Old blocks 5000-8000 sync fine (fork version 0x10) and new blocks 8000+ sync fine (fork version 0x5)... however it is true you can't sync from the original genesis any more without special support.  Usually after 2 hard forks though you *should* have had a chance to update with a new anchor state.\n\ne.g. if your hard coded anchor state is at epoch 6000, then you are all good to go and should never need to sync blocks \u003c 5000.\n\nThe chain ID needs to support two fork versions, and the cutover time, so that you can have an anchor block at 7,995 that knows the upcoming block 8,000 will change fork version, without knowing what that block will be.  But it doesn't need more than two; once you get to 8,005 just hard code in a new anchor block to your client.",
+        "created_at": "2020-03-02T23:14:04.779000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sly_gryphon",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003e if one peer has fork 0x01 and the other has 0x02\n\u003c@!476250636548308992\u003e fork and fork version are different.  I'm not sure if the example you were trying to give was an upcoming fork from version 0x01 to 0x02 at, say, epoch 2000 (and assuming version 0x01 started at 1000).\n\nIn the case the first client would have fork (0x00, 0x01, 1000),and the second woudl have fork (0x01,0x02,2000).\n\nThe fork version for blocks in the range 1000-2000 would be the same for both (version 0x01). Blocks 2000+ are incompatible, and the second client doesn't know the correct value for blocks \u003c 1000, but would have an anchor 1000+ that makes that irrelevant.",
+        "created_at": "2020-03-02T23:22:51.604000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sly_gryphon",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "BTW. Yes, client 2 can *not* sync from genesis, as it has no (incorrect) knowledge of the correct fork version for blocks \u003c 1,000... but it would never do this... it would have an anchor block \u003e 1,000 and just sync from that.",
+        "created_at": "2020-03-02T23:26:46.940000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "@sly - I agree with everything you are saying. My original questions were related to https://github.com/ethereum/eth2.0-specs/pull/1624\n\nHere the proposal is to segregate peers based on a topic, with a fork version which must be in string form. We may be able to hash fork structs (which represent version and block number) but this potentially requires more thought. \n\nAlso when peers initially connect via the RPC they send status messages with fork version to determine if a peer is compatible for downloading blocks",
+        "created_at": "2020-03-02T23:27:20.180000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Hey @sly the context I was stating from was having a hardcoded head fork version. We basically use `state.fork.currentforkversion` to filter out peers when performing a status handshake",
+        "created_at": "2020-03-02T23:28:28.459000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "So whether the fork epoch is in the future/past we would use this hardcoded fork version",
+        "created_at": "2020-03-02T23:29:22.843000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Like \u003c@498009160982724610\u003e said, it would need to be a epoch/time based solution for this",
+        "created_at": "2020-03-02T23:32:20.677000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Especially in the context of status handshakes",
+        "created_at": "2020-03-02T23:32:33.306000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "djrtwo",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "For sync, even if you are syncing from the past, you know the fork versions for the future epochs (unless you have an outdated client, but arguably you are just a stubborn user that things fork version 0 is canonical for all time)",
+        "created_at": "2020-03-02T23:32:56.728000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sly_gryphon",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003c@476250636548308992\u003e yes, you send head_fork_version and head_slot ;  the other side then validates if that fork version is valid at that slot.",
+        "created_at": "2020-03-02T23:32:59.755000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sly_gryphon",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "If both clients are on fork (0x0, 0x10, 5000), then heads \u003c5000 will be 0x0, and heads \u003e 5000 will be 0x10.\n\nIf both clients are updated well in advance of the cutover, this will work fine.",
+        "created_at": "2020-03-02T23:34:26.515000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sly_gryphon",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "The only problem is a client that is not updated, and still on (0x0, 0x0, 0). If have not reached 5000 then all is fine. (because head 4999 with version 0x0 is valid for both)\n\nHowever as soon as one of the two clients has head \u003e 5000 they become incompatible.",
+        "created_at": "2020-03-02T23:38:13.342000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sly_gryphon",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "You could, if you want, make your client a bit lenient, if you really wanted to, so A connects with head = 4900 version 0x0, and B responds with 5100 version 0x10.  \n\nIf A is on fork (0x0, 0x0, 0) then the spec says the SHOULD disconnect (because eventually they will hit an incompatible block), but it doesn't say MUST, so you could keep the connection open and sync blocks.\n\nOnce you get to block @ 5000 (epoch), they will start to fail.\n\nEDIT: (because you won't get to 5000). Further connections, with head=4999 version = 0x0 will continue to be accepted by B as valid, so if you choose to leniently accept the reply head = 5100 version = 0x10, then you probably want to also add a mechanism to record that block 5000 was where B is no longer useful.",
+        "created_at": "2020-03-02T23:43:22.578000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sly_gryphon",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "The reverse also, if B was behind and connects with head = 4800 version = 0x0, then A will accept and respond with head = 5200 version = 0x0.\n\nThe spec says B should reject, but they could be lenient and request blocks from A, knowing that \u003c 5000 is okay. It is much safer to be backwards-lenient (because you know when to stop request) than forward-lenient (you need to deduce from blocks).",
+        "created_at": "2020-03-02T23:49:43.581000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sly_gryphon",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "(By backwards lenient, I mean a client that sends you a head after your fork epoch but with the previous fork version... you know you are safe up to the fork epoch)",
+        "created_at": "2020-03-02T23:52:02.304000+00:00",
+        "attachments": []
+    }
+]

@@ -1,0 +1,234 @@
+[
+    {
+        "author": "stefanbratanov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Do the following changes in the current p2p specs make sense?\n\n**execution_payload**\n\n[REJECT] `block` passes validation. **-\u003e** [REJECT] `envelope.beacon_block_root` is the root of a known block in fork choice.\n\n**execution_payload_header**\n\n[IGNORE] this bid is the highest value bid seen for the pair of the corresponding slot and the given parent block hash. **-\u003e** [IGNORE] this bid is the highest value signed bid seen with a valid signature for the pair of the corresponding slot and the given parent block hash.\n\nThere is also:\n\n[IGNORE] The signed builder bid value, header.value, is less or equal than the builder's balance in state. i.e. MIN_BUILDER_BALANCE + header.value \u003c state.builder_balances[header.builder_index].\n\nWhere is `MIN_BUILDER_BALANCE` defined in the specs?",
+        "created_at": "2024-09-02T07:23:15.428000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "kboom_ro",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003eWhere is MIN_BUILDER_BALANCE defined in the specs?\nmust be min. ejection balance",
+        "created_at": "2024-09-02T07:24:45.798000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "stefanbratanov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah, EJECTION_BALANCE makes sense",
+        "created_at": "2024-09-02T07:42:14.841000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "stefanbratanov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Actually, I am wrong with the first one, client can choose to import the block only when the payload arrives, so the rule makes sense",
+        "created_at": "2024-09-02T09:39:09.292000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yes this was from a first iteration with highly staked builders, it´s in my TODO to have a separate constant in the spec defined to be now like the ejection balance. The reason to keep them separated is that we may find a way to allow it to be actually less than the ejection balance in the future.",
+        "created_at": "2024-09-02T10:24:28.365000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I didn't understand this, what do you mean a client can choose to import a block only when the payload arrives?",
+        "created_at": "2024-09-02T10:25:50.345000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tbenr",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "`PayloadAttestationMessage` is signed using `BEACON_ATTESTER` Domain?",
+        "created_at": "2024-09-02T12:59:25.461000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tbenr",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "lol i just saw PTC_ATTESTER",
+        "created_at": "2024-09-02T12:59:54.701000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tbenr",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "there is a bit of inconsistency to me in the attestation naming. On the data structure sude we just call it PayloadAttestation but the the committee has the \"timeliness\" concept in it.",
+        "created_at": "2024-09-02T13:02:35.985000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tbenr",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "(IMHO)",
+        "created_at": "2024-09-02T13:03:29.140000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yeah, naming is fucked up, and this is mostly because I couldn't care less about naming, I'm happy to change any names to whatever teams want to, but I just don't want to bikeshed over names forever, changing the spec PR with tests is a pain, so I rather do that when there's some actual indication of this being shipped, teams are free to name things internally as they want.",
+        "created_at": "2024-09-02T13:37:08.232000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tbenr",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "absolutely. Just dumped here a thing that was floating in my head while implementing.",
+        "created_at": "2024-09-02T13:41:24.480000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I have a question for the EL devs. Starting in Cancun we started sending `parentBeaconBlockRoot` with the payload attributes when we are about to propose. We also send the head block hash on the same call to FCU. I assume that the EL has no way of verifying the consistency of these data. Is this correct? it it is not correct, Is there any explicit check on the EL that these data is consistent? If on the other hand this is correct, is there a specific check that the CL should to to check consistency? I haven't seen this in the engine API for `engine_forkchoiceUpdatedV3`. I ask because the analogous check for consistency would actually be different in ePBS since you can have many different parent beacon block roots for the same head block hash. cc \u003c@425572898787426305\u003e",
+        "created_at": "2024-09-02T14:02:46.105000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "There is the following consistency check on the CL side:\n```\n    # Verify consistency of the parent hash with respect to the previous execution payload header\n    assert payload.parent_hash == state.latest_execution_payload_header.block_hash\n```\nThis check implicitly validates the consistency between the `parentBeaconBlockRoot` and the `headBlockHash` as it ensures that there is 1:1 mapping between the beacon block and the execution payload hash.\n\nI am not sure I understand how the `headBlockHash` in ePBS can have multiple `parentBeaconBlockRoot`s. Could you please provide more details?",
+        "created_at": "2024-09-02T14:56:02.603000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "In ePBS there's no 1:1 mapping",
+        "created_at": "2024-09-02T15:02:16.114000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Imagine several consecutive empty blocks",
+        "created_at": "2024-09-02T15:03:08.755000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I have this consistency check in the beacon chain, what I don't have is the consistency check in the engine API",
+        "created_at": "2024-09-02T15:06:43.305000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "And I don't see this either in your reply: I mean the engine API caller can send inconsistent hash and root in the call to FCU isn't it?",
+        "created_at": "2024-09-02T15:07:14.816000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yes, it can. but the block won't be accepted by honest nodes because of the above check. So the engine API doesn't need to make this check again as EL relies on the fork choice state and consistency of other related data that are coming from the CL",
+        "created_at": "2024-09-02T15:16:38.552000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah, I'm not complaining just checking that the engine API is not protecting the client from sending incoherent data that will result in a block miss. I ask cause in ePBS the situation is the same but worse as it's actually more likely that you will send an inconsistent root/hash pair",
+        "created_at": "2024-09-02T15:21:14.397000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "But if there's no check then there's no change needed",
+        "created_at": "2024-09-02T15:21:29.540000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "then the `parentBeaconBlockRoot` in the payload must be updated every time there is yet another empty block (block with no payload), right?",
+        "created_at": "2024-09-02T15:26:15.447000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think so, if I remember correctly Adrian told me this is to set the BEACON BLOCK ROOT opcode in the EL, as such it should be updated even if there's no Payload",
+        "created_at": "2024-09-02T15:27:35.219000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Although this may break contract behavior since it becomes impossible to prove against some beacon blocks",
+        "created_at": "2024-09-02T15:28:39.849000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yes, a payload in the next non-empty block will need to have correct beacon block root. this actually changes the semantics of the data returned by the opcode as now there can be gaps between beacon block roots stored by the system smart contract",
+        "created_at": "2024-09-02T15:29:12.423000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I am not sure if it can break anything tho, but def worth checking",
+        "created_at": "2024-09-02T15:29:29.729000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Whose on rocket pool here, I assume that would be a candidate to use this opcode",
+        "created_at": "2024-09-02T15:33:28.786000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Cc \u003c@784446040073175040\u003e",
+        "created_at": "2024-09-02T15:33:36.349000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "because one will likely proof with the root that has been sent to the smart contract, i.e. a root that has a non-empty child",
+        "created_at": "2024-09-02T15:34:05.472000+00:00",
+        "attachments": []
+    }
+]

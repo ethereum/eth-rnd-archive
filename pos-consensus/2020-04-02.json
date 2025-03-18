@@ -1,0 +1,154 @@
+[
+    {
+        "author": "ajsutton",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "When beacon chain and validator clients are running separately, what APIs are being used to perform the committee aggregation role when it's due? And if the beacon chain client is the one connecting to libp2p, does it perform the aggregation on behalf of the validator or is the validator pulling all the relevant attestations from the beacon chain client to do the aggregation?",
+        "created_at": "2020-04-02T01:22:32.774000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "paulhauner",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "This is how it works for us (our APIs are still being refined, naming is a little wonky atm):\n\n1. VC requests duties `/beacon/validator/duties` (BN responds)\n2. VC locally determines if it should be an aggregator (via slot signature)\n3. VC posts to `/beacon/validator/subscribe` with `(slot: Slot, committee_index: CommitteeIndex is_aggregator: bool)`\n4. Now the BN knows that (a) it needs to subscribe to the `committee` subnet during `slot`  and also (b) it needs to collect attestations on that subnet since it will likely be asked to produce an aggregate.\n5. The attestation `slot` arrives and we are 1/3rd through it.\n6. VC requests an attestation from `/beacon/validator/attestation`\n7. VC signs the attestation, remembers `attestation.data` and then publishs it to `/beacon/validator/attestations`\n8. Wait until 2/3rd through the `slot`\n9. VC requests an aggregate attestation via `/beacon/validator/aggregate_attestation`, supplying the previous `attestation.data`.\n10. VC uses the aggregate to produce a `SignedAggregateAndProof` and publishes it to `/beacon/validator/aggregate_and_proofs`.",
+        "created_at": "2020-04-02T01:34:09.259000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "paulhauner",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003e does it perform the aggregation on behalf of the validator or is the validator pulling all the relevant attestations from the beacon chain client to do the aggregation?\nOur beacon node does all the aggregation",
+        "created_at": "2020-04-02T01:36:39.793000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "djrtwo",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "And this is very near the api in the PR in the apis repo. Merging that in next 24 hours",
+        "created_at": "2020-04-02T01:48:01.388000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "ok, that makes sense.  For the validator to decide if it is the aggregator, it needs to know the committee size - is it requesting that from the `/beacon/committees` API or has that info been added to the duties response?",
+        "created_at": "2020-04-02T01:52:50.280000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "paulhauner",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Oh good pickup! We also send back the `modulo` from `is_aggregator` with the `/beacon/validator/duties` response!",
+        "created_at": "2020-04-02T01:54:09.996000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "That makes sense - doesn't appear in your output from the `testnet5` branch (or I haven't managed to recompile properly...).  What's the name of that field so we can be consistent?",
+        "created_at": "2020-04-02T01:55:19.806000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I guess I should go find that PR too....",
+        "created_at": "2020-04-02T01:55:26.831000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "paulhauner",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "This is all in `v0.2.0`, our branch with v0.11.1 and the aggregation scheme. It won't place nice with our testnet though.",
+        "created_at": "2020-04-02T01:55:59.015000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "👍  Thanks.",
+        "created_at": "2020-04-02T01:56:19.957000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "paulhauner",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Anytime!",
+        "created_at": "2020-04-02T01:56:38.600000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "paulhauner",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "We _used_ to send the slot signature back in step 3, however we moved away from it because verifying the slot signature requires obtaining the committees and that's expensive. There's some argument that sending the slot signature provides some protection from the BN by VCs doing malicious subscribing, however the slot signature is published on the public network so it's not a _great_ secret. Additionally, our BN is geared to facilitate the VC as opposed to restrict it so and additional committee load + signature verification doesn't seem quite worth it.",
+        "created_at": "2020-04-02T01:59:30.262000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "terence0083",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003c@!361447803194441738\u003e I wanna confirm, if you are an attester, you wouldn't ask the beacon node to subscribe to the subnet correct?",
+        "created_at": "2020-04-02T02:03:50.852000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "djrtwo",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "attester should find persistent peers on the subnet in question to be able to publish\nif also an aggregator, should join the subnet",
+        "created_at": "2020-04-02T02:07:57.088000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "terence0083",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "yeah i see, instead of \"listens\" everything, the node only \"submits\" the unaggregated attestations",
+        "created_at": "2020-04-02T02:10:05.505000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "magicking",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003e A 32-byte hash with one byte truncated is just a 31-byte hash, which still has 124 bits of collision security (and 29-byte hashes would have 116 bits of collision security)\nHey sorry to bother again with that, I think I summarized my question in fewer words and image (https://twitter.com/magicking_/status/1245600764304568321) which was, was the version refer to? Deposit contract, early address scheme, etc?",
+        "created_at": "2020-04-02T13:29:22.352000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "magicking",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I could not find anything relevant on the forum",
+        "created_at": "2020-04-02T13:29:38.003000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "djrtwo",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "The withdrawal credential version 0x00 maps to an underlying BLS key (31bytes of the hash of the pubkey). In the future, this version will likely be bumped and potentially point to a code snippet on a particular shard.\n\nFor example, version 0x01 might have 0th byte as version, byte 1 and 2 as shard, and the remaining 29 bytes as an address on a shard representing some validation code",
+        "created_at": "2020-04-02T13:41:22.577000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "djrtwo",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "the 0th byte will always signify the version and the structure of the rest of the bytes",
+        "created_at": "2020-04-02T13:41:40.607000+00:00",
+        "attachments": []
+    }
+]

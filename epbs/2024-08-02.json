@@ -1,0 +1,394 @@
+[
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Ah I guess it's the analogous to executing the state transition without signing, adding the state root and then signing",
+        "created_at": "2024-08-02T00:02:27.356000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Alright thanks this does clarify things",
+        "created_at": "2024-08-02T00:02:38.716000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The final ssz root of our blocks does depend on the post state in this sense",
+        "created_at": "2024-08-02T00:03:23.513000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The equivalent on the CL side would be trying to have a block include attestations for itself. You can only include attestations from previous slots.",
+        "created_at": "2024-08-02T00:06:49.173000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah I guess I understand what a cyclical dependency is, I just didn't understand how blockroot can be used in the EL to affect the final payload root the ugly thing is that this can't appear in the spec cause we specify validity of the Payload directly. It can only appear in the engine API",
+        "created_at": "2024-08-02T00:12:22.071000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "But it does make implementation uglier cause we need to grab the parent block root without having a block at hand. I would assume that all CLs have forkchoice in memory",
+        "created_at": "2024-08-02T00:13:21.196000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "And that this is cheap to get",
+        "created_at": "2024-08-02T00:13:28.769000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Hmm I'll take note that this is another difference between block auctions and slot auctions then. With slot auctions the blockhash does not form part of the beacon block root and thus we coukd use the current one in principle",
+        "created_at": "2024-08-02T00:18:38.216000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Breakout room tomorrow. \n- Agenda \u003chttps://github.com/ethereum/pm/issues/1120\u003e\n- zoom \u003chttps://ethereumfoundation.zoom.us/j/87569210985?pwd=3Cv1hDh7If4cq9IMXvNln1CtqQ72MR.1\u003e\n\nWe don't have much to talk tomorrow either. Prysm has ramped up implementation and now that we're not working on the Python spec anymore we can focus on the POC. We can discuss the issue above with the parent blockroot and how it surfaces. Barnabé mentioned interest in specing out slot auctions. Other than that it should be just 10 minutes",
+        "created_at": "2024-08-02T01:15:59.214000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Re: parent_beacon_block_root. One difference from the `BLOCKHASH` opcode is that when a beacon_block_root is obtained from the inside of the EVM the corresponding `timestamp` is passed on that call (see https://eips.ethereum.org/EIPS/eip-4788#pseudocode `get()` function). Today the `current_timestamp` will denote the `parent_beacon_block_root`, so if we do switch to the `current_beacon_block_root` the consumers will have to adjust their timestamp -- doable but still has impact, especially if a consuming smart contract can't be updated. Thus, we should rather leave it as is if possible. Another aspect would be block building, a builder will have to obtain the `current_beacon_block_root` to pass it to the payload build process, which I guess will be possible with the ePBS design.",
+        "created_at": "2024-08-02T11:17:22.195000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Thanks \u003c@340345049063882753\u003e and \u003c@425572898787426305\u003e,  it made it clear that we don't want to touch this. I adjusted Prysm implementation to pass the parent root.",
+        "created_at": "2024-08-02T12:55:59.038000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "terence0083",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I generally find parent/current slot empty or full checks tricky, so I'm writing down some notes that might help others one day.\n\n**When consensus block reveals:**\n- Before `process_execution_payload_header`, check `state.execution_payload_header.hash == state.latest_block_hash`.\n- After `process_execution_payload_header`, check `state.execution_payload_header.parent_hash == state.latest_block_hash`.\n\n**When execution block reveals:**\n- After `process_execution_payload`, check `state.slot == state.latest_full_slot`. You can also use `state.execution_payload_header.parent_hash == state.latest_block_hash` here.",
+        "created_at": "2024-08-02T13:39:47.296000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@486501030046203915\u003e I know you like them better that's why I'm tagging you. There's something that I truly dislike about slot auctions: it makes self building much worse, you have to commit at the beginning of the slot without really knowing how much you will lose with respect to the builders'  block. Home stakers are not sophisticated enough to be able to gauge 6 seconds in advance how much their block will change",
+        "created_at": "2024-08-02T13:59:01.830000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Breakout room happening now\nhttps://ethereumfoundation.zoom.us/j/87569210985?pwd=3Cv1hDh7If4cq9IMXvNln1CtqQ72MR.1",
+        "created_at": "2024-08-02T13:59:21.698000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "My answer is that it really depends on your benchmark. Actually you can define a quantity we could call \"regret\" which is how much you lose by local building vs a builder block/bid.\n\nSo in block auctions you can perfectly compute your regret, you know the value of the local block you would deliver if you committed to yourself, and you know the value the builder gives you too. You might have a local decision rule that says \"if local value \u003e= best builder bid * 80%, then local build\" (this is the rule we discussed on the call)\n\nIn slot auctions, you can't compute your regret perfectly because you don't know how much your local block will be worth when you propose it 6 seconds later. But you get a lower bound, i.e., you know that regret \u003c= best builder bid - current local value, since the local value can only increase *unless you allow for transactions to be cancelled and replaced within the 6 seconds*.\n\nImo you could tell yourself that if you were going to choose a local block vs a builder block when regret is \u003c 20% in a block auction, then maybe you could choose a local block vs a builder block when regret is \u003c 25% in a slot auction, where the extra 5% of \"tolerance\" comes from increasing local block value.",
+        "created_at": "2024-08-02T14:46:06.923000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "And by the way, all of this ignores bypassability of slot auctions. If I commit to myself in a slot auction, I can also use mev-boost after 6 seconds to get the best builder block at that time. This makes the lower bound of regret even less worse, since you might have a builder give you a more valuable block later on.",
+        "created_at": "2024-08-02T14:47:39.525000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e perfectly because you don't know how much your local block will be worth when you propose it 6 seconds later.\nahh nice insight 👍  so the local block builder has to support an api to get the current local value because final getPayload could be 6 secs later",
+        "created_at": "2024-08-02T14:47:51.836000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think there is one already no? iirc this was adopted, so that you would have a local block value oracle to compare against mev-boost bids",
+        "created_at": "2024-08-02T14:48:42.012000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "can't see on engine api spec",
+        "created_at": "2024-08-02T14:49:34.764000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e maybe you could choose a local block vs a builder block when regret is \u003c 25% in a slot auction, where the extra 5% of \"tolerance\" comes from increasing local block value.\nThis is precisely my point, the difference between the 20% and the 25% in here is strictly worse for local building and it's based on heuristics that homestakers cannot really make, much less in a static decision before launching their clients. \n\nAt anyrate, it would be nice to get some numbers out of this. I'll see if I can get \u003c@911055007837720597\u003e peer-pressured into computing this with real data.",
+        "created_at": "2024-08-02T14:53:22.747000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e since the local value can only increase unless you allow for transactions to be cancelled and replaced within the 6 seconds.\n\ni guess that would be some sort of customized support, else don't see a normal execution node reducing its block value\n\nalso packing the block is NP hard, so the could be that cancellation leads to increase in value because of some other tx. so in the end this would have to be heuristic based",
+        "created_at": "2024-08-02T14:54:23.948000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'm thinking of such features as \u003c@363800010518822915\u003e writes here https://x.com/terencechain/status/1629147419102572544 (i did some twitter archaeology)",
+        "created_at": "2024-08-02T14:54:26.208000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "There aren't changes in the engine API",
+        "created_at": "2024-08-02T14:55:04.883000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yes but this is with getPayload and i think ELs stop building the block after this request comes in",
+        "created_at": "2024-08-02T14:55:17.100000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "so may be they can continue building till they see a new block via new payload",
+        "created_at": "2024-08-02T14:55:36.318000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yes, slot auctions require changes in the Engine API to continue building even after the block has delivered",
+        "created_at": "2024-08-02T14:55:51.760000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "block auctions do not need these changes that is why I did not include them",
+        "created_at": "2024-08-02T14:56:11.894000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "or this, with no change in engine api",
+        "created_at": "2024-08-02T14:56:31.352000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Sure but 20% is an arbitrary number anyways, what I am saying is if you set 20% in the slot auction context then you are \"too strict\" in a sense, so you can give yourself more slack to account for transactions coming in. I'm sure you can get a number of what that is ofc",
+        "created_at": "2024-08-02T14:56:31.466000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I completely agree, my whole complain is that I expect the difference between 20% and 25% (whatever these numbers are in real life) to be a substantial hit to local building",
+        "created_at": "2024-08-02T14:57:27.636000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "That doesn't work because you can get a new payload from a completely different slot that you are syncing at the same time",
+        "created_at": "2024-08-02T14:58:20.524000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "well EL can identify if an fcU extends the current building head",
+        "created_at": "2024-08-02T14:58:54.439000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "ILs are what's important for local building 😉",
+        "created_at": "2024-08-02T14:58:57.147000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "You could have completely unrelated slots on different consensus forks that are builing over the same EL head on ePBS.. that's why forkchoice is considerably more complicated",
+        "created_at": "2024-08-02T15:01:50.936000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "but when EL head will be updated with acceptance of some payload which gets added to CL head, this will be resolved right",
+        "created_at": "2024-08-02T15:04:18.039000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e have completely unrelated slots on different consensus forks that are builing over the same EL heads\n\nso basically no fcU happens and the slot is over and no new CL head with payload has arrived so we need to tell EL to stop building",
+        "created_at": "2024-08-02T15:07:01.999000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "i don't think EL needs to continue building beyond the current slot, so 6 sec is the limit",
+        "created_at": "2024-08-02T15:08:22.430000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "No, say your last full slot is slot 10, there's a fork like this\n```\n10 \u003c--- 11 \n \\____________ 12\n```\nThis can even happen today without ePBS. Both FCUs from 11 and 12 would advance the EL head. If you were proposing 12 and exactly at that time your engine gets an FCU to 11 because it synced that block, then your engine will stop producing a block with that rule above. \n\nOn ePBS something worse can happen,  11 and 12 may be on completely separate branches of long forks without any payload.",
+        "created_at": "2024-08-02T15:12:58.652000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "so 11 is without payload, and if it doesn't change EL head, why will I fcU EL?",
+        "created_at": "2024-08-02T15:15:07.049000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "or do i keep building 12 to forkout 11",
+        "created_at": "2024-08-02T15:15:35.011000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "umm ok need to think on this, thanks for the scenario",
+        "created_at": "2024-08-02T15:16:07.087000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "11 came without a payload, you are proposing 12 and reorging 11. You send the get_Payload to your engine at 0 seconds of 12. Builds on top of 10.  At 6 seconds you receive a payload from 11 that also builds on top of 10 and becomes your head, you FCU to it. You will not broadcast your local payload with the above rule",
+        "created_at": "2024-08-02T15:30:44.600000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@486501030046203915\u003e I think these are the changes for slot auctions https://github.com/potuz/consensus-specs/pull/15 on the consensus spec. Some of these are actually redundant cause we may want to even apply them on the current block auctions spec.",
+        "created_at": "2024-08-02T15:55:36.897000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "terence0083",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'd think you need a new engine api end point right? at least modify the existing one. Manually to signal EL \"What's the block value now given this is the head but dont stop building the block: `GetBlockValue(parentBlockHash)`",
+        "created_at": "2024-08-02T16:04:39.464000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "terence0083",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "implementation detail though, dont think consensus spec would concern about this one if not the validator spec",
+        "created_at": "2024-08-02T16:05:03.556000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yes as we talked above",
+        "created_at": "2024-08-02T16:48:20.673000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "this does not appear in the CL spec repo, that PR is on the CL spec repo",
+        "created_at": "2024-08-02T16:48:35.185000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "terence0083",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It probably needs to be mentioned in the validator spec which is part of the CL spec. Nothing to do with the beacon chain spec I agree",
+        "created_at": "2024-08-02T16:52:45.783000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Ooops wrong channel, apologies 🙂",
+        "created_at": "2024-08-02T18:54:58.667000+00:00",
+        "attachments": []
+    }
+]

@@ -1,0 +1,154 @@
+[
+    {
+        "author": "tyneslol",
+        "category": "general",
+        "parent": "",
+        "content": "ethers states that `tx.gasPrice` can now be `null` here:\nhttps://twitter.com/ethersproject/status/1408836914141138946?s=20\nIt looks like there now needs to be `if (tx.gasPrice === null)` checks added to code that builds on ethers\nWIP pull request on web3.js here: https://github.com/ChainSafe/web3.js/pull/4155, it seems like your library is built on ethers based on the `null` value but it is called `web3-core-helpers`",
+        "created_at": "2021-06-27T06:23:15.619000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@358385024573243393\u003e Why `null` instead of missing?",
+        "created_at": "2021-06-27T06:36:09.747000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ricmoo",
+        "category": "general",
+        "parent": "",
+        "content": "What do you mean?",
+        "created_at": "2021-06-27T09:30:51.853000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ricmoo",
+        "category": "general",
+        "parent": "",
+        "content": "There are still networks that aren’t EIP-1559.",
+        "created_at": "2021-06-27T09:31:29.421000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ricmoo",
+        "category": "general",
+        "parent": "",
+        "content": "And there always might be, like xdai or BSC. I don’t actually know if they are or not, but I can’t remove the `gasPrice` property from them.",
+        "created_at": "2021-06-27T09:32:39.236000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "```ts\n{ gasPrice: bigint | null, nonce: bigint, ... }\n```vs\n```ts\n{ gasPrice: bigint, nonce: bigint, ... } | { nonce: bigint, ... }\n```",
+        "created_at": "2021-06-27T11:09:32.810000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "An EIP-1559 transaction doesn't have a `null` gasPrice, it is that a gasPrice field on an EIP-1559 transaction doesn't make sense at all.",
+        "created_at": "2021-06-27T11:10:50.516000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "IMO, idiomatic JS/TS would be to leave the field off entirely so users can do `if ('gasPrice' in transaction) handleLegacy() else handle1559()` (though really they should be switching on the transaction type).",
+        "created_at": "2021-06-27T11:11:37.612000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ricmoo",
+        "category": "general",
+        "parent": "",
+        "content": "Oh, I thought you mean removed from the typing. It is hard to do that with the way the code is currently designed. There is a formatted with a descriptor that does all the parsing. gasPrice went from `bigNumberish` to `allowNull(bigNumberish)`.",
+        "created_at": "2021-06-27T18:08:11.142000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ricmoo",
+        "category": "general",
+        "parent": "",
+        "content": "But I generally don’t plan around people relying on auto-vivification as a method for value discovery. Because sometime auto-vivification happens. So, I expect people to check for nullish, via `if (tx.gasPrice == null)` which catches both, “missing” or null.",
+        "created_at": "2021-06-27T18:09:48.926000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ricmoo",
+        "category": "general",
+        "parent": "",
+        "content": "Also, if you use a union set it would be massive. 2 ** 9 ish sets right now, at least.",
+        "created_at": "2021-06-27T18:11:01.272000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ricmoo",
+        "category": "general",
+        "parent": "",
+        "content": "In v6 many things become `gasPrice?: BigNumberish | null` for input and `gasPrice: null | BigNumber` for output.",
+        "created_at": "2021-06-27T18:12:03.010000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ricmoo",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@255928837727059979\u003e after a quick look at your code, I think there are bugs in the signTransaction. If accessList is defined, it will use EIP-2930 and then else if maxFeePerGas use EIP-1559. But EIP-1559 can also have an access list, in which case you have already knee-capped EIP-1559. 😒",
+        "created_at": "2021-06-27T18:16:13.136000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ricmoo",
+        "category": "general",
+        "parent": "",
+        "content": "There is a lot of conditions requires to auto detect the type. And you actually probably want to detect the networks capabilities first. For example, if talking to an EIP-1559 network, your default should be 1559 if there isn’t enough info to determine type.",
+        "created_at": "2021-06-27T18:17:42.136000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ricmoo",
+        "category": "general",
+        "parent": "",
+        "content": "It was a lot of back-and-forth and I implemented that populateTransaction 12 or so different ways before settling on that.",
+        "created_at": "2021-06-27T18:18:19.930000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ricmoo",
+        "category": "general",
+        "parent": "",
+        "content": "Nothing was perfect. It was about least terrible. 🙂",
+        "created_at": "2021-06-27T18:18:36.262000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ricmoo",
+        "category": "general",
+        "parent": "",
+        "content": "Also, in v6 getGasPrice will go away and you will need to use `(await provider.getFeeData()).gasPrice` for the legacy gasPrice. All fee-related things will be bundled into the `provider.getFeeData()` method. Just a heads up. 🙂",
+        "created_at": "2021-06-27T18:20:07.020000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tyneslol",
+        "category": "general",
+        "parent": "",
+        "content": "If you mean that web3.js PR, that isn't mine but I'm sure they would like to hear your feedback 🙂",
+        "created_at": "2021-06-27T19:57:02.236000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ricmoo",
+        "category": "general",
+        "parent": "",
+        "content": "Oh, thanks. 😉",
+        "created_at": "2021-06-27T22:56:12.942000+00:00",
+        "attachments": []
+    }
+]

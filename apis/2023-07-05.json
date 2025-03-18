@@ -1,0 +1,202 @@
+[
+    {
+        "author": ".paulharris",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "i'd expect slot would be the state at that exact slot... so empty blocks applied if required",
+        "created_at": "2023-07-05T00:38:47.743000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".paulharris",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "i had missed that point, not sure why it would 'only have an effect when the block root is also provided', because a slot should be canonical slot? or are you talking about being able to get a non-canonical state based on the block root and slot?",
+        "created_at": "2023-07-05T00:42:20.078000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "\u003e Hello! In Prysm we store states indexed by block root ... We have had several requests from users to allow arbitrary roots, which will require a new index in the DB, but we are hesitant to implement this.\n\nSo, is there a motivation here beyond trying to effectively push Prysm's database schema into the beacon API?",
+        "created_at": "2023-07-05T01:09:21.601000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I mean, that sounds uncharitable, I understand, but there's also no real reason provided except, well, it fits with Prysm's database schema, and adding another index has tradeoffs.",
+        "created_at": "2023-07-05T01:10:08.461000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Adrian mentioned above that teku specifically had to add an index for block root to state root in order to get this particular api to work, so I dont think we are the only client who are running into this. States are traditionally referenced by their block root in the spec, the API is the only place where we are expected to retrieve states by their stateroot",
+        "created_at": "2023-07-05T01:39:06.210000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Except, this API would still presumably exist? The proposals here don't remove it, or even deprecate it, they broaden it",
+        "created_at": "2023-07-05T01:42:56.366000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Yes, unless all clients are in agreement that they are ok with not supporting state root lookups in v3, we would have to broaden it",
+        "created_at": "2023-07-05T02:08:44.034000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I think that `shouldOverrideBuilder` as a method doesn't make sense because 1) the result of this method can change between the latest call of a VC and a subsequent BN call which then decides on a payload 2) there is a circuit breaker that can take VC into the same situation 3) there are other potential not yet existing reasons for BN to decide proposing with local payload.\n\nI think an ultimate solution would be in providing an unblinded block when it is possible with information about a payload alongside to a block if this information is needed, maybe unblinded block would be perfectly enough.\n\nI consider `shouldOverrideBuilder` flag and unblinded block in the response as two slightly different topics worth to be discussed separately. Suggesting to raise the latter on the next CL call. wdyt?",
+        "created_at": "2023-07-05T10:17:24.381000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Yeah, although I'd like to have direct visibility into `shouldOverrideBuilder`, as you say it will result in potential issues due to its asynchronous nature.\n\nI'll see if I can put together a sample call for the v3 API call for fetching a proposal so we have something meatier to discuss on the call.",
+        "created_at": "2023-07-05T10:42:10.568000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Sounds great! Could you please elaborate on why `shouldOverrideBuilder` need to be visible and circuit breaker activation need not?",
+        "created_at": "2023-07-05T10:52:13.990000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Well at current it's implicitly visible by the returned information from the request (blinded block with matching execution payload header == no circuit breaker in operation), but having two potential reasons (CL circuit breaker or EL censorship detection) breaks that, hence the idea of having the flag separate.  I think that I'll start the call with more explicit flags in there, and we can then discuss if they have enough value to include them.",
+        "created_at": "2023-07-05T11:03:44.748000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "From my perspective, circuit breaker activation and CL adhering to EL's suggestion to fallback to local build process are not distinguishable. Btw, it is up to CL to decide whether to use `shouldOverrideBuilder` or not, so, the flag can be `true` but CL ignoring it",
+        "created_at": "2023-07-05T13:40:48.250000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I have put together an consolidated blinded/unblinded block request endpoint at https://github.com/ethereum/beacon-APIs/issues/309#issuecomment-1621810001 for further discussion.  Ultimately I have decided not to include execution payload provenance in the endpoint, as ultimately it's useful academically but not as part of the proposal flow itself.",
+        "created_at": "2023-07-05T13:54:51.932000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Adrian wrote:\n\u003e **You can only request canonical states by slot** by you can request non canonical states by block root. You can’t request empty slots by block root alone. So there are differing gaps in the two possibilities. \n\nTo me the implicit meaning behind the bolded part is that with  block_root+slot you can fetch non-canonical states. But I see that things will become confusing now. Both `block_id` and `state_id` can be a slot, but there's an additional `slot` parameter too... That is too much.",
+        "created_at": "2023-07-05T14:32:27.355000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Also what happens when you provide both `block_id` and `state_id`?",
+        "created_at": "2023-07-05T14:34:03.984000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "How about leaving the endpoint as is, plus one query param: `block_root`",
+        "created_at": "2023-07-05T14:35:59.709000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "If you specify `block_root`, then it overwrites what's in `state_id` unless it is a slot - in that case it returns the state for that block at the desired slot",
+        "created_at": "2023-07-05T14:36:50.123000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Kind of convoluted, but maybe not too bad?",
+        "created_at": "2023-07-05T14:36:59.743000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I think that would be counter to the principle of least astonishment.",
+        "created_at": "2023-07-05T14:37:44.047000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "How about 3 query params:\n- `state_id` which takes precedence (this will need to be documented)\n- `block_root`\n- `block_slot` (not the best name, but `slot` feels even worse) \nIf you don't provide `state_id`, then you have to provide `block_root` and optionally `block_slot`, in case you want the state to be from a different slot then immediately after applying the block.",
+        "created_at": "2023-07-05T14:46:10.609000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Isn't that basically what was suggested at https://discord.com/channels/595666850260713488/710831784991916072/1125858733713530960 ?",
+        "created_at": "2023-07-05T14:49:30.385000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Yes, I suppose so. A more refined version maybe.",
+        "created_at": "2023-07-05T14:51:29.667000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Looks good to me! 👍",
+        "created_at": "2023-07-05T17:51:58.617000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".paulharris",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "This sounds probably more appropriate than `slot` since its unique to how we'd normally use a slot field.",
+        "created_at": "2023-07-05T21:31:10.467000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sproul",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "At Lighthouse we're in the process of overhauling our database, so can try to have the `block_root` index as part of that. Currently we only support `state_root` and `slot` indexing for states",
+        "created_at": "2023-07-05T23:20:44.935000+00:00",
+        "attachments": []
+    }
+]

@@ -1,0 +1,218 @@
+[
+    {
+        "author": "draganrakita",
+        "category": "general",
+        "parent": "",
+        "content": "Made a PR on eip7702 to introduce a notion of AuthList item limits that removes some edge cases on decoding: https://github.com/ethereum/EIPs/pull/8746",
+        "created_at": "2024-07-22T11:24:32.318000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Great! I wanted to comment on the EIP at some point that we would need limits on those 🙂",
+        "created_at": "2024-07-22T12:31:14.476000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "We should also ban the \"sign flipping\" so that only the signatures on the low end are accepted (let me find a better description of this)",
+        "created_at": "2024-07-22T12:32:37.377000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, rule 2 of EIP-2 https://eips.ethereum.org/EIPS/eip-2 also for auth sigs",
+        "created_at": "2024-07-22T12:34:36.568000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "draganrakita",
+        "category": "general",
+        "parent": "",
+        "content": "Makes sense, will update the PR",
+        "created_at": "2024-07-22T12:55:26.162000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Great, thanks 😄",
+        "created_at": "2024-07-22T12:56:41.991000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "draganrakita",
+        "category": "general",
+        "parent": "",
+        "content": "We can be more strict on parity, to allow only 0 or 1.",
+        "created_at": "2024-07-22T13:05:40.982000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rjected",
+        "category": "general",
+        "parent": "",
+        "content": "yeah, renaming to `y_parity` even might be good",
+        "created_at": "2024-07-22T13:09:26.684000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rjected",
+        "category": "general",
+        "parent": "",
+        "content": "or, nvm, it's already named y_parity",
+        "created_at": "2024-07-22T13:09:55.810000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rjected",
+        "category": "general",
+        "parent": "",
+        "content": "So I think that should already be defined, as long as clients don't take liberties and make `y_parity` a `u8` or something LOL",
+        "created_at": "2024-07-22T13:11:06.915000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "draganrakita",
+        "category": "general",
+        "parent": "",
+        "content": "`0/1` requirement was defined as part EIP-2728, but needs to be checked as part of tx validity.",
+        "created_at": "2024-07-22T13:18:28.886000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "We can do this, but this does not align with EIP-2. So for txs you need the lower s value, but for auth lists it can now be both, because the v value will decide if we take the upper/lower s value. So for simplicity I would stick with EIP-2",
+        "created_at": "2024-07-22T13:35:46.208000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rjected",
+        "category": "general",
+        "parent": "",
+        "content": "I don't understand, the `s` value can be restricted independently of restricting `v` to 0/1. The `v` value determines how to get the full `r` point in recovery",
+        "created_at": "2024-07-22T13:46:30.748000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Oh wait, you are right",
+        "created_at": "2024-07-22T13:47:43.689000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Sorry, I forgot how to flip signatures 🙂",
+        "created_at": "2024-07-22T13:47:51.479000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rjected",
+        "category": "general",
+        "parent": "",
+        "content": "haha np",
+        "created_at": "2024-07-22T13:48:02.578000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm no wait, I think I'm missing something, here is our code to flip a signature (and thus make an invalid tx per EIP-2)\n\n```typescript\nfunction flipSignature(signature: any) {\n  const s = bytesToBigInt(signature.s)\n  const flipped = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n - s\n\n  if (signature.v === 27) {\n    signature.v = 28\n  } else {\n    signature.v = 27\n  }\n  signature.s = setLengthLeft(bigIntToBytes(flipped), 32)\n  return signature\n}\n```\n\nI just checked, txs can have both `v = 27` or `v = 28` (this is equivalent to `yParity` of either 0 or 1). So would this not mean that if we restrict `v` we also thus cannot impose the rule that the `s` value should be \u003c `secp256k1n/2`? Because if you would have `yParity = 1` then if you set `yParity = 0` you also have to \"flip\" the `s` value (thus if this was `\u003c secp256k1n/2` before this is now larger than it). If you don't change `s` then the signer would also change - right?",
+        "created_at": "2024-07-22T13:55:17.217000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Or maybe you can change `r` too? (I honestly don't know anything about EC crypto)",
+        "created_at": "2024-07-22T14:30:34.939000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rjected",
+        "category": "general",
+        "parent": "",
+        "content": "I think instead of modifying the signature like this s.t. the recovery routine returns invalid, you should have a validation method which checks the `s` value before passing it into recovery",
+        "created_at": "2024-07-22T15:25:42.458000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rjected",
+        "category": "general",
+        "parent": "",
+        "content": "In general IMO the fields of the signature should be checked, not modified in validation",
+        "created_at": "2024-07-22T15:29:07.926000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rjected",
+        "category": "general",
+        "parent": "",
+        "content": "The signature validation library / recovery method should handle deriving the correct R value from the recovery id",
+        "created_at": "2024-07-22T15:31:38.266000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Ah ok just for reference, this is in our test suite and not in our production code, we do not flip signatures in case that the sig is invalid by the EIP-2 rule",
+        "created_at": "2024-07-22T15:42:38.060000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rjected",
+        "category": "general",
+        "parent": "",
+        "content": "ah I see",
+        "created_at": "2024-07-22T16:04:06.810000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rjected",
+        "category": "general",
+        "parent": "",
+        "content": "so this is in invalid test case generation",
+        "created_at": "2024-07-22T16:04:26.674000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, its in this test\n```typescript\n  it('Should set AUTH to unauthorized if signature s \u003e N_DIV_2', async () =\u003e {\n    const vm = await VM.create({ common })\n    const message = hexToBytes('0x01')\n    const signature = flipSignature(signMessage(message, contractAddress, privateKey))\n```",
+        "created_at": "2024-07-22T16:20:23.187000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "(EIP 3074)",
+        "created_at": "2024-07-22T16:20:32.610000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rjected",
+        "category": "general",
+        "parent": "",
+        "content": "Ok, after reading this I think you can just have these as separate tests, where one flips `v` and the other changes `s` to be \u003e N/2",
+        "created_at": "2024-07-22T18:45:17.578000+00:00",
+        "attachments": []
+    }
+]

@@ -1,0 +1,322 @@
+[
+    {
+        "author": "jsli.",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "is there a way to get historical (maybe orphaned) blocks/slots that have been pruned by clients? Thanks.",
+        "created_at": "2022-08-05T01:57:55.342000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".paulharris",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "teku will supply then from nodes that have requested they stay are kept, but because they're not part of the canonical chain its opt-in",
+        "created_at": "2022-08-05T01:58:52.031000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".paulharris",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "and syncing wont get them.. if that makes sense, so its basically you saw a block that became non canonical and kept it",
+        "created_at": "2022-08-05T01:59:21.754000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".paulharris",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "i know canonical is returned on https://ethereum.github.io/beacon-APIs/#/Beacon/getBlockHeader so potentially some clients are serving non canonical block information there, and you could then presumably use the block hash to retrieve it if it's stored...",
+        "created_at": "2022-08-05T02:02:09.962000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "\u003c@340345049063882753\u003e I've been working on EIP-4881 and I realized something: if we also included the deposit tree root in the snapshot, we could use it to validate the snapshot really easily.\n```\n@dataclass\nclass DepositTreeSnapshot:\n    finalized: List[Hash32, DEPOSIT_CONTRACT_DEPTH]\n    deposits: uint64\n    deposit_tree_root: Hash32\n    execution_block_hash: Hash32\n    execution_block_height: uint64\n    def calculate_root(self): -\u003e Hash32\n        size = self.deposits\n        index = len(self.finalized)\n        root = zerohashes[0]\n        for height in range(0, DEPOSIT_CONTRACT_DEPTH):\n            if (size \u0026 1) == 1:\n                index -= 1\n                root = sha256(self.finalized[index], root)\n            else:\n                root = sha256(root, zerohashes[height])\n            size = int(size / 2)\n        return sha256(root, to_le_bytes(self.deposits))\n```",
+        "created_at": "2022-08-05T21:50:46.473000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "You mean validate the snapshot against itself essentially? Like a parity bit kind of thing",
+        "created_at": "2022-08-05T21:51:28.663000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "yes",
+        "created_at": "2022-08-05T21:51:33.150000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "```\nassert(snapshot.deposit_tree_root == snapshot.calculate_root())\n```",
+        "created_at": "2022-08-05T21:52:38.170000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Seems like a sensible thing to add for an extra 32. Bytes.",
+        "created_at": "2022-08-05T21:53:14.890000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "it's also already in the `Eth1Data`, so the `DepositTreeSnapshot` *could* become:\n```\nclass DepositTreeSnapshot:\n    finalized: List[Hash32, DEPOSIT_CONTRACT_DEPTH]\n    finalized_eth1_data: Eth1Data\n    execution_block_height: uint64\n```",
+        "created_at": "2022-08-05T21:54:40.523000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "though I know you prefer a flat structure",
+        "created_at": "2022-08-05T21:54:51.872000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "but i'm just pointing out that this is essentially what makes up a snapshot",
+        "created_at": "2022-08-05T21:55:18.066000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".paulharris",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "i thought basically everyone else wanted non-flat?",
+        "created_at": "2022-08-05T21:55:44.764000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "most people did, only Cayman and Adrian didn't, but nobody had strong opinions either way",
+        "created_at": "2022-08-05T21:56:22.653000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".paulharris",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "ah ok i mis-understood",
+        "created_at": "2022-08-05T21:56:35.855000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".paulharris",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "i think parity makes sense so if that informs the design, maybe its a win/win",
+        "created_at": "2022-08-05T21:57:37.786000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "* Paul Hauner (lean slightly non-flat)\n* Sean Anderson (non-flat)\n* Zahary (no opinion)\n* Dustin [nimbus team] (non-flat)\n* Adrian Sutton (flat)\n* Cayman [lodestar team] (flat)",
+        "created_at": "2022-08-05T21:59:04.276000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "you mean including the `Eth1Data` structure explicitly?",
+        "created_at": "2022-08-05T21:59:52.787000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".paulharris",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "just that what you said before about adding a bytes32 being easier if its non flat",
+        "created_at": "2022-08-05T22:00:25.973000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "gotcha",
+        "created_at": "2022-08-05T22:00:42.575000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Yeah I’m happier with non flat if I can reuse existing structures.",
+        "created_at": "2022-08-05T22:05:03.292000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Semi-related question for you based on a conversation elsewhere - would it be possible to create a deposit merkle tree snapshot from a recent eth1 world state? The deposit contract stores the merkle tree in world state but I’m not sure exactly what format it’s in. There’s some fun details around handling forks if you’re too close to chain head and which deposits have and haven’t been included etc but it would be nice if we could.",
+        "created_at": "2022-08-05T22:11:15.258000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "hmmm where can I find the structure of the eth1 world state?",
+        "created_at": "2022-08-05T22:12:12.105000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "You’d have to look at the deposit contract source code I suspect.",
+        "created_at": "2022-08-05T22:20:25.600000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "oh you mean could it be recovered from the data in the deposit contract",
+        "created_at": "2022-08-05T22:21:05.587000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Yep",
+        "created_at": "2022-08-05T22:21:14.877000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I know there’s a call to get the merkle root - not sure what other easy access it provides but it clearly has the data to create the root and I thought it used a structure similar to this snapshot with storing just the edge of the tree",
+        "created_at": "2022-08-05T22:22:06.069000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "that might be possible, but yeah there is the issue of it only working when the deposits have been fully included in the beacon chain",
+        "created_at": "2022-08-05T22:22:10.423000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "yeah there's no function to grab the `branch` from the deposit contract's storage :/",
+        "created_at": "2022-08-05T22:24:02.327000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I’m pretty sure access can be “obtained”. It probably won’t be pretty but it could be done once and will never need to change.",
+        "created_at": "2022-08-05T22:26:25.556000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "yeah it's just that you can only grab the tree as it existed at the head of the execution chain when the snapshot was created",
+        "created_at": "2022-08-05T22:27:27.254000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "All deposits wind up included often enough that I don’t think that would be a big deal since you’d have at least a hundred blocks of history even on a brand new sync",
+        "created_at": "2022-08-05T22:27:28.790000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "no because there's an 8 hour lag",
+        "created_at": "2022-08-05T22:27:53.814000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Ugh. Of course. But we’ll get rid of that post merge hopefully.",
+        "created_at": "2022-08-05T22:28:11.787000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "before you even start including deposits",
+        "created_at": "2022-08-05T22:28:11.972000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "yeah",
+        "created_at": "2022-08-05T22:28:23.085000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Some gnarly things to think through there but it might be a worthwhile objective to consider when doing post merge clean up work. It would be a big win if we can make it possible (and reasonably simple)",
+        "created_at": "2022-08-05T22:29:19.772000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "right - though i don't think it influences the structure of the snapshot at this point",
+        "created_at": "2022-08-05T22:30:50.757000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "if it's possible to pull out the `finalized` hashes, the rest should be possible to pull out",
+        "created_at": "2022-08-05T22:31:07.586000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Yep agreed. Was definitely a tangent. 🙂",
+        "created_at": "2022-08-05T22:41:12.339000+00:00",
+        "attachments": []
+    }
+]

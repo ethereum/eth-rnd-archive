@@ -1,0 +1,106 @@
+[
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ah.  When I think of \"flat\" db representations, it doesn't imply changesets, so flat db doesn't imply a high cost to selfdestruct. The Geth snapshot+diffs representation seems more like an implementation choice, and sure, I can see how with that implementation choice there's an incarnation counter or equivalent required to avoid the O(n) storage\u003c-\u003ediff transfer.",
+        "created_at": "2021-10-15T12:05:39.287000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "In the representation I'm working on, it's a flat db in the sense that account/slot reads are a single lookup, but there are no explicit diffs.  Multiple full states are stored merged together, so there's no storage\u003c-\u003ediff transfer cost on selfdestruct. That's why I wondered why it was said that the cost isinherent to flat dbs.",
+        "created_at": "2021-10-15T12:11:02.646000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "merged how? how do you differentiate between current and historical state?",
+        "created_at": "2021-10-15T12:14:58.939000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I agree it's not complicated. My point was that some objections people made to incarnation counters / other tracking on grounds of complexity seem weak because that's surely at least as uncomplicated as anything else in the snapshot+diffs handling.",
+        "created_at": "2021-10-15T12:16:46.429000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Of course the chain processing differentiates current from history, but the account/storage db does not consider any state to be current. Given (state, account) or (state, account, slot) key tuple, the db will return value from the appropriate point in history without doing a linear in-memory search of diffs as Geth does. Fast pruning of any range of states, accounts or slots is supported, and branches can be stored. Key to compactness is keeping track of the topological relationship between states. Don't hold me to any details as it's still WIP though.",
+        "created_at": "2021-10-15T12:25:47.650000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I've opened nimbus-eth1 repo but the only state db-related thing I see is a shim to `SecureHexaryTrie` - where should I be looking?",
+        "created_at": "2021-10-15T12:29:21.089000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yeah, my question was precisely *how* the states are differentiated, on the storage engine key/value level",
+        "created_at": "2021-10-15T12:30:04.965000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That's the old db which is not at all space efficient, which I am replacing. The new one is not in the repo at this point, as it's _very_ raw WIP, half on large whiteboards behind me, the other half in experimental code that's not really suitable to integrate.",
+        "created_at": "2021-10-15T12:30:19.170000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "do you have an extra part for the key in the state table, or?",
+        "created_at": "2021-10-15T12:30:51.669000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "basically, what is your data model?",
+        "created_at": "2021-10-15T12:31:06.274000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ordered data store (like most are), key is tuple (account, [slot,] abstractstate) -\u003e value. All queries are projected through a topology ruleset which is stored in a separate, small table and is primarily for fast pruning. Abstractstate is a function of block number and branch relationship, whose ordering properties are similar to block numbers but supports more compact encoding while keeping queries fast. Compactness and speed depend on a various properties of the data store, but roughly speaking, at the db API level, keys and values appear in full as if they are replicated in each full state, but underneath in the data store representation, tuple components undergo searchable delta compression, and point queries are converted to limit-1, filtered, backward range scans on the key tuple, which is equivalent to \"get max less than or equal\". Pruning (past states, branches) and cloning a state for a successor state only update metadata without touching the bulk data pages, despite the key tuple order implying the logical edit is spread out. This is key to fast pruning combined with fast account/slot lookup. It's a versatile structure, though I've made it sound very specific to eth storage here.",
+        "created_at": "2021-10-15T13:05:00.300000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "By the way, is \u003c#812719315136675850\u003e meant to be in the Graveyard section and not used any more?",
+        "created_at": "2021-10-15T13:08:40.782000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "albusdompeldorius",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "evm-graveyard is for discussing how to remove complexities in the EVM, moving them to the \"evm-graveyard\" 😉",
+        "created_at": "2021-10-15T13:16:18.358000+00:00",
+        "attachments": []
+    }
+]

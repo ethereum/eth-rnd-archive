@@ -1,0 +1,666 @@
+[
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "generally, if clients start abusing the id field by providing poor connectivity, the slighted software will soon include a spoofing option to use a custom client id",
+        "created_at": "2019-12-17T10:08:13.716000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "then we can have an arms race: who will fingerprint the remote client the best? 🙂",
+        "created_at": "2019-12-17T10:09:15.528000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "It is more useful for honest-but-misguided software, rather then malicious software. Simple bugs and the like",
+        "created_at": "2019-12-17T10:11:58.683000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I spent some time looking at the network layer in prysm, specifically how libp2p interacts with our protocol layer.  After some thought \u003c@!476250636548308992\u003e and I came up with a doc that attempts to explain some of the issues we're seeing and how we believe some additional hooks in libp2p could help us to create and maintain a stable network and reduce unnecessary traffic.  Before I send it over to the libp2p folks it would be great if other teams could take a look at this and let me know their thoughts.  Please ask if there are any details that appear unclear; thanks.\nhttps://hackmd.io/@jgm/SJGg_VLCS",
+        "created_at": "2019-12-17T13:57:52.721000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Back to the version field, I second \u003c@144468805697929216\u003e , this isn't about malicious clients, this is more about client identification. This is even used in libp2p  itself, where such info is exchanged during identify, obviously libp2p specific. Same for browsers, the useragent field has turned out usefully beyond just debugging.",
+        "created_at": "2019-12-17T14:40:58.009000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "keep in mind that you do not want too much fanciness or memory in these things - take a simple example: several peers connecting from a NAT - until you've done a handshake, you don't know if they're the same or not - likewise for a software upgrade - etc etc. before making any such \"optimizations\", did you measure how much cpu/bandwidth they actually do take up, as a percentage of useful throughput?",
+        "created_at": "2019-12-17T14:42:33.300000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I put together an issue at https://github.com/ethereum/eth2.0-specs/issues/1531 that talks about a \"hello\" message",
+        "created_at": "2019-12-17T14:43:49.534000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "generally, what p2p clients usually do is to score peers indeed, and keep a pool of high-score peers as well as a bottom layer that gets periodically refreshed to allow for benign churn / new peers",
+        "created_at": "2019-12-17T14:44:04.708000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "\u003c@!449019668296892420\u003e a hello message would be a good way to do fast scoring ,at least initially",
+        "created_at": "2019-12-17T14:44:49.038000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "the bottom layer, you kick out slow/bad peers and have a few slots for connection attempts etc so that you're not negatively influenced by DoS",
+        "created_at": "2019-12-17T14:44:51.690000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "so basically, the good peers you have, you keep them, but it's also normal to have a \"churn area\" for experiments - there are studies that show how much should be geared towards new node exploration and how much to allocate to existing nodes etc",
+        "created_at": "2019-12-17T14:46:00.699000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "well, that brings us back to my original question: can you quantify how much of a problem this actually is, in libp2p?",
+        "created_at": "2019-12-17T14:47:29.025000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "as to hello - as \u003c@!498009160982724610\u003e says, some of it is covered by libp2p itself already - adding a special message with the \"at-connection\" semantic represents an implementation burden, so it should be considered carefully in that light as well",
+        "created_at": "2019-12-17T14:49:18.030000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "vs simply adding a field or two to `status` if really deemed necessary",
+        "created_at": "2019-12-17T14:49:54.481000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Are we talking specifically about why a hello message would be a good thing?  Well, we already have 1 node misbehaving on the network.  But the point isn't so much the problems we have now, it's the problems we may have down the line.\n\nFor example. release V1.0.0 of code is found to be sending bad data.  V1.0.1 is released as a patch, but not everyone upgrades immediately.  Without some way of knowing which peer is in V1.0.0 and which in V1.0.1 we won't know if to talk to the peer or not.",
+        "created_at": "2019-12-17T14:51:29.749000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I would say, scoring is in a completely different realm and afair, these isn't an easy way of sharing this info from libp2p",
+        "created_at": "2019-12-17T14:51:51.090000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "As for the question of if we should add to `status`, there is a rationale in the issue I linked.",
+        "created_at": "2019-12-17T14:52:00.834000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Most implementations i know of, don't share that info with the app level , it's internal to libp2p, if at all present",
+        "created_at": "2019-12-17T14:52:37.177000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "yeah, but the question is, is the optimization because it's static worth it, considering the other reasons",
+        "created_at": "2019-12-17T14:52:39.480000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "\u003c@!453997683431178243\u003e well, scoring is a client implementation detail that has no network-level implications so I don't see why it necessarily has to be specified by libp2p",
+        "created_at": "2019-12-17T14:53:18.085000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "though libp2p could present suggestions",
+        "created_at": "2019-12-17T14:53:29.718000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Well, there should be a way to at least blacklist peers from the in libp2p",
+        "created_at": "2019-12-17T14:53:49.089000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "This isn't possible right now",
+        "created_at": "2019-12-17T14:53:59.457000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Optimisation being a different message rather than adding to `status`?  Personally I think that the former will be cleaner and more extensible, as well as reducing bandwidth usage, but if it ends up being added to `status` I won't weep.  The more important thing is to have the data available",
+        "created_at": "2019-12-17T14:54:12.825000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "well, yeah, what I'm saying is that it's an implementation detail: we can add blacklisting to nim-libp2p without involving anyone else",
+        "created_at": "2019-12-17T14:54:23.403000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "(Note that blacklisting and peer scoring are discussed in https://hackmd.io/@jgm/SJGg_VLCS)",
+        "created_at": "2019-12-17T14:54:48.955000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "We can, but it's missing from libp2p at the spec level, something I'd like to see change",
+        "created_at": "2019-12-17T14:55:29.859000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "have you looked at how eth1/bitcoin does peer selection/scoring, in comparison?",
+        "created_at": "2019-12-17T15:08:05.124000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Scoring peers would make sense if these were valid peers, but if you had peers that constantly failed handshakes because they were on a different fork etc. It wouldnt make sense to still keep them in our set of connected peers, having a separation between peers considered valid by protocol vs network would lead to higher quality of messages being gossiped in the network.",
+        "created_at": "2019-12-17T15:14:23.459000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "from what I previously remember geth did not use peer scoring, \u003c@!194432762315407360\u003e can confirm on this",
+        "created_at": "2019-12-17T15:15:02.767000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "there is no peer scoring in geth",
+        "created_at": "2019-12-17T15:17:27.538000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "for us, there is a really simple tactic that has always worked",
+        "created_at": "2019-12-17T15:17:43.270000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "disconnect the peer for any protocol breach",
+        "created_at": "2019-12-17T15:18:14.130000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "additionally, maintain a heap of recent connections and prevent reconnects for some amount of time after disconnect",
+        "created_at": "2019-12-17T15:18:53.518000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "any reputation system can be gamed in some way",
+        "created_at": "2019-12-17T15:25:04.666000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "any whitelist/blacklist circumvented",
+        "created_at": "2019-12-17T15:25:19.757000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Scoring peers should be internal to the client, beyond that it as \u003c@!194432762315407360\u003e says, it can be gamed. The advantage of \"protocol vs network\" as mentioned by \u003c@!476250636548308992\u003e is in how soon a peer can be identified as useful/valid. If a significant amount of data needs to be exchanged before the peer is deemed to be on a different fork, then having a way of filtering (well behaved) peers early on is quite significant.",
+        "created_at": "2019-12-17T15:30:03.368000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "global scoring is possible, but would involve some consensus protocol to determine if the global score is valid...",
+        "created_at": "2019-12-17T15:30:42.258000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "It's important to remember that blacklisting and scoring as outlined in the doc isn't meant to be some way to stop malicious peers, but a way to handle well-intentioned-but-wayward peers.  It should help to ensure a good and stable network as long as all peers fall in to the well-intentioned category.",
+        "created_at": "2019-12-17T15:31:54.397000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I'm actually not sure if chain identification has been worked out for eth2 yet",
+        "created_at": "2019-12-17T15:32:05.771000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "And scoring isn't purely a measure of how ill-behaved a client is.  It could involve response time, for example.",
+        "created_at": "2019-12-17T15:32:56.319000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "What I mean is, what kind of information is being exchanged in 'hello' to identify the eth2 chain the peers will talk about?",
+        "created_at": "2019-12-17T15:33:00.655000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I'm also interested in this, it sounds like with LMD Ghost you'd require to walk the chain before realizing if it's valid?",
+        "created_at": "2019-12-17T15:33:19.335000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "genesis fork version and genesis root should be enough to decide if we are starting from the same point.  It won't allow us to work out if the chains have diverged since then, but that's partly what we get from `status`",
+        "created_at": "2019-12-17T15:34:05.637000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "\u003c@144468805697929216\u003e I think your example of well intentioned but broken clients is unrealistic. If clients properly validate all protocol messages, you won't even get to the point where there is a broken popular client",
+        "created_at": "2019-12-17T15:34:24.167000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "you guys might be interested in https://eips.ethereum.org/EIPS/eip-2124",
+        "created_at": "2019-12-17T15:34:59.924000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Broken could mean many things.  Bugs in the code, bad network connectivity, etc",
+        "created_at": "2019-12-17T15:35:02.249000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "we just shipped that in eth1",
+        "created_at": "2019-12-17T15:35:13.739000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Interesting.  I do think that we'll need something similar at some stage (a great candidate to add to the nascent hello message 🙂 ) as people start coming up with interesting (and badly thought-out) ways to fork Ethereum 2",
+        "created_at": "2019-12-17T15:39:22.519000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "jgm the genesis information, if anywhere, belongs in the discovery protocol, so that \"good\" citizens don't connect at all",
+        "created_at": "2019-12-17T15:53:27.943000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "but it's really an optimization that should be quantified before implementation - I mean from the logs it might look like it's a big deal, but handling a few connections now and then really shouldn't be, compared to what the protocol will be consuming overall",
+        "created_at": "2019-12-17T15:54:50.581000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I'm not sure what you mean by \"discovery protocol\".  The proposed hello would pretty much *be* the discovery protocol, as far as I'm aware (given that libp2p is indiscriminate in terms of connecting to peers that the protocol layer may already consider bad).",
+        "created_at": "2019-12-17T15:58:50.405000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "discv5 - the protocol used to discover peers in the network (ie to find addresses to connect to)",
+        "created_at": "2019-12-17T16:00:12.530000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "or whatever else we end up using in case discv5 ends up not covering our needs (ie there's a kad2 being developed for libp2p - not sure what progress looks like there)",
+        "created_at": "2019-12-17T16:01:37.967000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "If the information ends up being passed around at a lower level that's great, but I don't see that existing today.",
+        "created_at": "2019-12-17T16:06:51.970000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "\u003c@!449019668296892420\u003e the info in the discovery layer can become stale, do we know how often it gets updated and weather version/agent is going to be part of it? In any case, if a massive rollout is happening, for a hardfork for example, and there is a transitional period where there are lots of incompatible clients in the network, it is a good thing to be able to tell them apart quickly",
+        "created_at": "2019-12-17T16:08:39.542000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "that's why forkversion is in `status` - it's concievable to add genesis in there too",
+        "created_at": "2019-12-17T16:09:33.903000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "comes down to how we manage forkversion - ie testnets have their own space etc.. it's a socially coordinated field",
+        "created_at": "2019-12-17T16:10:02.588000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "is the status message exchanged often or only once?",
+        "created_at": "2019-12-17T16:10:53.578000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "As for the question of quantification: I think it's bad enough with the 100-or so active nodes in the prysm testnet now that scaling up to thousands or tens of thousands of nodes will cause real problems.  The `hello` message would give well-behaved nodes a chance to gate their behaviour, and the libp2p tweaks as mentioned in the doc would allow stable pubsub meshes to be formed between peers that are likely to keep up long-term connections with each other.",
+        "created_at": "2019-12-17T16:11:19.741000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "\u003c@!144468805697929216\u003e in the doc, the scoring system you're proposing, is it local to the peer, or some global score that everybody shares?",
+        "created_at": "2019-12-17T16:20:17.496000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "other than that, more hooks in libp2p to allow the application layer more control over the mesh forming, is IMO a good thing.",
+        "created_at": "2019-12-17T16:21:00.677000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I'm not proposing any particular system, just stating that if libp2p had a way of us ordering their potential peers we could think about building one.",
+        "created_at": "2019-12-17T16:21:32.126000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Personally I'd start with a local one; not sure that a global one would give significant benefit compared to the pain that would be involved in protecting it from attack (or from bugs)",
+        "created_at": "2019-12-17T16:22:17.733000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "right, a standard way of scoring peers within libp2p would be a good addition, but any sort of global scoring is  complicated and a bit of a can of worms IMO",
+        "created_at": "2019-12-17T16:23:13.800000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Yeah thinking about it, it would be a whole system to carry out checks and protections.  Peers do okay with local scoring (prysm has a simple 'bad responses' count, for example, that stops use from interacting with the bad-uns at the protocol layer)",
+        "created_at": "2019-12-17T16:25:52.753000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "yes, it's an interesting problem to play with for sure, but remains to be seen how practical it actually is... tho we do have a synchronization primitive in the beacon chain already, perhaps we can piggy back on it somehow - this is probably the least of our problems right now tho 🙂",
+        "created_at": "2019-12-17T16:27:28.041000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "And a quick note on quantification: I just ran a prysm beacon node for 5 minutes with some additional monitoring turned on for rejections and the numbers are:\n\n```\np2p_message_discarded_total{topic=\"/eth2/beacon_attestation/ssz/ssz\"} 419\np2p_message_discarded_total{topic=\"/eth2/beacon_block/ssz/ssz\"} 7\np2p_message_received_total{topic=\"/eth2/beacon_attestation/ssz/ssz\"} 633\np2p_message_received_total{topic=\"/eth2/beacon_block/ssz/ssz\"} 11\n```\n\nSo that's about 2/3 of the messages received are discarded due to being from peers we have not yet completed a handshake with.  Having a `hello` gate plus the libp2p changes should go some way to help this.",
+        "created_at": "2019-12-17T16:33:41.519000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "But looking at the status message, it already provides most of the information, sans the client name and supported versions?",
+        "created_at": "2019-12-17T16:36:03.842000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "here it is for reference - https://github.com/ethereum/eth2.0-specs/blob/dev/specs/networking/p2p-interface.md#status",
+        "created_at": "2019-12-17T16:36:10.784000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "unless the status message is intended to be exchanged periodically, this is the hello message?",
+        "created_at": "2019-12-17T16:36:32.899000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I'm still in favor of some client id field, but not sure about a new, dedicated hello message",
+        "created_at": "2019-12-17T16:36:59.801000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "As I said earlier, I don't care if the required info is added to the `status` message instead of a new message.  `status` is sent on a periodic basis, so it will take up more bandwidth than a dedicated message over time.",
+        "created_at": "2019-12-17T16:37:16.880000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "yes, in that case I agree - we need a static handshake message",
+        "created_at": "2019-12-17T16:38:17.012000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dryajov",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I can't find any place in the spec that states that the status message should be exchanged on a periodic basis, \u003c@!449019668296892420\u003e is that the case, or is it a static message used in place of the hello? Furthermore, whats the need to exchange this information on aperiodic basis? To signal new blocks/slots?",
+        "created_at": "2019-12-17T16:46:31.959000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "prysm updates them at least every 6 minutes.  Given they have information that changes each block in them the messages do become stale pretty quickly.  If that matters or not depends on what people use that information for (prysm uses it to select nodes with which to sync, for example).",
+        "created_at": "2019-12-17T16:50:02.930000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "about passing chain identification in discovery: this is part of eip-2124 (the one I linked earlier)",
+        "created_at": "2019-12-17T17:57:06.950000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "the forkID specified there is part of the node record in the \"eth\" entry",
+        "created_at": "2019-12-17T17:57:33.816000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "we should think about the format of the \"eth2\" entry soon.",
+        "created_at": "2019-12-17T17:58:54.059000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "as discussed in networking call 0, if eth2 uses 64 shards initially, shard participation could be a bitmap because it fits into ENR",
+        "created_at": "2019-12-17T18:00:22.370000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "atoulme",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "initially what will use discovery? Just beacon nodes right?",
+        "created_at": "2019-12-17T18:01:40.849000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "atoulme",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Do they need to participate in a specific shard? I thought phase 0 didn't have sharding quite yet, just use beacon chain as a basic, simple PoS chain",
+        "created_at": "2019-12-17T18:02:21.318000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "djrtwo",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Phase 0 does not have shards but _does_ have the basic notion of different committees sending messages on subnets. These subnets loosely map to shard subnets that will fully form in phase 1.\nI just put up a PR that adds a `shards` entry to the ENR which is a bitfield corresponding to committee_index in phase0  and which will map into shards in phase 1.\n\nhttps://github.com/ethereum/eth2.0-specs/pull/1534",
+        "created_at": "2019-12-17T18:20:54.779000+00:00",
+        "attachments": []
+    }
+]

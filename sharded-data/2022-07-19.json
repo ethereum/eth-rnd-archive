@@ -1,0 +1,26 @@
+[
+    {
+        "author": "inphi",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'm working on implementing EIP-4844 for clients and recently implemented \u003c@862973562243252234\u003e 's optimization (https://github.com/ethereum/EIPs/pull/5088) for blob verification using KZG proofs.\nAs expected this improves single transaction verification time by a factor of 2-3x:\n```\nBenchmarkVerifyBlobs-8             57      20378432 ns/op     2195321 B/op       33389 allocs/op\nBenchmarkVerifyBlobsWithoutKZGProof-8             15      73560186 ns/op     1628573 B/op        4377 allocs/op\n```\nPrior to using KZG proofs for blob verification, we had an optimization for verifying multiple transactions as a batch. This was done by aggregating blobs and commitments into single polynomials and then doing verifying the aggregate as usual. Doing so had a profound speedup where verification time becomes sublinear in the number of blob transactions.\nHowever, with KZG proofs, we can no longer do this. We can't simply apply the same technique prior to KZG proofs to optimize batch transaction verification since the points for the proof has already been selected proof using the (blob,commitment) root heuristic. (And I'm guessing doing otherwise would break security). So the proofs are not readily aggregable across blob transactions.\nThus, my implementation verifies blobs iteratively. But doing so takes much longer than batch-verfication without KZG proofs:\n```\nBenchmarkBatchVerifyWithoutKZGProofs/2-8           15      73008533 ns/op     1035821 B/op        4353 allocs/op\nBenchmarkBatchVerifyWithoutKZGProofs/4-8           15      74046119 ns/op     1071456 B/op        4617 allocs/op\nBenchmarkBatchVerifyWithoutKZGProofs/8-8           15      75317150 ns/op     1142760 B/op        5145 allocs/op\nBenchmarkBatchVerifyWithoutKZGProofs/16-8                   14      78850306 ns/op     1285345 B/op        6201 allocs/op\nBenchmarkBatchVerifyIterative/2-8            5     202556858 ns/op    21962900 B/op      333884 allocs/op\nBenchmarkBatchVerifyIterative/4-8            5     201514508 ns/op    21959921 B/op      333886 allocs/op\nBenchmarkBatchVerifyIterative/8-8            5     204940358 ns/op    21962918 B/op      333884 allocs/op\nBenchmarkBatchVerifyIterative/16-8                    5     204348308 ns/op    21960270 B/op      333881 allocs/op\n```\nWhile we technically can still run the batch verification using KZG proofs, doing so means that a client may accept a blob transaction with an invalid aggregate proof. Anyone have ideas on how to verify multiple blob transactions in a batch using KZG proofs? Perhaps the single transaction verification time improvements are sufficient and maybe we don't need to optimize this even further.",
+        "created_at": "2022-07-19T16:59:37.583000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "kevaundray",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "If you are iteratively verifying N kzg proofs, which is costing you a pairing per verification, you can change this to batch verify all N kzg proofs by using randomness",
+        "created_at": "2022-07-19T22:15:00.654000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "kevaundray",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Here is some code that does this: https://github.com/arkworks-rs/poly-commit/blob/master/src/kzg10/mod.rs#L305",
+        "created_at": "2022-07-19T22:15:41.905000+00:00",
+        "attachments": []
+    }
+]

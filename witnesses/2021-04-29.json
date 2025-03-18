@@ -1,0 +1,218 @@
+[
+    {
+        "author": "g11tech",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "ok, for the purposes of this EIP, 1) it will make it a necessary but insufficient condition to prove that the witness data for the block (as fetched using for e.g. wit/0) is complete (that witness data has all of the accessed addresses and nothing is left out) , and for the purposes of light clients sending and receiving, batching/requests for the witness data can be done using headers. And we hope to evolve this into proof of full data completeness later.",
+        "created_at": "2021-04-29T07:08:56.114000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "2. also help clients preload these addresses for optimal computation of the block.",
+        "created_at": "2021-04-29T07:12:09.953000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "where can I find these JSON-RPC end points to have a look. in spec or specific client implementation code?",
+        "created_at": "2021-04-29T07:16:37.716000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "on block level we could have: accessed_block_addresses: Set[Address,[AccessedInTransactionNumberList] ] and this can be deterministically computed as a trie while serially  building the transactions, whose root can be embedded in block header.",
+        "created_at": "2021-04-29T07:27:43.823000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "For the general json-rpc spec: https://eth.wiki/json-rpc/API",
+        "created_at": "2021-04-29T14:10:27.434000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "For the new access list endpoints try asking in the #json-rpc channel",
+        "created_at": "2021-04-29T14:11:06.089000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "👍",
+        "created_at": "2021-04-29T17:32:25.036000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Something I think to look at here is:\n\n- set's tend to be un-ordered.  We'll need something to denote canonical ordering if we want to be able to produce a consistent 32-byte hash reference to the ACL\n- the concept of a \"set\" is probably good here, but the EIP will probably need to explicitely define the rules of \"no item may appear in the list multiple times\"\n- the EIP will need to define how we derive a 32-byte hash from the structure.  Using an SSZ list would be my suggested starting point but I recommend exploring different options.",
+        "created_at": "2021-04-29T18:47:34.430000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That's why I mentioned that a Patricia Merkel or verkel trie be build for reach block starting from an empty root node, while transactions are executed one by one, the first access will in that particular transaction will leed to it being added in the addresses leaf node, leaf node being the tuple of address to the ordered list of the transaction number of this transaction in the block. I haven't really thought at cost implications here, but same strategy can be used to extend it to build a list of witnesses for stateless ethereum. Going by the compactness of size, verkel would be preferred but I am yet to put my thoughts together on all this.",
+        "created_at": "2021-04-29T18:53:29.093000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Am I understanding correctly that you're proposing using the Merkle/Verkle trie as the \"32-byte\" hash generation mechanism, stick the witness pieces into a trie, use the root hash as the 32-byte reference in the header?",
+        "created_at": "2021-04-29T18:54:45.880000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes on these lines",
+        "created_at": "2021-04-29T18:55:47.347000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I mean the verkel tree for contract code access section is also being proposed to be build in same fashion",
+        "created_at": "2021-04-29T18:56:28.117000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "For the purposes of witness compression for stateless",
+        "created_at": "2021-04-29T18:56:56.038000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "First time access in a transaction leads to terminal node creation/updation",
+        "created_at": "2021-04-29T18:58:18.789000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I can see the temptation here since it basically gives you a \"set\" object which produces a unique 32-byte root hash.  But I think this route is probably more complex than necessary and has some implications that we're likely to want to avoid.\n\nPrimary downside I see is that it ties the access list to our trie format and there's benefit from it being independent of that format.\n\nSecond is the complexity.  Using a trie is a complex data structure, and IIUC the main motivation here is that it gives us a \"Set\" type data structure.  It is probably much simpler to define the protocol rules around a \"list\" of things with a prescribed ordering and rules around not allowing duplicates.  Implementations can use \"set\" type data structures, but the protocol can stay agnostic to how they model it internally.",
+        "created_at": "2021-04-29T18:58:52.857000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If we use Patricia Merkle trie, then later when we migrate to Verkle, we also have to migrate `Header.access_list_root` as well, making that future migration more complex...  And so on sometime down the road when we move from verkle to ??? whatever new fancy thing smart people figure out...",
+        "created_at": "2021-04-29T19:00:29.988000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "glad you're looking forward to this change, yes access lists will eventually have a 3rd item of code chunks accessed.",
+        "created_at": "2021-04-29T19:01:51.200000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "cc \u003c@!508125616940515329\u003e ^ this conversation may be relevant to your beam sync work.  Working towards getting a field in the header that would allow you to verify the data before you download it (preventing griefing)",
+        "created_at": "2021-04-29T19:02:55.593000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "You have a valid point w.r.t. the complexity and computation, defining an ordered set in the same way is simple and just chunk it into a hash, but I am thinking of what other purposes this could be used for and extended to",
+        "created_at": "2021-04-29T19:03:18.092000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Will some sort of proof regarding the witnesses bring gathered for e.g. in wit 0 protocol can be done",
+        "created_at": "2021-04-29T19:04:13.526000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jason.carver",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'd also be hesitant to make the access order of trie node to be consensus-sensitive. It much simpler as a client to just collect all accessed nodes and sort them some other way, rather than always precisely agree on access order. It also might limit some kinds of out-of-order performance tricks that some clients might want to try (or at least make it more complex to re-construct the access order correctly)",
+        "created_at": "2021-04-29T19:05:24.077000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "for ordering I see two choices (but maybe there's more):\n\n- A: lexicographical (sorted by account -\u003e storage slot -\u003e code chunk index)\n- B: order of access within the block\n\nI'd lean towards the later since it would allow clients to prioritize downloading the data they will need \"first\" when executing a block during something like beam sync.",
+        "created_at": "2021-04-29T19:05:57.533000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "My construction also favours B",
+        "created_at": "2021-04-29T19:06:40.468000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "worth considering.  probably good to get broader buy-in/discussion on this.",
+        "created_at": "2021-04-29T19:07:42.749000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And if the data to be downloaded is partial then trie makes sense l, I must confess my fascination with the tries",
+        "created_at": "2021-04-29T19:07:44.333000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Oh, another reason to go with lexicographical ordering is that it can be validated without executing the block.  Otherwise there's maybe a griefing vector where the last two items are swapped and you can only know it's invalid by executing the full block.",
+        "created_at": "2021-04-29T19:09:13.143000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Will give due thoughts on this",
+        "created_at": "2021-04-29T19:11:48.130000+00:00",
+        "attachments": []
+    }
+]

@@ -1,0 +1,330 @@
+[
+    {
+        "author": "roberto.bayardo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Also: on the call there was apparent consensus around getting rid of optionality entirely in the To: field of blob txs (no need to support contract creation through nil To: field).",
+        "created_at": "2023-05-02T01:26:33.860000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Thanks for the summary!\n\nI think, one question is, whether there needs to be replay protection across multiple Ethereum-based chains, that implement custom transaction types that conflict with standardized type numbers. e.g., vendor who created their own SSZ type 3 transaction that doesn't have anything to do with blobs, but happens to have a separate field at the location of the blob commitments, with a different meaning. EIP-6493 currently protects against that, both for pre-existing conflicts, and also for conflicts that may arise as part of a fork, e.g., ETHW wanting their own type 3 transactions with different meanings.\n\nOne important thing to note is that discussion about those kind of forks are quite theoretical and future-looking. Question being, which kinds of forks should be protected against, and which ones are (explicitly) alright to ignore. What should be avoided is a situation where we decide on some scheme and later find out it has design flaws that were not explicitly accepted.\n\nAbout the three options discussed on your notes:\n\nOption 1 (EIP-6493): \n\u003e it brings significant complexity into the EL that may have made sense in the CL but may not provide value for this purpose (e.g. forkid as part of the domain)\n– The value provided by forkid is an EL concept, see EIP-2124. ELs already track this value as part of their devp2p advertisements: https://eips.ethereum.org/EIPS/eip-2124#specification\n– `compute_signing_root` is a pure function. It is referred to, because it already passed any potential security audits for the beacon chain. \n– Maybe I miss something, not sure what the \"significant complexity\" is about.\n\nOption 2:\n– This may be limiting design space, if regular message signatures also should be moved over to SSZ at some time.\n– This also ignores the fork problem, as in, other chains that may use type 3 for a different transaction format.\n\nOption 3:\n– Seems to delay the problem instead of addressing it.\n– Why even have the SSZ network presentation",
+        "created_at": "2023-05-02T09:48:38.511000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Also, EIP-6493 not set in stone, there could be solutions between \"option 1\" and \"option 2\" that forgo some of the elements as well",
+        "created_at": "2023-05-02T09:50:24.335000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://ethereum-magicians.org/t/eip-6493-ssz-transaction-signature-scheme/13050/8?u=etan-status\nReplied to lightclient as well",
+        "created_at": "2023-05-02T10:17:12.886000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think w.r.t. the chain replay, it was discussed that a simple prefix encoding the chain genesis might be useful instead of just a tx type prefix rather than going CL compute signing root, basically sans any fork info so that even non-upgraded  (hardware) wallet signatures can be easily upgraded on the fly",
+        "created_at": "2023-05-02T10:27:38.699000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "so, instead of signing `hash_tree_root(tx, chaininfo)`, it would be signing `chaininfo || hash_tree_root(tx)`?\nif it has a display, the chaininfo needs to be sent anyway for user verification (ledger show signed chain ID if non-1 for example).\nif it doesn't have a display, the signing wallet could send the overall `hash_tree_root(tx, chaininfo)`",
+        "created_at": "2023-05-02T10:37:12.250000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yperbasis",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "IMO EIP-6493 complicates things unnecessarily. Even with the current EIP-4844 spec it's not possible to have the same serialization of a type-3 transaction between SSZ and RLP. SSZ-serialized transaction starts with little-endian uint256(chain_id), i.e. 010000000... for mainnet. RLP-serialized transactions cannot start with 01.",
+        "created_at": "2023-05-02T12:51:56.973000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yperbasis",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So I'd rather leave EIP-4844 as is.",
+        "created_at": "2023-05-02T12:54:16.300000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Re \"significant complexity\" I guess that's subjective,  but IMO there's a lot of cognitive load in just interpreting the 6493 doc compared to the brief descriptions of the other approaches.  If that extra load isn't providing significant value (and I don't have a strong opinion on that yet) then it doesn't seem worth pursuing.",
+        "created_at": "2023-05-02T14:31:07.353000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "And I didn't imply the options to be the only ones, those were just the ones that were discussed on the call.  Option 2 was only alluded to without a concrete proposal, I tried to make it more concrete in the doc.",
+        "created_at": "2023-05-02T14:33:45.882000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Re option 2: _\"– This also ignores the fork problem, as in, other chains that may use type 3 for a different transaction format.\"_\n\nI believe this risk would only be there if they introduce another type-3 SSZ transaction without the chain id appearing in the same position as the blob-tx format or is there another case I'm missing?",
+        "created_at": "2023-05-02T14:48:10.300000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It does sort of feel we should move chain-id out of the raw tx and make it part of the signing envelope though.   But maybe there is more to chain id being within the transaction than replay protection?",
+        "created_at": "2023-05-02T14:52:06.852000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yperbasis",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Chain ID is already effectively part of the signing envelope because its little-endian encoding is the first 32 bytes of SSZ-serialized transactions.",
+        "created_at": "2023-05-02T14:55:49.021000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Right but why not make it explicitly so?  If it's not useful for anything but tx-replay it should be part of the signing envelope not the tx itself, just like the tx-type byte.",
+        "created_at": "2023-05-02T15:01:03.489000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "e.g. for option 2 we'd remove chain_id from the tx itself and have the following signing envelope:\n```\nclass TxSigningData(Container):\n    tx_type: Bytes1\n    chain_id: Bytes32\n    object_root: Root\n```\n\nFor current Keccak/flat style sheme we'd remove chain_id from the tx itself and instead sign:\n\n```\nkeccak([tx_type_byte] + uint_to_bytes(uint32(chain_id)) + ssz.serialize(tx.message))\n```",
+        "created_at": "2023-05-02T15:04:09.620000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think the real protection for fork domain based signings root is from the `forked chains` having same chainid like ETHW, to protect a user's tx on a chain like that to be played on here \n\nBut i think we do not care about that and force a user to choose a canonical chain?",
+        "created_at": "2023-05-02T15:13:30.566000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Good point, comes back to Etan's question around what kinds of situations do we want to protect against. EL is already vulnerable to bad actors who fork without a new chain id. Do we want to fix that?",
+        "created_at": "2023-05-02T15:15:26.315000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "else i agree, chainid already part of signing root and tx type prefix also in it already takes care of within chain replay (change prefix and try to run tx as a different type would not work as sig would not match)",
+        "created_at": "2023-05-02T15:15:48.026000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "my feeling is we do not, since forkID based signing root calculation was previously rejected?",
+        "created_at": "2023-05-02T15:16:40.440000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003ctimbeiko\u003e \u003e \u003ctimbeiko\u003e  FWIW, ETHW ended up changing the chain ID. I think we have pretty strong consensus in the community that not doing so is pretty reckless. (re @sharded_data_bot: \u003cg11tech\u003e I think the real protection for fork domain based signings root is from the `forked chains` having same chainid like ETHW, to protect a user's tx on a chain like that to be played on here \n\nBut i think we do not care about that and force a user to choose a canonical chain?)",
+        "created_at": "2023-05-02T15:16:42.850000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "That's not how SSZ works. The beginning is an offset table, as there are variable-length fields inside.",
+        "created_at": "2023-05-02T16:25:22.630000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes, but SSZ doesn't necessarily encode the chain ID to the same location for all transaction types. It depends on what layers are variable-length or not.",
+        "created_at": "2023-05-02T16:26:13.381000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "That's good feedback. I can update 6493 to be briefer. For example, using distinct domains across CL and EL is not strictly required, as CL signatures currently use BLS, and EL signatures currently use ECDSA, so there is no conflict potential at this time.",
+        "created_at": "2023-05-02T16:26:58.035000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The chain ID isn't actually required, as long as it is being signed (as part of the mixed in data). However, having it there in the payload ensures that messages with incorrect chain ID can be dropped without having to do the more expensive ecrecover (and then discovering that the signer has no balance)",
+        "created_at": "2023-05-02T16:28:04.372000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Well, it's not a security feature for protecting against malicious intent. More a fix for unintentional coincidental changes. People should be able to propose new transaction types without having to worry about the offset where a chain ID gets serialized. I think, as for forks, it should be good enough to mix in chain ID and genesis hash. The fork version I guess we can drop without losing something significant",
+        "created_at": "2023-05-02T16:32:12.851000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Unless different type 3 transactions from different networks have the chain id in the payload at different locations, that would work. Mixing in the chain ID into the signing root ensures it's always at the same location",
+        "created_at": "2023-05-02T16:33:49.394000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Oh, do you have a source for that? Would be interesting to read on it",
+        "created_at": "2023-05-02T16:34:03.642000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "thats something \u003c@543900561460822016\u003e mentioned in call if my understanding is correct",
+        "created_at": "2023-05-02T16:42:57.586000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I do agree adding chain-id prefix is a simple solution that doesn't tax brain cycles for security analysis",
+        "created_at": "2023-05-02T16:45:45.043000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "but the problem is a \"rogue chain\" could design tx serialization any which way it wants that can conflict with ours",
+        "created_at": "2023-05-02T16:50:02.561000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "what we should be concerned about is if it conflicts with  serializations in our span of chain ids",
+        "created_at": "2023-05-02T16:51:40.696000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Right, which is why i like the idea of moving chain-id into the top section of the signing envelope which presumably would only have fixed-sized fields.",
+        "created_at": "2023-05-02T17:27:23.464000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "One more thing: I also still like your idea of having the signature in the blob tx be opaque 65 bytes rather than the v,r,s split \u003c@881905303011086387\u003e but we didn't have time to discuss it on the call.",
+        "created_at": "2023-05-02T17:29:45.655000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "One catch of moving chain-id out: you could no longer validate a signature without the chain \u0026 block context (which is how you would then derive the chain-id to validate)",
+        "created_at": "2023-05-02T17:32:27.096000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "inphi",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "are there actual cases where this would be a problem?",
+        "created_at": "2023-05-02T17:50:31.729000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Not that I can tell, but just putting it out there.",
+        "created_at": "2023-05-02T17:53:48.099000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I now have sections in the doc on the chain-id location issue as well as whether to move to an opaque signature format.",
+        "created_at": "2023-05-02T17:54:59.233000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://hackmd.io/nz-IqXLPQ-yahFPFlPl62A",
+        "created_at": "2023-05-02T17:55:01.697000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So I might derail the conversation a bit, but I'm not sure if ssz-ing the blob transactions is beneficial.\nSince we only use the encoding format and not the hash-tree-root, the format is basically useless for proving the data in the transaction.\nUsing SSZ for blob transaction is kinda seen as a stepping stone to get full SSZ transactions in, however we arrived at a point where we know that full SSZ transaction root will take a longer time to get right. This kinda poses the question if it would be more beneficial to pause 4844 until we get full SSZ roots. My personal answer to this question would be a hard no. \n\nSo the way I see it using RLP to encode Blob transactions has the following drawbacks:\n- Less momentum for getting SSZ into EL\n- A bit of coordination for updating the implementations\n\nBut also the following advantages:\n- Way less complex code\n- Trusted and Well tested RLP libraries (see recent SSZ bug)\n- Easier for wallets and downstream projects to support\n- Migration to full SSZ txroot is cleaner (no need to special case SSZ(Hash(SSZEncode(tx)) only SSZ(RLP(TX)))\n\ncc \u003c@881905303011086387\u003e \u003c@898563924440543283\u003e \u003c@543900561460822016\u003e",
+        "created_at": "2023-05-02T20:13:15.645000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes, this is another option, one I was hesitant to list in my doc but did bring up in the Monday client dev's meeting.  That said it feels like we're close to figuring out an idiomatic SSZ approach for transactions in the EL (options 1 \u0026 2 from the doc).     Plus most of the benefits of a full SSZ txroot would be lost if we didn't have SSZ txs (ability to prove over tx subfields for example).",
+        "created_at": "2023-05-02T21:14:03.237000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Sure, and if that's a problem, e.g., one wants the ability to quickly reject invalid chain id in the mempool, could just put it in both places. But that doesn't help in case of a spamming attack (as they could just use correct chain ID), and without it being an attack, there's not lots of traffic with invalid chain IDs on devp2p I guess?",
+        "created_at": "2023-05-02T22:10:40.541000+00:00",
+        "attachments": []
+    }
+]

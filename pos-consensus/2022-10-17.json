@@ -1,0 +1,34 @@
+[
+    {
+        "author": "potuz",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Good morning, I wanted to call to attention to this little quirk that happens when you process justification during `on_tick`. This is something that we discussed with the lighthouse team ( \u003c@361447803194441738\u003e and \u003c@607055410104500244\u003e ) during devcon. In \u003c@602753420033785856\u003e's push to reorg the last late block, one piece of it consists on processing attestations before the end of the slot, so that if the block has seen enough votes over a threshold, we do not reorg it. The issue at hand is \"what justified balances should be used here?\". The way the spec works around attestation accounting in forkchoice is that we simply insert the attestation as we see them and we track only the last message. And then we update the nodes' balances only during the call to `get_head` that calls `get_latest_attesting_balances`. This latter call gets the balances from `store.justified_checkpoint`. When you want to decide if you reorg a late block that arrived say at 8 seconds into the slot `N`, and you want to find out what is the total balance that this block received say at 11.5 seconds into `N`. We need to call something analogous to `get_latest_attesting_balances`. There is also the subtlety that we **want** to consider attestations for the current slot (which we typically will discard). My understanding is that lighthouse hacks around this by telling its forkchoice that the slot is `N+1`, and in doing so, the forkchoice already performed `on_tick` which updates justification and thus the balances used are the ones corresponding to the new justified_checkpoint. For Prysm doing this would be a nightmare as we have an actual wall clock on forkchoice. So when we process the node's balance at 11.5 seconds (we're thinking on doing this close to 10 seconds) then we will use the current justified balances. These may change from this call until the next one at second `0` of `N+1`.  I don't see any issues as we don't reorg on epoch boundaries, but specifying this is difficult",
+        "created_at": "2022-10-17T08:57:51.212000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sproul",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "The specification as currently written doesn’t actually mandate that any attestations are processed early, although it is advantageous to do so in order to minimise the chance of a misprediction.\n\nI think we could keep the specification simple (and abstract) by continuing to only make reference to the store’s slot clock. Then each client can implement additional measures outside of the core spec to minimise mispredictions. In Lighthouse’s case this can be advancing the slot clock forward, in Prysm’s case it can be weighing the attestations using the previous justified balances at second 10, and then again with the proper justified balances at the start of the next slot. In other words `get_proposer_head` is a mandatory part of the spec, while `should_override_forkchoice_update` is implementation specific. This saves specifying whatever nasty hacks you have to pull \u003c@755590043632140352\u003e 😉 \n\nUntil this morning I was happy to ship the feature in Lighthouse with _no_  attestation lookahead, as I think this is substantially better than nothing, and the penalty for a misprediction is low. The penalty can even be zero if you’re using an external builder, because they can give you a block without you having to send payload attributes N seconds in advance! Another parameter that could be tuned with a simple no-lookahead implementation is the block delay to consider late. I think there likely exists a cutoff around 4.5s at which one can be quite sure that the block won’t receive enough attestations, assuming an attacker isn’t hoarding 20% of attestation weight.",
+        "created_at": "2022-10-17T09:55:07.137000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I agree with this. One of the things I liked about your PR is that it doesn't specify about counting votes early. In fact this may be a feature, that clients do this in independent ways so that it's harder to game the system.",
+        "created_at": "2022-10-17T10:12:23.476000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnili",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "i'm not sure if this has been discussed or even possible to implement without getting gamed:\nif there was a clear cutoff time before a block has to be at least known to the CL in order to vote on it this would free up a determinable amount of time for block import instead of making it a race to attestation\nespecially besu is currently struggling on some blocks sometimes leading to an attestation for the previous block in edge cases where other ELs were a few hundred ms faster and already reached consensus on the next block\nif it were consensus to not vote on blocks that were not known at least 4 seconds before the attestation has to be made this would be much less of an import performance race against the early majority",
+        "created_at": "2022-10-17T12:46:42.326000+00:00",
+        "attachments": []
+    }
+]

@@ -1,0 +1,242 @@
+[
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "\u003c@194432762315407360\u003e sorry if this was discussed before in the thread, didn't find it in a cursory look, but I am facing this review https://github.com/prysmaticlabs/prysm/pull/14498 and I realize that we may be at an impasse. The CL has an `ExecutionRequests` container object, it needs to pass the hash of this to the EL, whatever mechanism we use to pass this hash (or even if we did pass all the requests), there is no way that the EL would know what is the order of the requests in the block. What James is doing in this PR is to pack deposits, then withdrawals, then consolidation requests and then hashing them. My point is that we can't know the order in which they appeared interleaved in the block, and thus to verify this the EL would have to grab the slice and reorder them anyway to the order in which we passed them so that they can be verified. \n\nBut now if the EL will have to do this anyway (it seems to me that you guys are forced since we can't know this order from the block) and you will already have to have this code within the EL, why not simply pass us in the engine API the lists of lists of requests ordered in this manner? we avoid leaking the stupid type byte as we would not be giving you more work to do than the work you've already have to do",
+        "created_at": "2024-10-03T11:01:28.782000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "\u003c@755590043632140352\u003e what about the most recent version suggested here: https://github.com/ethereum/execution-apis/pull/591/files\n\nIt proposes to receive and send `[requests_00, requests_01, requests_02]` from and to EL in a strict order but with not type byte incorporated into encoded data",
+        "created_at": "2024-10-03T11:43:38.044000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "The spec should probably mention that each element of the list is SSZ encoding of the list of requests of a certain type",
+        "created_at": "2024-10-03T11:44:12.526000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "the point is what order? you see by the time the CL sends `notify_newPayload` the CL has a `SignedBeaconBlock` , it can only order the requests as they appear in the beacon block, not as they appear in the payload. This means that the EL anyway needs to order them. Therefore I claim that the EL already will have all the ingredients to just send us `[[deposit_0, deposit_1,...],[withdrawal_0, withdrawal_1,...], [consolidation_0, consolidation_1,...]]`",
+        "created_at": "2024-10-03T11:53:54.116000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "when we request a `getPayload`",
+        "created_at": "2024-10-03T11:54:03.674000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "And we will send the hash of the requests in that same order (unless they accept an ssz HTR)",
+        "created_at": "2024-10-03T11:54:28.432000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "when we call `notify_newPayload`.",
+        "created_at": "2024-10-03T11:54:39.876000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "cc \u003c@881905303011086387\u003e am I missing something here?",
+        "created_at": "2024-10-03T11:54:47.271000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "the order they appear in the beacon block must respect the order reqeusts were sent as a part of getPayload",
+        "created_at": "2024-10-03T11:58:05.024000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Encoded request list is returned by a smart contract and EL just relays each list, it does not parse anything",
+        "created_at": "2024-10-03T11:58:59.564000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "What I am saying is that the CL does not have this order when it needs to send a `notify_NewPayload`",
+        "created_at": "2024-10-03T12:02:55.665000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "only the EL can check against this order, therefore the EL must reorder whatever we send in whatever mechanism, either hash or full requests",
+        "created_at": "2024-10-03T12:03:25.896000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Added this to the issue for ACDC today, perhaps we can discuss better there and I expose my point as above",
+        "created_at": "2024-10-03T12:05:32.400000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "which order do you mean? we have two flavours of order: 1) order of each request 2) order of lists of requests\n(1) is respected by the order of requests of each type in the beacon block\n(2) is what CL should know, i.e. it should send them as `[deposit_bytes, withdrawal_bytes, consolidation_bytes]`",
+        "created_at": "2024-10-03T12:44:06.364000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Ok but if the requests are sent in this order the EL already has to deal with the fact that they are in different order in the block",
+        "created_at": "2024-10-03T12:59:23.931000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "That's my point",
+        "created_at": "2024-10-03T12:59:27.587000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Each request type has its own order of requests which does not depend on requests of other types",
+        "created_at": "2024-10-03T13:02:39.843000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Not in the Payloads",
+        "created_at": "2024-10-03T13:09:54.137000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "There are two canonical orderings and they are different: the Payload has an ordering by appearance in the Payload. The CL has an ordering by appearance in the container. From the first order you can deduce the second one but from the second one you cannot deduce the first one",
+        "created_at": "2024-10-03T13:11:47.259000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "If we send the requests to the EL with the second order on notify new Payload, the EL will have to deal with the fact that they have the requests in different order",
+        "created_at": "2024-10-03T13:12:44.888000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "how so?",
+        "created_at": "2024-10-03T13:13:19.538000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "i think we should chat",
+        "created_at": "2024-10-03T13:14:00.495000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I'm free now",
+        "created_at": "2024-10-03T13:15:26.360000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I'm in the \u003c#814925424726900766\u003e",
+        "created_at": "2024-10-03T13:15:48.560000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "yes, CL just sends in newPayload what it gets in getPayload, in the same order (which matches the order in `ExecutionRequests`)",
+        "created_at": "2024-10-03T15:27:21.513000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I honestly think we need to compromise on whatever hashing, it is ridiculous to send the full data",
+        "created_at": "2024-10-03T15:29:48.624000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "how large are the requests?",
+        "created_at": "2024-10-03T15:30:55.645000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "If I'm reading a Max correctly of 8192 deposits requests then a lot, very large",
+        "created_at": "2024-10-03T15:49:21.534000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "That's itself over 1.5MB",
+        "created_at": "2024-10-03T15:49:47.772000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "This is CPU bound because of the stupid hex string format. Until we move to SSZ we need to compromise",
+        "created_at": "2024-10-03T15:53:04.130000+00:00",
+        "attachments": []
+    }
+]

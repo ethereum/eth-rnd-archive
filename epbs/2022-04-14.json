@@ -1,0 +1,130 @@
+[
+    {
+        "author": "jgm",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I have taken a closer look at the other API calls, and have a few notes.",
+        "created_at": "2022-04-14T06:18:11.005000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "`builder_getHeaderv1`\n  - the input value `hash` states that this is the hash of the parent block.  I assume this is the execution block, but it would be good for this to be explicit\n  - it would be useful to use the `message,signature` format for the returned data, as per the example I put above yesterday but also generally throughout the consensus specs.  Having an `Object` and a `SignedObject` allows for easy calculation of the SSZ hash tree root of the object, and hence simpler signing and verification\n  - I'm not sure what the public key of the builder is doing in there.  It's either well-known, in which case it isn't required here, or it isn't, in which case having it here brings no guarantees as to its provenance\n\nI would also perhaps make it explicit that the `feeRecipient` value in the `executionPayloadHeaderV1` does not need to be the same as that supplied by the end user in `setFeeRecipientV1`, and that the value returned *does* refer to this value.  I would further make it explicit that this is not the change in value, but the amount explicitly paid to the fee recipient as the bribe.",
+        "created_at": "2022-04-14T06:26:13.941000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "`builder_getPayloadv1`\n  - the inputs can be replaced with a single `SignedBlindedBeaconBlock object\n  - the specification section states \"f the CL modifies the payload in such a way that it is still valid and the builder is able to unblind it, the builder MAY update the payload on it's end to reflect the CL's changes before returning it\"; are there any situations where this can happen without the signature being invalid, one way or the other?",
+        "created_at": "2022-04-14T06:30:16.160000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Thanks for the feedback \u003c@144468805697929216\u003e! Generally 👍 to the feedback and will make some updates.\n\n\u003e - I'm not sure what the public key of the builder is doing in there\nI think this will be necessary when we switch to p2p-based communication because you won't actually know which builder a message originated from. But in the current iteration, it is not necessary.\n\n\u003e I would also perhaps make it explicit that the feeRecipient value in the executionPayloadHeaderV1 does not need to be the same as that supplied by the end user in setFeeRecipientV1\nSo you're imagining a scenario where a builder may want to use a `feeRecipient` that is different than the user provided one, but that `value` still denotes the amount of value that is being sent to the validator's `feeRecipient`?\n\n\u003e the inputs can be replaced with a single `SignedBlindedBeaconBlock object\nIt can, but following the strict SSZ type definitions doesn't feel like it follows the same format as the engine api. There is a spectrum of transparency that can be chosen here and it _feels_ like how it's specified is a reasonable choice on the curve\n\n\u003e re there any situations where this can happen without the signature being invalid, one way or the other?\nBasically I wanted it to not be a strict requirement that the builder only unblind the block the validator if it exactly matches the header it gave to validator. It's worded sort of weird though, I'll update it",
+        "created_at": "2022-04-14T09:44:35.783000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Also \u003c@539495253418180618\u003e recommended we consider removing `builder_setFeeRecipient` and instead use a smart contract registry to map validator to EL addresses. This has quite a few advantages since i) it removes the need to modify the beacon api ii) reduces the overall chatter on mev-boost p2p iii) ensures that if builders come online, they can immediately determine every validator -\u003e EL address mapping\n\nThe main downside is that this will require a mainnet transaction from every validator ... also, since there is no BLS precompile, it wouldn't actually be able to be a registry (a pure mapping), it would need to be a queue of announcements that builders process to generate their db. I think the additional burden on validators may be worth it for a much more robust and less intrusive solution. Would like to hear other's thoughts though",
+        "created_at": "2022-04-14T09:49:12.442000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "we can just fork the deposit contract",
+        "created_at": "2022-04-14T09:54:17.906000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e So you're imagining a scenario where a builder may want to use a feeRecipient that is different than the user provided one, but that value still denotes the amount of value that is being sent to the validator's feeRecipient?\n\nYes.  I would assume that a builder would not want to build blocks with a variable `feeRecipient`, as that makes life difficult if the fee recipient changes (for example, because of a chain reorg changing the proposer or an updated fee recipient sent via the API).  As such, it's a lot easier for the builder to build using their own fee recipient, and then attaching a final simple transfer from their fee recipient address to the actual fee recipient.",
+        "created_at": "2022-04-14T10:07:23.839000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e It can, but following the strict SSZ type definitions doesn't feel like it follows the same format as the engine api. There is a spectrum of transparency that can be chosen here and it feels like how it's specified is a reasonable choice on the curve\n\nThis is more down to the way that SSZ works.  Having a single data structure with the `signature` embedded makes it hard to generate the hash tree root.  Separating the message and signature is far simpler for implementation (you will likely see significant pushback from client teams if you don't go down this route).",
+        "created_at": "2022-04-14T10:09:55.338000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Regarding the smart contract... how would fee recipient updates be verified as being valid without a BLS precompile?",
+        "created_at": "2022-04-14T10:10:53.311000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "but the values in the json object from the RPC need to be plucked into an SSZ object regardless?",
+        "created_at": "2022-04-14T10:11:57.059000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Sure, but the general point is that if you're generating (or verifying) an SSZ signature it will be easier to do so with an SSZ native object.  Reading it in to a flat structure then moving it across to a second structure seems wasteful, and doesn't seem to have any benefits.",
+        "created_at": "2022-04-14T10:15:52.050000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Fair enough",
+        "created_at": "2022-04-14T10:18:03.717000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "it would be verified off chain by the builders",
+        "created_at": "2022-04-14T10:20:25.707000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "And if the verification failed?",
+        "created_at": "2022-04-14T10:28:17.691000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "then the mapping would not be updated",
+        "created_at": "2022-04-14T10:28:30.765000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I had a few other ideas on how to remove `SetFeeRecipient`, would love to have some feedback on them: https://github.com/flashbots/mev-boost/issues/92#issue-1204500700",
+        "created_at": "2022-04-14T13:01:31.530000+00:00",
+        "attachments": []
+    }
+]

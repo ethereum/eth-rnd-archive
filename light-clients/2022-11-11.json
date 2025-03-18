@@ -1,0 +1,114 @@
+[
+    {
+        "author": "sproul",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "We're just starting to build out light client server support in Lighthouse and I'm wondering how other clients are dealing with the data availability problem for historic `LightClientUpdate`s. The spec states that full nodes should serve these updates to peers for at least the last `MIN_EPOCHS_FOR_BLOCK_REQUESTS` epochs, which is around 5 months.\n\nConstructing a `LightClientUpdate` requires a `BeaconState`, but in Lighthouse we often do not have access to the last 5 months of historic states because they get pruned. It's really only \"archive nodes\" that are guaranteed to have full state history. In practice a lot of Lighthouse nodes _will_ have these states because we keep all states later than the state that was used for checkpoint sync, but we are planning to change this in future so that the only states available are ones between finalization and the head.\n\nWe are planning to keep a cache of light client data in memory, one improvement might be to also persist this on disk? Then non-archive nodes that have been running continuously for \u003e5 months would have complete light client data (same as Lighthouse nodes that checkpoint synced more than 5 months ago today).\n\ncc \u003c@881905303011086387\u003e \u003c@578356786889752586\u003e",
+        "created_at": "2022-11-11T03:02:02.906000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Teku is likely to be in the same boat - the vast majority of teku nodes don't have any states prior to the finalized epoch.  I think it would be a big ask to expect nodes to store more stuff on disk to support light clients - they're already altruistically supplying bandwidth and cpu to serve this data (admittedly minimal).  Disk IOps are in high demand these days though.",
+        "created_at": "2022-11-11T03:43:29.798000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Hence, SHOULD and not MUST/SHALL. On Nimbus we provide a launch option to configure the behaviour. By default, we only import data incrementally as it gets available. As in, whenever applying a new block, compute the merkle proofs on the `pre_state`, then apply the block, and then compute the light client data, run the `is_better_update` check against the best block of the period, and update it in the database if the new one is better. Likewise, if slot number is higher than latest optimistic / finality  update, update that one as well.\n\nOn Nimbus, we also opt to never delete light client data by default (beyond the 5 months). It is very cheap and only needs about 10 MB of storage (per ~half year) with tricks such as not storing a copy of the entire sync committee with every single `LightClientBootstrap`.\n\nSee https://nimbus.guide/light-client-data.html for Nimbus options\n\nNote that both for libp2p and for REST, error codes are defined to cover the startup period where for example, latest optimistic / finality update may not yet be known (as no new block was applied, as this would require parent state to be available), or also, if no light client data is yet known for a given period. For the `/updates` endpoint, it is alright to report it on a best-effort basis as well.",
+        "created_at": "2022-11-11T05:32:06.416000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "(also replying here, see answer above)",
+        "created_at": "2022-11-11T05:32:27.635000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sproul",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "awesome, this is exactly what I wanted\n\nI'll look into supporting a similar database of light client updates in LH as well",
+        "created_at": "2022-11-11T05:35:45.376000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sproul",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "thanks",
+        "created_at": "2022-11-11T05:35:56.345000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Also, the merkle proofs in Nimbus design make sense to be cached for the highest known finalized head + all non-finalized blocks (i.e., any block that may become a parent block for a new block). This avoids having to run the entire `hash_tree_root` on a state repeatedly in case of heavy branching of the chain (otherwise, computing the merkle proofs on the `pre_state` may become a bottleneck).",
+        "created_at": "2022-11-11T05:37:49.728000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sproul",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "yeah, we are working towards a new state model that would allow us to easily cache these as well\n\nthe cache will be finite size, but should cover most viable choices of parent block during smooth chain operation",
+        "created_at": "2022-11-11T05:39:19.261000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Sounds reasonable as well.\n\nCaching:\nhttps://github.com/status-im/nimbus-eth2/blob/stable/beacon_chain/consensus_object_pools/blockchain_dag_light_client.nim#L414\n\nUpdating LC data (using the cache)\nhttps://github.com/status-im/nimbus-eth2/blob/stable/beacon_chain/consensus_object_pools/blockchain_dag_light_client.nim#L481",
+        "created_at": "2022-11-11T05:40:32.342000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Hey \u003c@84562395988508672\u003e \u003c@181594452228308992\u003e and \u003c@881905303011086387\u003e I've finally made a proposal on trustless checkpoint sync. Would be glad to get any feedback from you, guys 🙃 \nhttps://hackmd.io/@gRwfloEASH6NWWS_KJxFGQ/HyUUJmcHs",
+        "created_at": "2022-11-11T10:31:53.263000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "You will also need to add a call to `/finality_update` to jump from the latest period (update with highest participation) to the latest finalized head (by slot).\nSee https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/light-client.md#light-client-sync-process\n\nNote that for beacon node syncing purposes, it is likely alright to start way before the weak subjectivity period as well. You will notice almost immediately if you are missing attestations due to the typical monitoring by beaconcha.in. This is in line with the security tradeoffs that people accept who sync all the way from genesis (instead of using any checkpoint), so does not add additional security downsides. You may end up on a non-canonical chain this way, but you cannot get slashed (as long as you keep around slashing protection DB across re-syncs).",
+        "created_at": "2022-11-11T11:03:38.916000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "As for \"non-interactive\", checkpointz showed interest in extending their caching service to also provide the light client endpoints.",
+        "created_at": "2022-11-11T11:05:25.281000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Yes, good point 👍  Syncing the whole period (in the worst case) would not be that quick",
+        "created_at": "2022-11-11T11:18:26.577000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Thanks for review \u003c@881905303011086387\u003e 👍",
+        "created_at": "2022-11-11T11:20:29.774000+00:00",
+        "attachments": []
+    }
+]

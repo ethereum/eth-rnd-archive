@@ -1,0 +1,26 @@
+[
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hi all, if I compare the pseudocode for requests of EIP 6110 against 7002/7251 I think that it is incomplete. Here is the pseudocode:\n\n```python\ndef parse_deposit_data(deposit_event_data) -\u003e bytes[]:\n  \"\"\"\n  Parses deposit data from DepositContract.DepositEvent data\n  \"\"\"\n  pass\n\ndef event_data_to_deposit_request(deposit_event_data) -\u003e bytes:\n    deposit_data = parse_deposit_data(deposit_event_data)\n    pubkey = Bytes48(deposit_data[0])\n    withdrawal_credentials = Bytes32(deposit_data[1])\n    amount = deposit_data[2]   # 8 bytes uint64 LE\n    signature = Bytes96(deposit_data[3])\n    index = deposit_data[4]    # 8 bytes uint64 LE\n\n    return pubkey + withdrawal_credentials + amount + signature + index\n\ndef get_deposit_request_data(receipts)\n    # Retrieve all deposits made in the block\n    deposit_requests = []\n    for receipt in receipts:\n        for log in receipt.logs:\n            if log.address == DEPOSIT_CONTRACT_ADDRESS:\n                deposit_request = event_data_to_deposit_request(log.data)\n                deposit_requests.append(deposit_request)\n\n    # Concatenate list of deposit request data\n    return b''.join(deposit_requests)\n```\n\nIn order to get the correct Deposit request, I have to call `get_deposit_request_data(receipts)` where `receipts` are the reported blocks after I've ran all the transactions of the block. The data can be used to create the correct deposit request byte sequence to be used in, for instance, the `requestHash`.\n\nIn `event_data_to_deposit_request` I am not sure how to decode the event. Normally an index like `deposit_data[0]` would mean the first byte (in JS it is), but this is obivously incorrect. It also calls into `parse_deposit_data` which is currently an undefined function.",
+        "created_at": "2024-10-10T19:35:56.034000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lucassaldanhaconsensys",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm not an EL developer anymore, but I believe the indexed access on `deposit_data` correspond to each one of the fields in the event emited by the Deposit Contract. So you will probably use the same logic that is already implemented in EthereumJS to get it. It looks like the `parse_deposit_data` function is just a way to represent that you are consuming the log data to read the event fields.\n\n```\nevent DepositEvent(\n        bytes pubkey,   ---\u003e deposit_data[0] (48 bytes)\n        bytes withdrawal_credentials,   ---\u003e deposit_data[1] (32 bytes)\n        bytes amount,   ---\u003e deposit_data[2] (8 bytes uint64 LE)\n        bytes signature,   ---\u003e deposit_data[3] (96 bytes)\n        bytes index.  ---\u003e deposit_data[4] (8 bytes uint64 LE)\n    );\n```\n\nI hope I am not lying to you! 🙂",
+        "created_at": "2024-10-10T21:08:54.709000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ah sorry I should have updated that I have figured out. But, yes, you are correct 😄 We can actually re-use the code which we indeed have in EthereumJS. It just was not super clear after reading the EIP multiple times that the parse tx data should \"just\" be reading the ABI-encoded elements of the event. Thanks for the ping anyways 😄",
+        "created_at": "2024-10-10T21:11:32.602000+00:00",
+        "attachments": []
+    }
+]

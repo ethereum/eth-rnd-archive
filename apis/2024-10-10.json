@@ -1,0 +1,250 @@
+[
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "\u003c@539495253418180618\u003e regarding builder api latency, with electra the payloads will increase quite a bit due to execution requests, having a ssz serialized list of those inside a json body does not make sense to me on the CL side, but we can adopt SSZ as proposed in https://github.com/ethereum/builder-specs/pull/104. A hard fork would be a good opportunity to roll this out. The sentiment from builders and sidecar implementers from the mev-boost call seemed supportive.\n\nRe-posting this here to get some feedback from CL devs.",
+        "created_at": "2024-10-10T15:42:09.249000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "has this been measured? how much of the latency is network, or CPU, or etc?",
+        "created_at": "2024-10-10T16:18:10.448000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "It's a difference scenario than typical engine API since it's not local anymore",
+        "created_at": "2024-10-10T16:18:30.104000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "SSZ has its appeals anyway, but I guess, at this point it's clear timing games are going to happen. So my concern is anything here just is a zero-sum game moving latency budget back to the relays/builders",
+        "created_at": "2024-10-10T16:22:43.054000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "So is it worth it?",
+        "created_at": "2024-10-10T16:22:49.647000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "there are few benchmarks here https://github.com/ethereum/builder-specs/issues/53, we also saw really good latency improvements switching from json to ssz is the block apis and that's a local connection",
+        "created_at": "2024-10-10T16:25:40.446000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Okay, stipulated, SSZ does seem significantly faster",
+        "created_at": "2024-10-10T16:26:41.342000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "my main concerns is that this disproportionally affects solo stakers and low bandwidth nodes",
+        "created_at": "2024-10-10T16:26:49.359000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "also we receive the blinded block from vc as ssz now since we use that by default and have to convert it to json when submitting to builder, but the beacon node here is really just a passthrough",
+        "created_at": "2024-10-10T16:28:17.466000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Yeah, in general I'm not opposed to SSZ, to be clear",
+        "created_at": "2024-10-10T16:28:33.897000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I'm just ... hm. It's engineering effort to change, and I'm not sure it benefits the CLs. Maybe.",
+        "created_at": "2024-10-10T16:29:01.681000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I can't tell what's the effort for this on every client, in Lodestar is very low, also the CL only implements the client side",
+        "created_at": "2024-10-10T16:29:41.473000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Maybe, but the does-it-benefit-the-CLs is the main concern I have. That is, along these lines",
+        "created_at": "2024-10-10T16:30:33.172000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I'll maybe spell it out more clearly: one possible scenario is, the relays still want to serve validators because it does profit them to do so, but they know solo stakers have `n` additional milliseconds (it's a distribution, etc, etc) of total end-to-end transmission time (accounting for bandwidth and latency)",
+        "created_at": "2024-10-10T16:31:35.168000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "But they still need to send out the block + blobs at the same time, so it means they move everything up a bit.",
+        "created_at": "2024-10-10T16:32:17.992000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Because we know for sure that, see above, the timing games are already happening. It's already playing against deadlines",
+        "created_at": "2024-10-10T16:32:42.379000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "So the latency + bandwidth + CPU usage effect of different encodings just becomes one more input to the game",
+        "created_at": "2024-10-10T16:33:13.563000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "It's not just, is this in isolation an engineering improvement/optimization. It's a question of how it affects the system as a whole against players with misaligned interests",
+        "created_at": "2024-10-10T16:33:57.458000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Not sure I can answer that, but I get what you mean",
+        "created_at": "2024-10-10T16:36:15.554000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "And, in general, yeah, the Nimbus VC/BN prefer SSZ here too",
+        "created_at": "2024-10-10T16:37:42.874000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "for the blinded beacon APIs",
+        "created_at": "2024-10-10T16:37:51.817000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I might be biased as well as JSON de/serialization in JS is painfully slow and hard to optimize",
+        "created_at": "2024-10-10T16:38:07.767000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I mean, I agree. Any time I see our JSON code I just give up on performance generally speaking",
+        "created_at": "2024-10-10T16:38:31.233000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "it's full of buffering and copying because of unknown field ordering etc",
+        "created_at": "2024-10-10T16:38:47.930000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "But my question is different, it's do the relays and builders have any incentive not to just take the gains from this and eat the profits",
+        "created_at": "2024-10-10T16:39:28.734000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "For something CLs spend any resources at all doing",
+        "created_at": "2024-10-10T16:39:40.822000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "that might happen, although we have a strict timeout on getHeader requests on the CL side, and the majority of latency benefits happen when you submit the blinded block",
+        "created_at": "2024-10-10T16:41:33.147000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "yeah i think in any case having SSZ support standardized would be really valuable",
+        "created_at": "2024-10-10T17:05:49.659000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "just need to get deployed in mev-boost and CL clients",
+        "created_at": "2024-10-10T17:06:01.800000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "made a note to bring up on next ACDC https://github.com/ethereum/pm/issues/1178#issuecomment-2405638130",
+        "created_at": "2024-10-10T17:08:13.228000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "well and relayers (which is the most important) but those are just a small set of known entities",
+        "created_at": "2024-10-10T17:22:51.955000+00:00",
+        "attachments": []
+    }
+]

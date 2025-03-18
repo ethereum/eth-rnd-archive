@@ -1,0 +1,114 @@
+[
+    {
+        "author": "sproul",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Sorry to bump such an old thread. It looks like we've pretty much decided on versioning each API endpoint separately (`/v1/` vs `/v2/`), but I'd like to put some points forward in favour of using the API version in the URL instead:\n\n* Versioning each endpoint can lead to strange version collisions across time: e.g. `/v2/beacon/blocks/` was introduced in Altair, but `/v2/beacon/pool/attestations` will (likely) be introduced during the merge\n* Similarly, we have to make decisions about incrementing the version if only one of the `GET`/`POST` versions of an endpoint changes, which seems weird\n* We _need_ a way to refer to the version of the entire API, and it would simplify things if this version matched what was in the URL (instead of introducing a whole new layer of versioning). We could say things like \"Lighthouse supports v2 of the API spec\" and have that translate directly into \"Cool, I can write v2 in all my API URLs\"\n* We can still track the changes to individual APIs in their docs, and in a diff between major releases. E.g. \"Changed in v2: added version field to response\"\n* We don't need to worry about indefinitely supporting old versions of the API. Having `/v1/beacon/blocks` and `/v2/beacon/blocks` coexist in the same spec implies that perhaps both should work, but I think I read that most clients are supporting only the latest version? (and with backwards-incompatible hard-fork changes, supporting only the latest version might be the only option).\n\nI've tried to be as articulate as possible with these reasons, but they're still a bit fuzzy for my liking. If anyone else has input for or against I'd be keen to hear it",
+        "created_at": "2021-07-28T00:56:03.913000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".paulharris",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "i really am not a huge fan of a catch-all rule, but here's my 2c.\n - first and foremost - a versioned api should not *ever* have incompatible changes.\n - changing every api to /vX/ creates 'busy work', and forces everyone to update for 'no real reason' other than to satisfy an arbitrary desire to have everything at 'vX'\n - if we must create a new incompatible change, at least it is clearly defined, and generally the old api (IMO) should have a sunset (v1 blocks wont work for altair)\n - maximum time to change is desirable: in this case, people can change any time until we click over to altair, and they can do that today, or choose to delay it until later.\n - 'additive' changes in rest are seen as 'compatible' generally speaking, and clients should just ignore fields that aren't known (generally, dangerous generalisation in some ways)\n\nthese are basically why we've gone the way we've gone, and there's nothing saying this is the only way to do it (part of the problem with rest IMO is its very un-opinionated)\nThere's also nothing stopping us saying 'v2 of the api' and having a number of 'v1' endpoints (indicating they're compatible with v1 effectively)\n\nI'm not completely against deciding at some point that we call everything v2, and remove the v1's that are incompatible, but initially at least the v2 has allowed the new development endpoints to be a little fluid while altair continues to be developed.  I think overall, having the dev interfaces called v2 has allowed us to move forward with altair development without breaking the existing api.\nAlso forcing everything to v2 does create some headaches for hosting services where they would need to be really careful about managing how the release occurs so they don't cause significant headaches for all and sundry...\n\nI think for every solution there's pro's and con's and we want to be careful ultimately...",
+        "created_at": "2021-07-28T02:38:46.717000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "raulj",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "We've been working on this recently in Prysm as we prepare to release Prysm v2.0.0. We have had quite a lot of discussion, especially because Prysm internally uses its own API that is not the eth2.0-apis standard yet. For our internal API, we have something like a v1 and a v2. We have decided on improving consumer experience by allowing people to use v2 by itself if they wish. This means we ported over everything to v2 that didn't change from v1, so that people can just use v2 from now on. We still support our v1 and will make a commitment to support the last trailing version.",
+        "created_at": "2021-07-28T03:15:38.268000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "raulj",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "we captured these thoughts in a hackmd https://hackmd.io/@prysmaticlabs/prysm-api-versioning",
+        "created_at": "2021-07-28T03:16:49.906000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sproul",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Ok yeah. The argument about the transitional period is most compelling to me. I'll try updating LH to use `/v2/` as per the current spec and see if we can interop with Teku",
+        "created_at": "2021-07-28T04:23:44.754000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "mpetrunic",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Hey,\nI think I messed up a bit when I tagged api release in github with v1. In retrospective something like v1.0.0. and following semver would be a lot better since we could release v1.0.1 when we just update descriptions a bit rather than waiting, like we currently do, for v2 to release, while still being able to track changes across versions.\n\nIf we agree on something like this, I can change v1 version release tag and title in github. In that case for altair we would release for example v2.0.0. where endpoints like `/v1/beacon/blocks` are marked as deprecated with notice that clients might not support them.\n\nLet me know what you think. We can setup a call to flush this up or make a poll here?",
+        "created_at": "2021-07-28T07:15:32.899000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "From a consumer point of view I initially wanted to have the _n_ in v_n_ refer to the version of the entire API, but with the current system it refers to the version of the endpoint.  Having now implemented some code using it I'm fine with the per-endpoint versioning as it gives flexibility to make incremental changes without making complete re-writes.\n\nFrom the producer point of view this also seems to be saner.  If we decide to add a field in a single endpoint would that trigger an entire 'v3' release and have every endpoint need to be updated?  It seems like a lot of work for little gain.\n\nI think that one thing that would make sense would be to have a deprecation policy, e.g. we support deprecated endpoints for at least 6 months, or 2 versions, or whatever.",
+        "created_at": "2021-07-28T07:47:04.276000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Separately, I note that the description for https://ethereum.github.io/eth2.0-APIs/#/Config/getForkSchedule says \"Retrieve all scheduled upcoming forks this node is aware of.\"  I believe that the implementations return the entire fork schedule, which is useful as it is the only way of obtaining old fork versions to allow independent verification of signatures.  If there are no disagreements I'll put i a PR that states this endpoint should return all forks, past current and future, which are known by the node.",
+        "created_at": "2021-07-28T07:48:41.274000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "mpetrunic",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "\u003e From the producer point of view this also seems to be saner.  If we decide to add a field in a single endpoint would that trigger an entire 'v3' release and have every endpoint need to be updated?  It seems like a lot of work for little gain.\nThats not really breaking change, right? we could leave endpoint as is and just publish on github v2.1.0 version so clients can express if they support this or not\nWe would need v3 if we decide to remove some field, at least thats how I see it",
+        "created_at": "2021-07-28T07:52:46.954000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Okay bad example, how about changing a field (as we just did with the sync committee information in beacon state).  But the general point is that I think that versioning on a per-endpoint basis isn't as painful as I thought it may be, and I'd be in favour of keeping it.",
+        "created_at": "2021-07-28T07:54:57.018000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".paulharris",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "i think state may end up with a v3 first, its a big object...\nThis is where this kind of numbering scheme gets tricky, because you end up with potentially a big spread, and eventually need to make it sane again once it gets unmanageable. at the moment i think its pretty easy to follow, but there'll come a time where that will be no longer the case...\nDeprecating endpoints with a good v2 solution (v1 blocks and state for example) would be a good idea so that its relatively clear currently... hopefully we don't end up with too many deprecated endpoints before we clean up",
+        "created_at": "2021-07-28T08:32:51.842000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sproul",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Another option for backwards-compatibility would be to provide two entire instances of the API e.g. v1 and v2. This would still allow consumers to migrate gradually, OR by bumping a global constant and fixing the breakages. On the implementation side we could share code between the two versions (e.g. route to the same handler for unchanged methods). This would parallel what big orgs like Github do AFAIK. In practice major version bumps would only occur every ~6 months.\n\nOTOH the stability of existing APIs in the per-endpoint versioning scheme is also nice, could enable scripts and apps to keep working even without constant maintenance",
+        "created_at": "2021-07-28T09:57:43.792000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I think that either could work, and that neither is perfect.  But given we have started down the route of versioning endpoints I suspect it will be easier for us to stick with that.",
+        "created_at": "2021-07-28T10:23:58.775000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Added a PR for the fork schedule change as mentioned above: https://github.com/ethereum/eth2.0-APIs/pull/159",
+        "created_at": "2021-07-28T13:40:10.474000+00:00",
+        "attachments": []
+    }
+]

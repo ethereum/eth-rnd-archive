@@ -1,0 +1,882 @@
+[
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!689161464829050960\u003e thinking a bit about the gas observability problem as it relates to meta transactions (specifically EIP-3074).\n\nThe \"invoker\" wants to guarantee they will be compensated for the overhead of invocation....  this seems to be satisfied \"out-of-band\".  Invoker contract can run whatever code it needs to enforce payment before executing the sponsored txn.\n\nThe \"signer\" wants to know that their transaction will be executed as specified, aka, all of `gas/calldata/value/...` are set to their appropriate values....  The majority of this verification under 3074 seems to be fulfilled by \"a verified trusted invoker\" meaning that the signer has verified that the invoker's code does indeed respect these values.  The **one** place this seems to fall short is the gas stipend for the subcall.  IIRC, `CALL` semantics are that the `gas` parameter to a `CALL` is not guaranteed to actually be the value passed into the opcode since we do *roughly* `gas = min(gas, gas - (gas // 64))`.  So if there is not enough gas left, the call gets less than whatever was specified. \n\nThis inability to strictly require the `CALL` operation be executed with *at least X gas* is where gas observability seems to remain critically required for meta-transactions to not require trust, and subsequently, the sticking point for removing gas observability.\n\nStated differently, it looks like one blocker to removing gas observability would be the ability to strictly require a subcall be executed with `\u003e= minimum_required_gas` which currently can only be done imperfectly by manually checking that `GAS (remaining_gas) \u003e minimum_required_gas`",
+        "created_at": "2021-03-30T18:21:04.058000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "here's the code from py-evm for how the gas value is determined: https://github.com/ethereum/py-evm/blob/7afe050f0849ed87a4282038d394212f6029d3b9/eth/vm/logic/call.py#L358-L382",
+        "created_at": "2021-03-30T18:21:32.691000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "A naive solution would be to either modify `CALL` or maybe just `AUTHCALL` to fail in some way if there is not enough gas remaining, but the failure here either screws the signer because the invoker intentionally provided too little gas so the subcall fails, **or** the invoker gets screwed because the whole txn reverts due to insufficient gas and they are out their transaction fees.  \n\nThe situation with the invoker *could* be addressed by the invoker contract only allowing \"trusted\" parties to initiate execution...  this seems potentially workable, but it does eliminate the ability for a \"generic\" invoker that anyone can interact with and that nobody \"owns\"",
+        "created_at": "2021-03-30T18:25:13.896000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Now that I've got this out of my brain, I'm gonna migrate it over to ethresearch to document it in a findable way. https://ethresear.ch/t/removing-gas-observability-in-the-context-of-eip-3074-auth-authcall/9050",
+        "created_at": "2021-03-30T18:27:50.168000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "wolflo_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "+ 1. In my mind it makes a lot of sense for `AUTHCALL` to have strict gas semantics rather than following EIP-150, and I think once you adopt EIP-150 for calculating the gas to send it's tough to then change it to be strict, because some contracts will still be using `GAS` to request the gas to send and relying on `all_but_one_64th` being sent.\n\nIt sounds like this is at least partially motivated by the magnitude of the client changes that would be needed to implement strict call gas?",
+        "created_at": "2021-03-30T19:53:29.404000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, one design goal was to mirror the behavior of `CALL` as closely as possible.\nHowever, there are other reasons for why we did not go with strict call gas as well:\n- for some use cases, you explicitly want to be able to pass in all available gas. Strict gas would not natively support that, so you would need another special case like \"a value of 0 means pass in all gas\", but that in turn makes the behavior even more complex and the diff to CALL even larger.\n- opcodes very rarely actually throw (only e.g. for things like stack overflow). CALL does e.g. not throw if you want to send more value than the contract holds, but simply returns 0 as success. If AUTHCALL were to only return success 0 for insufficient gas as well, that would from the outside be indistinguishable from a failed tx, so the fault would not be clearly attributable. If AUTHCALL instead throws here, it should then really also throw for insufficient value, but then again we are more and more moving away from how opcodes behave normally.",
+        "created_at": "2021-03-30T20:16:17.744000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think \u003c@!364458974906548225\u003e is right that meta-transactions in general rely on gas observability at least to some extent - that is true for both 3074 and non-3074 meta-transactions. I think there would be ways to make UNGAS not break invokers, but the specifics would depend on both the way invokers end up being written and the way UNGAS would be implemented in general.",
+        "created_at": "2021-03-30T20:19:41.061000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!415548822983278593\u003e with respect to indistinguishable faults and and what I am interpreting as resistance to adding strict gas semantics to AUTHCALL: If we can establish a scheme for strict gas that ensures that 1) a caller can distinguish between tx-revert/tx-success/insufficient-gas and 2) the scheme still allowed for a clean API for any of provide-all-remaining-gas/provide-exactly-this-much-gas-or-throw\n\nWould you still have opposition to the opcode causing a revert in the insufficient-gas case?",
+        "created_at": "2021-03-30T20:45:24.509000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "wolflo_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That makes sense. It's quite a complicated collection of tradeoffs.\n\nOn throwing vs returning 0, I would agree that `AUTHCALL` would have to throw for insufficient gas. In my mind, throwing here but not for value make sense because in the case of insufficient gas, you are trying to execute an operation that consumes more gas than you have remaining (even if you _told_ it to consume that much gas). For insufficient value, this feels intuitively a bit more like the call itself being invalid to me.\n\nOn making things harder for contracts passing in all available gas, my thought is that with the EIP-150 gas semantics, contracts need to make significant assumptions about the gas cost for executing some opcodes (most notably the `CALL` opcode itself) if they are going to try to send a strict amount of gas. \nIf the `AUTHCALL` opcode enforces a strict amount of gas, then it is on contracts that want to pass in all gas to make the gas cost assumptions (sending `GAS` - the cost of call). It seems logical to make the most common application of an opcode possible without assumptions about gas costs, and my guess is that for `AUTHCALL` metatransactions are the most common.\n\nOne caveat is that the assumptions about gas costs currently needed to send a strict amount of gas can just be over-estimated, but that's not the case for trying to send all remaining gas via an `AUTHCALL` that enforces stricted gas semantics.",
+        "created_at": "2021-03-30T20:46:54+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think that it's easy to distinguish between `tx-revert/tx-success/insufficient-gas` because both `tx-revert/tx-success` put a value on the stack and let the invoker call frame continue executing.  If `insufficient-gas` caused it to REVERT, those are three distinctly different behaviors.",
+        "created_at": "2021-03-30T20:47:12.225000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e For insufficient value, this feels intuitively a bit more like the call itself being invalid to me.\nI agree with this",
+        "created_at": "2021-03-30T20:47:46.019000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Worth noting that providing \"too much gas\" can also be a problem in some rare but valid cases.  Being able to control \"exactly this much gas\" seems important. (valid case is some imagined thing where the sub-call is actually taking advantage of gas schedules or something to hit some edge case where some deeper subcall fails intentionally due to running out of gas??? I'm making stuff up so no need to put too much weight towards this)",
+        "created_at": "2021-03-30T20:49:34.672000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So I think the following changes to AUTHCALL would be feasible:\n- calculate `avaliable_gas` according to EIP-150\n- if `gas == 0`, pass in `available_gas`\n- if `0 \u003c gas \u003c= available_gas`, pass in `gas`\n- if `available_gas \u003c gas`, throw.\n- (optionally) if `available_value \u003c value`, throw.",
+        "created_at": "2021-03-30T20:53:29.627000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "While I am generally on the fence about this, my main concern is that throwing as part of opcode logic is very rare today. Looking over it briefly, I can only find such behavior for `RETURNDATACOPY` (out of bounds) and `JUMP` and `JUMPI` (invalid target). I am not sure how big of a deal it would be to have an opcode do it so liberally now.",
+        "created_at": "2021-03-30T20:55:13.534000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "also, I assume we are talking about throwing here, not reverting. Because I think only `REVERT` itself can revert currently. (difference as far as I understand being that revert does not consume left over gas and is able to return a revert string)",
+        "created_at": "2021-03-30T20:57:56.190000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I've been saying \"revert\" .. I mean that generically, fine with either actual REVERT or OOG",
+        "created_at": "2021-03-30T20:59:03.412000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And obviously I don't see a problem with the opcode causing REVERT/OOG but others may feel different",
+        "created_at": "2021-03-30T21:00:19.412000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "wolflo_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It seems like using 0 as a special case to request `available_gas` could be a tough complexity to communicate since that's currently used in `CALL` for transfers with nonzero value that just want to send the 2300 gas stipend. I guess that's not super relevant, other than \"dang, `CALL` gas is really complicated already\"",
+        "created_at": "2021-03-30T21:04:04.591000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "wolflo_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "What about an additional stack parameter, 0 for EIP-150 gas semantics and nonzero for strict gas?",
+        "created_at": "2021-03-30T21:04:43.745000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "wait, so what would `gas` be for then?",
+        "created_at": "2021-03-30T21:05:08.225000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "that is basically exactly what I wanted to use `gas` for",
+        "created_at": "2021-03-30T21:05:28.035000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Oh, we should not do 2300 stipend",
+        "created_at": "2021-03-30T21:05:33.240000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The stipend is one of the things we want to remove in general so better to not copy poverty those semantics",
+        "created_at": "2021-03-30T21:06:35.348000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think if we go down this path we are breaking symmetry with CALL anyway, so we might as well fully optimize for AUTHCALL",
+        "created_at": "2021-03-30T21:06:38.933000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "agree",
+        "created_at": "2021-03-30T21:06:42.339000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "wolflo_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yeah I think I'm on the same page here. Just thinking about the possibility of adding a boolean parameter to indicate which gas semantics to use instead of adding a special case in the gas request.",
+        "created_at": "2021-03-30T21:07:00.936000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes. Let's do this!",
+        "created_at": "2021-03-30T21:07:16.870000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "seems like a lot of overhead though, given that we would get it for free for the `gas == 0` case, if that would not copy the gas stipend behavior anyway",
+        "created_at": "2021-03-30T21:07:57.514000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm not seeing a need for an extra stack parameter",
+        "created_at": "2021-03-30T21:08:46.631000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "wolflo_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That makes sense. The gas stipend behavior maybe doesn't really interfere anyway, since 0  isn't actually a special case in `CALL`, it's just how people use it. I think there should be some freedom to say that `AUTHCALL` is it's own opcode, so it shouldn't carry over the baggage of usage patterns with `CALL`",
+        "created_at": "2021-03-30T21:09:40.706000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "wolflo_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Even with the stipend, just request 1 gas and then the recipient gets 2301",
+        "created_at": "2021-03-30T21:10:00.463000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "wait, really?",
+        "created_at": "2021-03-30T21:10:21.214000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "but for 10000 you don't get 12300, do you?",
+        "created_at": "2021-03-30T21:10:52.337000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "wolflo_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think you do if the value is nonzero",
+        "created_at": "2021-03-30T21:11:10.975000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "ah, oh wow is that ugly",
+        "created_at": "2021-03-30T21:11:45.410000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We should explore whether there are use cases for \"make the call with at most X gas (or however much is left of there's less than X remaining)\" which isn't possible under the proposed strict gas mechanics",
+        "created_at": "2021-03-30T21:11:45.515000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "wolflo_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "https://github.com/ethereum/go-ethereum/blob/4a37ae510eb02bb7daf1fa5982f326e92a401c60/core/vm/instructions.go#L658-L661",
+        "created_at": "2021-03-30T21:13:17.329000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "huh, TIL",
+        "created_at": "2021-03-30T21:14:11.491000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "makes sense. I think it might be too complex to fully offer strict gas and 150 gas though",
+        "created_at": "2021-03-30T21:18:05.352000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "samwilsn",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I like the simple approach of throwing if `gas_available_in_callee \u003c gas_from_stack`, but otherwise keeping the call semantics.",
+        "created_at": "2021-03-30T21:19:14.608000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "samwilsn",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Any further refinements can come later, and be applied to call and authcall together.",
+        "created_at": "2021-03-30T21:19:47.724000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I don't have any use cases that need this coming to mind, nor does it seem that important, just wanted to highlight that we should look at it",
+        "created_at": "2021-03-30T21:20:04.089000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Are you opposed to removing the stipend?",
+        "created_at": "2021-03-30T21:20:32.164000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think losing the ability to pass in all remaining gas would be very unfortunate, especially given that the EIP right now supports it and there isn't really a clear reason to change",
+        "created_at": "2021-03-30T21:21:31.444000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "and I would expect \"pass in all gas\" to be a major use case",
+        "created_at": "2021-03-30T21:21:57.414000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think exact gas will be the dominant use case but that \"pass all gas\" will be common and needs to be supported",
+        "created_at": "2021-03-30T21:24:12.308000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yes, and \"maximum gas\" seems more like a nice-to-have",
+        "created_at": "2021-03-30T21:26:04.422000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "wolflo_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I actually assumed almost every invoker would make the gas to send with the authcall a parameter of the signed commit, since the idea would be to give a user control over everything they can control when sending an EOA transaction. It sounds like you're imagining this being up to the sponsor of the transaction in most cases though?",
+        "created_at": "2021-03-30T21:28:42.368000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think the \"untrusted\" setting is the main one we are designing for, where indeed all of this is signed over. But I think the EIP has many other use cases with partial or full trust. Full trust e.g. for \"one user, multiple addresses\" situations, where an AUTHCALL is similar to a CALL you would have in a smart contract wallet. And whenever there is partial or full trust, there might be situations where you want to have other gas logic...",
+        "created_at": "2021-03-30T21:32:48.338000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "In the EIP as-is we have the stipend. I would suggest keeping it if we decide against the general move to throw-on-insufficient-gas, but removing it if we depart from CALL behavior anyway.",
+        "created_at": "2021-03-30T21:35:18.403000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "samwilsn",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I would like to see this make it in London, so I guess I'd like to defer anything that makes the implementation or testing more difficult.",
+        "created_at": "2021-03-30T21:37:53.588000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "samwilsn",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But not throwing on insufficient gas is a bit of a security problem",
+        "created_at": "2021-03-30T21:38:21.887000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I can see using this in a trusted setup.  I have my own invoker contract and a single funded EOA that i send all transactions from, but I use a bunch of different accounts through those two main accounts to send transactions from some arbitrary number of other addresses that are all also mine.",
+        "created_at": "2021-03-30T21:39:08.826000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "can you expand on that? I don't see any security concerns",
+        "created_at": "2021-03-30T21:39:31.248000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "assuming tests don't already exist, I don't see any of the proposed changes making writing the tests harder, but \u003c@!393119312350543872\u003e might have more information on this front.",
+        "created_at": "2021-03-30T21:40:39.141000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "samwilsn",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I guess I have a broad definition of security, but a malicious sponsor could burn a sponsee's nonce and still get repaid by sending insufficient gas.\n\nYou can prevent that in the contract by using `GAS` but that'll break if ungas ever happens.\n\nThrowing is a reasonable thing to do, and doesn't depend on never ungassing.",
+        "created_at": "2021-03-30T21:41:30.248000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "samwilsn",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It was pretty trivial to re-use the existing call implementation in OE. I think the whole diff for EIP-3074 is about ~130 lines.",
+        "created_at": "2021-03-30T21:42:07.458000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I would not count UNGAS optimizations as security considerations tbh",
+        "created_at": "2021-03-30T21:42:33.587000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "samwilsn",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Fair 😛",
+        "created_at": "2021-03-30T21:42:41.252000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!415548822983278593\u003e it might be nice to have you summarize your thoughts in the ethresearch forum post at some point so that we can at least \"try\" to document this discussion in a discoverable manner.",
+        "created_at": "2021-03-30T21:42:42.982000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "ah, I only just now saw your link there (did you edit the comment?)",
+        "created_at": "2021-03-30T21:44:23.115000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, edited with appended link, sneaky",
+        "created_at": "2021-03-30T21:44:57.870000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "haha I see",
+        "created_at": "2021-03-30T21:45:12.241000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "will try to do that then 🙂",
+        "created_at": "2021-03-30T21:47:31.325000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I's actually a topic that I have wanted to bring up in the \u003c#812719315136675850\u003e channel for a while now.",
+        "created_at": "2021-03-30T21:48:23.503000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Would be interested in \u003c@!301186049323958275\u003e's opinion as well btw, I am still hesitant to go ahead with such a large change (well, more like mid-sized) without a clear necessity.",
+        "created_at": "2021-03-30T21:51:18.473000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "wolflo_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "One reason I was thinking along the lines of an additional \"strictgas?\" stack parameter is that it would allow adding the strict gas semantics in the future. If you pick one or the other now, I doubt you would ever be able to change or even add the other option. But you could add an additional stack parameter without much work and just throw if it's ever nonzero",
+        "created_at": "2021-03-30T21:53:48.376000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "also btw, if we talk about future-proofing for ungas, we might as well talk about AUTHCALL returning the consumed gas, because any logic that does accounting for acutual consumed gas on the outside would also break there.",
+        "created_at": "2021-03-30T21:54:00.395000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We already did something like that with `valueExt`. I worry though that in this case it would not help with existing invoker contracts? Unless all of them are written in a way to allow switching to strict gas in the future",
+        "created_at": "2021-03-30T21:55:21.401000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "wolflo_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I still agree adding a stack parameter for something that you can find another way to do is a big deal",
+        "created_at": "2021-03-30T21:55:26.364000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yeah, that's ugly but worth looking at. I forgot about *accounting* for gas used (vs just gas provided).",
+        "created_at": "2021-03-30T21:55:34.563000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yes, my general take is that ungas and meta-txs are just not a great match",
+        "created_at": "2021-03-30T21:56:03.771000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "both pre-3074 and post-3074",
+        "created_at": "2021-03-30T21:56:15.103000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dimitry8570",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Which eip?",
+        "created_at": "2021-03-30T21:56:19.173000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I am of the opposite view.  Enshrined meta-transactions seem to be the way that we get to UNGAS, because without them, gas observability is the only mechanism available for meta transactions.",
+        "created_at": "2021-03-30T21:57:13.468000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "3074 AUTH and AUTHCALL",
+        "created_at": "2021-03-30T21:57:37.500000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Sam was able to answer my curiousity mostly (that they were able to reuse much of the existing CALL test suite)",
+        "created_at": "2021-03-30T21:58:08.302000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "wolflo_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The nice thing is, invokers are perhaps the easiest contracts in Ethereum to migrate. Migrating a multisig or meta-tx relayer is extremely difficult because so much is dependent on the existing address. With an invoker, it seems like it's as simple as deploying a new version",
+        "created_at": "2021-03-30T21:58:25.200000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "wolflo_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "^ I think this may also be an argument for sticking with EIP-150 gas, since any assumptions made about the cost of `AUTHCALL` to implement stricter gas provisioning can just be updated with a slightly modified invoker when the cost of `AUTHCALL`  changes",
+        "created_at": "2021-03-30T22:00:34.514000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I’m working on tests this week, will have a PR by Thursday",
+        "created_at": "2021-03-30T22:04:07.720000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "EIP-3074",
+        "created_at": "2021-03-30T22:06:56.596000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dimitry8570",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "A new callcode. Thats gonna be a lot of tests. Calls create a sub context",
+        "created_at": "2021-03-30T22:06:56.785000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dimitry8570",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Need to check how this call acts under other calls and vice versa",
+        "created_at": "2021-03-30T22:07:23.769000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dimitry8570",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Need to check static flag",
+        "created_at": "2021-03-30T22:07:40.173000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dimitry8570",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Need to check call operands (like transaction origin caller, call data, return data)",
+        "created_at": "2021-03-30T22:08:23.352000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dimitry8570",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Need to see how it's reverted by oog, revert, and other exceptions",
+        "created_at": "2021-03-30T22:08:50.466000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dimitry8570",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Does it increase calldepth",
+        "created_at": "2021-03-30T22:09:15.651000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dimitry8570",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And so on. Many tests",
+        "created_at": "2021-03-30T22:09:21.745000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Thanks for this info! I’ll be sure to address these cases",
+        "created_at": "2021-03-30T22:09:53.055000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dimitry8570",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Do you use retesteth for the test exec?",
+        "created_at": "2021-03-30T22:10:21.789000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!393119312350543872\u003e yes with t8n",
+        "created_at": "2021-03-30T22:14:38.176000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "imo changing the gas accounting of authcall will just make the eip more complicated, the evm more complicated, and not get us any closer to removing the stipend",
+        "created_at": "2021-03-30T22:19:59.102000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "isn't removing the stipend exactly what gets us REALLY close to removing the stipend 🤣",
+        "created_at": "2021-03-30T22:20:41.922000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "it doesn't get us any closer to removing it for call et. al though",
+        "created_at": "2021-03-30T22:21:09.896000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i think the only way we remove the stipend is with evm versioning and at that point we can transition all call ops to the new schedule",
+        "created_at": "2021-03-30T22:21:17.850000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "(I respect that this adds work that I won't be doing, so treat anything I'm saying here as gentle nudges and nothing firm)",
+        "created_at": "2021-03-30T22:21:29.936000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dimitry8570",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yay. You can edit https://github.com/winsvega/solidity to have new opcode lllc support to generate the tests.",
+        "created_at": "2021-03-30T22:22:03.498000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i'm happy to do any work that needs to be done - if people want the stipend removed we can remove it",
+        "created_at": "2021-03-30T22:22:03.905000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm +0 on removing the stipend.  I think it's actually a simpler less complex opcode without the stipend and easier to reason about, but you are correct, that doing it for just this one opcode doesn't get us anywhere on the other ones...",
+        "created_at": "2021-03-30T22:22:24.980000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I tend to agree. Basically go ahead with the current version, but with an \"if you write an invoker that relies on manual gas accounting, be aware that ungas might break that in the future\" disclaimer. Given that sub-calls from an invoker always come from the EOA address anyway, I would expect minimal invoker lock-in. and as long as we only ever change AUTHCALL behavior to be more strict, \"making existing signatures do unexpected things\" should also not be an issue.",
+        "created_at": "2021-03-30T22:23:41.074000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i think my perspective is that the eip-150 logic is already implemented in clients and easily extensible to other ops and devs are already used to the accounting",
+        "created_at": "2021-03-30T22:23:45.527000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "a new mechanism would require a different code path and increase client complexity",
+        "created_at": "2021-03-30T22:24:08.201000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It also might be nice to just have 3074 fully self contained, rather than \"Exactly like CALL with these exceptions...\", which is subject to future ambiguity as people try to figure out \"which\" version of CALL it's \"the same as\".",
+        "created_at": "2021-03-30T22:24:43.891000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "samwilsn",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It's the same as CALL, whatever the current CALL is 😉",
+        "created_at": "2021-03-30T22:25:15.726000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "to be clear, these are all just tweak to get the \"perfect\" eip and i don't think we plan on dying on any of these hills - we're very happy with the core mechanics of the eip and more than willing to e.g. drop the stipend, throw on too little gas, use eip-191 signatures if that is the preferred path",
+        "created_at": "2021-03-30T22:28:46.235000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I like working with you guys",
+        "created_at": "2021-03-30T22:45:05.356000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the feeling is mutual 🙂 thanks for the feedback on the eip",
+        "created_at": "2021-03-30T22:45:49.764000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "samwilsn",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I am going to die on each and every hill, thank you.",
+        "created_at": "2021-03-30T22:56:11.748000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "sorry didn't mean to speak for you \u003c:FeelsBadMan:740998004667973722\u003e",
+        "created_at": "2021-03-30T22:56:39.074000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "samwilsn",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We certainly aren't going with a two opcode design, even though it's clearly superior.",
+        "created_at": "2021-03-30T22:57:09.689000+00:00",
+        "attachments": []
+    }
+]

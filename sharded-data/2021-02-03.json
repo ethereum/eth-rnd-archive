@@ -1,0 +1,114 @@
+[
+    {
+        "author": "ajsutton",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think it was \u003c@!476250636548308992\u003e that mentioned it in a chat comment on the call this morning, but I missed the response so will ask here.  With sharding introducing a lot more libp2p topics nodes will need to be able to much more reliably find peers on the topic they need.  The experience with attestation subnets is that finding peers is hard enough that the only really reliable strategy is to ensure you have some peers that are subscribed to all subnets, even if you aren't subscribed to them yourself yet.  Then when you switch subnets you just change your subscriptions but don't need to disconnect peers and find new ones on the subnet you need.\n\nGiven that is unlikely to scale to the number of topics required for sharding data, is there any work being done to improve discovery?\nAlso on MainNet, it seems that a lot of nodes don't have port forward setting correctly so can't accept inbound connections which makes it hard to find peers you can actually connect to. Do we need to factor in the impacts of that?",
+        "created_at": "2021-02-03T03:31:56.345000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "+ 1 ,Thanks for raising this here",
+        "created_at": "2021-02-03T03:34:08.365000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "protolambda",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "There are some ideas to improve the subnet situation for DAS. The primary being one that makes nodes subscribe to a few vertical subnets in a deterministic way based on their identity and the slot time (to rotate it out slowly over time). That way other nodes don't need advanced discovery, and can find these \"backbone\" nodes to join a subnet if they couldn't otherwise. It's similar to the attestation subnets backbone",
+        "created_at": "2021-02-03T03:34:52.661000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Would this be similar to what we have now for shard subnets ?",
+        "created_at": "2021-02-03T03:35:48.623000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "where each attached validator subscribes to 1 subnet for an extended period",
+        "created_at": "2021-02-03T03:36:06.721000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "protolambda",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Current attestation backbone is not predictable in the same way, but we do have ENR data \"attbits\" that includes the backbone. For vertical subnets we can change it to not use ENR, just identity, since we only really need the backbone to be known (and preferably not more than that at the same time, for randomness in sampling)",
+        "created_at": "2021-02-03T03:39:09.244000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "protolambda",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So yes, it has some similarity. Just some more stable subscriptions, that can be found via discovery (and starting with a quick search through peerstore), to make moving around easier",
+        "created_at": "2021-02-03T03:41:04.839000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "protolambda",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This part is relatively complete though, it definitely needs testing and review still, but for sharding we have more difficult open problems: historical block retrieval and non-gossip sampling (gossip-sampling isn't sufficient, and if it's not perfect, this would be backup anyway). We've looked at discv5 topic discovery, and now at an alternative \"data carousel\" for block retrieval, but it's not a clear-cut problem. Lots of pros/cons with bandwidth and incentives",
+        "created_at": "2021-02-03T03:45:04.953000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "What would the exact method be on determing which peer is subscribed to which vertical subnet . And would non validating nodes also be subscribed to the subnet ? \n\nMy main concern is the size here with 1024 vertical subnets, you might at most only have 4/5 peers in that subnet in the whole network. Lets say any majority of those peers are behind a NAT or simply are 'full' you would have no way to access that subnet then",
+        "created_at": "2021-02-03T03:49:07.684000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "protolambda",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "You also don't have to switch every subnet at the same time, you just have to keep things continuously unpredictable. It's a trade-off, and we try to get the best security (pushing subnet limits). Gossip is for the \"happy case\", where if you can do your random sampling in a direct, low-latency way, you can keep moving fast, and reduce load on the remaining random sampling work. If something misses, the query approach may still work well.",
+        "created_at": "2021-02-03T03:55:34.445000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Gotcha, so it is a backup of sorts. Is there a particular reason 1024 was chosen here ? Could the same goals be achieved with a smaller number",
+        "created_at": "2021-02-03T04:19:50.668000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "protolambda",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Smaller = less sampling precision, lower security if not increasing query count, bigger samples (more bandwidth). Higher = more networking complexity. 1024 seemed balanced enough but can (and should) definitely be experimented with",
+        "created_at": "2021-02-03T04:45:56.930000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "terence0083",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "These are also samples per block right? And with extended data, the actual data will be half of that?",
+        "created_at": "2021-02-03T04:47:08.156000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "protolambda",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Right, samples are e.g. slices of 8 points, out of 2N points you get from extending block contents of N points.",
+        "created_at": "2021-02-03T04:52:15.436000+00:00",
+        "attachments": []
+    }
+]

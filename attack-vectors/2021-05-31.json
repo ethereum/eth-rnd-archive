@@ -1,0 +1,642 @@
+[
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@456226577798135808\u003e is this the right channel to continue speaking about execution bombs?",
+        "created_at": "2021-05-31T09:49:12.812000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, that's the right channel",
+        "created_at": "2021-05-31T10:36:49.729000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Cool. I have mentioned that we will be operating in a time restricted environment after the Merge. And resource exhaustion attacks may shift beacon block propagation time and thus impact on consensus. If we assume the attack scenario leading to 24 seconds block propagation delay (2 slots) due to high execution time then we'd miss `2/3` of blocks worth of slots. Though, this might look severe but recent accident with deposit data voting caused `~3/4` blocks missed in epoch (https://beaconcha.in/epoch/32304) without preventing finality showed that the beacon chain is pretty resilient to this kind of attacks. But anyway attacks leading to 50 seconds execution delays can start breaking finality and should be taken in account in the analysis.\n\nI am curious about potential attack vectors that could be exploited to increase execution time significantly. Obviously, there are precompiles (some edge cases) and mostly state access. But since we have snapshots providing `O(1)` state access time during the execution, I suppose that the worst case for any state access including contract code reads should be computed out of reading and writing to storage slot or contract's code that doesn't exist; this is the worst case for DB engines as it doesn't hit any cached value (probably some bloom filters can handle it, idk). How do you think attack vectors look like with snapshots?",
+        "created_at": "2021-05-31T11:02:15.477000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "First of all, there is no O(1) access time usually, unless you keep the entire state in a very large hash map - which is impractical, because you cannot easily iterate over it, and it is hard to persist. So I would say it is more like O(log S), where S - size of the state. The coefficient there depends on whether State fits in RAM or not, for example. Currently, it can still fit in RAM on 64 Gb machines",
+        "created_at": "2021-05-31T11:05:51.691000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, bloom filters (or cuckoo filters because they allow deletions)  can efficiently protect against attacks based on querying mostly non-existent data",
+        "created_at": "2021-05-31T11:06:37.900000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the attacks they are not protecting against are based on querying existing data. Yes, these attacks are much less potent, because such transaction has to essentially list all the accessed state locations in its input",
+        "created_at": "2021-05-31T11:07:27.520000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "you might consider it not to be an attack, but nevertheless, it is one of the things that determine the \"safe\" gas limit",
+        "created_at": "2021-05-31T11:08:07.601000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "luckily, such transactions will mostly likely be easily detectable",
+        "created_at": "2021-05-31T11:08:28.920000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Is it worth standardizing other safeguards? eg. when a block proposer is making a block, time out execution at 4 seconds; if execution takes longer then just throw everything out and make an empty proposal (or a proposal with all transactions up to but not including what took 4 seconds)",
+        "created_at": "2021-05-31T11:09:55.777000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The thing I am mostly looking for input currently is something that we have disagreed with \u003c@!211091239112671234\u003e on the call - Whether miners (block proposers) have an incentive to \"bomb\" other miners/block proposers. I have not done a lot of analysis on that, but in my initial thinking, block proposers can adopt the strategy under which there is no incentive to bomb each other",
+        "created_at": "2021-05-31T11:14:07.397000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This would decrease block space supply. And seems like until malicious transactions are floating around in the mempool there will be no possibility to produce a payload. Mempool will need to self-recover somehow in this case",
+        "created_at": "2021-05-31T11:14:21.743000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I thought that the snapshot database gives an ability to access state in `O(1)` during the execution which turns into `O(logN)` to compute state root thereafter.",
+        "created_at": "2021-05-31T11:15:47.543000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It's O(1) leveldb requests",
+        "created_at": "2021-05-31T11:16:09.595000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Instead of O(log(n)) leveldb requests as was the pre-snapshot status quo",
+        "created_at": "2021-05-31T11:16:18.989000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "right, this is what I am referring to",
+        "created_at": "2021-05-31T11:16:28.300000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But each leveldb request is still O(log(n)) disk accesses",
+        "created_at": "2021-05-31T11:16:28.489000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "flattening the state gets you from O(log^2) to O(log)",
+        "created_at": "2021-05-31T11:16:57.668000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I get it now",
+        "created_at": "2021-05-31T11:17:18.764000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "btw \u003c@456226577798135808\u003e do you happen to know what is the size of the in-memory cache for leveldb?",
+        "created_at": "2021-05-31T11:17:48.896000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I don't know for LevelDB, but in our representation in Erigon, current size of plain state is about 32Gb",
+        "created_at": "2021-05-31T11:18:30.842000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "we haven't used LevelDB for years 🙂",
+        "created_at": "2021-05-31T11:18:45.793000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ah I mean specifically the portion cached in RAM (so the portion of tree descent that does not require disk accesses)",
+        "created_at": "2021-05-31T11:18:55.502000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "LevelDB is an LSM store, it works pretty well for the items that have been recently added/modified, but if an item has not changed for a while, it gets merged into lower levels and its access latency increases",
+        "created_at": "2021-05-31T11:20:34.866000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I do not know specifics about caches",
+        "created_at": "2021-05-31T11:20:46.099000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "in our database, which is B-tree based, the most efficiently access parts are those that were \"read\" recently, not \"modified\" recently",
+        "created_at": "2021-05-31T11:21:18.224000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "and we can use all the available RAM on the computer without changing any settings",
+        "created_at": "2021-05-31T11:21:33.903000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I believe with LevelDB this can be tweaked",
+        "created_at": "2021-05-31T11:21:51.204000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Taking in account that producing empty payload will lower supply, IMHO, producing a block even with a chance of it to be orphaned would be better for the network, depending on how long it takes to execute though, there is a trade-off. If we have `1/3` blocks with payloads that have been attested it might be better than if we have no skipped slots but all blocks with empty payloads.",
+        "created_at": "2021-05-31T11:22:25.159000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Or having a block with just consensus messages but no execution messages",
+        "created_at": "2021-05-31T11:23:40.955000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@456226577798135808\u003e do you have thoughts on what would be the worst case scenario for the state access? Or there is no general case and each would highly depend on the underlying database engine?",
+        "created_at": "2021-05-31T11:23:53.776000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But letting at least a few execution transactions go in definitely seems ideal",
+        "created_at": "2021-05-31T11:23:56.013000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "One funky type of bomb is a delete-bomb. On ropsten, there was a gigantic deletion (I cc:ed you \u003c@456226577798135808\u003e on a PR), which we totally didn't even notice when running in trie-mode. When we ran it in snapshot-mode, however, the selfdestruct of a massive account caused massive immediate db deletes, which were further problematic because of batching (memory blowup) and simultaneous iteration (iteration + deletion didn't mix well). \n\nSo even the direct access model comes with problems.",
+        "created_at": "2021-05-31T11:25:32.553000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It would be great if we have an ability to evict malicious transactions that takes say `\u003e 3s` of execution time. I am wondering whether this kind of protection would have any adverse effects.",
+        "created_at": "2021-05-31T11:25:48.047000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, worst cases depend on lots of things, DB implementation, hardware, etc. Therefore I cannot see gas pricing being able to keep up with the shifting landscape of possible attacks. Therefore I wanted to create an extra layer of protection",
+        "created_at": "2021-05-31T11:25:57.267000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "heh, reminds me of the need to #BanSelfDestruct at some point",
+        "created_at": "2021-05-31T11:26:30.914000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We are handing these delete bombs pretty well, because we had to handle self-destruct unwinding anyway 🙂",
+        "created_at": "2021-05-31T11:26:42.505000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I don't think it's that bad! With EIP 2929 we have a hard limit of ~7000 state accesses per block (except selfdestruct)",
+        "created_at": "2021-05-31T11:26:57.943000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I was thinking about it as a subjective kind of protection. The simplest rule would look like \"drop any transactions from my pool that take more than N seconds to be executed\". Still propagated them but do not include in a block",
+        "created_at": "2021-05-31T11:27:04.724000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The idea is not to propagate them, so that the bomb does not reach the destination",
+        "created_at": "2021-05-31T11:27:52.287000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But my point in general on the ACD was more that sure: we can try to remove 'malicious' transaction. But from a miner perspective, \na) If you've already spent 10s processing a tx, why not just include it? \nb) If you can construct a malicious tx which will take _you_ zero seconds to evaluate, but will take others `10s`, what's the downside of constructing such a block? The other miners will have to import it before they know it was malicious.",
+        "created_at": "2021-05-31T11:27:55.844000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "there is no point of checking the bomb and letting it go further",
+        "created_at": "2021-05-31T11:28:03.904000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If, as a miner, you know that your slow transaction that you included, will lead to your block getting likely orphaned, you won't include it",
+        "created_at": "2021-05-31T11:28:53.510000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Right, I think this is all defense-in-depth protection. Change the security model from \"there are no DoS vulnerabilities\" to \"there are no DoS vulnerabilities OR there are very few malicious proposers\"",
+        "created_at": "2021-05-31T11:29:10.865000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Right, but I am thinking of potential adverse effects that we could have by introducing no propagation rule. Probably, somebody wants to include this one transaction. So, less intrusive way would be still propagate but have an option for validators to sort out potentially malicious transactions that could result in the block they produce to be orphaned",
+        "created_at": "2021-05-31T11:29:30.339000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "After the Merge these blocks will likely be orphaned. And there is motivation to avoid producing them",
+        "created_at": "2021-05-31T11:30:48.853000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, that makes sense. So my point was more that it doesn't _change_ the need for having constraints on gas. Defense in depth means that sure, we can  add  more perimeter stuff, but we still keep the same protections we had previously.",
+        "created_at": "2021-05-31T11:30:49.496000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "agree fully there!",
+        "created_at": "2021-05-31T11:31:01.449000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So maybe we're not disagreeing, \u003c@456226577798135808\u003e . I think it's a cool approach and all, just not a replacement",
+        "created_at": "2021-05-31T11:31:21.275000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, it does not remove the need to gas rebalancing",
+        "created_at": "2021-05-31T11:31:32.623000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "it just makes this gas rebalancing more systematic",
+        "created_at": "2021-05-31T11:31:41.780000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "you clearly identify the disbalance and work on fixing it, while perimeter keeps protecting you from it",
+        "created_at": "2021-05-31T11:32:24.181000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "in many cases, it lets you not to have \"open secrets\", which would also accelerate the adoption of gas rebalancing changes",
+        "created_at": "2021-05-31T11:32:56.153000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "because you will clearly state - this fixes gas imbalance, and we are not vulnerable yet, because of perimeter, but the pressure will increase if we don't fix it",
+        "created_at": "2021-05-31T11:33:36.596000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "for miners/block proposers, if they change their block choice strategy, they can eliminate incentive for bombing each other",
+        "created_at": "2021-05-31T11:34:21.342000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "when they try to import a block, and it is too slow, they keep mining on top of the previous block",
+        "created_at": "2021-05-31T11:34:41.786000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "essentially marking that new block a bomb and refusing to build on top of it",
+        "created_at": "2021-05-31T11:35:00.088000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "this strategy, adopted collectively, should remove the incentive",
+        "created_at": "2021-05-31T11:35:21.424000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I also posit that most naive DOS attacking transactions can be identified by abstract interpretation (i.e. without access to the state)",
+        "created_at": "2021-05-31T11:38:31.868000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I will be writing on that topic soon",
+        "created_at": "2021-05-31T11:39:09.372000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "how to make next-generation of EVM that supports abstract interpretation out-of-the-box",
+        "created_at": "2021-05-31T11:39:33.087000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Block proposers strictly follows the fork choice and they build on top of a block that is the head of the chain according to attestations received from the network. IMO, a self-protection excluding potentially malicious transactions from the payload that is being produced to allow for the block to be propagated in time and thus having chances to be included onchain should be sufficiently enough for block proposers. Even though such transactions are propagated in the network.",
+        "created_at": "2021-05-31T12:02:16.411000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Are the attestations given once the validators have fully executed the block, or before it?",
+        "created_at": "2021-05-31T12:05:18.653000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "They already do this. I mean, until they've constructed a new block on top of `X`(where `X` is the malicious new potential head that just arrived), the backend-workers are still mining the old one",
+        "created_at": "2021-05-31T12:05:23.413000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "They are made at a strict boundary which is 4 seconds throughout a slot. So, if a block produced in this slot hadn't been imported before this boundary attesters would vote for the current head e.g. a block produced in the previous slot.",
+        "created_at": "2021-05-31T12:08:23.938000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Which makes block producers \"bombing\" others even less of a problem than for the miners",
+        "created_at": "2021-05-31T12:09:50.143000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "bombing blocks simple not going make it 🙂",
+        "created_at": "2021-05-31T12:10:10.833000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "so if the block producers have txpool protective perimeter, they have all the incentive to actually use it and not place bombs into the block",
+        "created_at": "2021-05-31T12:11:01.655000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This is how I am currently understanding it. Though, the beacon chain fork choice is not that trivial and this question needs further analysis and modelling to say for sure. There could be edge cases",
+        "created_at": "2021-05-31T12:12:26.857000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think in general, miner/block producers only have incentive to produce \"bomb blocks\", if they know for sure that other miners don't have detection/defuse mechanisms. If, however, everyone use those mechanisms, making bomb becomes counter-productive",
+        "created_at": "2021-05-31T12:13:21.029000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think that for the beacon chain making malicious blocks on purpose is less of a problem than bombing network with malicious transactions and make everyone produce such blocks. This is why I see value in defending perimeter. And make it as less intrusive as possible, i.e. a self-protection mechanism preventing inclusion of potentially malicious transactions, would work. At the first glance I don't see any adverse effect of not propagating this kind of transactions but we would need to monitor these transactions in the network and having them propagated could also have positive effect.",
+        "created_at": "2021-05-31T12:17:40.128000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "protolambda",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "https://hackernoon.com/bitcoin-core-bug-cve-2018-17144-an-analysis-f80d9d373362\nClassic example, in Bitcoin, what could go wrong if transaction (pool or other sources) validation does so much that you start making bad assumptions about block validation. I think the gas-bomb research is very useful, but it shouldn't replace/optimize core consensus rules without thorough review.",
+        "created_at": "2021-05-31T12:22:31.334000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This is perhaps a dumb question, but how do incentives from miners \u0026 stakers differ here? Post-merge, if we have better ways to identify \"gas bombs\", is there a way we could create explicit penalties for block proposers who propose those, and slash them if they do?",
+        "created_at": "2021-05-31T17:15:38.694000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We obviously can't stop miners from mining in PoW, but with stakers maybe we have more flexibility",
+        "created_at": "2021-05-31T17:16:37.790000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "proving that something is an execution bomb \"on chain\" (to do slashing) is probably very hard",
+        "created_at": "2021-05-31T17:16:43.122000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "because you probably have to let it explode to prove it 🙂",
+        "created_at": "2021-05-31T17:17:06.676000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yeah, and I guess the challenge is that you can at best delete a 32 ETH stake",
+        "created_at": "2021-05-31T17:17:31.559000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "so if I'm an attacker with 100,000 ETH, that's a lot of execution bombs I can pay for",
+        "created_at": "2021-05-31T17:17:45.254000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "even there, though, I wonder if we had better ways of detecting (and defining!) an \"execution bomb\", we could actually raise the gas limit to a point where the network can handle a small number of very expensive bombs where we can slash the validators.",
+        "created_at": "2021-05-31T17:18:35.634000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I can also see how that makes block construction become even more complicated though and lead block proposers to be overly conservative 😅",
+        "created_at": "2021-05-31T17:20:21.699000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The value of an execution bomb could easily be worth more than 32 ETH.",
+        "created_at": "2021-05-31T18:44:07.308000+00:00",
+        "attachments": []
+    }
+]

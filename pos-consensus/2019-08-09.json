@@ -1,0 +1,42 @@
+[
+    {
+        "author": "agemanning",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003c@449019668296892420\u003e - Thinking about syncing with the new RPC. If we are on a fork and HELLO a peer that is ahead of us. We  request blocks up to our head slot, however we could find that the block returned from a peer at our head slot is not the same as our head block. We would then have to get all blocks on the peers fork from the last finalized block (or binary serarch until we agree on a block and slot. i.e a common ancestor). It seems it would be more efficient if we could just ask for all the hashes and filter out which we dont need rather than requesting entire blocks to find the common ancestor?\nAnd the use RecentBeaconBlocks. If we get a block with an unknown parent, it seems we can only ask for a single block at a time. I,.e get me parent 1.. then another request, get me parent 2 etc. We wouldn't have a list of block hahses to request and would have to do multiple requests? Would it not be more efficient to be able to ask for a number of blocks in the recent past rather than multiple requests each block with an unknown parent?\nIs there something I'm missing in how you imagine the syncing logic to go?",
+        "created_at": "2019-08-09T00:19:39.758000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "yes, that's pretty much it - you're right that in the particular case of ending up on mismatching forks, there's overhead to transmitting full blocks instead of hashes and we briefly discussed whether it should be possible to make a similar query but getting roots instead (or some arbitrary nesting depth of the merkle tree for example) - that said, such cases should be rare - if you're syncing up from a restart long past (first start), whatever happens around head is negligible (you should already be listening to blocks/attestations before starting the sync so you're already collecting \"recent\" stuff) and in the case it's recent - well - it's not too many blocks. the key idea behind simplifying the protocol was that in the common case of a missed block or a long sync, getting whole blocks without additional round trips was a nice and easy way to get started and get some numbers on what other requests would be sensible to add, and we can experiment with that once interop is running. an easy strategy to start with is to ask by block hash on orphan attestations and ask by range on orphan blocks, perhaps an epoch at a time (considering known finalization/justification points). consider also that for a long sync, you don't really want to ask for headers first then ask for those headers one by one - not only does that create large requests with long lists of hashes - it also requires an inefficient database lookup by hash for whoever is responding where blocks must be fetched one-by-one from store because they could literally be anything...",
+        "created_at": "2019-08-09T08:50:20.240000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "long story short - we should for sure consider adding a few more \"helper\" requests once the basics are working well.",
+        "created_at": "2019-08-09T08:51:06.569000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003c@498009160982724610\u003e ^",
+        "created_at": "2019-08-09T08:51:16.710000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Yep  ok sounds good. The next thing I came accross is keeping the NULL ssz state in the RecentBeaconBlock response. I know we discussed this, but the 1:1 mapping was good when we didn't have full blocks, now that we have full blocks, we can tell which block our peer has easily (using the slot for example). With the SSZ encoding, to have a NULL in a list of objects, I think we add extra bytes on all objects that are not NULL. So it seems to me that having the 1:1 mapping, bloats the response and we gain very little. What do you think?",
+        "created_at": "2019-08-09T08:56:01.045000+00:00",
+        "attachments": []
+    }
+]

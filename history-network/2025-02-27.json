@@ -1,0 +1,50 @@
+[
+    {
+        "author": "ogenev",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I’ve started implementing ephemeral headers in Trin but have a few questions about the specification. The specs at [ephemeral block headers](https://github.com/ethereum/portal-network-specs/blob/master/history/history-network.md#ephemeral-block-headers) state:\n\n    `ephemeral_header_payload = List(BlockHeader, limit=MAX_EPHEMERAL_HEADER_PAYLOAD)`\n\nHowever, it’s unclear what format `BlockHeader` should take.\n\nI assume that it follows the standard EL header (as per the execution-layer specs). But if a portal node relies on a beacon chain oracle, then it only has access to `LightClientOptimisticUpdate` objects, which expose `LightClientHeader` and its `ExecutionPayloadHeader` rather than the classic EL header format.\n\nI’ve raised this before because of the discrepancies between the EL header format and the `ExecutionPayloadHeader`:\n\n    •    PoW fields (e.g., `difficulty`, `mix_hash`, `nonce`, `uncles_hash`) appear in the EL header but not in the `ExecutionPayloadHeader`.\n    •    PoS fields (e.g., `fee_recipient`, `prev_randao`, `block_hash`) appear in the `ExecutionPayloadHeader` but not in the EL header.\n    •    `parent_beacon_block_root` is included in the EL header (via EIP-4788) but not yet in the `ExecutionPayloadHeader`.\n\nWe don’t need these extra fields to verify data near the chain head, but it’s important to clarify and standardize the definition of `BlockHeader` for ephemeral headers. Since every history node is expected to fetch recent headers from its respective oracle, one possible solution is to define a minimal header type that includes only the fields necessary for verifying bodies and receipts. Clients would then respond with this minimal format on request.\n\nWhat do you think, does this make sense?",
+        "created_at": "2025-02-27T10:08:24.628000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "\u003e    •    parent_beacon_block_root is included in the EL header (via EIP-4788) but not yet in the ExecutionPayloadHeader.\nThe parent root is in the `LightClientHeader`",
+        "created_at": "2025-02-27T10:36:10.943000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I wrote code for extracting the `Execution Block Header` from the deneb `BeaconBlock` here \u003chttps://github.com/ethereum/trin/blob/75a56e157f84541406664c60935a1541dcf3e7e7/bin/trin-execution/src/era/beacon.rs#L144-L165\u003e. We can basically do the exact same thing for this usecase. Converting CL data to `Execution Block Header`'s is standard practice by all Execution Clients so it isn't like this is undefined or anything.",
+        "created_at": "2025-02-27T10:38:03.500000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "\u003e We don’t need these extra fields to verify data near the chain head, but it’s important to clarify and standardize the definition of BlockHeader for ephemeral headers\nThere is no reason we can't use the valid execution header, the oracle has all the information to construct the valid execution header, we want to provide valid headers for our json-rpc regardless, so I don't think it makes sense to do something custom here like a `minimal header type`. I think using valid execution headers is a requirement, for a few reasons.",
+        "created_at": "2025-02-27T10:40:30.101000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "acolytec3",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Agree with this. This is what we are doing in our code",
+        "created_at": "2025-02-27T11:22:39.496000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ogenev",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I forgot that we want to provide the headers close to the head to  the end users \u003c:crazycry:932693133546889216\u003e . \nOk, so `BlockHeader` is a valid EL header and needs to be constructed from whatever the oracle provides. Every client decides how to construct this and what oracle to use.\n\nI'll open a PR to clarify this. In other parts of the specs, we use \"header\" instead of \"BlockHeader,\" which can also be confusing.",
+        "created_at": "2025-02-27T11:36:55.399000+00:00",
+        "attachments": []
+    }
+]

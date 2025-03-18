@@ -1,0 +1,210 @@
+[
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "alright, \u003c@!476250636548308992\u003e helped me to benchmark with fastssz the very same state and it does it 130ms faster than I do (420 with -O2 vs 290 on fastssz)... I'll have to profile this implementation before doing the parallelization.",
+        "created_at": "2021-07-13T01:20:16.723000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "which state is it? we can run it through nimbus as well, curious to see how it's doing nowadays - I think the key thing clients do is not parallelize but cache - the majority of a state doesn't change, so in nimbus, we cache the intermediate hashes of all lists, for example",
+        "created_at": "2021-07-13T09:56:09.598000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "we have an `ncli` tool that does these things (hashing raw states etc) from the command line",
+        "created_at": "2021-07-13T09:57:02.828000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Hi, I'm aware of the cache issue, but I want to first benchmark the raw algorithm cause that's something that can be done without any extra logic to see where I am going wrong. The state I am using to benchmark is from slot 1605741 a couple of days ago. I am running currently under valgrind and it seems that my problem is using openssl that was compiled by the distro. When I finish profiling I'll try to simply include a hashing implementation either from cminer or any of the ones out there, but will compile it myself, that should make a huge difference. I do appreciate if you could run the `ncli` on that state to confirm something on the ballpark of 290ms for hashing from scratch without any partial caching (this would screw the subsequent runs of the benching algorithm, this is something that proto's implementation does and I am not sure if fastssz does it as well, in which case I'd be benching against an incorrect number)",
+        "created_at": "2021-07-13T10:05:40.036000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "by the way \u003c@!449019668296892420\u003e the link for \"github\" in your webpage goes to https://nimbus.team/contribute/ which is a 404",
+        "created_at": "2021-07-13T10:08:01.508000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "tried to download ncli here.",
+        "created_at": "2021-07-13T10:08:08.305000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "which webpage?",
+        "created_at": "2021-07-13T10:08:33.127000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "it's source only, need to clone",
+        "created_at": "2021-07-13T10:08:49.549000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "https://nimbus.team/",
+        "created_at": "2021-07-13T10:09:21.896000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "right, thanks",
+        "created_at": "2021-07-13T10:18:59.199000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "interesting, on first run `ncli` is quite a bit slower which I didn't expect, roughly double what you're seeing (on a 3yo laptop with some other stuff running so its not .. the best benchmark) - need to look into whether that's loading the ssz, hash-tree-rooting or doing something else wrong",
+        "created_at": "2021-07-13T11:54:28.697000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "ahh thanks! the laptop may be the difference. Loading does take time, but I'd expect that deserialization doesn't. In my implementation deserializing takes about 35ms. I'm updating cgminer's hashing algorithm from `C` to modern `C++` to confirm my thesis that openssl was screwing my results.",
+        "created_at": "2021-07-13T11:58:17.486000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "probably a more comparable measure (for sanity checks) would be the number of calls made to the hashing function",
+        "created_at": "2021-07-13T11:59:12.338000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "it's not like one can do .. magic here - the number of hash calls is deterministic for each input, so unless you're doing it wrong (not precalculating zero-hashes), it should all depend on the speed of the hashing function",
+        "created_at": "2021-07-13T12:00:12.656000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "but that's part of the thing. For example in proto's algorithm and fastssz algorithm they hash backwards on a flat array. I am using a recurrent function as in a binary tree which does include overhead of the calling on the stack which can be up to about order 40 on a beaconstate. The reason I took the recurrent approach is that I can trivially parallelize this on the large lists. So I want to measure if this is responsible for the 120ms or I'm just using the wrong hashing algorithm compiled without optimizations.  There are a couple of other things that can be hurting me like I'm using `std::byte` instead of `uint8_t` and this requires a recast... I am not sure if freeing memory after that recast takes longer. But I'll put my money on the hashing algorithm first though.",
+        "created_at": "2021-07-13T12:10:29.967000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "```\n  82,04%  ncli     ncli              [.] blst_sha256_block_data_order\n   5,02%  ncli     ncli              [.] blst_sha256_bcopy\n   3,35%  ncli     ncli              [.] X5BX5Deq___wCxLFNoF2DOiuJpFEiBO9cQ\n   1,91%  ncli     ncli              [.] addChunk__R01UGeyNwopoORQvliYo6w.constprop.0\n   1,51%  ncli     ncli              [.] digest__dvV7q0puAbsCfklkQrX4Gg.constprop.0\n   1,37%  ncli     ncli              [.] blst_sha256_emit\n```\nso some 89:ish % of ncli is running the hash function - `X5B..` is our caching overhead (basically that's the \"am-I-cached\" check, could probably get that down .. the rest is loading and deserializing the bytes, as well as some .. small nim overhead",
+        "created_at": "2021-07-13T12:42:46.427000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "casting in c++ is \"free\" if you're merely casting the pointer",
+        "created_at": "2021-07-13T12:43:32.886000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "long story short, there are only two ways to optimize the above: call the hashing function fewer times (which is bounded by the nature of the algorithm), or hunt that last 5% or so which .. isn't much to be hunting for..",
+        "created_at": "2021-07-13T12:46:26.214000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "I'll admit we might not be optimial in terms of hash calls because we're so used to the caching that we might have left some low hanging fruit 😉 I'll be curious to hear where you end up",
+        "created_at": "2021-07-13T12:47:24.646000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "`perf record` + `perf report` are great for a first quick analysis on linux - if you want to go deeper, I'd recommend https://software.intel.com/content/www/us/en/develop/tools/oneapi/components/vtune-profiler.html which is still fairly easy to use, compared to the amount of detail it gives",
+        "created_at": "2021-07-13T12:50:04.657000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Let me see if I understand if you are around 89% in the hashing algorithm, and the total amount of time was of the order of twice here, then that's still a bit more than what it's taking me here to hash it. I guess it's the laptop. I'm running on a Ryzen 5 3600, it's not great but also is not bad. I am using Valgrind + Callgrind to profile it and indeed, most of the time is spent on the openssl implementation of sha256. I'm pissed that I took a random implementation from the internet to convert to my use case, and it turned out that it's not really working 🙂 https://github.com/System-Glitch/SHA256, will now try to convert the one I had originally in mind which is cgminer's",
+        "created_at": "2021-07-13T16:28:18.833000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "I .. doubt the openssl one that bad - rather it's probably pretty decent, given that openssl powers the world pretty much - we're using the one in blst which is apparently the same:ish and has some assembly to it - all I did was run ncli, so if you want to compare apples with apples, that's a good start (ie compare on the same CPU) - if the difference between ours and yours is \u003e5% in any direction, and you're similarly spending a lot of time in the sha algo, it means one of us is doing too many hash calls",
+        "created_at": "2021-07-13T21:08:45.474000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "indeed, I wasn't doubting on openssl but the way it was compiled generically by the distro. But it seems that Arch does a pretty good job and already includes all the relevant flags to use SHA256RNDS2 and the like. I learned this cause I compiled it with `-march=native`  and only gained 20ms per run, so I got slightly below 400ms per round.  Alright, perhaps I can compare with your `ncli`  results, but perhaps we'll need absolute counts since relative may vary a lot depending on the implementation. I'll start a run now with valgrind with full debug symbols for profiling but also with `-O3`  optimization. It's painful and it may take a while.",
+        "created_at": "2021-07-13T22:14:41.886000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Alright this run has finished \u003c@!449019668296892420\u003e in my case I'm not that efficient it seems: From what I gather from callgrind I'm spending only 60% of the time on libcrypto. And there are `39 840 901` calls to `SHA256_final`  on 10 runs of the hashing. So that's about 4 million calls per run. Is this on the ballpark of your application?",
+        "created_at": "2021-07-13T23:32:38.626000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The rest is pretty much pulverized, so it's not clear how I can improve it.",
+        "created_at": "2021-07-13T23:33:17.932000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Oh now I see: you said 90% but that includes deserializing. Yeah, the time I spend loading and deserializing is negligible as well. The 60% are the actual calls to openssl",
+        "created_at": "2021-07-13T23:35:42.893000+00:00",
+        "attachments": []
+    }
+]

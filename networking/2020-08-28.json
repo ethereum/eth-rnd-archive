@@ -1,0 +1,194 @@
+[
+    {
+        "author": "agemanning",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Hey all. \nI'm looking through some gossipsub messages. It seems someone is sending a sequence number of 0. \nIf a sequence number is present we check to see if its u64. We don't check if the sequence number is not present. \nIt seems someone is sending with a sequence number present but not a u64. We are dropping these gossip messages as invalid.",
+        "created_at": "2020-08-28T07:20:45.470000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "\u003c@!498009160982724610\u003e not sure I got why the seqno of `0` is not a `u64`",
+        "created_at": "2020-08-28T08:42:41.695000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "If I recall correctly - I modelled the go-code. The protobuf is an optional bytes. The go implementation from memory will encode 0 as 8 0 bytes. \nSo anything that isn't of 8 bytes in len, we consider invalid.",
+        "created_at": "2020-08-28T08:44:41.696000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Potentially this is too strict, but it had seemed to be fine, until recently (or I've just not noticed us dropping these). I could allow \u003c 8 bytes.",
+        "created_at": "2020-08-28T08:45:56.530000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "So do you mean that someone is sending _empty_ `seqno` protobuf field?",
+        "created_at": "2020-08-28T08:51:50.735000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Going to check what is actually sent. 2 secs",
+        "created_at": "2020-08-28T08:57:11.017000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I think its giving me an empty byte array, rather than nothing.",
+        "created_at": "2020-08-28T08:57:50.540000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Yeah. I'm getting empty bytes rather than nothing. It sounds like an implementation bug",
+        "created_at": "2020-08-28T09:02:54.047000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Prysm seem to ignore it and forward it, and the source field is empty, so I don't know who is making them. But I'm not getting lots so its likely a minority client",
+        "created_at": "2020-08-28T09:03:57.787000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "any chance to know by the agent string ?",
+        "created_at": "2020-08-28T09:05:11.749000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "for that particular peer",
+        "created_at": "2020-08-28T09:05:23.377000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "The peer that propagated it to me was prysm. But I'm assuming prysm just don't check th seq_no and pass it on",
+        "created_at": "2020-08-28T09:07:41.507000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Yeah, empty bytes I suppose is not a valid `seqno`, though I suppose Teku would also ignore this and forward 'as is'",
+        "created_at": "2020-08-28T09:08:57.487000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "So potentially nimbus or lodestar?",
+        "created_at": "2020-08-28T09:10:19.877000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Yeah we dont really enforce that seq_no, is empty here.",
+        "created_at": "2020-08-28T09:12:31.667000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Yeah, i built a range of validation methods. The one I'm currently using, is \"If it exists, validate it\".",
+        "created_at": "2020-08-28T09:13:19.411000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "The main reason being, I don't want to propagate invalid messages. \nBecause if another implementation decides to validate something I've sent, they could think I'm malicious",
+        "created_at": "2020-08-28T09:14:25.294000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Yep, good point 👍",
+        "created_at": "2020-08-28T09:20:51.074000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "BTW do you assume _absent_ `seqno` as valid?",
+        "created_at": "2020-08-28T09:22:16.191000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Yep, if it doesn't exist it's fine",
+        "created_at": "2020-08-28T09:23:38.845000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Should we simply then enforce that it doesn't set anything instead across all clients then ? Having a few only validating it makes it possible to have a normal peer being unfairly penalised",
+        "created_at": "2020-08-28T10:23:16.950000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "\u003e Should we simply then enforce that it doesn't set anything instead across all clients then ?\n+1",
+        "created_at": "2020-08-28T10:24:57.370000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "agemanning",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "\u003e We've discussed a migration path for (1) on Medalla. Essentially,\n\u003e a. have all gossipsub implementations add support for empty fields conforming the go-libp2p implementation\n\u003e b. roll this out as a default to clients, but do not put strict validation requirement on them being empty\n\u003e c. swap to strict validation requirement ~10 days after initial release [potentially monitoring traffic to estimate % swap over]\nYes this is the plan. See Danny's message above",
+        "created_at": "2020-08-28T11:15:02.128000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Ah k, thanks. Must have missed this",
+        "created_at": "2020-08-28T11:17:02.172000+00:00",
+        "attachments": []
+    }
+]

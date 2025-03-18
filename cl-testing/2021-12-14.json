@@ -1,0 +1,192 @@
+[
+    {
+        "author": "jmozah",
+        "category": "Testing",
+        "parent": "",
+        "content": "Sorry for later reply, TZ diff between us\nI  nuked the `datadir`  multiple times and i get the same result (INVALID) while doing ExecutePayload api with EL.\nI inspected the offending EP, that was being passed to EL.\nThe transactions field was empty. I am not sure if this can trigger INVALID from EL.\nAll this is during `initial sync` of blocks from peers. Prysm received every batch and validates the EP and this EP fails.\n\nI will do some debugging in Geth and see which condition is exactly triggering this and update you.",
+        "created_at": "2021-12-14T03:51:59.636000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jmozah",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@!360491619402776577\u003e  These are some observation that i saw.\nGood News, I don't get any \"Bad Blocks\" in this commit eb2f01ccf7dc925f1a01d746e71e135ef889cf09.\n\nPrysm and Teku seems to go bonkers when they encounter EL block 6836 (my guess is that's when we reach TTD).\nIn Prysm this is also the first time we call ExecutePayload().\nI saw two scenarios in Prysm\n 1) if Geth is still syncing and we call ExecutePayload() of block 6836,\n     Even though Geth seems to sends a SYNCING message here (https://github.com/MariusVanDerWijden/go-ethereum/blob/merge-devnet-3/eth/catalyst/api.go#L276), we get a EOF in our \n     ExecutePayload() https response.  i caught the http response and saw this EOF.\n\n2) If Geth has synced and then we call ExecutePayload() of block 6836,\n      Geth finds our block as INVALID here (https://github.com/MariusVanDerWijden/go-ethereum/blob/merge-devnet-3/eth/catalyst/api.go#L288), and we get \"invalid payload\" from our \n     ExecutePayload(). Why geth finds our EP as invalid is not known.\n\nI am using the commit eb2f01ccf7dc925f1a01d746e71e135ef889cf09.",
+        "created_at": "2021-12-14T08:13:33.190000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jmozah",
+        "category": "Testing",
+        "parent": "",
+        "content": "Happy to give more info or logs on this",
+        "created_at": "2021-12-14T08:41:50.049000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Could you link me a branch for prysm and teku to try it out?",
+        "created_at": "2021-12-14T08:46:31.326000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "alleria7777",
+        "category": "Testing",
+        "parent": "",
+        "content": "hello, could you share me a bootnode for devnet-3, my geth always Looking for peers",
+        "created_at": "2021-12-14T08:48:52.999000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jmozah",
+        "category": "Testing",
+        "parent": "",
+        "content": "--bootnodes enode://6b457d42e6301acfae11dc785b43346e195ad0974b394922b842adea5aeb4c55b02410607ba21e4a03ba53e7656091e2f990034ce3f8bad4d0cca1c6398bdbb8@137.184.55.117:30303",
+        "created_at": "2021-12-14T08:50:11.790000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "alleria7777",
+        "category": "Testing",
+        "parent": "",
+        "content": "thanks a lot!",
+        "created_at": "2021-12-14T08:51:23.779000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jmozah",
+        "category": "Testing",
+        "parent": "",
+        "content": "Prysm: branch \"kintsugi\" , commit f84c95667c5a34d24f8ef3490ef6b5b29476bfb2\nTeku:  branch \"master\" , commit 38d50575a1933355d8a4bf757d7cd7f2ea790a05    (the hacmd doc doesnt talk about any branch )\nGeth: branch\"merge-devnet-3\", commit eb2f01ccf7dc925f1a01d746e71e135ef889cf09",
+        "created_at": "2021-12-14T08:54:17.650000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jmozah",
+        "category": "Testing",
+        "parent": "",
+        "content": "Lighthouse \"kintsugi\" branch still has the FeeReceipient bug, so i could not test with that",
+        "created_at": "2021-12-14T08:56:51.959000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "I did find this...\n```diff\ndiff --git a/eth/catalyst/api.go b/eth/catalyst/api.go\nindex e127d068f..4ce0eaafe 100644\n--- a/eth/catalyst/api.go\n+++ b/eth/catalyst/api.go\n@@ -46,7 +46,7 @@ var (\n        VALID            = GenericStringResponse{\"VALID\"}\n        SUCCESS          = GenericStringResponse{\"SUCCESS\"}\n        INVALID          = ForkChoiceResponse{Status: \"INVALID\", PayloadID: nil}\n-       SYNCING          = ForkChoiceResponse{Status: \"INVALID\", PayloadID: nil}\n+       SYNCING          = ForkChoiceResponse{Status: \"SYNCING\", PayloadID: nil}\n        UnknownHeader    = rpc.CustomError{Code: -32000, ValidationError: \"unknown header\"}\n        UnknownPayload   = rpc.CustomError{Code: -32001, ValidationError: \"unknown payload\"}\n        TTDNotReached    = rpc.CustomError{Code: -32002, ValidationError: \"TTD not reached yet\"}\n```",
+        "created_at": "2021-12-14T09:15:59.100000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Not sure how that ended up there 🤡 🥸",
+        "created_at": "2021-12-14T09:16:57.554000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@!306415870010327041\u003e Looks like the `BaseFeePerGas` that you provide is wrong",
+        "created_at": "2021-12-14T10:54:47.633000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "```\n{\"parentHash\":\"0x629d50e058fb944e85c2c5c731259103e574386f36233d7c829c29069fba2cd8\",\"feeRecipient\":\"0xa18fd83a55a9bedb96d66c24b768259eed183be3\",\"stateRoot\":\"0xb7d22cb31932a6f71c241d4cda9d2cb7d77d15345745daa560e574989374d82f\",\"receiptsRoot\":\"0x9096c39e962687d9898aff9d35f3156b29ed643e236d503a6623847a2d23c211\",\"logsBloom\":\"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\",\"random\":\"0x1d0ca87b370ccbe928fd7ca71a3b3d284376ccd39d85a599d773217b19ad8e09\",\"blockNumber\":\"0x1ada\",\"gasLimit\":\"0x7a1200\",\"gasUsed\":\"0x78bbb0\",\"timestamp\":\"0x61afcb8c\",\"extraData\":\"0x\",\"baseFeePerGas\":\"0x7\",\"blockHash\":\"0x31b1de7cbd0ae927ea5423bd185281dee9469874c27818880d44b8efedeb889f\",\"transactions\":[\"0x ...\n```\nThis is what you provide",
+        "created_at": "2021-12-14T10:55:34.601000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "and this is the correct block",
+        "created_at": "2021-12-14T10:55:52.539000+00:00",
+        "attachments": [
+            {
+                "type": "text/plain; charset=utf-8",
+                "origin_name": "message.txt",
+                "content": "PiBldGguZ2V0QmxvY2soIjY4NzQiKQp7CiAgYmFzZUZlZVBlckdhczogMjYzLAogIGRpZmZpY3VsdHk6IDAsCiAgZXh0cmFEYXRhOiAiMHgiLAogIGdhc0xpbWl0OiA4MDAwMDAwLAogIGdhc1VzZWQ6IDc5MTIzNjgsCiAgaGFzaDogIjB4MzFiMWRlN2NiZDBhZTkyN2VhNTQyM2JkMTg1MjgxZGVlOTQ2OTg3NGMyNzgxODg4MGQ0NGI4ZWZlZGViODg5ZiIsCiAgbG9nc0Jsb29tOiAiMHgwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsCiAgbWluZXI6ICIweGExOGZkODNhNTVhOWJlZGI5NmQ2NmMyNGI3NjgyNTllZWQxODNiZTMiLAogIG1peEhhc2g6ICIweDFkMGNhODdiMzcwY2NiZTkyOGZkN2NhNzFhM2IzZDI4NDM3NmNjZDM5ZDg1YTU5OWQ3NzMyMTdiMTlhZDhlMDkiLAogIG5vbmNlOiAiMHgwMDAwMDAwMDAwMDAwMDAwIiwKICBudW1iZXI6IDY4NzQsCiAgcGFyZW50SGFzaDogIjB4NjI5ZDUwZTA1OGZiOTQ0ZTg1YzJjNWM3MzEyNTkxMDNlNTc0Mzg2ZjM2MjMzZDdjODI5YzI5MDY5ZmJhMmNkOCIsCiAgcmVjZWlwdHNSb290OiAiMHg5MDk2YzM5ZTk2MjY4N2Q5ODk4YWZmOWQzNWYzMTU2YjI5ZWQ2NDNlMjM2ZDUwM2E2NjIzODQ3YTJkMjNjMjExIiwKICBzaGEzVW5jbGVzOiAiMHgxZGNjNGRlOGRlYzc1ZDdhYWI4NWI1NjdiNmNjZDQxYWQzMTI0NTFiOTQ4YTc0MTNmMGExNDJmZDQwZDQ5MzQ3IiwKICBzaXplOiA5MjkyLAogIHN0YXRlUm9vdDogIjB4YjdkMjJjYjMxOTMyYTZmNzFjMjQxZDRjZGE5ZDJjYjdkNzdkMTUzNDU3NDVkYWE1NjBlNTc0OTg5Mzc0ZDgyZiIsCiAgdGltZXN0YW1wOiAxNjM4OTEwODYwLAogIHRvdGFsRGlmZmljdWx0eTogNTAwMDE2Mjk5NSwKICB0cmFuc2FjdGlvbnM6IFsiMHhiZmM0NWI1NGYzNjRlY2RmMTIzOGI0OTkyMWM2MDM5ODUyNGRiNTc1NDIzN2IwMmExM2YxMDNhOGMyOTJmODExIiwgIjB4YTFlYzQyMGM2ZGUxODY4ZjUxMDA4MDg4M2M2MjgzNGQxNjcwOTRkNmE4ZWJmMjliMjU4MTc4YTE3NmQ2NTI0NyIsICIweDI4ZDE4Nzk5MTk1NmY2ZmNkNTU2ZDhjM2FlOWZmN2JjNzAzMzU0Y2JlZjlmOWU5MjUxZDIyMjJkM2ZhNzdiZDAiLCAiMHgxODE5MzMyNWFiYTcyZTIxM2NjZjMxOWFhZjI4OTNkZWQ2NmU2ZWIxZjI0MDNjMDQxOTYxMmY2MGViNjQxM2I5IiwgIjB4YWNkYTdhYzM5MDZkNjgxYzZhM2YyN2FjZThlNGVjMjEyZThiNmM4M2E5NzQ2NjU1NDAzYWZlYjg0YzcwNTBhYyIsICIweDk1OTQ4NTI5ZjA3N2ZjY2I4ZGJlMWUyM2JiNWNiYTJlMGI4YTI3NzZlZjA5MTYzMjU5ZGU3M2NhNmJkNTYyM2YiLCAiMHg4ZjllYzk4MzhlMjIxOWVlMDBhYTY1MDkzMDFjYjdkNTI3MzA2NDUyNjhmNDE0ZjhkNTAyOTQ3YWFjZDIwZjViIiwgIjB4OWRmMjNmMTJkZDgxYTZkZGQ2NzcwMDI5ODAzODRhOWEzYzgzZjA0MzBiOWM0NDUzNTZlOGYxNTAyYzAwZmYxYSIsICIweDIyMDY3OWVjN2M1Y2MxNTdlOWY4YjdmNDNiNjc0MGI0YzM4NzVjMTFiMTAzYmNiMzJjYzg5N2U4ZmNiYzhkMDciLCAiMHgwMjIzNThmMTQ1ZDBkY2VmM2Q5NzA5Njc0Y2IzZmE2YTBhMzI1ZWQzYzQ0ODk1N2NiOWIwMzA5MGZlNzQ0MGZlIiwgIjB4NDI2YzkxNTBjZjc4NWNiNzdlMzQ3MzU2MDhkZGE1ZGRkYzNhZjRmNTMwYjA4ZjZkNzA0YzM3OTAyOWNiOWQ5MiIsICIweDhlNjQ0NTEzY2M2ZDI4NDgzOGRiMTIwNzEyYjM3MTI0NzMxMDFiZTMzOTgyNDBlZTM1YzYzNDM1Y2I0NGNiNTEiLCAiMHg1OTQ3ZDAzNjAzODk0ZjRkZjlkNjZmYzhlNjQ1ZTUxNDgzOGZlNzJlYTQzOTY2ZjgwODIxMjk5OGFjNjRlY2NmIiwgIjB4ZWQ5NzJiZThkOWU5MDllNDMyMzI5MGY1OTZkNWVmZDNhYjk2YzE2MDc5MjBmMDg5YjQxZTNiM2Q4ZGUzNDU2NCIsICIweGJhZTYwMWUwYzU0MGU3NTI1NThhZDM2MDRlODE5ZDliODRlY2FhOWQ4MjFhNTZlOWZmMTdlY2NjMjBkYTAwZjAiLCAiMHhmMzA4NjRjMzViZGYzMjUyMWQ3YTA0OGYwYzJmY2U1OTY2Y2FmMDU2NzY3ZTAzODBkZjE4N2RkMDQ1NzQ4NjZlIiwgIjB4MjkzNDgwYzdlMTMzYTNiMTc1Yzk3OTZjZTk3NjI2NGU5OTEyYzQ5ZmYzNmUyNDg5YjBlYjk2YjRiNTVlNGY3ZSIsICIweGQyOGVhYjM3YWQyZjQ0NmRmYzdlZmIwZWY3ODZiNWM3MGVjODdkZDY2ZWIxMjVlZjk0NThiMjViMWFhYWEzZjQiLCAiMHgzODgxM2Q1OGJhNDlmYjY1ZjA0YzM1NTc5NDc3ZDgzZGJhZTI0YzU1YzM4NjE4YzZjZDg5MTcxN2YzNmY5NjI4IiwgIjB4YmQ3OTNhYWM2NWYzZTQ4MGJjNDgxNjZjMWRhNDAyYzBmNWU2NmVkYmMzNmU1YmY1ODczZWQ5Y2VkMDk2MDAwYSIsICIweDRmZjkwNzcyZWVhNTgwZjZiOGVjNmFkNTk2ZGNmNTBjOWNjOGQ3YzQzNzcwNjY3MDI5YWI4ZjRiMGZjNGYwMDQiLCAiMHg2MzUzNTljODBjMzJjMWMzOTQ4MmRkYWNmMmMxYjJlYmYzOWM5MzdkYTFkYTlkNDJiMjdjOGJlZWMzNThjMmQ1IiwgIjB4ZjRmZWIyMWMzZTcyYmY4Y2ZhZjA0YjJkNjlhNTQ4YzIwOTMyMjZlNGMwMDU1OTE2MTE0ZTc4MTRjZjVlMjkzYSIsICIweDkzZjgyYzFlZmU1NjIzNTVjOWFjZjcwMTRlYWYzNmFlOGZiZTM4OTBlNzVjNzg4M2Y3YzRmZTFkZTVhYTdmMDUiLCAiMHhkNjg1MDk3OTRlZjdiOTM1ZTBjZmY2YTY3NjhkM2QyMjM5MDcwMzFjNzk5MjUyYmI2MmUzZWI3MjE4NjgyNTI1IiwgIjB4NTdjNTZlNmJjY2ViNWQxMzg2OTI5ZTAwMTZkYjAxMTRjMGM1YjEyMmE4N2I0YzRmZTEwNGM2NDZhYzY2ZTc2MiIsICIweDZkZTVkMzUxYzZiODcwZjhlN2M3ZWVhM2JkYzVjYjIwYjI1NDg3ZjRmZjg5YWE2NmY2MWNjNmUyYWEyY2I2MmQiLCAiMHgyYjQwNWVkNTkxYTNlZmYzMmEyMzFiMTVlYmZmNGI1MGFjNDA2NmRjZTdiMmU0YzQ2OGE2ZmQ2ZmQ3ZWRhMWI3IiwgIjB4MTJhMGUwNDBjMDE3MjUxNzNhZDg0Y2NkYTM0YzY4MmMyYTcyZTNiYTFjY2UyZjU2NjdkNGIyNmViMDE1NThkZCIsICIweGRkMWZhYjM4MzhlZjM0ODg5YjY2ZDlhMmQwNzAwYjUyYWZhZTkzMDUxMDJiYWQ4ZDAyZWNjMjlkNWI5MmZmNjUiLCAiMHhiZjAyNDcwODQwNTFjZjcwOTViZjljMjdjODRiMTc4MTk1MDdiYzZiYWIzZTBhMmEzMmViNjQ3MjEzNjdkOGJlIiwgIjB4NzI5NTc1MzY1NTM3M2ZmMzZhZGYyNWU4NmE0Zjc2OWMwNWEwZDRhYzI1YjRkNTA2OWEzZDU5M2M2MmM0NWIxMyIsICIweGYxOWM3MGEwY2VmZWQ2YWI4NGE4MThmZWZkYTMxMTNiOTQwZWRlNjdmZjAwZmFhNWU4N2YwZDllNWM0NjM4OWUiLCAiMHg0MGQ5YjE5NjhmNzU1NGVmMGI0OTU0ZWY3ZmIwM2ZlYTdiZTMyMTgyNzcyYjdjZGIwZDA0NTBkMTExNTQxN2I0IiwgIjB4MDE0MzU1YTYxMDIzYjYxM2I1NzY0MTUwNjcwMDRhZmMzMjdlZTFhZjk0NWE3NjFjMjk0ZjM0YzMyZDczZWNiNSIsICIweGUxZjhhZDZlZDg5MGU1NjY2NjBkOGRjMzVjNDMxOWIyYzQxMzE1M2IxZjRhZWU2M2RlYTRmM2Q3ZWExYzhjNmIiLCAiMHhjNDgxNmNjZmQ0OTAzZTBmNjM0MTVkYTA1ZDQ2MjBkNjg0OTUwZGRhYjQ4MTNjZjgyZDFlNGU4NTk2OTg5NDhlIl0sCiAgdHJhbnNhY3Rpb25zUm9vdDogIjB4MmFkOWRiZjMzODJjMWMwMzliM2U4NWVhZTlhZjJiNWY3MDFiMDYxMjdlYjlkN2ZmZTA2MjM3NjQ2ZjIzY2NkZSIsCiAgdW5jbGVzOiBbXQp9Cg=="
+            }
+        ]
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Which produces the following error:\n`\"blockhash mismatch, want 31b1de7cbd0ae927ea5423bd185281dee9469874c27818880d44b8efedeb889f, got c33e08881bd3a5e17e3abb28e479f29a519e290bf9b3a4e69dd2c30a6b3dbd29\"`",
+        "created_at": "2021-12-14T10:56:48.744000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yep, when I hardcode the basefee to 263, the block is correctly imported and the sync fails on the next block with basefee `27` (according to prysm) but `295` in reality",
+        "created_at": "2021-12-14T10:59:12.167000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jmozah",
+        "category": "Testing",
+        "parent": "",
+        "content": "Awesome. i looked at it this morning and i didn't see it too :-). Happens.",
+        "created_at": "2021-12-14T12:42:06.746000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jmozah",
+        "category": "Testing",
+        "parent": "",
+        "content": "Beautiful. Thanks for identifying our bug. \nA bug for a bug makes the world a better place.",
+        "created_at": "2021-12-14T12:43:17.750000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "https://github.com/prysmaticlabs/prysm/blob/f84c95667c5a34d24f8ef3490ef6b5b29476bfb2/beacon-chain/blockchain/process_block.go#L641 It's been one of our todo. Thank you 🙂",
+        "created_at": "2021-12-14T13:09:31.488000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jmozah",
+        "category": "Testing",
+        "parent": "",
+        "content": "i fixed this, now the block is accepted but i get some errors\n```\nINFO [12-14|21:52:34.907] Ignoring already processed block         number=11289 hash=f8c77d..2aec82\nINFO [12-14|21:52:34.910] Setting head                             head=f8c77d..2aec82\nINFO [12-14|21:52:34.912] Set the chain head                       number=11289 hash=f8c77d..2aec82\nERROR[12-14|21:52:34.912] Failed to reset txpool state             err=\"missing trie node e66110f5014e2ab974dce4127afd87e69fddbefcd0e5e46d129fbbf8e3bce899 (path )\"\nERROR[12-14|21:52:34.912] Failed to create mining context          err=\"missing trie node e66110f5014e2ab974dce4127afd87e69fddbefcd0e5e46d129fbbf8e3bce899 (path )\"\n```",
+        "created_at": "2021-12-14T16:24:23.740000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jmozah",
+        "category": "Testing",
+        "parent": "",
+        "content": "Just concerned about the ERROR above, otherwise i dont see any other error in Geth or Prysm",
+        "created_at": "2021-12-14T16:25:38.322000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah I've seen that too, but it's more an issue of the txpool and should not impede node operation",
+        "created_at": "2021-12-14T16:27:15.636000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jmozah",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thanks. That helped.",
+        "created_at": "2021-12-14T16:27:45.277000+00:00",
+        "attachments": []
+    }
+]

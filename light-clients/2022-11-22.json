@@ -1,0 +1,210 @@
+[
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003c@881905303011086387\u003e I am not sure I understand your comment https://github.com/ethereum/consensus-specs/pull/3078#issuecomment-1322822108. Why would BN need Patricia Trie support if RLP hashes weren't needed to be passed in the header?",
+        "created_at": "2022-11-22T10:32:58.759000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Assuming that the full `EL block header` needs to be reproducible from the light client data to drive LES, the light client server (BNs) needs to send all required data to do that. \n\nThat includes:\n– SSZ `ExecutionPayloadHeader` + SSZ merkle proof of inclusion into the corresponding block\n– `withdrawals_trie_root = compute_trie_root_from_indexed_data(execution_payload.withdrawals)`\n– `transactions_trie_root = compute_trie_root_from_indexed_data(execution_payload.transactions)`\n\nClient can then verify, that:\n– SSZ merkle proof indeed confirms `ExecutionPayloadHeader` to be included in the block\n\nClient can then combine the SSZ `ExecutionPayloadHeader`, `withdrawals_trie_root` and `transactions_trie_root` into a `execution_payload_header_rlp`:\n```\nexecution_payload_header_rlp = RLP([\n  parent_hash,\n  0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347, # ommers hash\n  coinbase,\n  state_root,\n  txs_root,\n  receipts_root,\n  logs_bloom,\n  0, # difficulty\n  number,\n  gas_limit,\n  gas_used,\n  timestamp,\n  extradata,\n  prev_randao,\n  0x0000000000000000, # nonce\n  base_fee_per_gas,\n  withdrawals_root,\n])\n```\nand verify that `keccak256(execution_payload_header_rlp)` == `execution_payload.block_hash`.\n\nIf that checks out, LC gossip can be forwarded and block passed to execution engine.",
+        "created_at": "2022-11-22T10:46:18.828000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "The `txs_root` and `withdrawals_root` are Patricia Tree root hashes of `RLP(array-index) =\u003e Transaction/Withdrawal` map",
+        "created_at": "2022-11-22T10:47:32.826000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Why EL client does need to verify the proof of header inclusion, can't CL does this part assuming trust assumptions between CL and EL?",
+        "created_at": "2022-11-22T10:48:17.051000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "That is for the CL client",
+        "created_at": "2022-11-22T10:49:11.038000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "the CL client obtains the data using libp2p / REST, and verifies it",
+        "created_at": "2022-11-22T10:49:41.013000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Oh, sorry, I misread. I can't see why block hash verification is needed, there are light client protocol security assumptions which remain the same regardless of `block_hash` verification.",
+        "created_at": "2022-11-22T10:54:17.407000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "To decide whether Gossip is valid (accept/ignore/reject). Otherwise, the extra `withdrawals_trie_root` / `transactions_trie_root` are not validated at all.",
+        "created_at": "2022-11-22T10:55:32.008000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "So, ultimately, on server side, need to compute those two extra Patricia trie root hashes (for transactions and withdrawals),\nand on client side, need to form the RLP object and then verify that the keccak hash matches.\n\nThe only difference is whether EL or CL component does the computation.",
+        "created_at": "2022-11-22T10:57:30.480000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "(And, of course, all pending assumption that `transactions_trie_root` and `withdrawals_trie_root` are actually needed for LES, or whether it could do with less than full block header as well)",
+        "created_at": "2022-11-22T10:58:36.955000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "But the p2p spec doesn't require running any EL validation before propagating a block",
+        "created_at": "2022-11-22T10:59:30.812000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "That's for full node which has a way to revert in case the EL later fails validation. For light client, there is no history, it only tracks latest finalized / optimistic header",
+        "created_at": "2022-11-22T11:01:05.728000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Why can't we rely on assumption that there is honest majority in the sync committee in this particular case?",
+        "created_at": "2022-11-22T11:02:04.529000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Well, that is possible, if the `withdrawals_trie_root` / `transactions_trie_root` are covered by the `ExecutionPayload` SSZ merkle proof.\nBut, if we don't want to extend that structure with those two extra roots, they are sent separately, not signed at all. So, doing the verification against the `execution_payload.block_hash`  wouuld be needed to re-gain the same trust assumption.",
+        "created_at": "2022-11-22T11:03:39.485000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "If the payload is a part of a beacon block that sync committee has voted for then merkle data proving that this particular header is a part of this particular block is sufficiently enough (taking in account LC security assumptions) to say that the payload enveloped by the beacon block is VALID wrt execution and block hash verification",
+        "created_at": "2022-11-22T11:05:22.054000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Design A: trie roots NOT part of `ExecutionPayloadHeader`\n```\nLightClientHeader:\n  beacon: BeaconBockHeader                     # Signed by sync committee\n  execution: ExecutionPayloadHeader\n  execution_branch: array[N, Root]             # Computed by BN serving the libp2p req\n  execution_transactions_trie_root: Hash32     # Computed by BN serving the libp2p req, not covered by merkle proof\n  execution_withdrawals_trie_root: Hash32      # Computed by BN serving the libp2p req, not covered by merkle proof\n```\nCL light client would receive this object.\n\nTo validate:\n1. Check that `execution_branch` confirms `execution` to be rooted in `beacon.body_root` (SSZ merkle proof verify)\n2. Form `execution_payload_header_rlp` from `execution`, `execution_transactions_trie_root` and `execution_withdrawals_root`\n3. Check that `kezzak256(execution_payload_header_rlp) == execution.block_hash`\n\nDesign B: trie roots as part of `ExecutionPayloadHeader`\n```\nLightClientHeader:\n  beacon: BeaconBlockHeader\n  execution: ExecutionPayloadHeader\n  execution_branch: array[N, Root]             # Computed by BN serving the libp2p req\n```\nTo validate:\n1. Check that `execution_branch` confirms `execution` to be rooted in `beacon.body_root` (SSZ merkle proof verify)\nSteps 2/3 not needed, as everything is covered by the merkle proof",
+        "created_at": "2022-11-22T11:09:19.760000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Yeah, I do understand the difference between A and B. What I don't understand is why do we need the `block_hash` check at all. From my perspective, we don't gain anything by running this check, as it is just one check from a list of payload verification checks; we don't run full payload verification in LC protocol, don't we? Thus, why do we need to run one particular check while we don't run them all?",
+        "created_at": "2022-11-22T11:13:47.384000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "When the LC retrieves data using libp2p/REST/portal, the goal of the verification is to ensure that the data is consistent in itself.\nSo, while you are correct that we do not need to validate the payload, we need to ensure that the payload itself corresponds to the beacon block signed by the sync committee (merkle proof).\nAnd, likewise, we need to ensure that supplementary `trie_root`'s that we obtained correspond to the payload that we obtained.\nOtherwise, we run the risk of making invalid / inconsistent data available to others (as `execution_transactions_trie_root` and `execution_withdrawals_trie_root` could be made up).\n\nThe `block_hash` is just the way to proof that the two `trie_root`'s correspond to the rest of the payload. If there is a more compact proof, that would be great, but `execution_payload_header_rlp` is just an RLP object, no tree / trie structure, so I don't think there is a better proof.",
+        "created_at": "2022-11-22T11:31:23.542000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "The B design doesn't need the `block_hash` check, as there is no supplementary data downloaded that is not covered by the merkle proof. So we already know that everything `execution` is consistent with itself",
+        "created_at": "2022-11-22T11:33:31.850000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003e When the LC retrieves data using libp2p/REST/portal\n\nIs a payload header accompanied with the merkle proof (linked to a beacon block) in each of these cases?",
+        "created_at": "2022-11-22T11:53:31.567000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "2/3 of sync committee voting for a beacon block containing payload with data inconsistent wrt `block_hash` is a byzantine failure, similarly, they can vote for a block with invalid state root",
+        "created_at": "2022-11-22T11:57:29.835000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Yes, the payload header is bundled with merkle proof that it matches the block signed by sync committee.",
+        "created_at": "2022-11-22T12:39:31.474000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "The data that is downloaded here is not signed by the data provider. The sync committee only signs the beacon block root.\nThe assumption is that everything inside `execution_payload` including `block_hash` is correct.\nBut, LC also wants to obtain the `trie_root`s in order to support LES use case. Those `trie_root`'s are not part of `execution_payload`, so the data provider could lie about them. By validating them against `execution_payload.block_hash` it is possible to verify that the `trie_root` were not tampered with.",
+        "created_at": "2022-11-22T12:42:16.287000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "So we do agree that there is no need to validate `block_hash` for LES to follow the head? LES needs `transaction_root` to prove tx belonging to a particular block, right? I see two potential approaches except for keeping RLP hashes in the structure. The first one is to add SSZ proof support to LES, the second one is to bundle absent RLP hashes with data requested from data provider",
+        "created_at": "2022-11-22T14:06:51.977000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Yes, `block_hash` is validated implicitly by being covered by the `execution_payload` merkle proof. \nYour second approach matches \"design A\" from above: the bundled hashes would need to be validated somehow (can be done by checking that they add up to `block_hash`).",
+        "created_at": "2022-11-22T14:17:38.456000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Summarized discussion here: https://github.com/ethereum/consensus-specs/pull/3078#issuecomment-1324265309\n\nThe other two designs that have not yet been evaluated deeply, are:\n– Adding SSZ support to the EL, for transactions and withdrawals.\n– Not passing transactions and withdrawals trie roots at all, when driving LES.",
+        "created_at": "2022-11-22T21:38:12.135000+00:00",
+        "attachments": []
+    }
+]

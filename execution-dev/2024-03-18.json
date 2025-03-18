@@ -1,0 +1,98 @@
+[
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "I am currently updating the EthereumJS implementation of EIP 3074. However I'm now slightly confused.The EIP now says:\n\n\"`nonce` is the signer’s current nonce, left-padded to 32 bytes. Any other value is considered invalid.\"\n\nSo I get the idea, we take the EOA accounts nonce and use that to sign the message, and when AUTH is invoked lookup the nonce of the account and use this to create the message-to-sign in order to verify the signature. However, the second sentence \"Any other value is considered invalid\" - this confuses me. This seems to imply that this `nonce` is not read from the account to get the message-to-sign but it is instead used as input? (So it should be read from memory?). And then verify if this nonce is the actual nonce of the account and throw if this is not the case?\n\nI think the idea is to \"just\" use the nonce, so if the EOA accounts nonce get bumped then the message-to-sign will change, therefore the sender recovery will return a different address, and therefore it will not be equal to `authority`, so we throw? CC \u003c@543900561460822016\u003e",
+        "created_at": "2024-03-18T09:46:46.452000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "No upon re-reading it seems that the nonce should be in the message, so it should be in memory somewhere? 🤔 I'm not really sure now though. Shift comes from the rationale section\n\n\"For this reason, `AUTH` requires the `nonce` in the message be equal to the signer's current nonce. This way, a single tx from the EOA will cause the nonce to increase, invalidating all outstanding authorizations.\"",
+        "created_at": "2024-03-18T10:09:32.436000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "So `nonce` is a part of the overall authorization message. It is a \"system component\". The invoker does not need to pass along any of the \"system components\", because the full auth msg can be constructed just from the inputs to AUTH. E.g. chain id and invoker are known to the EVM context. Since `authority` is also passed in, we can retrieve the nonce value from that account during our construction of the full auth msg. The signer has already done this locally to construct the signature in the first place, so if the EVM pulls a different nonce in from `authority` the AUTH msg will be invalid.",
+        "created_at": "2024-03-18T13:10:07.271000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@508125616940515329\u003e let me know if this makes sense or if I misunderstood your question",
+        "created_at": "2024-03-18T13:10:21.907000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Oh 🤦‍♂️ I think I need some more coffee 😂 For some reason I was thinking this authorization would be the tx origin 🤦‍♂️",
+        "created_at": "2024-03-18T13:48:58.926000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Yes it makes a lot of sense, thanks 😄",
+        "created_at": "2024-03-18T13:49:22.661000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Hey so small question: I have a test where I want to AUTH my EOA, I just updated our implementation to the latest spec and this is the only test now failing. For this EOA I pass the test if I sign the message using nonce 1, not nonce 0. Is this correct? I don't think that EVM has had this edge case before: should the EOA nonce be updated **before** running a tx or **after** running a tx? Because this makes the difference between the result of AUTH if I sign with nonce 0 or nonce 1 🤔 \n\nI can't think of a case before this EIP where we could use EVM to (somewhat artificially) get access to the nonce of an EOA 🤔",
+        "created_at": "2024-03-18T15:49:08.752000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "I'm also not entirely sure what happens if `v` is set to not 0 and not 1, or that the `s` value is out of the ECDSA range. Do we unset AUTH or do we OOG the entire call frame?",
+        "created_at": "2024-03-18T15:52:10.697000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "You’re correct about the nonce needing to 1 for the EOA due to the fact that EOAs usually update their nonce at the beginning of execution.\n\nBut I also think you’re right, there is no way to observe this currently? So this would be the first instance of such",
+        "created_at": "2024-03-18T17:10:30.708000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Great, thanks for the verification 😄",
+        "created_at": "2024-03-18T17:34:53.552000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "oh sorry, also thought i responded to this. if the sig is invalid for any reason, the regular gas is charged but AUTH returns `0` and unsets `authorized`",
+        "created_at": "2024-03-18T18:23:29.378000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Ok great then I need to edit my implementation, it throws on s being too high",
+        "created_at": "2024-03-18T20:37:45.240000+00:00",
+        "attachments": []
+    }
+]

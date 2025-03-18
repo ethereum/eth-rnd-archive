@@ -1,0 +1,98 @@
+[
+    {
+        "author": "pietjepuk",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "The question has come up a few times, but since there's now actually active work being done on implementing withdrawals I'll bring it up again.\n\nThe overall purpose is that those who have lost sole-ownership of their mnemonic (with 0x00 withdrawal credentials) can \"win\" a withdrawal request by requesting a withdrawal to the original deposit address. With that in mind:\n- As far as the 0x00 -\u003e 0x01 transition goes, what happens if there are multiple competing 0x00 -\u003e 0x01 messages? \n- Is it at all possible for the the CL client to query the EL client for deposit addresses? And then to prefer a competing 0x00 -\u003e 0x01 message that has a matching deposit?\n\nRelated questions:\n- Is there any order in which these 0x00 -\u003e 0x01 messages should be processed?\n- If the \"attacker\" has many validators and happens to be a proposer early after the fork, is there any way to force them to _not_ ignore ignore all but their own competing message?\n- What should a CL client do if there are multiple deposits from multiple addresses?\n\nMostly just trying to provoke some discussion on this, so feel free to ignore most questions 😅",
+        "created_at": "2021-12-10T08:34:03.190000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003e I'm wondering what is in the withdrawal receipt, and if we can get away without it.\nGetting away without it requires tight coupling of payload processing to the beacon block processing that the payload is enveloped by. The future compatibility to CL/EL separation would be the main concern here. If we do this tight coupling today it will be almost infeasible to undo this in the future once we really need it. If we see a huge overhead in implementing a particular communication between the layers in asynchronous way, this concern may be re-considered.\n\n\u003e would adding a couple of fields like LAST_SKIM_EPOCH and LAST_SKIM_GWEI to the Validator definition be enough\nFull withdrawals will also rely on receipts as a mechanism of moving funds to execution layer account. I do think that skimming should share the EL mechanics with full withdrawals.",
+        "created_at": "2021-12-10T08:59:01.014000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I agree that sharing the same mechanics makes sense.  But couldn't we still rely on the validator definition to do this, given that it would have `WITHDRAWN_EPOCH == current_epoch` as a trigger for the withdrawal (assuming that we have one slot per epoch where withdrawals are processed; if not a `WITHDRAWN_SLOT` may be better)?\n\nRegarding coupling, though, I hear you.  I think the general question is probably more: how realistic is it to worry about CL/EL separation in this particular case, when the EL will be totally driven by the CL anyway come the merge?",
+        "created_at": "2021-12-10T09:31:54.806000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "mearix",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I'm quite curious how this is going to be handled as well.",
+        "created_at": "2021-12-10T17:20:33.766000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Short version:\n  - the CL has no visibility in to EL transactions, so cannot use information on there to prefer one CL transaction over another\n  - competing transactions will be purely on a first-come-first-serve basis.  If a node has a credentials change operation in memory for a given validator index there is no reason it would throw it out in preference for a different one",
+        "created_at": "2021-12-10T17:37:51.596000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Are these technical limitations, or just choices that are/were made?",
+        "created_at": "2021-12-10T17:40:34.262000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "The former is just how the beacon chain is built.  The latter is more of a case of there being no non-gameable way in which to prefer one valid credentials change operation over another.\n\n(The beacon state does have a deposit root, which contains data from the deposit contract,  but that doesn't include any information on the source address of the transaction so cannot be used.)",
+        "created_at": "2021-12-10T17:43:41.676000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "With merge intensifying communication between EL/CL clients, I would've assumed that it is also possible to ask the EL for a source address of the transaction emitting the deposit event. A costly set of calls maybe, but technically possible. \n\n\u003e The latter is more of a case of there being no non-gameable way in which to prefer one valid credentials change operation over another.\nI'm not entirely sure what you mean by \"non-gameable\". In the hypothetical case that the CL client knows with validator/deposit address pairs exists, it is easy to recognize which one to prefer no?",
+        "created_at": "2021-12-10T17:50:49.405000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "The latter answer was given the current state of the interactions between EL and CL.\n\nAs for being able to fetch balance changes for a given (potentially very old) transaction from the EL in a way that all CLs can verify its veracity, I can't think of a way of doing it offhand.  But even if there were, adding a requirement that all execution nodes should retain all this data on an \"in case\" basis would create a significant load on all validators.\n\nBy far the simplest way to proceed would be some sort of social compact, where beacon nodes have the capability to look up a local list of allowed credential change operations for a given set of validator public keys ,and reject anything that doesn't match.  If enough beacon nodes do that, and enough people agree on the contents of the list, you'd have a fair chance of being able to rescue some funds.",
+        "created_at": "2021-12-10T18:06:53.342000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003e As for being able to fetch balance changes for a given (potentially very old) transaction from the EL in a way that all CLs can verify its veracity, I can't think of a way of doing it offhand.  But even if there were, adding a requirement that all execution nodes should retain all this data on an \"in case\" basis would create a significant load on all validators.\nYeh, it would be very costly indeed. \n\n\u003e By far the simplest way to proceed would be some sort of social compact, where beacon nodes have the capability to look up a local list of allowed credential change operations for a given set of validator public keys ,and reject anything that doesn't match.  If enough beacon nodes do that, and enough people agree on the contents of the list, you'd have a fair chance of being able to rescue some funds.\nHadn't thought of that yet, indeed might be a good idea. Are you talking about a list like a publicly shared \".txt\" file (or a script you can run against your local client to generate one), that you can point a CL client to?",
+        "created_at": "2021-12-10T18:12:28.232000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Yeah, it would obviously be opt-in and there would need to be copious notes against it for each validator operator to be happy enough to run it (and it would no doubt be subject to much argument) but it would at least be possible, which I think with the current merge architecture the other option would not be.",
+        "created_at": "2021-12-10T18:14:06.940000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Sure, but I feel it's not all that unfair to put some work back in the hands of stakers that lost sole-ownership of their keys. And by work I mean 1) convincing CL client devs to implement this hypothetical \"read txt file\" option, and 2) convincing solo-stakers and staking pools to use the option.",
+        "created_at": "2021-12-10T18:17:12.414000+00:00",
+        "attachments": []
+    }
+]

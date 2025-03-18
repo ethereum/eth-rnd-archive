@@ -1,0 +1,226 @@
+[
+    {
+        "author": "sproul",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@607055410104500244\u003e and I were working on a simple builder implementation and noticed that the `prev_randao` value is kind of hard to come by unless you've already been sent a `forkchoiceUpdate` by some beacon node. I've proposed a new beacon API endpoint here that would make it a bit easier to get access to this value: https://github.com/ethereum/beacon-APIs/pull/242\n\nWould other people building MEV-tools find this useful? cc \u003c@539495253418180618\u003e",
+        "created_at": "2022-09-13T02:48:49.740000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "metachris_",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The approach that works best for our open builder (https://github.com/flashbots/boost-geth-builder) is to have a modified beacon-node that triggers the block building process with a payload that contains all the information needed: https://github.com/flashbots/prysm/blob/develop-boost/beacon-chain/blockchain/execution_engine.go#L257",
+        "created_at": "2022-09-13T08:54:26.488000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "metachris_",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Btw, in addition to our Goerli relay, we've opened block submissions to external builders on our Sepolia MEV-Boost relay: https://boost.flashbots.net/mev-boost-status-updates/flashbots-sepolia-relay-now-accepts-external-block-submissions",
+        "created_at": "2022-09-13T08:55:32.410000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "metachris_",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "(our mainnet relay also allows external builder submissions)",
+        "created_at": "2022-09-13T08:56:21.868000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think the solution to this is a low-cost \"cancellation\" transaction and/or low-cost \"expired\" transactions.",
+        "created_at": "2022-09-13T09:28:36.059000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "If a transaction exists with an expiration, the expired transaction can be included but it would only validate the signature and update the nonce.  This should bring the operational cost *below* 21,000 gas, so the cost of an expired transaction landing on-chain would be quite low to the user while still protecting the system from DoS attacks.",
+        "created_at": "2022-09-13T09:29:25.902000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sproul",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Makes sense. I would like to upstream something like this in Lighthouse eventually so that builders don’t need their own fork. The flashbots-lighthouse diff is quite small so I think we could just put something equivalent behind a `--always-prepare-payloads` flag",
+        "created_at": "2022-09-13T09:29:44.731000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Similarly, if there was a special transaction type that *only* bumped the nonce, it should cost less than 21,000 gas and thus allow for \"cheap\" cancellations.",
+        "created_at": "2022-09-13T09:29:45.979000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I don't see how that would bring cost below 21k gas, or why it would be cheaper than a regular ETH transfer. You still need to include a tx (=storage), broadcast it (=bandwidth), and validate the signature (=EC operation) no?",
+        "created_at": "2022-09-13T09:33:58.687000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "osas_enehizy",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Hmm.. Nice thought",
+        "created_at": "2022-09-13T09:43:59.173000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "An ETH transfer requires looking up two accounts, updating the balance of both, updating the nonce of one of them, and validating the signature.",
+        "created_at": "2022-09-13T09:44:28.211000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "A cancellation transaction only requires looking up one account, updating its nonce (not balance), and validating the signature.",
+        "created_at": "2022-09-13T09:44:45.605000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It is strictly cheaper (operationally).  The big difference is one vs two cold account lookups.",
+        "created_at": "2022-09-13T09:44:56.276000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I don't know *how much* cheaper, but we can assert that it is strictly less than a transfer.",
+        "created_at": "2022-09-13T09:45:33.199000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "well, a cancellation transaction should also pay for the costs of the signature validation of the tx it is cancelling right?",
+        "created_at": "2022-09-13T09:45:39.802000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "That is defended against with the 12.5% replace-by-fee increment requirement most clients implement.",
+        "created_at": "2022-09-13T09:46:09.694000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Ah yes, so.. depending on gas costs, it might still be more expensive overall (if gas costs are not at least 12.5% less)",
+        "created_at": "2022-09-13T09:46:56.100000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "And already accounted for with the transfer transaction gas costs (so still strictly less).",
+        "created_at": "2022-09-13T09:46:57.759000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah, if you are cancelling a 21,000 gas transaction with a 20,900 gas transaction it actually costs more in fees to be included vs not.",
+        "created_at": "2022-09-13T09:47:30.799000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This is why I think there is separately value in expiring transactions (which also are healthier for the network as they keep the mempool/network clear of additional cancellation transactions.",
+        "created_at": "2022-09-13T09:47:54.472000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It does feel like it opens up new ways of DDoSing nodes, but that gut feeling might be wrong though",
+        "created_at": "2022-09-13T09:49:12.916000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The key is to ensure that anyone who sends something to the network *must* pay (eventually) for that.",
+        "created_at": "2022-09-13T09:50:05.371000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This is why expiring transactions can't just become invalid.  They can, however, change their behavior to something less costly.",
+        "created_at": "2022-09-13T09:50:27.669000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "i certainly would",
+        "created_at": "2022-09-13T15:11:03.472000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "the approach i have been taking is to essentially MiTM the FCU call to grab the payload attributes",
+        "created_at": "2022-09-13T15:14:43.550000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "but would strongly support client changes so that e.g. we don't need to run forks of clients to have efficient builders",
+        "created_at": "2022-09-13T15:15:11.621000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "metachris_",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "fwiw, i think fcU is too late, you can start building way before on newPayload already all attributes are known https://github.com/flashbots/prysm/blob/develop-boost/beacon-chain/blockchain/execution_engine.go#L257\n\nand yes, certainly agree for standard support! an SSE subscription would fit best into the current model i think",
+        "created_at": "2022-09-13T19:19:09.284000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "metachris_",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "would love a SSE subscription to newPayload events, with BuilderPayloadAttributes as data (slot, blockHash and prevRandao is needed)",
+        "created_at": "2022-09-13T19:22:25.794000+00:00",
+        "attachments": []
+    }
+]

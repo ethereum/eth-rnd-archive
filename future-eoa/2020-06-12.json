@@ -1,0 +1,890 @@
+[
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Does anyone have thoughts on having `GAS_PAYER` only sign the *signature* rather than the whole transaction?",
+        "created_at": "2020-06-12T02:02:16.159000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This would make the signing logic for gas payers *slightly* easier as they wouldn't need to extract CHAIN_ID from the signature.  I think it provides just as much protection as signing the whole transaction?",
+        "created_at": "2020-06-12T02:03:06.030000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@543900561460822016\u003e I added a note about increased client complexity to the EIP.",
+        "created_at": "2020-06-12T02:20:50.347000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "As well as changed `chainId` to be bit packed with `senderV`.",
+        "created_at": "2020-06-12T02:21:05.757000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I have decided against adding a reference to Rich Transactions.  It feels too speculative to me to include reference to an *idea for future changes* in an EIP.  The general concept is briefly mentioned in the motivation section, which I feel is enough for this standard:\n\u003e The arrangements that enable the covering of gas costs is out of scope for this EIP but it could be an extra-protocol monthly subscription, **payment could occur as part of the transaction being submitted**, the recpient may be willing to cover gas costs, or it could be a free service offered as a value-ad by a company that you are working with.",
+        "created_at": "2020-06-12T02:26:44.532000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!301186049323958275\u003e when/if you're around I'd love to chat more about who controls the gas price.  I'm going to go read through the thread again right now to be sure I've grok'd all the arguments for either side.",
+        "created_at": "2020-06-12T15:53:42.080000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm around, though not for terribly long (it is late here).",
+        "created_at": "2020-06-12T15:54:08.545000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "got it, then I'll dump here real quick.  I think you have me convinced.  My biggest *concern* has been addressed since it's clear that in the meta-transaction use case, it is easy to implement mechanisms within the EVM to cap the payment, thus mitigating the griefing issue.\n\nWe can safely ignore the case where sender/payer trust each other, or, where the payer isn't being reimbursed.\n\nThat only leaves some ambiguous use case where this is **not** a meta transaction in the sense that the payer is not necessarily being reimbursed and where the sender/payer are not in a trusted relationship of some kind....",
+        "created_at": "2020-06-12T15:56:51.584000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I would be curious to here the user story behind such a situation.",
+        "created_at": "2020-06-12T15:57:35.020000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "In which case, it seems to make obvious sense for gas_price to be controlled by payer since they have the correct incentives to set it to a value that gets the transaction included...",
+        "created_at": "2020-06-12T15:57:55.097000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I can grok up some imaginary case where this would be a problem:\n\n1. txn is in the main txn pool for Status.im token sale which did have a restriction on max gas price.  Current gas-payer gas price is below the limit.\n2. griefer scoops these, re-signs them but with a higher gas price.  These new versions superceed the old ones, and will error our when included.",
+        "created_at": "2020-06-12T15:59:49.045000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We could remove the ability for contracts to read the gas price.  😬",
+        "created_at": "2020-06-12T16:00:47.181000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "(BTW, I do see a set of strong cases for why gas payer should be in control of the gas price in almost all scenarios, there are just a few odd edge case ones that I can make up that I'm trying to work through)",
+        "created_at": "2020-06-12T16:01:21.673000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "0x currently uses gas price to determine how much 0x fees are taken.",
+        "created_at": "2020-06-12T16:02:06.588000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "One idea is to actually support both.  Signer included gas price means payer cannot.  Signer excluded gas price means payer must.",
+        "created_at": "2020-06-12T16:02:19.293000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "🤔 Actually, maybe 0x uses `gasLimit`.... (checking)",
+        "created_at": "2020-06-12T16:02:31.228000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e One idea is to actually support both.  Signer included gas price means payer cannot.  Signer excluded gas price means payer must.\nI like this a lot",
+        "created_at": "2020-06-12T16:03:44.479000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Is there a use case were the gas payer could make the tx fail on purpose (e.g. to prevent a vote)",
+        "created_at": "2020-06-12T16:04:05.520000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm not immediately against allowing that.  We could also allow the signer to choose whether to include `gasAmount` as well.",
+        "created_at": "2020-06-12T16:04:23.962000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ahhh yeah that optional thing would solve this :D",
+        "created_at": "2020-06-12T16:04:29.302000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And I think that having a *sentinal* leading value which unambigiously lets us define new transaction formats would be a good thing to look into in conjunction with this. \n\n1. Retain current txn format\n2. All future formats are `[TxnFormatIdentifier, [... \u003cactual payload\u003e]]`\n\nThat makes it very unambigous to differentiate.",
+        "created_at": "2020-06-12T16:04:29.418000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If there aren't any obvious problems with that, I'll submit an EIP tomorrow for it.",
+        "created_at": "2020-06-12T16:05:00.155000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Then we can make 2711 depend on that.",
+        "created_at": "2020-06-12T16:05:14.415000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That would also let us introduce 4 different transactions at once with 2711:\n1. `SENDER` sets both `gasLimit` and `gasPrice`\n2. `SENDER` sets `gasLimit`, `GAS_PAYER` sets `gasPrice`\n3. `SENDER` sets `gasPrice`, `GAS_PAYER` sets `gasLimit`\n4. `GAS_PAYER` sets `gasPrice` and `gasLimit`",
+        "created_at": "2020-06-12T16:06:28.004000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "👍 I'm thinking that we can make this easy and do it the right way by submitting a separate EIP which just introduces the new format with the identifier, and `v1` of that format is just the current transaction format.  That should require near zero discussion debate and be trivial to include in a near future hard fork.",
+        "created_at": "2020-06-12T16:06:35.340000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The only reason I didn't start with that was that I wasn't *super* confident there are no overlap issues with existing transactions.",
+        "created_at": "2020-06-12T16:07:08.513000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Regarding the 4 formats.   Lets be sure each one has a clear use case, but in general, I am 👍 assuming they each do.",
+        "created_at": "2020-06-12T16:07:14.362000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I *think* as long as the first item (TransactionType) has high bit set we are fine though, since nonces will never reach 2^256-1.",
+        "created_at": "2020-06-12T16:07:31.336000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If we *really* wanted to generalize this (unclear if we do) we could grab a whole range of TransactionTypes and use it as a bitmask for determining which things are set by the `SENDER` and which are set by the `GAS_PAYER`.",
+        "created_at": "2020-06-12T16:08:42.926000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm thinking differentiation happens on length of the RLP item.  If it has ?7? items it is a legacy transaction.  If it has 2 items, then the first item is the version/type and that dictates how the second item is validated.",
+        "created_at": "2020-06-12T16:08:45.377000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So if someone *wanted*, they could let `GAS_PAYER` set nonce, or value, or to, or whatever.",
+        "created_at": "2020-06-12T16:08:57.424000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "(no idea if that would be useful, just throwing it out there)",
+        "created_at": "2020-06-12T16:09:06.513000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yup, lets start simple and see if the idea sticks and if anyone shows up with a good \"we can't do that because X\".",
+        "created_at": "2020-06-12T16:09:33.284000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "RLP arrays don't count the number of items in the array, they count the total length of the array in bytes.",
+        "created_at": "2020-06-12T16:09:33.896000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So reading the first byte(s) of the RLP encoded transaction would not reveal whether it is a 2-item array with really big items, or a 7 item array with smaller items (they both could have the same array-length in RLP terms).",
+        "created_at": "2020-06-12T16:10:00.065000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "However, by the time you finish reading the array you *would* know what type it is, because the second item would be a list instead of a value.",
+        "created_at": "2020-06-12T16:10:54.749000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So I guess having the high bit set is just convenient because it lets a parser switch on the type early, rather than having to start reading into local variables that have ambiguous meanings until it gets further along.",
+        "created_at": "2020-06-12T16:11:55.131000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I don't think that is correct.\n\nhttps://github.com/ethereum/wiki/wiki/%5BEnglish%5D-RLP\n\nRLP encodes the actual length of the lists themselves if I'm reading the spec right.",
+        "created_at": "2020-06-12T16:12:15.423000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e If the total payload of a list is more than 55 bytes long, the RLP encoding consists of a single byte with value 0xf7 plus the length of the length of the payload in binary form, followed by the **length of the payload**, followed by the concatenation of the RLP encodings of the items. The range of the first byte is thus [0xf8, 0xff].",
+        "created_at": "2020-06-12T16:13:52.482000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "nevermind, you're right (just re-read)",
+        "created_at": "2020-06-12T16:14:05.962000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "👍",
+        "created_at": "2020-06-12T16:14:09.208000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Been a while since I wrote an RLP encoder/decoder, so don't take my word for it.",
+        "created_at": "2020-06-12T16:14:12.205000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ah, the `['cat', 'dog']` example shows that the length is number of bytes in the list, not number of items in the list (has a length of 8).",
+        "created_at": "2020-06-12T16:15:13.848000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'd suggest that we *maybe* consider including another eip that caps the nonce to 2**255 so that nonces with the highest bit set are invalid.",
+        "created_at": "2020-06-12T16:15:55.259000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "does having a high bit set to differentiate between tx types seems hacky, or is it just me?",
+        "created_at": "2020-06-12T16:16:12.431000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "0x protocol fees are: `150,000 * gasPrice * orders filled`",
+        "created_at": "2020-06-12T16:16:52.415000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes it is hacky, but also these is precident with `chainId`",
+        "created_at": "2020-06-12T16:16:53.456000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@543900561460822016\u003e The core devs have a history of hacky bit packing.  I'm not a huge fan, though I can appreciate the space saving and reduced decoding complexity.",
+        "created_at": "2020-06-12T16:17:25.982000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e I'd suggest that we maybe consider including another eip that caps the nonce to 2**255 so that nonces with the highest bit set are invalid.\nsomething like this? https://github.com/ethereum/EIPs/pull/2681/files",
+        "created_at": "2020-06-12T16:17:27.390000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm very open to hearing any alternate way to to differentiate between a legacy transaction (today's format) and some new format.",
+        "created_at": "2020-06-12T16:17:47.946000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Nonces can't skip can they?",
+        "created_at": "2020-06-12T16:17:54.944000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "They cannot skip",
+        "created_at": "2020-06-12T16:18:00.896000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@364458974906548225\u003e Technically we can differentiate from RLP encoding alone.  However, you can't differentiate until *after* you read the second array item's first byte.",
+        "created_at": "2020-06-12T16:18:22.929000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm going to rhuminate on this over the weekend and see where I land, I'll post a reply to the magicians thread documenting this conversation",
+        "created_at": "2020-06-12T16:19:21.763000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The 0x protocol fee is probably the best example of `GAS_PAYER` being able to screw `SENDER`.",
+        "created_at": "2020-06-12T16:20:18.534000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Supporting *optional* `gasPrice` set by `GAS_PAYER` would address this (0x transactions would always set `gasPrice` as `SENDER`, not leave it to `GAS_PAYER`).",
+        "created_at": "2020-06-12T16:20:30.446000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The most important thing in introducing a new tx type imo is not breaking all existing tooling. Since we can enforce a new tx encoding after `FORK_BLOCK_NUM`, we're should be okay over devp2p so we'd need to come up with a solution over RPC. I'm thinking that we could add a new endpoint which accepts the new tx format and the old endpoint would simply wrap the tx with the type (we can say the sig of a basic tx is as it is today minus the tx type)",
+        "created_at": "2020-06-12T16:21:50.600000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We could take the opportunity to move selector calculation to the client from the dapp...",
+        "created_at": "2020-06-12T16:24:06.138000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That should get us away from bit packing and a bit closer to EIP-232 https://github.com/ethereum/EIPs/issues/232",
+        "created_at": "2020-06-12T16:24:09.680000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It has always bugged me that the transaction given to the client by the dapp is encoded in a lossy format (the selector is a lossy encoding of the function signature being called).",
+        "created_at": "2020-06-12T16:24:38.637000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Though, I suppose in *theory* one can submit a transaction that doesn't use Solidity's ABI encoding, even though *almost everyone* does except for some advanced bots.",
+        "created_at": "2020-06-12T16:25:21.664000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Is there a consensus on the *layers*?\n\n- Layer 0 is the actual protocol itself (transaction/header/block format, trie spec, etc)\n- Layer 1 is the EVM (execution rules)\n- Layer 2 is everything built on top of the EVM?",
+        "created_at": "2020-06-12T16:29:23.020000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That aligns with my interpretation of the layers.",
+        "created_at": "2020-06-12T16:30:10.067000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i know when we were working on phase 2 and we tried to refer \"things built on top of the EVM\" as layer 2, there was quite a bit of push back since most people have made up their mind that layer 2 == plasma/rollup/state channel",
+        "created_at": "2020-06-12T16:31:47.707000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm not sure how you can call a single thing built at a layer the whole layer...",
+        "created_at": "2020-06-12T16:32:24.743000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That isn't a layer, that is a protocol.",
+        "created_at": "2020-06-12T16:32:31.342000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i'm just relaying what happened when we brought this topic up in the past 🤷",
+        "created_at": "2020-06-12T16:33:01.116000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "UDP is the same layer as TCP, TCP didn't come along and say \"we claim layer 4, you have to be layer 5\".",
+        "created_at": "2020-06-12T16:33:24.861000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Layer 1 is EVM and maybe one day WASM (both would live on layer 1, as siblings).  Layer 2 would be plasma, rollups, side chains, drive chains, etc. (all live on layer 2, as siblings, or possibly cousins if they build off different layer 1s).",
+        "created_at": "2020-06-12T16:34:58.568000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm reading \u003c@!364458974906548225\u003e's layer 2 as \"smart contracts\", in which case people seem to dislike calling general smart contracts L2 and prefer to reserve that term for things that scale on chain computation (in other words, protocols whose safety is not tied to L1)",
+        "created_at": "2020-06-12T16:37:21.258000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hmm, smart contracts aren't layer 1?",
+        "created_at": "2020-06-12T16:39:37.975000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "They feel like layer 1...",
+        "created_at": "2020-06-12T16:39:43.547000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e Is there a consensus on the layers?\nI don't see a meaningful difference between the layers listed, imo they all define the protocol that every participant must follow and are L1",
+        "created_at": "2020-06-12T16:39:45.301000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e They feel like layer 1...\nagreed, maybe i misinterpreted what he meant",
+        "created_at": "2020-06-12T16:40:09.515000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e It has always bugged me that the transaction given to the client by the dapp is encoded in a lossy format (the selector is a lossy encoding of the function signature being called).\nto clarify, you believe that the full function name should be passed to the client?",
+        "created_at": "2020-06-12T16:40:56.692000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think that UX would improve greatly if the full function signature were passed to the client.",
+        "created_at": "2020-06-12T16:41:20.385000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It would allow signing tools that mirror the JSON-RPC API to present the user with the thing being signed, rather than an opaque byte array.",
+        "created_at": "2020-06-12T16:41:39.928000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That's interesting. Why does the full function signature need to be passed, why can signing tools not be expanded to accept more information (as long as they ensure they has to the same thing)?",
+        "created_at": "2020-06-12T16:45:05.034000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Unfortunately, signing tools mostly just copy the client JSON-RPC verbatim.  I believe the primary reason is so that the dapp developers can target either client or signing tool or in-memory wallet or hardware wallet with library, etc. without having to write different code for each.",
+        "created_at": "2020-06-12T16:51:20.439000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This means that the lowest common denominator is used, which is is the client JSON-RPC because that came first and everyone else copied it.",
+        "created_at": "2020-06-12T16:51:43.142000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So if we are introducing a new JSON-RPC method, there is value in defining it in a way that improves the experience when the same method is used for signing tools or libraries.",
+        "created_at": "2020-06-12T16:52:13.806000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "In this case, that means including the function signature being called.",
+        "created_at": "2020-06-12T16:52:27.719000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It could be optional, and required to match the `data` if supplied.  That way you could still call non-Solidity-like contracts.",
+        "created_at": "2020-06-12T16:52:48.857000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Micah, thank you again for taking lead on the EIP, it is immensly helpful.  As of maybe just 2 weeks ago I was still struggling with un-answered questions about how we'd be able to reprice things for witness accounting and now there is a fuzzy but progressively more defined path to getting that done (sponsored-transactions -\u003e ungas -\u003e reprice stuff willy-nilly).  😻",
+        "created_at": "2020-06-12T17:06:06.852000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!364458974906548225\u003e / anyone, one thing that I'm still not quite following is how sponsored-transactions directly lead to being able to implement ungas, could you expand on that some? As I understood it, the concern with oil / ungas was that it would break relay contracts ability to only send a portion of gas to a subcall, which in turn allowed the relay contract to catch any reversions and charge the user appropriately.",
+        "created_at": "2020-06-12T17:12:27.337000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!543900561460822016\u003e I think you are correct that there is still a missing piece, for how relayer can protect themselves from a full revert which is a griefing vector exploitable by the sender.  This still needs to be addressed but I think there are a few viable options to address this.\n\nOne is to do nothing and push the responsibility to the relayers.  This isn't ideal since there will be scenarios where the relayer cannot guarantee payment, though in *most* scenarios, they should be able to achieve a high degree of confidence.  I think this is viable, but likely contentious.\n\nAnother is to preserve the functionality via a new mechanism.  This could be native batch transactions, or something akin to what V proposed a while back which is having `CALL` style operations only forward 63/64th of the available gas which allows call sites to perform *some* amount of computation after a failed sub-call without being subject to a full revert, despite not being in precise control of gas amounts.",
+        "created_at": "2020-06-12T20:20:32.220000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Anyone know off the top of their head:  Do current implementations of meta-transaction base the payment off of actual measured gas used or joff of the total `gasLimit * gasPrice`, or something else...",
+        "created_at": "2020-06-12T20:21:55.713000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Can only talk for the safe. There we have some base value and measure how much gas is used for the inner transaction that value is than multiplied by a gasPrice",
+        "created_at": "2020-06-12T20:22:55.590000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "but I am not sure if this is the best way ... it was just the most accurate way to calculate the refund on chain at the point of writing",
+        "created_at": "2020-06-12T20:23:36.267000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I do see the point that contracts should not base implementations on the \"gas\" value.",
+        "created_at": "2020-06-12T20:23:58.470000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "My current thinking is that under the \"new regime\", payment would probably need to be based off of `gasLimit * gasPrice` which overpays the relayer in cases where the txn doesn't use all gas.",
+        "created_at": "2020-06-12T20:24:02.242000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the thing is that on the safe you could nest multiple calls to different safes in 1 ethereum tx",
+        "created_at": "2020-06-12T20:24:29.245000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "in that case the gasLimit would be totally off",
+        "created_at": "2020-06-12T20:24:39.230000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "What is \"the safe\"",
+        "created_at": "2020-06-12T20:25:18.651000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "but I think for the metatx proposed here it is different, as this should not be possible",
+        "created_at": "2020-06-12T20:25:19.298000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the Gnosis Safe contract",
+        "created_at": "2020-06-12T20:25:25.034000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "ah, got it, so the Gnosis Safe has a built-in meta-transaction functionality of some sort that allows for a signed message to be sent into the contract and to pay back the relayer (restating in my own words to be sure I understand)",
+        "created_at": "2020-06-12T20:26:02.824000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the contract takes as an argument the signatures of different owners and doesn't care about msg.sender .... but this is a different use case (kind of a mix of account abstraction and meta tx)",
+        "created_at": "2020-06-12T20:26:13.259000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "kk, as this develops I'll be curious to hear how this will effect Gnosis Safe",
+        "created_at": "2020-06-12T20:26:41.523000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e restating in my own words to be sure I understand\nyes",
+        "created_at": "2020-06-12T20:26:42.405000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yes, that is why I am following this 😉 (I am one of the core dev of that contract)",
+        "created_at": "2020-06-12T20:27:02.048000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "as the contract is a mix of AA and meta tx, I would love to see how you could make use of these to implement the safe 😄",
+        "created_at": "2020-06-12T20:27:26.787000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "in the future",
+        "created_at": "2020-06-12T20:27:30.284000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!317706410680909834\u003e do you think sponsored transactions are valuable for gnosis safe? It seems like they enable better interoperability for gasless payments with EOAs but don't help the smart contract wallets too much",
+        "created_at": "2020-06-12T20:30:17.545000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "short answer: yes I think so; little bit longer: currently we have our own relay that wraps the transactions and submits them. and there are quite some things to consider. In this regard it should already make this easier (also because the payer nonce doesn't influence the process, which might be very nice).",
+        "created_at": "2020-06-12T20:32:27.740000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think the contracts could be more optimized and take more advantage of this logic and I would love to take this in consderation for the next big version of the contracts",
+        "created_at": "2020-06-12T20:32:59.532000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the other problem i foresee is this won't allow you to batch relayed safe txs, so you won't be able to amortize the intrinsic cost of the tx",
+        "created_at": "2020-06-12T20:36:03.952000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i think this is a great mechanism to help onboard EOA people to safes since they no longer need any ether to transfer assets over",
+        "created_at": "2020-06-12T20:36:54.327000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "currently we don't do that anyway (was more a theoretical thing to safe some gas) but yeah ... could be worse ... I think the advantages would outweight this quite a bit",
+        "created_at": "2020-06-12T20:36:56.415000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "but I would play around with this more as soon as we have a test implementation for this. (therefore I would also love to help on this)",
+        "created_at": "2020-06-12T20:37:10.534000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i'd also be happy to help on the implementation of this, so as soon as this eip is a little more solidified we should take a stab at it",
+        "created_at": "2020-06-12T20:37:58.890000+00:00",
+        "attachments": []
+    }
+]

@@ -1,0 +1,146 @@
+[
+    {
+        "author": "dapplion",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Lodestar is pushing to do a browser based lightclient (post-merge) supported by N Infura style servers that can do basic functionality restricted to showing account balances + ERC20 token balances. \n\nJust spoke with \u003c@!202397237962211328\u003e (Geth) and he is onboard to add a new JSON RPC method to expose LES functionality through there. Specifically, given a recent state root + account + (optional) storage address return an encoded proof.\n\nDoes the EthereumJS team (cc \u003c@!425269142615097345\u003e \u003c@!263093996044156938\u003e ) have implemented functionality that could decode and validate LES style proofs and work in the browser? Otherwise what can we contribute to support the above usecase?",
+        "created_at": "2021-11-17T10:35:19.841000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "zsfelfoldi",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I just checked and we already have an `eth_getProof` endpoint that might be enough for you 🙂",
+        "created_at": "2021-11-17T10:44:48.422000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dapplion",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "If it's not documented in the docs, could you link to the code? https://geth.ethereum.org/docs/rpc/ns-eth",
+        "created_at": "2021-11-17T10:45:54.441000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "zsfelfoldi",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "https://github.com/ethereum/go-ethereum/blob/master/internal/ethapi/api.go#L653",
+        "created_at": "2021-11-17T10:47:12.813000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "zsfelfoldi",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "It returns the account data in json so you have to re-encode the account object. The trie nodes leading to the account are returned as hex encoded rlp so you need to decode the rlp there in order to verify the hashes.",
+        "created_at": "2021-11-17T10:49:05.397000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "zsfelfoldi",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "When following the address path in the trie nodes you also need to keep in mind that addresses are internally hashed so the actual path to follow in the trie is calculated as SHA3(address). Same applies for contract storage entries.",
+        "created_at": "2021-11-17T10:50:44.468000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "zsfelfoldi",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Also, this proves the account/contract starting from the state root but expects block hash/number to identify the block.  So you also need to verify the EL block header on the client side.",
+        "created_at": "2021-11-17T10:54:28.397000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "zsfelfoldi",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Ping me if you are stuck somewhere in the process 🙂",
+        "created_at": "2021-11-17T10:58:58.025000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "holgerd77",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003c@!688748669268132001\u003e don't have the whole context here and no time to catch up on the discussion, so just to throw in the ring: we have recently implemented LES v3/v4 for our devp2p library along this PR https://github.com/ethereumjs/ethereumjs-monorepo/pull/1324, our client also somewhat supports LES but this is highly untested since it is so difficult to find any peers so we gave up at some point.\n\nLet me know if this helps and/or if you need more context, happy to provide!",
+        "created_at": "2021-11-17T11:38:55.950000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dapplion",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "To rephrase my question, does ethereumjs contain code that would be able to consume the response from https://github.com/ethereum/go-ethereum/blob/master/internal/ethapi/api.go#L653 and validate against a known state root?\n\nI'm catching up with how eth1 proofs work, so excuse my limited understanding.",
+        "created_at": "2021-11-17T12:56:44.460000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "holgerd77",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003c@!688748669268132001\u003e we have functionality in our Trie library to verify merkle proofs - see https://github.com/ethereumjs/ethereumjs-monorepo/tree/master/packages/trie#merkle-proofs - but I guess not in the given format from above.\n\nI am not mistaken this open issue we have on `eth_getProof` (EIP-1186) https://github.com/ethereumjs/ethereumjs-monorepo/issues/1078 should be related, where we also have some implementation done but not yet merged.",
+        "created_at": "2021-11-17T13:02:38.735000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dapplion",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Thanks for the links, that's great progress! How much dev work is necessary to parse eth_getProof (EIP-1186) responses provided there's already some impl done?",
+        "created_at": "2021-11-17T13:11:31.256000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "holgerd77",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003c@!688748669268132001\u003e not too much I guess, to have this specific work finalized should take roughly 2-3 weeks I guess (needs confirmation 🙂 ).\n\nCould you redescribe your use case? What would you want to have from our side? Does our client play a role in this? Or are you requesting the data (proof) yourself from Lodestar and need just a library to verify the respective proof (that would likely/eventually our Trie library)? 🤔\n\n//cc \u003c@!508125616940515329\u003e",
+        "created_at": "2021-11-17T13:27:44.212000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dapplion",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "To recap, the goal is to demo a minimum viable browser based light-client that shows recent user data (no execution and no p2p networking, view only)\n\nSpecifically a browser based app (either UI or extension) that communicates via HTTP with:\n- consensus client to get head + execution payload state root (dedicated REST endpoints on the beacon node, pending standardization) This part will be covered by `@chainsafe/lodestar-light-client`\n- execution client to get proofs (with eth_getProof) for the user input address(es)\n\nIf EthereumJS full node is able to serve eth_getProof requests it could also be the backend for the execution part. But the blocker so far is parsing the eth_getProof responses in the browser",
+        "created_at": "2021-11-17T14:00:28.371000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "holgerd77",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003c@!688748669268132001\u003e I guess as a backend our client is realistically out since we won't be able to serve you `mainnet` proofs any time soon.\n\nWe can very well provide you with the functionality though to verify these proofs in JavaScript/TypeScript though. We need to make some final design decision how to expose the functionality, I'll directly have a look and give this some write-up on the issue. Then I don't see any major obstacles why we shouldn't be able to release this within the next 2 weeks, eventually you can directly test this on the Kintsugi merge test network (if you want).",
+        "created_at": "2021-11-17T15:16:49.185000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dapplion",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "That sounds great! Since this is a shorterm project we won't have to worry about mainnet size execution layer loads any time soon. As you say this will connect to Kintsugi type networks",
+        "created_at": "2021-11-17T15:39:49.439000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "holgerd77",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003c@!688748669268132001\u003e ok, we'll think about if we can also provide our client as a backend, not sure if we can short-term implement the `eth_getProof` RPC endpoint though, haven't looked into the complexity.\n\nAnd I guess you would need the proof verification anyhow on \"your side\" (so within Lodestar), is this correct? 🤔 So would need direct exposure to the `verifyProof()` functionality (?).",
+        "created_at": "2021-11-17T15:43:05.972000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "dapplion",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "The architecture would be some new app, lib or just site that imports code from `@chainsafe/lodestar-light-client` and from your libraries. Since Lodestar is exclusively concerned with consensus land",
+        "created_at": "2021-11-17T15:46:40.859000+00:00",
+        "attachments": []
+    }
+]

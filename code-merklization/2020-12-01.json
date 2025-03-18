@@ -1,0 +1,138 @@
+[
+    {
+        "author": ".vbuterin",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "\u003e The overhead of Merkle Trie generation is absolutely something to be concerned about.  Right now it is a top performance concern for multiple clients.",
+        "created_at": "2020-12-01T08:43:50.929000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "This _really_ surprises me! What are the stats there?",
+        "created_at": "2020-12-01T08:43:58.439000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "A simple binary MPT of is 2 hashes per 32 bytes, so ~1/16 hashes per byte, so a 12.5m gas block full of just contract creations (200 gas per byte) would be doing one hash per 3200 gas, which is tiny",
+        "created_at": "2020-12-01T08:45:18.508000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "\u003e So you're right, it's significant enough to warrant a cost increase of a few percents\n\nGiven how much we have to argue to make even the most necessary gas cost increases happen, surely it's better to just sweep the few percent under the rug? It's not like contract creation is anything remotely like a usable DoS vector",
+        "created_at": "2020-12-01T08:48:43.492000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "s1na",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "\u003c@!273808422753796097\u003e At the time I only had data for the hexary trie and was assuming the binary overhead would be more. Seems like the SSZ merkleization overhead is also under 60k gas for a max sized contract which is less than 2% of the 200 gas per byte. My vote would also be to sweep this overhead under the rug",
+        "created_at": "2020-12-01T10:48:15.944000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "_shemnon",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "\u003e A simple binary MPT of is 2 hashes per 32 bytes, so ~1/16 hashes per byte, so a 12.5m gas block full of just contract creations (200 gas per byte) would be doing one hash per 3200 gas, which is tiny\n\nIt's not the hashing, it's the random disk access of over a billion different trie nodes.  With low latency for both reads and writes.",
+        "created_at": "2020-12-01T15:36:32.163000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "\u003c@!403707149043105803\u003e that's an implementation detail.  Your implementation doesn't have to do it so that it uses random disk access right?  That's something that's been shown to be solveable?",
+        "created_at": "2020-12-01T15:38:05.890000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "_shemnon",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "It's a problem when you throw \"performant\" into the mix",
+        "created_at": "2020-12-01T15:38:34.881000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Can you explain what that means?",
+        "created_at": "2020-12-01T15:39:02.723000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Because my understanding is that this is exactly what TurboGeth has demonstrated recently, that there are designs that avoid the random disk access problem",
+        "created_at": "2020-12-01T15:39:29.420000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Also, implementations can store the full code as a binary blob as an optimization.  Help me understand if I'm missing something.",
+        "created_at": "2020-12-01T15:44:02.580000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "_shemnon",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "TurboGeths main improvement comes in leaf reads AKA the \"flat storage\" - most clients are going that direction for a variety of reasons.  It's the need to calculate the trie root after transaction commits that causes the random trie node reads.  TG does some node clustering but doesn't reduce the need to read. Caching potential trie nodes with the inbound TX pool helps but that only works while people gossip all their TXes.",
+        "created_at": "2020-12-01T15:51:09.848000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "_shemnon",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Getting reads _and_ writes fast (microseconds) in a DB is tricky, especially when we are just below terrabyte scale, with people still expecting single box clients.",
+        "created_at": "2020-12-01T15:52:25.695000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "_shemnon",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "It's the root node recalculations at the end of the block and keeping it consistent and in a state it can be rolled-back in the event you commit an orphan block that gets missed in hash speed calculations.",
+        "created_at": "2020-12-01T15:54:36.102000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "s1na",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "\u003c@!403707149043105803\u003e During contract creation all the chunks should be in memory anyway right? to me it seems that hashing is the main bottleneck for code merkleization",
+        "created_at": "2020-12-01T15:55:12.862000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "_shemnon",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "I think we are having conversations about two different merkle tries, sorry.  Wrong chat room.",
+        "created_at": "2020-12-01T15:56:02.192000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "_shemnon",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "code is small enough it fits in memory.",
+        "created_at": "2020-12-01T15:56:15.704000+00:00",
+        "attachments": []
+    }
+]

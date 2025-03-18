@@ -1,0 +1,210 @@
+[
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "One bug I noticed:",
+        "created_at": "2023-01-31T06:18:01.682000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "```\nclass ECDSASignature(Container):\n    y_parity: boolean  # EIP-2930\n    r: uint256\n    s: uint256\n```",
+        "created_at": "2023-01-31T06:18:03.867000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This is actually really subtle: the `v` value is a boolean in more recent signatures, but it's a uint256 in older versions",
+        "created_at": "2023-01-31T06:18:25.408000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "v = 27 or 28 for legacy txs, and then 37 + chainid * 2 + bit (or inv(bit), I forget) for eip 155 txs",
+        "created_at": "2023-01-31T06:18:58.343000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "`v` is recomputed in `get_transaction_signer` based on pre/post EIP-155. Added a post-y_parity transition flavor as well. Hope is correct now.",
+        "created_at": "2023-01-31T08:03:17.716000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "in SSZ encoding, all the fixed-length stuff precedes the variable-length stuff. so, the offset at which `len(blobs)` is located in the encoded tx is fixed. Will take another look into the networking part.",
+        "created_at": "2023-01-31T08:04:52.231000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Networking section: https://eips.ethereum.org/EIPS/eip-4844#networking\nI think I now understand the problem you are referring to. Essentially, because network encodes as `TransactionType || TransactionNetworkPayload`, if `TransactionType == 5` for both non-blob and with-blob tx, you don't know if `TransactionNetworkPayload` is `BlobTransactionNetworkWrapper` or `SignedTransaction`.\n\nWasn't there a design decision to decouple blobs? If yes, then it could just always be a `SignedTransaction` and blobs requested via req/resp while the plain tx gets broadcasted as usually.\n\nOr, if that decoupling only was for blobs / blocks (but not for blobs / tx), then, `blobs_kzgs`/`blobs`/`kzg_aggregated_proof` could be wrapped into an `Optional[TransactionBlobs]`, in the `TransactionNetworkWrapper`, and then simply include it all the time. There is a method to make sure that unused `Optional[Foo]` in SSZ consume 0 bytes on serialization (in contrast to the `List[Foo, 1]` trick)",
+        "created_at": "2023-01-31T09:02:52.891000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Updated https://github.com/etan-status/EIPs/blob/el-ssz/EIPS/eip-draft_ssz.md with network wrapper. Still works with single `Transaction` type.",
+        "created_at": "2023-01-31T09:44:24.696000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Also added `Receipt` now, updated block header with matching values, and introduce more compact `Option[T]` ssz type",
+        "created_at": "2023-01-31T11:25:30.131000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "https://github.com/ethereum/EIPs/pull/6404   Trying to submit as EIP, it's my first one so not sure how the process works overall.\nCurrently, PR is failing because I need to open a post on Ethereum Magicians, but that one typically refers to the EIP number, which I don't have yet.",
+        "created_at": "2023-01-31T12:11:18.710000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Create a post on magicians with the title of the EIP (no number) then once you have a number you can edit the magician post with the number.",
+        "created_at": "2023-01-31T12:15:30.499000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Also, unless things have changed significantly you are going to be told to remove the external links in the Security Considerations section.",
+        "created_at": "2023-01-31T12:16:37.307000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Also the first two lines need to be removed, they are not part of an EIP.  That sort of content makes more sense in the discussion thread, not the EIP.",
+        "created_at": "2023-01-31T12:17:35.481000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "EIPs should be written toward their final target, not as an intermediate place to discuss things and collate details.",
+        "created_at": "2023-01-31T12:18:01.790000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Same with the link to Vitalik's notes.  Any relevant notes should be integrated into the EIP itself, not linked externally.",
+        "created_at": "2023-01-31T12:18:20.522000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If the link is valuable for discussion, you can put it into the discussions-to thread.",
+        "created_at": "2023-01-31T12:18:46.608000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Oh, great. Thanks for the explanation, that helps a lot 🙂",
+        "created_at": "2023-01-31T12:23:48.481000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Right, all I was saying is that's an extra 4 bytes that wouldn't need to be stored in the \"Vitalik encoding\" for a typical tx.",
+        "created_at": "2023-01-31T14:30:10.010000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Network tx stuff looks good! If I'm understanding this, in the typical case then the network wrapper adds a 4-byte offset to the tx  indicating the start of the \"extension\" which is typically empty?  Or is another 4 bytes needed to encode the extension container itself? I believe it's the latter even though single-element container like this could technically be elided?",
+        "created_at": "2023-01-31T14:35:34.077000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "true. `Optional` creates an offset-entry in its enclosing container, so yes, it consumes 4 bytes. I _guess_ that's probably alright.",
+        "created_at": "2023-01-31T15:37:14.050000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Will add a test to the bottom section to show the serialization of all the tx fields. Better to discuss it when we see it.\nThe extension container should not affect the size of serialization",
+        "created_at": "2023-01-31T15:40:15.940000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "You were right, the \"extension\" thing is considered variable-size as well, due to the optional inside, so it adds another 4 bytes. Will remove the extension. merkleization does not need to be optimized on the network level, and in the persisted data as part of the block, the extensions are gone anyway",
+        "created_at": "2023-01-31T22:29:42.472000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Extended https://github.com/ethereum/EIPs/pull/6404  with sample serialization for `Transaction` network wrapper of various kinds",
+        "created_at": "2023-01-31T23:41:07.535000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Have also highlighted what byte sections are redundant, when upgrading from legacy tx",
+        "created_at": "2023-01-31T23:45:14.591000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Overhead of a non-blob tx seems to be 8 bytes",
+        "created_at": "2023-01-31T23:45:40.280000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Cleaned up the PR, moved the links to https://ethereum-magicians.org/t/transition-to-ssz/12783 \nI think it is in a state to be discussable at this ACDE. I put TBD for the pending sections",
+        "created_at": "2023-01-31T23:49:52.787000+00:00",
+        "attachments": []
+    }
+]

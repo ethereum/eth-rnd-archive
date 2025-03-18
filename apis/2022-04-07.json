@@ -1,0 +1,138 @@
+[
+    {
+        "author": "radekkapka",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "No, otherwise the `execution_optimistic` metadata field will be more or less useless. If your CL is fully synced, but optimistically, then `execution_optimistic` will be `true`.",
+        "created_at": "2022-04-07T08:46:15.699000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Looks useful to me. Question is should this be mandatory to implement? Can we make an endpoint optional? Should we allow bloating the API with optional endpoints in the first place?",
+        "created_at": "2022-04-07T08:47:51.531000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "mpetrunic",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Yes my question exactly, thats why I'm trying to gauge if all teams are willing to implement this",
+        "created_at": "2022-04-07T09:19:09.064000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "This wouldn’t be useful to verify a state because there’s nothing to guarantee the state you have is from the very start of the weak subjectivity period or that the period hasn’t changed since you got the state. So you’d always verify by getting the state root at the slot of the state you have which we already have apis for. \n\nGetting the weak subjectivity checkpoint is probably useful but we’d need to have a definitive definition of what that checkpoint actually is. I forget if that’s fully settled or not yet but the api spec should either define it or link to a spec for it.",
+        "created_at": "2022-04-07T10:35:39.734000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Being able to get the weak subjectivity checkpoint hasn’t exactly proven useful to users though. Beaconscan supported it for a while but wound up removing it again and almost nobody noticed. We need to build ways for users to get and verify the states they use with checkpoint sync easily but I’m not very optimistic this api will be what we need.",
+        "created_at": "2022-04-07T10:38:13.156000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "There isn’t currently an execution optimistic flag on the syncing response. And syncing returning true wouldn’t stop you returning data from other apis where execution_optimistic would then tell you whether that particular data is optimistic or not.",
+        "created_at": "2022-04-07T10:40:46.791000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Adding \u003c@833706406699073536\u003e to the discussion about weak subjectivity checkpoint",
+        "created_at": "2022-04-07T11:55:41.397000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "`/validator/blocks/{slot}`, `/validator/beacon_committee_subscriptions`, `/validator/sync_committee_subscriptions` - these endpoints can be safely called when we are optimistically synced",
+        "created_at": "2022-04-07T12:01:29.601000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "so they should not be blocked by a `Syncing` response when we are fully synced but waiting for the EL",
+        "created_at": "2022-04-07T12:02:08.957000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "__kasey__",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I agree that it is probably not necessary to include the state root. Once you have the block referred to by the checkpoint, you can simply get this value from the block. Asking to remove state_root would be totally reasonable feedback for the PR. FWIW the issue filed for this PR [1] links to the working definition of the weak subjectivity checkpoint [2], which I take to mean \"the checkpoint representing the latest block from the state in the first slot of the weak subjectivity period\". Pinging \u003c@!544848504078598144\u003e to clarify if that is correct.\n[1] https://github.com/ethereum/beacon-APIs/issues/198\n[2] https://notes.ethereum.org/@adiasg/weak-subjectvity-eth2",
+        "created_at": "2022-04-07T13:17:38.704000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "__kasey__",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Could you please expand on \"We need to build ways for users to get and verify the states they use with checkpoint sync easily but I’m not very optimistic this api will be what we need.\"?",
+        "created_at": "2022-04-07T13:20:01.363000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "__kasey__",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I don't follow `nothing to guarantee the state you have is from the very start of the weak subjectivity period` - assuming we agree that the checkpoint state should be the post-state from the first slot of the checkpoint epoch, the client uses the checkpoint to compute that slot and request the state by slot, all pretty straightforward. `or that the period hasn’t changed since you got the state` is a valid concern. One mitigation could be including the weak subjectivity period, or a timestamp of the slot corresponding to the ws epoch + ws period, in the response, so that a client could determine if the checkpoint was stale.",
+        "created_at": "2022-04-07T16:15:13.969000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Agreed, I'm saying that returning `is_syncing: true` from the syncing endpoint doesn't prevent us from responding to other APIs like those and many others.  The question is specifically about what `/eth/v1/node/syncing` returns.",
+        "created_at": "2022-04-07T21:18:47.380000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "There's no reason you should start your sync from the first slot of the weak subjectivity period.  In fact this is probably a very poor choice - if you're right at the end of the weak subjectivity period by the time you actually start syncing the state you got may now be outside the weak subjectivity period and you'll start getting scary warnings from your client. You also wind up processing a bunch of blocks you could have skipped if you started syncing from a more recent state.  The most sensible place to start from is the current finalized checkpoint. It gives you the maximum time before the state drops out of the weak subjectivity period and the minimum amount of work required before being in sync.\n\nThe only reason anyone is suggesting using older states is so that really slow methods of publishing the root can be used but that assumes the user will manually seek those out and verify the state. I see that as very unlikely to be a common pattern and an automated way of verifying the state will need to be built in where the client can check the state root against multiple public APIs (eg from block explorers). With that kind of approach there's no reason to use such an old state, and this kind of API to provide a specific old weak subjectivity checkpoint isn't useful.",
+        "created_at": "2022-04-07T21:25:12.829000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I think it's really very telling that we've had the concept of a weak subjectivity checkpoint since before mainnet launch, every client supports it, beaconscan had an api for getting the checkpoint for ages and yet I almost never hear about anyone using it. Beaconchain even removed their endpoint eventually.  To put it bluntly (apologies if this comes off as rude): I'm just not sure why we think this system is going to work when it has so clearly failed in the real world already.",
+        "created_at": "2022-04-07T21:27:44.711000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "oh my, I misread the original question... I don't have a strong opinion on what to do, to be honest...",
+        "created_at": "2022-04-07T21:51:10.601000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".paulharris",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I raised a PR anyway to add the field, left it agnostic of opinions on is_syncing... https://github.com/ethereum/beacon-APIs/pull/202",
+        "created_at": "2022-04-07T21:52:28.631000+00:00",
+        "attachments": []
+    }
+]

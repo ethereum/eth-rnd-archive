@@ -1,0 +1,186 @@
+[
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Thanks for the explanation! 🍉 \n\nFor context, here is our current changeset model, as defined in Akula\n```\ntype Location = H256;\ntype Value = H256;\n\n// When an account/slot is changed, current block and its old value is written here\ndecl_table!(AccountChangeSet =\u003e BlockNumber =\u003e (Address, EncodedAccount);\ndecl_table!(StorageChangeSet =\u003e (BlockNumber, Address, Incarnation) =\u003e (Location, Value) =\u003e StorageChangeSeekKey);\n\n// Optional history index, used to find account/storage at `earliest block when changed \u003e= requested historical block`\ndecl_table!(AccountHistory =\u003e (Address, BlockNumber) =\u003e RoaringTreemap);\ndecl_table!(StorageHistory =\u003e (Address, H256, BlockNumber) =\u003e RoaringTreemap);\n```\n\nIf I read your explanation correctly, you completely replaced current state table, and just use something like changesets directly",
+        "created_at": "2021-10-16T03:11:57.998000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e If I read your explanation correctly, you completely replaced current state table, and just use something like changesets directly\nAssuming by changesets you mean a diff (i.e. like shown by `git diff`), no I'm doing the opposite. There are no diffs.  There is a change sequence encoding, but the changes from block N to block N+1 are not clustered together, which is what a diff would be.  The tuple key has account (+storage-slot) first, block second.  So the ordering is like the transpose of a sequence of diffs.  It's done this way so a value lookup requires no diff traversal.  Technically I think it's better big-O than Geth's method and could store the entire history rather than only the recent 128 blocks, if you wanted.  We'll see.  Archive mode is not a priority for Nimbus.",
+        "created_at": "2021-10-16T03:16:12.520000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "changesets store values as they changed over time, not sure if it's a _diff_ in a usual sense (although we do call them reverse diffs)",
+        "created_at": "2021-10-16T03:18:15.991000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "so if you have e.g. some slot, create to X at block 10, set to Y at 20 and then to Z at 30, its changeset would be like `[(\u003cstub value\u003e, 10), (X, 20), (Y, 30)]`",
+        "created_at": "2021-10-16T03:19:46.436000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "(each change as separate value, also with address and incarnation, of course)",
+        "created_at": "2021-10-16T03:20:10.354000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I see. The terminology is confusing because \"changeset\" is also the name of a ~~\"git commit\"~~. A better explanation: It's the name of a set of values being changed at a single point in time as an atomic unit.",
+        "created_at": "2021-10-16T03:20:23.331000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hmm. I have seen \"reverse diffs\" mentioned before, but I have always assumed they are the collection of changes to all accounts/slots from block N to block N-1.  Are you telling me \"reverse diffs\" is used to mean something more like \"the sequence of changes to a single account/slot over time\"?",
+        "created_at": "2021-10-16T03:25:09.792000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "sequence of values for account/slot for each block when it changed",
+        "created_at": "2021-10-16T03:25:46.578000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "at least, it's this way in Erigon, I'm not sure about what Geth do currently",
+        "created_at": "2021-10-16T03:26:01.993000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "My mind parses that as having either meaning 🙂 so I don't know which is meant",
+        "created_at": "2021-10-16T03:26:17.820000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "well, historical values for one account/slot are not dependent on each other, so you first look for the block number in the index, then look for that exact entry by the composite key in the changesets",
+        "created_at": "2021-10-16T03:29:45.493000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I believe Geth stores (1) a snapshot, which is the set of accounts/slots at a single point in time (block N) ordered by trie path, and (2) a linear sequence of diffs, each diff being the set of changed values from block K to block K±1.  The diffs are kept in RAM so they can be traversed quickly for lookups despite being a linear-time traversal, and this is the reason snap limits history to 128 blocks.",
+        "created_at": "2021-10-16T03:29:48.853000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "(if that's what you were asking)",
+        "created_at": "2021-10-16T03:29:53.511000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yeah, in this case we have different approach to diffs, namely our diffs are a lot more granular - instead of one giant diff for block we do them per-account/slot",
+        "created_at": "2021-10-16T03:33:49.223000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "to find an account/slot at certain block, it's two DB lookups - find block, then by block find historical value\n\nin the worst case scenario - no memory mapping, MDBX' b+tree is scattered all over disk - it should be like 5 + 5 disk accesses",
+        "created_at": "2021-10-16T03:36:01.587000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "best case scenario - with enough RAM the whole database (or at least relevant chunks) is memory-mapped, so it's all in RAM",
+        "created_at": "2021-10-16T03:36:35.164000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Don't you have to check the write-deamplification buffer as well, or is that always kept in RAM?",
+        "created_at": "2021-10-16T03:48:54.632000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "are you specifically talking about changeset and state writes? they only happen during execution stage of sync - and for it we do have an in-memory buffer, which we dump into MDBX over time",
+        "created_at": "2021-10-16T03:51:57.855000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "other than that, we have completely eschewed all kinds of buffering (for local mode, at least), leaning on MDBX and its automatic memory mapping at least",
+        "created_at": "2021-10-16T03:52:55.524000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "history index (used for first lookup, to find block number) is done using Extract-Transform-Load framework, which dumps data into raw files on disk and inserts into MDBX in sorted order",
+        "created_at": "2021-10-16T03:54:44.603000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "MDBX is extremely fast for random reads and sequential writes, especially appends to the end of the table\n\nnot so fast for doing random writes, hence ETL",
+        "created_at": "2021-10-16T03:55:20.846000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "speaking of\n\nwhich storage engine are you building on?",
+        "created_at": "2021-10-16T03:56:40.891000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes that's what I meant by the write-deamplification buffer.",
+        "created_at": "2021-10-16T04:27:48.150000+00:00",
+        "attachments": []
+    }
+]

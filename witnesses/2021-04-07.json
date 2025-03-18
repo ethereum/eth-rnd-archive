@@ -1,0 +1,234 @@
+[
+    {
+        "author": "jason.carver",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!508125616940515329\u003e re:\n\u003e [Does Trinity] take about a block worth of time to get the node data? We at JS (when starting from a clean trie) take significantly more time to get this node data, ~250 seconds for block 12136251. Worth noting that we (currently) do not batch request accounts/targets/coinbase and we also do not have fast sync running in the background. Or is this gain due to the witness protocol used?\nYeah, it took quite a few tricks to get to this final result (speculative execution of each transaction, parallel execution of blocks, batching accounts, etc). But I think if you just start with the witness, you can leapfrog most of them.",
+        "created_at": "2021-04-07T17:26:54.856000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jason.carver",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "All recent versions of Nethermind nodes start with `wit/0` by default. Since they make up \u003e1% of the network, it shouldn't take too much effort to hunt one down on launch.",
+        "created_at": "2021-04-07T17:28:49.234000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!425615769280315392\u003e In your 80s sync, you're not syncing the header chain yet, right?",
+        "created_at": "2021-04-07T18:20:12.475000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Also I don't see the block download for the full node in beam sync here: https://github.com/ethereum/stateless-ethereum-specs/blob/master/beam-sync-phase0.md\nAre they downloaded concurrently to backfilling the state?",
+        "created_at": "2021-04-07T18:25:19.596000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ahh okay yeah you could indeed try to use speculative transactions in parallel. There are definitely some tricks to use here. Do you maybe have some docs about this witness protocol? At JS we are currently implementing beam sync and it would make sense to also implement this witness protocol at some point 🙂",
+        "created_at": "2021-04-07T18:47:10.095000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I also wonder if access lists transactions are going to be widely used on mainnet if that would make a difference 🤔  (but I assume that wide use of those is going to take some time)",
+        "created_at": "2021-04-07T18:48:07.977000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jason.carver",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Right, that uses a recent-ish header checkpoint. Perhaps worth noting that we are heading that direction with the merge anyway.",
+        "created_at": "2021-04-07T18:53:33.315000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jason.carver",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yeah, so the tip blocks are needed to execute transactions of course. We can backfill old blocks asynchronously; they aren't on the critical path to getting to the first stage of being synced.",
+        "created_at": "2021-04-07T18:55:05.988000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jason.carver",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "For `wit/0` docs: https://github.com/ethereum/devp2p/blob/master/caps/wit.md",
+        "created_at": "2021-04-07T18:57:38.986000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jason.carver",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'd recommend going straight to the meta-witness download. You'll be able to skip a lot of micro-optimizations that can take a while (like speculative execution).",
+        "created_at": "2021-04-07T18:57:39.402000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Right, then you only need the newest 64 headers of the headerchain",
+        "created_at": "2021-04-07T18:58:42.480000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Great, thanks 😄",
+        "created_at": "2021-04-07T19:01:21.808000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So the `BlockWitnessHashes` only returns the `B_32` trie hashes? It does not actually contain the node values? Is the idea here then to first get these hashes and then batch-request these hashes using `GetNodeData`?",
+        "created_at": "2021-04-07T19:19:27.114000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jason.carver",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yup",
+        "created_at": "2021-04-07T19:19:43.866000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ah cool",
+        "created_at": "2021-04-07T19:19:46.926000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jason.carver",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Two benefits: 1) you can parallelize the requests for bodies across peers, 2) you can skip requesting node bodies that you already have",
+        "created_at": "2021-04-07T19:20:22.573000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think it would be an improvement if the witness is also in order of the node data which is visited? Then you can start the VM and only request specific node data if it is not there, but since you just batch requested a lot of this node data in order it is very likely that you already have this data?",
+        "created_at": "2021-04-07T19:20:45.681000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Like that should be a nice-to-have thing. Maybe it is already implemented like this? It would make sense if you create a witness to actually add those in order... Thinking of it, it would make less sense if it would not be ordered?",
+        "created_at": "2021-04-07T19:21:33.262000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jason.carver",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yeah, would be nice, but probably not worth enforcing at the protocol level. You get all the data really fast, so ordering it wouldn't make too much a difference in the few tests I've done.",
+        "created_at": "2021-04-07T19:25:33.885000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jason.carver",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It seems like a natural way to collect it, but also maybe the client stores the data in a set instead of a list, so the order in the final list might be undefined.",
+        "created_at": "2021-04-07T19:26:26.860000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yep, true",
+        "created_at": "2021-04-07T19:27:22.310000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Do you have some indication about how many trie nodes an average block hits? I think we got around 4k nodes",
+        "created_at": "2021-04-07T19:27:46.154000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ah wait never mind, we did about 18k lookups and there were about 5k nodes we needed to request (for 12136251)",
+        "created_at": "2021-04-07T19:28:47.138000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jason.carver",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hm, 18k sounds a little high, but not implausible. That's a unique count? I'd say I was seeing more like ~6k nodes usually.",
+        "created_at": "2021-04-07T19:33:16.559000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jason.carver",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Around block 10.7M, running the heaviest 10 blocks of 120 consecutive blocks used this many trie nodes:\n```\n6934\n6999\n7025\n7213\n7279\n7434\n7445\n7445\n7455\n7592\n```",
+        "created_at": "2021-04-07T19:36:23.762000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "They are not unique FYI, there were 5k unique nodes, but 18k lookups",
+        "created_at": "2021-04-07T19:36:32.855000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jason.carver",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ah, yeah, that fits my expectations much better",
+        "created_at": "2021-04-07T19:36:45.331000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Cool 😄 Otherwise we might forget to cache some stuff somewhere and lookup too many trie nodes if it is not necessary",
+        "created_at": "2021-04-07T19:37:07.973000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sandra_johnson",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I have created a post to provide some context for my question around witness compression techniques https://ethresear.ch/t/bayesian-network-model-of-witness-creation-feedback-request/9115",
+        "created_at": "2021-04-07T21:37:10.016000+00:00",
+        "attachments": []
+    }
+]

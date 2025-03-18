@@ -1,0 +1,242 @@
+[
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Do people have thoughts on `mev-boost` having it's own networking stack to propagate Builder API messages? Naively, I would implement this with disv5 for discovery and devp2p for transport. Eventually we would want to deprecate this and integrate it into the CL networking stack - however that won't happen before the merge and I have a very strong preference that we have some sort of p2p network in place for the Builder API before the merge goes live.",
+        "created_at": "2022-04-13T08:48:48.063000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Why do we want builders network to be integrated with CL networking stack eventually?",
+        "created_at": "2022-04-13T08:50:32.458000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "well the relays have to",
+        "created_at": "2022-04-13T08:51:10.590000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "tersec",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "so you mean, the builders specifically? Not sure why either",
+        "created_at": "2022-04-13T08:51:42.382000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I mean that mev-boost is somehow connected to builders, and CL doesn't need to know how exactly, all it has is API interface providing required data. Is this for the future PBS designs where the separation will be integrated into the protocol?",
+        "created_at": "2022-04-13T08:52:56.466000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Somewhat of an aside, but it looks like there is going to be significant friction between MEV-boost and the current system of sending fee recipient information to beacon nodes.  The general issue is that MEV-boost is lumping the validator client and beacon node together under a generic \"consensus\" banner, but that means that the current `prepare_beacon_proposer` call results (which does not require a signature) cannot be translated to the `builder_setFeeRecipient` call (which does require a signature).\n\nThere also appears to be no consideration of timeouts and refreshing the fee recipient information in the spec.",
+        "created_at": "2022-04-13T09:23:05.940000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "IMO it a critical part of block production and we would benefit from a diversity of implementation. CLs directly integrating it seems like the most coherent path towards that diversification. I don't think it is a strict requirement and likely depends also on the timeline for PBS",
+        "created_at": "2022-04-13T09:34:43.938000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Would you mind elaborating? My thinking is that upon startup, the beacon node will request the validator client to sign a `setFeeRecipient` message and then give it `mev-boost`. It doesn't need to do this again until the operator decides to modify their `feeRecipient`",
+        "created_at": "2022-04-13T09:36:52.624000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "You mean CL doesn't use `mve-boost` but instead connects to builders through relays or directly?",
+        "created_at": "2022-04-13T09:38:16.403000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "right it wouldn't use `mev-boost` it would implement that logic in it's own native module, completely circumventing the current builder api",
+        "created_at": "2022-04-13T09:39:23.135000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@144468805697929216\u003e would additional information on refreshing the `feeRecipient` are you interested in beyond what is in the spec? and regarding timeouts, are you referring to timeouts on the api requests (this will be spec'd out soon) or timeout of the signed `setFeeRecipient` message?\n\u003e Builder software **MUST** respond to requests where timestamp is before the latest announcement from the validator or more than +/- 10 seconds from the current time with -32006: Invalid timestamp.",
+        "created_at": "2022-04-13T09:40:24.896000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "There is no mechanism to do this, however.",
+        "created_at": "2022-04-13T09:44:42.244000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The issue with not refreshing is that the there is no crash consistency.  If a builder goes offline then it has no information on the expected fee recipients, and unless there is some sort of periodic refresh (which there isn't, according to what you said above and the timestamp validity of `setFeeRecipient`) then how does a newly-started builder obtain information about fee recipients?",
+        "created_at": "2022-04-13T09:46:26.198000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes of course, there will need to be a new method for bn\u003c\u003evc to do this. Is there an issue with doing this?",
+        "created_at": "2022-04-13T09:53:02.251000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "metachris_",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "A periodic refresh sounds like a good idea; mev-boost could just resend the call every minute or so. And we should probably remove the reject causes in case of old timestamps, the builder shouldn't have an issue with receiving older payloads, if it hasn't received one with a newer timestamp in the meantime.",
+        "created_at": "2022-04-13T09:53:18.761000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Requiring the validator client to listen for API requests is a new requirement.  At current the beacon node is the only thing required to do so.",
+        "created_at": "2022-04-13T09:55:22.356000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Hmm okay I see",
+        "created_at": "2022-04-13T09:57:32.641000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/prepareBeaconProposer covers details of the current call and its implementation details.",
+        "created_at": "2022-04-13T09:57:40.980000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "How about on start up, the validator client just posts the signed message to the beacon client and it sends it over the builder api?",
+        "created_at": "2022-04-13T09:59:01.665000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It would likely need to be periodic as per the link above, and also would require a new endpoint on the beacon nodes which would forward on the message.\n\n(This would also raise the question of how a beacon node should handle conflicts between information in this request and `prepare_beacon_proposer`, but that's another issue.)",
+        "created_at": "2022-04-13T10:05:51.874000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@144468805697929216\u003e is opening a PR to `beacon-apis` the logical next step towards standardizing an endpoint?",
+        "created_at": "2022-04-13T10:13:14.235000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think sorting out the conflict between your proposal and `prepare_beacon_proposer` in \u003c#710831784991916072\u003e would be a good next step prior to creating the PR.",
+        "created_at": "2022-04-13T10:14:33.060000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Okay sounds good",
+        "created_at": "2022-04-13T10:14:45.232000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "`mev-boost` could cache and periodically relay the most recent information received from beacon node to address an issue with a builder coming online and missing previous `setFeeRecipient` messages. What if `prepare_beacon_proposer` message will be signed and re-used by `mev-boost`, beacon node may omit the signature?",
+        "created_at": "2022-04-13T10:18:12.200000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes one option may be to include signatures in `prepare_beacon_proposer`, although there are other differences that would also need to be ironed out (`prepare_beacon_proposer` uses validator index rather than public key, and has no timestamp).",
+        "created_at": "2022-04-13T10:21:21.006000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think bn could augment with the pubkey based on the index?",
+        "created_at": "2022-04-13T10:24:13.689000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think that timestamp may be omitted if `mev-boost` is resending request periodically as \u003c@388610194608750595\u003e wrote above. And IF a builder may use the most recent beacon state to obtain a public key via validator index then it seems that public key isn't required",
+        "created_at": "2022-04-13T10:24:38.459000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Or builder can do that",
+        "created_at": "2022-04-13T10:25:08.923000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "metachris_",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "the timestamp is needed because otherwise old messages could be replayed after a validator's feerecipient changes (i.e. the builder has no way of knowing which if the latest/current one)",
+        "created_at": "2022-04-13T10:25:50.867000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "You're right, there need to be a protection from replaying old messages and making builders set fee recipient to outdated address",
+        "created_at": "2022-04-13T10:28:19.303000+00:00",
+        "attachments": []
+    }
+]

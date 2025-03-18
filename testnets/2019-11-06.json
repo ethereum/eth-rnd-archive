@@ -1,0 +1,66 @@
+[
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I've been doing a deep dive into eth1 linking over the past weeks and noticed several things we need to be wary of:\n\n1. The current implementation of `get_eth1_vote` will raise an exception in the best case scenario. Basically, you can't just choose a vote using the current state; at some point you'll need access to an earlier state (see: https://github.com/ethereum/eth2.0-specs/issues/1464)\n2. There's some no-op code in `get_eth1_vote`, but no actual bug related to it (see: https://github.com/ethereum/eth2.0-specs/pull/1463)\n3. It's not trivial to decide what to do if eth1 data gets corrupted (see: https://github.com/ethereum/eth2.0-specs/issues/1431)\n4. There's some room for interpretation around how you should choose the `new_eth1_data` and `all_eth1_data` (see \"clarification\" in https://github.com/ethereum/eth2.0-specs/issues/1439)\n\nAdditionally, something I've noticed but haven't raised an issue for is that for testnets, if you don't deploy your deposit contract `ETH1_FOLLOW_DISTANCE * 2` (~8hrs on mainnet spec) _before_ eth2 genesis occurs, you will face a scenario where you have to cast eth1 votes where `deposit_root` and `deposit_count` on `Eth1Data` _should_ be `None`, because the deposit contract wasn't yet deployed in those blocks. AFAIK the expected behaviour in this case is undefined because it doesn't affect mainnet (only testnets).",
+        "created_at": "2019-11-06T01:19:06.907000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "gregthegreek",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm making a metamask plugin to allow users to sign using BLS \u0026 I'm thinking about baking in some deposit logic",
+        "created_at": "2019-11-06T04:00:28.210000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "gregthegreek",
+        "category": "Testing",
+        "parent": "",
+        "content": "Would that even be useful for anyone",
+        "created_at": "2019-11-06T04:00:53.058000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@361447803194441738\u003e have you thought about shrinking `ETH1_FOLLOW_DISTANCE` on these testnets? if the testnet is trusted to not fork then should be fine -- agree this is a annoying though",
+        "created_at": "2019-11-06T14:56:34.542000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "For our testnet thats the approach we have taken , shrinking it down from 1024 to 16 for the \n`ETH1_FOLLOW_DISTANCE` . This leads to difficulties in block proposals for the first 32 slots because\nyou cant get a valid ETH1Data since the contract didn't exist at that point, but after that it is fine",
+        "created_at": "2019-11-06T15:03:50.028000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "Also for 3) I am not sure if there is a solution that doesn't require ETH 1 to utilise ETH2's finality gadget. Otherwise there is always a risk of a very large re-org potentially corrupting our deposit tree",
+        "created_at": "2019-11-06T15:09:30.199000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@539495253418180618\u003e I agree we should shrink the `ETH1_FOLLOW_DISTANCE` for testnets. It's nice from the perspective of eth1-\u003eeth2 lag too (things happen faster).",
+        "created_at": "2019-11-06T22:32:23.278000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@476250636548308992\u003e what do you do when the block you want to enshrine does not contain the full `Eth1Data`?\n\nThe two viable candidates I see are:\n\n1. Vote on the `Eth1Data` at the block that deployed the deposit contract (the deposit count and root are constants, you just need the block hash).\n2. Just vote random as you can possibly vote in valid `Eth1Data` if `seconds(ETH1_FOLLOW_DISTANCE) \u003c seconds(SLOTS_PER_ETH1_VOTING_PERIOD - 1)` (this allows at least two proposers to vote on the same, valid `Eth1Data`).\n\n(1) requires that the deposit contract deployment block is a known value (i.e., a constant), but this is useful information that makes collecting logs more efficient for the client (i.e., no need to query for logs in blocks prior to deposit contract deployment).\n\n(1) seems a lot more stable as (2) involves a degree of crossing your fingers and hoping it works out. However, doing (2) seems significantly simpler and more consistent with https://github.com/ethereum/eth2.0-specs/issues/1431.\n\nI'm leaning towards (2), since we're definitely not going to see this problem in mainnet and it's basically an edge-case that results from a bad testnet setup.",
+        "created_at": "2019-11-06T23:08:24.355000+00:00",
+        "attachments": []
+    }
+]

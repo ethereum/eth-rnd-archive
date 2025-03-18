@@ -1,0 +1,242 @@
+[
+    {
+        "author": "pipermerriam",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "I've been thinking about this more and some of the recent posts in that thread and other conversations around meta-transactions have me thinking about something like the following (I can't the first to propose something like this so please let me know if you know of other eips that propose something similar):\n\nWe would institute a new pre-compile which allowed for making a special type of call with the following semantics:\n\n1. the `data` part of the call would include encoded transaction parameters `signature (v/r/s), to, value, data, gas nonce`\n2. when the pre-compile is invoked\n    - the signature is checked for validity against the encoded transaction data.\n    - the `sender` address is extracted from the signature and the `nonce` is validated to be the correct *next* nonce\n    - the `sender` account balance is validated to be sufficient for the `value`\n    - the `gas` value is validated to be `\u003e=` the current remaining `gas` for the current call frame.\n    - the payment is calculated using the current transaction `gas_price`, and that amount is charged to the calling account (not the `sender`)\n    - a `CALL` is made using the extracted parameters with the `sender` set to the extracted sender from encoded transaction data.\n\nIn short, a precompile that allows sending a transaction on someone else's behalf and paying for the gas, while still executing the transaction as if it came from the `sender`.",
+        "created_at": "2020-06-05T19:29:30.781000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Assuming I'm not missing something major/obvious/something I'll translate this into a forum post that is more concretely specified, but I wanted get a quick sanity check first.",
+        "created_at": "2020-06-05T19:30:22.466000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "(Oh, and maybe we'd want to set `tx.origin` to `sender` so that for all intents and purposes within the EVM, it looks like a legit transaction sent by `sender`)",
+        "created_at": "2020-06-05T19:31:19.322000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Yes, I have seen such proposal very recently, let me find it again",
+        "created_at": "2020-06-05T19:36:53.241000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "(It felt similar to Nick Johnsons proposal to allow EOA accounts to execute what is effectively a DELEGATECALL)",
+        "created_at": "2020-06-05T19:38:14.291000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "https://github.com/anydotcrypto/metatransactions/pull/23",
+        "created_at": "2020-06-05T19:38:35.642000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "though he proposes it as a new opcode rather than a precompile",
+        "created_at": "2020-06-05T19:38:49.721000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "but the general idea is quite similar I think",
+        "created_at": "2020-06-05T19:39:01.121000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Yeah, the distinction is ... thin.  I'm un-opinionated on opcode vs precompile",
+        "created_at": "2020-06-05T19:39:18.321000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "and here is what he said about \"if we could change tx format\": https://twitter.com/paddypisa/status/1265997616871084032",
+        "created_at": "2020-06-05T19:40:19.039000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "I think the main insight I got from that was that ECSDA signature in the transaction actually authorizes multiple things at once: 1) spending ETH for gas 2) incrementing the nonce 3) being msg.sender \u0026 tx.origin for the call",
+        "created_at": "2020-06-05T19:42:22.782000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "and meta-transaction is a way of decoupling that a bit",
+        "created_at": "2020-06-05T19:42:48.810000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "it seems to be a recurring theme 🙂 we try to decouple things that are coupled",
+        "created_at": "2020-06-05T19:43:11.180000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "If the new signatures were appended to the end, and allowed to be omitted...  then we could probably update the transaction format in a backwards compatible way (and maybe toss a version number in there as well)",
+        "created_at": "2020-06-05T20:24:54.420000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "phabc",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "I'm a bit weary of having meta-tx at L0 primarly because of how projects choose their gas reimbursement method. Some projects cover 100% of the fees, some calculate the gas cost of a given tx they execute on-chain, some just charge a fixed fee, etc. The method to reimburse can also different (ERC-20, ERC-1155, ETH, etc.). THis means we pretty much need to do a second call to reimburse gas in the tx",
+        "created_at": "2020-06-05T20:57:42.989000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "phabc",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Imo meta-tx at L0 would work better if we had rich transactions or something like Native transaction Batches : https://ethereum-magicians.org/t/eip-native-batched-transactions/4337",
+        "created_at": "2020-06-05T21:01:42.923000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "phabc",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "With the latter, we could have Alice execute these transactoins atomically: \ntx1: sell ETH for DAI on uniswap\ntx2: send X DAI to Bob\n\nAnd then Bob executes this in one batch, paying in ETH for the gas but receiving DAI from Alice as per her second tx",
+        "created_at": "2020-06-05T21:03:21.612000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "From my point of view, we do not want to make L0 meta-tx as a dependency of the Stateless project, unless it is really necessary. I am still convinced that we can offer \"good enough\" mitigation for meta-tx potential breakage within the Oil proposal. I realised yesterday that perhaps the reason Vitalik and some others concluded that \"Oil won't work with meta-tx\" is because they keep thinking about the worst cases. But if you look at meta-tx relayers as the businesses, who can apply discretion to which transaction to relay, the problem becomes much more tractable, because you don't have to solve it for the worst case. It will take us a while to work through it, but my current working assumption is that solving meta-tx at L0 level is a separate project and not in the scope of Stateless Ethereum.",
+        "created_at": "2020-06-05T21:08:19.236000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "phabc",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Perhaps this should be in another channel indeed, but I agree with you. We use meta-tx for all our users and our philosophy is that if a tx fail and we don't get reimburse, it's on us to build better tools to prevent this from happening and to charge users according to that x% loss we incure with these failed tx. I think having users* worry about whether tx will pass or not is a bad service anyway. Relayer should be incentivized to ensure tx passes and optimize to make sure it happens 99% of the time",
+        "created_at": "2020-06-05T21:10:33.357000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "\u003e Imo meta-tx at L0 would work better if we had rich transactions or something like Native transaction Batches\nagreed, but i see that as just an *improvement* for meta-tx systems whereas `CallWithSigner` or a new tx format would allow for something previously impossible - EOA txs to be paid for by a sponsor and therefore contracts can rely only on `CALLER` instead of also implementing an analogous authentication scheme via eip-1271",
+        "created_at": "2020-06-05T21:33:22.041000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "I posted  about my concern with doing this upgrade as an opcode here: https://ethereum-magicians.org/t/eip-callwithsigner-as-a-potential-fix-for-the-msg-sender-problem/4340/2\ncurious how others feel about it",
+        "created_at": "2020-06-05T21:38:01.878000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "phabc",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "\u003e EOA txs to be paid for by a sponsor and therefore contracts can rely only on CALLER\nI understand, but i'm not convinced any service would opt for using this method in practice since they don't get reimbursed explicitly, so might as well use an L1 meta-tx to have the ability to do so if needed. Might have a handful of projects that use it in some contexts, but that's about it.",
+        "created_at": "2020-06-05T21:46:50.933000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "They would be able to be paid explicitly if native batches transactions were possible, correct?",
+        "created_at": "2020-06-05T21:48:59.747000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "phabc",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Yes indeed",
+        "created_at": "2020-06-05T21:49:27.345000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "phabc",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "or rich transactions",
+        "created_at": "2020-06-05T21:49:50.276000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "I guess my point is that meta-txs via rich transactions would still not be able to rely solely on `CALLER` for authentication",
+        "created_at": "2020-06-05T21:51:45.256000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Only `CallWithSigner` or a sponsored transaction would resolve that",
+        "created_at": "2020-06-05T21:52:42.067000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Imo both parts are important",
+        "created_at": "2020-06-05T21:53:09.358000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "phabc",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Yes they are both important for meta-txs, but rich transactions and batched tx are useful on their own and i'm arguing that `CallWithSigner` isn't worth it without rich transactions or batch transactions or something along these lines, imo. Perhaps we should discuss this in another channel however,  don't think meta-tx is the main topic of this one",
+        "created_at": "2020-06-05T22:26:48.558000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "I've just created \u003c#718596092828057631\u003e as I agree that I think it deserves it's own place for discussion, allowing us to get back to the core issue with gas accounting here in this channel",
+        "created_at": "2020-06-05T22:45:08.254000+00:00",
+        "attachments": []
+    }
+]

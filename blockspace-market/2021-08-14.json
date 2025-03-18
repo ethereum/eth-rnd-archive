@@ -1,0 +1,130 @@
+[
+    {
+        "author": "perama",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "From the infra call, there was a chat whether max fee should be set to a `1.2 * base`rather than `2 * base` as a rough standard. Part of the discussion was around the data I pulled from the first few days, which showed similarities between the two in terms of how viable each setting remained.\n\nWhile one interpretation could be: \"They are similar, so best to use 1.2x\".\n\nI would consider another path: \" They are similar, so use 2x and don't worry about it actually reaching 2x\"\n\nSo an interface can show fee like this (e.g., for max = 2x base):\n```\n0.001 ETH fee expected (network may rarely rise to charge 0.002 ETH)\n```\nThe word 'rarely' here can be used because you know that at only E.g., 0.1% of the time the base fee will rise that much.\n\nRather than the status quo (pre-London):\n```\n0.001 ETH fee expected (network may rarely rise to exclude your transaction indefinitely)\n```\nWallets might not have explicitly said: Your transaction may never make it in because of a low fee. \n\nThe power that has been enabled with 1559 is: You can probably avoid transactions getting stuck, as long as the max fee is high enough. So, if the max fee default is instead 1.2x base fee, then you increase the chance that a transaction will be excluded indefinitely. Which negates that benefit.\n\n```\nE.g., with 1.2x\n0.001 ETH fee expected (may be 0.0012 ETH and also may get stuck like pre-London times).\n```\n\nSo to summarise (and thoughts are welcome on this), the two paradigms are:\n\n- Pre-london: Fee is 0.001 ETH \n    - Chance of getting stuck 1%.\n- Post-london (with max = 2x base fee): Fee is 0.001 ETH\n    - Chance of getting stuck 0.01% (\"rarely\")\n    - Chance of 0.002 ETH fee 1%.\n\nThat is: If you use a high max fee, you can hot-swap risk-of-Stuck for risk-of-Costly.  If you don't set a high max fee, you cannot.\n\n\nhttps://gist.github.com/perama-v/4c6b5088b18dfb928e9675f8aca869a5",
+        "created_at": "2021-08-14T00:19:08.373000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ednoepel",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I dug into the source, and then found a discussion on that behavior here: https://github.com/ethereum/go-ethereum/issues/23311 .  This behavior was purportedly intended to prevent a user from spamming with meaningless feecap replacements.",
+        "created_at": "2021-08-14T03:08:22.456000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes I went a little back and forth on how to interpret your data. On the one hand I agree with you that given viability is kind of same for 1.3-1.7x than 2x, might as well be flexible and set 2x, in fact it’s probably more “optimal” from the system perspective. On the other it seems to me that wallets are not willing to show too big numbers to users, so they’d intuitively try and minimise the worst case, however improbable, by taking max fee as small as reasonably possible. This is something Jin Chung from Rainbow quite clearly expressed on the call too.\n\nI am not sure how best to resolve that tension, I tend to think a scaling of basefee that depends on basefee level is the correct approach (so like 2x until basefee \u003e 100, 1.7 until  \u003e 500 etc…) with scales tweaked based on market data and possibly detecting congestion as early as possible to nudge users to up their parameters",
+        "created_at": "2021-08-14T12:46:14.295000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "perama",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Good thoughts. It has probably been long enough to create a dataset of all the peaks in the basefee (e.g., 20 nft drop peaks) \n\nWith that dataset made public, there could be a challenge to identify the simplest signature that identifies a peak onset. Then wallets could internally handle those as a separate case and then be more confident in using a small max fee.",
+        "created_at": "2021-08-14T14:03:23.041000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "one thing I wrote in the call zoom is that if you had access to more contextual data you could probably know when these things are happening. during an NFT drop you'd suddenly see a lot of transactions going to one specific contract, it would look really like an outlier compared to regular seasonality. I am not sure it is so easy for a wallet to detect natively but it's perhaps not a difficult API to build. I agree that by now we should see some kind of \"signature\" of these events",
+        "created_at": "2021-08-14T14:18:09.428000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "perama",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hypothesis: a robust test might take the form:\n\n1. Use feeHistory to calculate an exponential moving average.\n2. If the base fee is some factor above that number, signature is happening",
+        "created_at": "2021-08-14T14:51:09.321000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ghosts_in_the_code",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I guess fundamental problem is \"max willingness to pay\" is a bad parameter to directly ask the user from a UX point of view. So the wallet should directly try and infer it from user's portfolio size, txdata and tx history. Can hard code basics (erc20 and NFTs can be detected and priced like etherscan does), beyond that they can run an ML model if they want to",
+        "created_at": "2021-08-14T15:00:16.316000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ghosts_in_the_code",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Your solution involves predicting how likely a certain tx is to go through *instantly* under different market situations, but wallets problem is they don't know whether users are willing to pay whatever is predicted as necessary to ensure that instant inclusion, and they don't know how to ask the user that question for fear of scaring the user away.",
+        "created_at": "2021-08-14T15:05:03.666000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ghosts_in_the_code",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "2 different problems",
+        "created_at": "2021-08-14T15:05:31.441000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hello, I got a question about ethereum gas fees after London update .\nthe base fee is maximum increasing by 12.5 if the total fees is over the target and the blocks are variable-size so thats mean the target can multiple twice in the blocks in total fees .\nthen if a total fees is 15m gwei in the first block and in the second block is 30 why it will continue increase base fee after the 9th block and wont stay at 2x base fee? it showed in the website it will continue increasing even after the 9th blocks when its become the base fee should be",
+        "created_at": "2021-08-14T19:08:37.028000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If the block is doubly full (30 M gas), the base fee increases with a factor of 1.125 (e.g. 40 Gwei -\u003e 45 Gwei). There is no limit to this. So if there are 10 full blocks in a row, it will increase with a factor of 1.125^10 = 3.24...",
+        "created_at": "2021-08-14T19:46:15.213000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "ohh to discourage you to pay and go back to 15m ? \u003c@!397389662085185547\u003e",
+        "created_at": "2021-08-14T20:00:54.002000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Indeed!",
+        "created_at": "2021-08-14T20:02:08.418000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "ty 🙂",
+        "created_at": "2021-08-14T20:07:48.043000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "another question I got",
+        "created_at": "2021-08-14T21:39:55.690000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "why gas is consumed if your gas limit is lower than needed ?",
+        "created_at": "2021-08-14T21:40:44.060000+00:00",
+        "attachments": []
+    }
+]

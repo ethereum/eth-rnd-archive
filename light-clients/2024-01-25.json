@@ -1,0 +1,90 @@
+[
+    {
+        "author": "0xparti",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Hey everyone! \nI'm looking into light client-based bridges and noticed some concerns regarding the weak economic security of the sync committee and the possibility of them colliding to sign an invalid block (https://lagrange-labs.gitbook.io/lagrange-labs/overview/overview-of-existing-cross-chain-security-models). According to the Altair specs (https://github.com/ethereum/annotated-spec/blob/master/altair/sync-protocol.md), light clients verify the signatures from the committee to the block header, so for them to sign an invalid block and be accepted, the header the light client receives should also be invalid. Hence, a coordinated attack would require sync committee corruption + header provider corruption.\nWhat is unclear from the specs is where the light client should get the header from (if there is a requirement). I checked some implementations, and they seem to be using RPCs, but I guess the ideal would be p2p, making an attack infeasible. Does anyone know about this?\nI'm not sure if this is the right place to ask this question; let me know if I should move it to a different place.",
+        "created_at": "2024-01-25T13:17:44.016000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "libp2p endpoints are standardized and documented in:\n- https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/p2p-interface.md\n- https://github.com/ethereum/consensus-specs/blob/dev/specs/capella/light-client/p2p-interface.md\n- https://github.com/ethereum/consensus-specs/blob/dev/specs/deneb/light-client/p2p-interface.md\nnote that for certain clients, e.g., web browser, it may not be feasible to connect to p2p, so the beacon-API REST endpoints or portal network are also provided.\n\nregardless of where you obtain the data from, the sync committee may still sign invalid blocks without repercussions, the current state of mitigation ideas can be found here:\n- https://github.com/ethereum/consensus-specs/issues/3321\ninvalid data may still propagate through libp2p, although at a slower rate as it is rejected by honest network participants. that's no guarantee, though.",
+        "created_at": "2024-01-25T13:33:53.492000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "for bridges, it is not currently recommended to solely rely on the sync committee for security. even if a slashing were to be defined, the maximum slashable amount is capped by 32 ETH x SYNC_COMMITTEE_SIZE. you can still use the sync committee as an additional security layer, or require staking of additional value in order to submit light client data to the bridge. in which case, that additionally staked amount should be incentive enough for submitters to cross-check their submitted light client data against a fully validating node.",
+        "created_at": "2024-01-25T13:36:41.147000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "0xparti",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Thank you very much for the detailed answer! \nWhat's still not clear to me is that by corrupting the sync committee alone, a light client can be fooled. I understand that if the light client receives an invalid beacon block root, the sync committee can sign to it, and the BLS check on the light client side will pass. But that would imply that the root provider, which is not the sync committee, is also corrupted and should be added to the equation. Is my reasoning wrong?",
+        "created_at": "2024-01-25T13:50:59.674000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "yes, but a provider that gives you invalid light client data can also give you invalid block headers.",
+        "created_at": "2024-01-25T13:59:38.122000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "0xparti",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Agree. That's the point of failure. \nIs using p2p not a good enough solution to it? I do understand, as you mentioned, that is not feasible in every case. But for a bridging solution that uses SNARKs of light-client proofs, I picture they could include the p2p connection in their proof and get rid of the sync committee corruption risk.",
+        "created_at": "2024-01-25T14:06:14.292000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "there is no punishment for sync committee validators to sign malicious headers. \nhow you validate the data, whether using a full light client data validation, or a SNARK that compresses the same validation, doesn't matter.",
+        "created_at": "2024-01-25T14:14:52.852000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "0xparti",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "yes, I understand that. What I meant was the following:\n- to fool a light client, you need to fool BLS into accepting an invalid root. \n- the inputs for BLS are public keys, signatures and the message to sign (the root).\n- The light-client provider cannot craft artificial signatures on behalf of others, but could corrupt 2/3 of the sync committee to sign an invalid root AND send the corresponding invalid root. (They could also change the public keys of the committee to some of their own)\n- if the light client uses the p2p network as a data provider, the chances of it being malicious decrease drastically. The tradeoff is of course more load for the p2p network.\n- I know the SNARK makes no difference in security compared to a full validation. What I meant with the SNARK is that they could do it for a circuit that includes p2p as a provider. It's not the SNARK per se that gives any extra security, but the fact that you are using the trust minimized provider and you can prove it.\ndoes it make more sense now?",
+        "created_at": "2024-01-25T14:28:40.732000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "The SNARK circuit cannot prove that data was received over libp2p vs REST, it operates on the same light client data regardless where it originated from. \nAnd, if you try to prove that it was processed by some specific networking logic, that portion could be forged as there are no secret keys involved.\n\nThe light client would accept the data if it appears valid; you can try to ask the data from multiple peers to see whether they all agree on it, but at some point the client has to decide whether it accepts it. The libp2p network may help reducing the propagation of bad data, but likewise a trusted server that the bridge operators control, can also do so. \n\nThe discussion is solely about the \"firewall\" mechanism to avoid processing of bad data. Libp2p vs REST both don't provide high security guarantees for that. You can either use trusted nodes / servers, and/or add a mechanism where data can only be submitted to the bridge from trusted operators (with additional stake), and/or add different mechanisms to shield the bridge contract from blindly processing bad light client data such as a multisig that needs to approve the update. Once such bad data hits the contract, the bridge has no chance to detect that it was fraudulent, regardless of full circuit or SNARK or whatever.",
+        "created_at": "2024-01-25T14:41:10.027000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "0xparti",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "ok, I thought you could include inside the SNARK the computation that made sure you were feeding in with the right library (of course, not where the data came from).\nI agree with the rest; it seems like a flawed design choice for a bridge.\nAppreciate your answers. They helped me a lot to clarify the trust assumptions of these systems ❤️",
+        "created_at": "2024-01-25T18:28:21.721000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "someone could feed the malicious data through the same library to obtain a trace that makes it appear to have been received via libp2p, then create a zk proof for it.\nor, even simpler, someone could directly connect to your node as a peer and send you the malicious data",
+        "created_at": "2024-01-25T20:19:10.463000+00:00",
+        "attachments": []
+    }
+]

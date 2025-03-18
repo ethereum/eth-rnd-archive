@@ -1,0 +1,498 @@
+[
+    {
+        "author": "pdobacz",
+        "category": "Testing",
+        "parent": "",
+        "content": "In the same vein letting know I'm tackling EOF-RETURNDATACOPY memory expansion oog test. Not sure about oog testing strategy. For DATACOPY I borrowed the approach from MCOPY, which was just to have a formula for expected gas cost and use it to trigger oog; I think it's reasonable and non-magical.",
+        "created_at": "2024-07-04T10:28:35.215000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hey all! I just realized an interesting test case - which I am not sure if that is already being tested!\n\nA \"naive\" implementation of CALLF/JUMPF might not do the stack check which is described in the spec. It can thus call into a section where \"max stack height\" might indicate it overflows. However, since there could also be paths in this code which do not reach this max stack height, it might thus be that when executing this code, we do not run into a stack overflow. We can thus do something \"malicious\", e.g. store a value somewhere and then return from the function (or just returning directly, because now there is a gas divergence). \n\n(At EthJS we have the stack check in place)",
+        "created_at": "2024-07-04T10:32:00.865000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pdobacz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I've also found that CALLF/JUMPF runtime stack overflow are indeed not covered in EEST or ethereum/tests. I've got it on my todo list",
+        "created_at": "2024-07-04T10:34:57.052000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Cool 😄",
+        "created_at": "2024-07-04T10:35:15.603000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "I hope to pass the EOF container validation tests today. If wanted, I can create a coverage report from the latest 1.0.5 release to see what is included (test mights be there, but might not be ported to the release / fixtures) 🙂",
+        "created_at": "2024-07-04T10:43:09.033000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hey all, small nit on the EOF container validation tests: we now have \"initcode\" mode. However, there is a special case (tx init code) which has slightly different rules (the data section of the tx type can actually be \"longer\": the data section which is dangling is now the calldata). So this should also be covered by the container validation tests 🙂",
+        "created_at": "2024-07-04T11:22:20.531000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "EthJS now passes the 1.0.5 container validation tests 😄",
+        "created_at": "2024-07-04T11:22:29.045000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hey all, will report some stuff on coverage which is likely not covered by the released EOF container validation 1.0.5 tests. (These lines are not hit in our code)\n\n- **Header validation**\n- Container section size 0\n- Container sections size \u003e 0x0100\n- Container size of a container is 0\n- Containers in Tx Init Mode (remaining data is the calldata of the tx init per 7698)\n\n** Container code validation **\n- Stack underflow of an arbitrary opcode (simple test: `POP STOP`)\n- A code section marked as non-returning (0x80 outputs) contains RETF\n- Code section contains an invalid opcode (for instance opcode 0xFD)\n- Code section ends with RJUMPV, but only the opcode (so no table size or table)\n- CALLF points to a code section which is marked as non-returning (0x80 outputs)\n- Stack underflow/overflow condition for CALLF (too low stack before calling the new code section / outputs - inputs might overflow current stack)\n- JUMPF stack overflow condition\n- RETF stack height does not match the amount of outputs of the code section\n- EOFCreate points to a subcontainer which does not exist (\u003e num subcontainers)\n- Subcontainer is pointed to by both EOFCREATE and RETURNCONTRACT\n- The unstable stack condition (`NOP PUSH1 RJUMPI[-4]`) (backwards jump has different recorded stack heights)\n- Stack overflow condition in general (stack height exceeds the max stack height)\n- Container has subcontainers which are never targeted by any EOFCREATE / RETURNCONTRACT\n\n\nNote: these obviously might contain false positives 🙂",
+        "created_at": "2024-07-04T12:34:10.123000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "CC \u003c@892053833121923094\u003e \u003c@907931206081990666\u003e",
+        "created_at": "2024-07-04T12:34:33.842000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Could you open up an issue in https://github.com/ethereum/execution-spec-tests/issues pls ? 🙏",
+        "created_at": "2024-07-04T14:42:44.628000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes will do after ACD 🙂",
+        "created_at": "2024-07-04T14:43:02.357000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Have opened 🙂 https://github.com/ethereum/execution-spec-tests/issues/672",
+        "created_at": "2024-07-04T15:25:53.046000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "chfast",
+        "category": "Testing",
+        "parent": "",
+        "content": "We decided to export evmone's internal tests as JSON in a format matching EEST releases. This is the best effort so use it on your own risk but we may fix some mistakes if reported. https://output.circle-artifacts.com/output/job/81751de6-1061-4a12-a101-6294d4a41a3a/artifacts/0/package/evmone-tests.tar.gz\n\nIt contains a lot of EOF tests...",
+        "created_at": "2024-07-04T17:12:30.908000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "I will run it against EthJS 🙂",
+        "created_at": "2024-07-04T17:38:06.112000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "We fail 21/105",
+        "created_at": "2024-07-04T17:41:25.376000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "(of the state tests)",
+        "created_at": "2024-07-04T17:41:31.424000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "chfast",
+        "category": "Testing",
+        "parent": "",
+        "content": "The tests with \"block\" are broken",
+        "created_at": "2024-07-04T17:54:06.407000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ok first question, we fail EXCHANGE test, this runs `EXCHANGE[0]`. What stack items should `EXCHANGE[0]` exchange?",
+        "created_at": "2024-07-04T17:54:21.092000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Not the topmost and the one down that one - right? Because thats swap1",
+        "created_at": "2024-07-04T17:54:32.689000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ok now I'm confused 😅",
+        "created_at": "2024-07-04T17:59:14.373000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "We fail your exchange test, and I think our exchange implementation is super borked",
+        "created_at": "2024-07-04T17:59:28.785000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "But we pass the execution spec releases 🤔",
+        "created_at": "2024-07-04T17:59:37.268000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "chfast",
+        "category": "Testing",
+        "parent": "",
+        "content": "According to the spec, it should swap 2nd and 3rd",
+        "created_at": "2024-07-04T17:59:42.322000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Isn't exchange tested there?",
+        "created_at": "2024-07-04T17:59:42.807000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes exactly I just hardcoded it and now we pass your test 😅",
+        "created_at": "2024-07-04T18:00:03.564000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "chfast",
+        "category": "Testing",
+        "parent": "",
+        "content": "there seems to be a single positive tests in EEST which executes many/all `EXCHANGE` at once. Maybe it is too clever and the bug cancels out 🙂",
+        "created_at": "2024-07-04T18:03:24.197000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think so 😅",
+        "created_at": "2024-07-04T18:03:35.397000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Because I am using our stack in reverse",
+        "created_at": "2024-07-04T18:03:38.924000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "And it is 0-based not 1-based",
+        "created_at": "2024-07-04T18:03:43.824000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "So I think if you would reverse the entire stack array of that test, it would still pass 😅",
+        "created_at": "2024-07-04T18:03:59.312000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Well it's great these tests uncover the bugs on our side 🙂",
+        "created_at": "2024-07-04T18:04:34.442000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "chfast",
+        "category": "Testing",
+        "parent": "",
+        "content": "I guess we need to fix EEST too. Do you want to report an issue there?",
+        "created_at": "2024-07-04T18:05:12.020000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes",
+        "created_at": "2024-07-04T18:05:22.095000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "This simple test should be in there, it is clearly not in there",
+        "created_at": "2024-07-04T18:05:32.193000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "chfast",
+        "category": "Testing",
+        "parent": "",
+        "content": "all combinations give 256 tests 🙂",
+        "created_at": "2024-07-04T18:13:47.819000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "I just tested, with the one which passes your test we still pass the EOF test",
+        "created_at": "2024-07-04T18:14:07.693000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think the problem of that test is, that the stack itself is exactly 256",
+        "created_at": "2024-07-04T18:14:24.551000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "So I think you can indeed \"flip\" the stack and then it still works",
+        "created_at": "2024-07-04T18:14:43.368000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Exchange 1 with 0 is the same as exchange 0 with 1",
+        "created_at": "2024-07-04T18:14:53.744000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Or wait, this argument does not really work",
+        "created_at": "2024-07-04T18:15:03.012000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Well anyways, it passes on the old and new version",
+        "created_at": "2024-07-04T18:15:12.219000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Here is the diff 😅 https://github.com/ethereumjs/ethereumjs-monorepo/pull/3440/commits/197c349d040b55f73dc76e180ccd5c03c08bb443",
+        "created_at": "2024-07-04T18:15:44.921000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Well these internal tests are super interesting because they find a lot of bugs, and it also seems to find some stuff not covered by EELS",
+        "created_at": "2024-07-04T18:19:47.955000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ok, we put \"2\" on stack if the target if EXTCALL reverts, instead of \"1\" (fixed)",
+        "created_at": "2024-07-04T18:33:59.472000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "What does this test do? `extcall_clears_returndata`\n\nIt calls the same contract twice, which put 32 bytes on stack, saves it on memory, and then returns it. Then in the end it SSTOREs RETURNDATASIZE (which should be 32). I don't see anything weird here, but we fail the test",
+        "created_at": "2024-07-04T18:42:18.656000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "O.O",
+        "created_at": "2024-07-04T19:14:16.619000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ok I seriously do not understand how we are not failing more EOF tests",
+        "created_at": "2024-07-04T19:14:36.683000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "We have the argument order on all EXT*CALLs in the wrong order 😮",
+        "created_at": "2024-07-04T19:14:48.317000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Our order: `const [toAddr, value, inOffset, inLength] = runState.stack.popN(4)`\nSpec: `(target_address, input_offset, input_size, value)` 😅",
+        "created_at": "2024-07-04T19:16:57.641000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hey, I think I might have found a bug",
+        "created_at": "2024-07-04T19:32:10.094000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Or at least something what might not match the spec",
+        "created_at": "2024-07-04T19:32:18.421000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "This: `creation_tx_initcontainer_return`",
+        "created_at": "2024-07-04T19:32:26.220000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "It tries to deploy (via tx) invalid EOF container. It is an EOF init container which has a RETURN in it (which is invalid in initcontainer context)",
+        "created_at": "2024-07-04T19:32:44.549000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "By EIP 7698 \n\n\u003e If EOF header parsing or full container validation fails, transaction is considered valid and failing. Gas for initcode execution is not consumed, only intrinsic creation transaction costs are charged.\n\nI read this as: if the container is invalid, simply charge the tx just by the data fee + contract creation fee. However EvmOne seems to want to spend all gas?",
+        "created_at": "2024-07-04T19:34:14.476000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Have those failing tests left\n\n```\nErrors thrown in file: state_transition/eof_create/creation_tx_dataloadn_referring_to_auxdata.json test: creation_tx_dataloadn_referring_to_auxdata:\n    [ 0.006 secs ] the state roots should match (successful tx run)\nErrors thrown in file: state_transition/eof_create/creation_tx_invalid_initcode_header.json test: creation_tx_invalid_initcode_header:\n    [ 0.009 secs ] the state roots should match (tx runtime error :err: expected kind types)\nErrors thrown in file: state_transition/eof_create/creation_tx_static_auxdata_in_calldata.json test: creation_tx_static_auxdata_in_calldata:\n    [ 0.007 secs ] the state roots should match (successful tx run)\nErrors thrown in file: state_transition/eof_create/creation_tx_truncated_data_initcode.json test: creation_tx_truncated_data_initcode:\n    [ 0.01 secs ] the state roots should match (tx runtime error :Trying to read out of bounds )\n```\n\nWill continue on that tomorrow.\n\nSo far it has found 3 bugs on our side, and 1 thing which we missed in our implementation 🙂",
+        "created_at": "2024-07-04T19:35:37.871000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "_shemnon",
+        "category": "Testing",
+        "parent": "",
+        "content": "Do we want 256 individual tests?  May be warranted,",
+        "created_at": "2024-07-04T20:01:30.530000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "So what I think might be happening in the current test which exchanges all and then stores the entire stack in storage, I think the \"problem\" with the test is that the initial stack length before all exchanges happen is exactly the right size, which means that if you flip the entire stack around, you still get the same results (if you execute these specific exchanges)",
+        "created_at": "2024-07-04T20:30:13.687000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "What one could do is indeed perform all these exchanges, but after each exchange also store the entire stack (or something like that)",
+        "created_at": "2024-07-04T20:30:45.042000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Or, I think in order to break the test with the inverted stack: ensure the initial stack length is not the stack length which it is currently (to avoid it being \"flippable\"). Current length is 34",
+        "created_at": "2024-07-04T20:31:14.231000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think if you make it 35 with some unique value as initial value it breaks our \"wrong\" exchange version",
+        "created_at": "2024-07-04T20:31:30.059000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "This is our before and after diff: https://github.com/ethereumjs/ethereumjs-monorepo/pull/3440/commits/197c349d040b55f73dc76e180ccd5c03c08bb443\n\nThey both passed that test 😅",
+        "created_at": "2024-07-04T20:31:48.465000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "chfast",
+        "category": "Testing",
+        "parent": "",
+        "content": "1. We can modify the existing one to be able to detect the bug described.\n2. all-pair testing doesn't help, but we can add cases for `[0,1,14,15]x[0,1,14,15]` (16 tests).",
+        "created_at": "2024-07-04T20:47:01.629000+00:00",
+        "attachments": []
+    }
+]

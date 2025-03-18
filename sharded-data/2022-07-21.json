@@ -1,0 +1,170 @@
+[
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003casn_d6\u003e @ke",
+        "created_at": "2022-07-21T12:39:45.313000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003casn_d6\u003e \u003e \u003casn_d6\u003e  @Kev oh yes! it's indeed possible just did it on paper and it works. will update my comment above. it's possible to indeed amortize verify multiple transactions efficiently! thanks for the link to the code! (re @asn_d6: @ke)",
+        "created_at": "2022-07-21T12:40:44.788000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003casn_d6\u003e \u003e \u003casn_d6\u003e  Hey @inphi ! We looked at this here in ethcc with @adietrichs carl and @protolambda .\n\nTwo points:\n\na) Your benchmark code of the KZG proof technique looks sane, but it's also much slower than expected. We did some benchmarks and it seems like most of the time is spent on the barycentric formula and specifically on calculating modular divisions. In particular it spends about 20ms calculating 4096 modular divisions which seems kinda excessive based on some napkin calculations. Please do check if bls kilic has a batch inversionn operation because that would make things much much faster.\n\nAlso, in the spec we are using ssz merkle hashing of the fiat-shamir random evaluation point which causes thousands of extra hashes. We should remove that and replace it with straight hashing.\n\nWe hope that these changes will decrease the verification cost to something more reasonable.\n\nb) In terms of batching, we can indeed aggregate verify multiple transactions at the same time in an efficient way; paying only two pairings instead of 2N pairings (see Kev's link, or I can try to summarize later). If the above optimizations for KZG proof verification are not enough we can see if aggregate verification helps.\n\nAlso, @adietrichs believes that you will not get enough blob transactions on the mempool to make multi-transaction verification worth it under honest conditions. Under malicious conditions, you want to do individual verification so that you can detect bad transactions and penalize your peer with peer scoring to avoid DoS.\n\n——\n\nLet me know if the above did not make sense. (re @sharded_data_bot: \u003cInphi\u003e I'm working on implementing EIP-4844 for clients and recently implemented @asn (George Kadianakis) 's optimization (https://github.com/ethereum/EIPs/pull/5088) for blob verification using KZG proofs.\nAs expected this improves single transaction verification time by a factor of 2-3x:\n```\nBenchmarkVeri \u003cclipped message\u003e",
+        "created_at": "2022-07-21T12:41:55.087000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Talking with \u003c@159152274659082240\u003e and \u003c@918333659327655968\u003e, there are a few potential mempool concerns we wanted people's thoughts on:\n\n1. Is it possible to spam the txn pool with blob txns to cause the node to use a ton of memory? IIRC Geth's default mempool stores 4000 transactions. At 256kb per blob txns, that's 1GB of memory if someone spams the mempool. If this is an issue, is an acceptable simple solution to simply cap the # of blob txns in the mempool?",
+        "created_at": "2022-07-21T17:42:24.166000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "2. Re: building good blocks, do we have high confidence that there is a \"good enough\" sorting algorithm we can implement in clients? If not, should we have someone research this further?",
+        "created_at": "2022-07-21T17:42:54.866000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "3. Would it be valuable to consider a design with more, smaller, blobs per slot? Do we have a good idea of how \"full\" the blob txns from ORs and ZKRs will be? For example, if we expect them to be \u003c50% full, could we simply double the # of blobs and halve their size?",
+        "created_at": "2022-07-21T17:43:51.554000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cadietrichs\u003e Good q‘s!\n1. blob txs are larger, so it’s reasonable to cap their number in the mempool. Realistically, that is not an issue though. the dynamic fee for blobs targets an average of 8 blobs per block. Say that’s 4 blobs txs. per 12s, so 1 tx per 3s. So you could cap super aggressively even at something like the highest paying 40 blob txs or something, that’s 10 MB required memory",
+        "created_at": "2022-07-21T17:48:21.326000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cralexstokes\u003e re: building, there aren't any execution semantics so it should be as simple as just picking the highest fee right?",
+        "created_at": "2022-07-21T17:48:34.920000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cadietrichs\u003e \u003e \u003cadietrichs\u003e  execution semantics as in? (re @ralexstokes: re: building, there aren't any execution semantics so it should be as simple as just picking the highest fee right?)",
+        "created_at": "2022-07-21T17:49:19.502000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cralexstokes\u003e i just mean for the blobs the only thing you have to go on is the fee for the data",
+        "created_at": "2022-07-21T17:50:10.641000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cralexstokes\u003e so you can just sort all the blobs by fee and pick the top MAX_BLOBS_PER_BLOCK",
+        "created_at": "2022-07-21T17:50:27.871000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cralexstokes\u003e no need to \"poke into\" a blob to do any sort of block packing",
+        "created_at": "2022-07-21T17:51:01.440000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cadietrichs\u003e Depends slightly on how we end up doing the fee market",
+        "created_at": "2022-07-21T17:51:35.374000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cadietrichs\u003e In the current version it’s floating gas amount, then it is indeed still one-dimensional, so no added complexity at all",
+        "created_at": "2022-07-21T17:52:02.345000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cadietrichs\u003e But we would only change that in a way we were confident would not introduce unreasonable extra complexity",
+        "created_at": "2022-07-21T17:52:39.617000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cadietrichs\u003e \u003e \u003cadietrichs\u003e  For 3. btw: changing the blob size is not really practical imo, because we then lose forward compatibility with full Danksharding (re @sharded_data_bot: \u003ctimbeiko\u003e 3. Would it be valuable to consider a design with more, smaller, blobs per slot? Do we have a good idea of how \"full\" the blob txns from ORs and ZKRs will be? For example, if we expect them to be \u003c50% full, could we simply double the # of blobs and halve their size?)",
+        "created_at": "2022-07-21T17:53:30.934000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I would nudge towards that unless there's a strong reason to change it then 🙂",
+        "created_at": "2022-07-21T17:55:05.609000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cadietrichs\u003e \u003e \u003cadietrichs\u003e  I personally think people are too scared of slight increases in block building complexity, but I generally agree that it’s a relevant design consideration. Also there aren’t any plans right now to deviate from the specs in that regard, I just wanted to point out that it would be a possibility (re @sharded_data_bot: \u003ctimbeiko\u003e [reply]: I would nudge towards that unless there's a strong reason to change it then 🙂)",
+        "created_at": "2022-07-21T17:57:01.122000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "ok, this is good to know! so, cap the blob txns in the mempool, keep the blob size, and keep the fee market one dimensional 😄",
+        "created_at": "2022-07-21T17:57:17.273000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cEdFelten\u003e At current blob size, Arbitrum’ blobs would be mostly full.  If blobs were half as large we would probably use them in pairs.",
+        "created_at": "2022-07-21T18:48:52.883000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cprotolambda\u003e There will probably be markets similar to flashbots that bundle data into full blobs. A protocol using less than a full blob can still be efficient",
+        "created_at": "2022-07-21T18:51:38.712000+00:00",
+        "attachments": []
+    }
+]

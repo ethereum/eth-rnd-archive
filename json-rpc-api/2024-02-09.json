@@ -1,0 +1,258 @@
+[
+    {
+        "author": "s1na",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Update on EIP-4844: it was discussed here before, but now concretely proposing that we add possibility to:\n- **compute** blob proofs in `eth_fillTransaction` if only blobs were provided\n- or **verify** the proofs if the full sidecar was present. \nThis means concretely: add `blobs`, `commitments`, `proofs` to GenericTransaction and the same fields to result of `fillTransaction`. This also means any `wallet_` method to sign a tx will have to take in these additional fields. I will push a spec PR if there was no disagreements.\n*Reminder that `eth_fillTransaction` serves as a replacement for `eth_sendTransaction` to fill in tx fields so it can be signed externally.*\n(PR to geth: https://github.com/ethereum/go-ethereum/pull/28839).",
+        "created_at": "2024-02-09T10:59:39.030000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Can you remind me, if `eth_fillTransaction` didn't exist would the EL have any need to ever generate blob proofs?",
+        "created_at": "2024-02-09T11:21:19.932000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "s1na",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "We have it only for testing. Apart from computing the blobHash from the commitment which is part of consensus",
+        "created_at": "2024-02-09T11:22:28.376000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I'm against having `eth_fillTransaction` include logic for turning blobs into proofs then.  I dislike the idea of requiring every client to have logic that will likely almost never be needed, and could be fulfilled by third party libraries written in the language that the user is using.",
+        "created_at": "2024-02-09T11:23:40.691000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "But since I am not writing a client, I won't press the issue too strongly.  It is just a general feeling that clients are already big and complex enough, and we should be trying to limit what is required for a client to be \"compatible\" with other clients (including JSON-RPC) as much as possible.",
+        "created_at": "2024-02-09T11:24:36.772000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "s1na",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "So geth is mostly wrapping calls to a library that does the heavy lifting. I'm open to hearing from other clients if this is code they already have. But generally we'd like to support the full transaction lifecycle. After filling transactions users can sign it via clef.",
+        "created_at": "2024-02-09T11:28:16.365000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "The full lifecycle includes some app that is generating the blob.  It feels like that should be the place the blob proof generation occurs?",
+        "created_at": "2024-02-09T12:05:26.902000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "s1na",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Most dapps will not send blob txes anyway. Are you aware if any library has implemented this?\nOne thing I'd like personally is to be able to generate and submit blob txes in geth console when i'm trying out things in the dev mode",
+        "created_at": "2024-02-09T12:13:35.019000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "It's really not a lot of code to add this feature",
+        "created_at": "2024-02-09T12:18:02.322000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "And there is no other way to create a blob tx right now",
+        "created_at": "2024-02-09T12:18:29.872000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Arguably `eth_fillTransaction` is the best place to support it because you can create a tx with recommended defaults for all fields very easily. All you need is a destination address and the blobs you want to send.",
+        "created_at": "2024-02-09T12:19:58.334000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Requiring all of these details to be implemented in all the related client libraries is a lot more work, and adds complex crypto dependencies to them that very few people will need.",
+        "created_at": "2024-02-09T12:20:55.829000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I am wondering today, should we maybe add a little document to execution-apis that explains how to send transactions?",
+        "created_at": "2024-02-09T12:22:00.339000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I feel like it'd be nice to at least have some place that explains the different ways of sending a tx, and the tradeoffs attached to that.",
+        "created_at": "2024-02-09T12:23:08.022000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Another good reason to recommend fillTransaction over other ways to send blobs is that it will *keep working* even if we change the blob gas price mechanism later.",
+        "created_at": "2024-02-09T12:25:16.516000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Having something in the geth console to generate blobs I think is quite reasonable, or building a separate tool you all use for internal testing or even something you publish.  My only argument is that I don't think it should be a *requirement* for every client that wants to be JSON-RPC spec compatible to have to implement blob proof generation.",
+        "created_at": "2024-02-09T12:30:01.369000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "It isn't the volume of code that is the problem, it is that it is a volume of code that is very difficult to remove later (removing features is nearly impossible once they are out there) and all of the little things add up to a lot over time.",
+        "created_at": "2024-02-09T12:31:18.576000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "If all of the client devs think it is a good idea this certainly isn't a hill I'm interested in dying on by any stretch.  Just one of those things where I kinda suspect we'll regret it later.",
+        "created_at": "2024-02-09T12:31:52.387000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003e My only argument is that I don't think it should be a requirement for every client that wants to be JSON-RPC spec compatible to have to implement blob proof generation.\n\nDo we have any concept of \"optional\" RPCs in the spec?  This one feels like one that while it shouldn't be required it does feel like if implemented all implementations should be compatible.",
+        "created_at": "2024-02-09T17:09:19.519000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "we don't have an official optional status",
+        "created_at": "2024-02-09T19:31:08.033000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "but you know, after years of pseudo-standardized APIs and client differences, I am pretty sure people are used to certain features not being available everywhere",
+        "created_at": "2024-02-09T19:31:39.971000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "does Infura support `eth_fillTransaction` right now?",
+        "created_at": "2024-02-09T19:32:02.520000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "it's a useful API, but it's also mostly a convenience method that saves you the work of implementing a bunch of things in the client side",
+        "created_at": "2024-02-09T19:32:38.343000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "it's for people who do not want think too hard about the Ethereum protocol minutiae related to transactions",
+        "created_at": "2024-02-09T19:34:28.196000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "and also for people who don't want or need a tx RLP encoder in their software",
+        "created_at": "2024-02-09T19:35:44.846000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I checked docs and it is not supported by Infura",
+        "created_at": "2024-02-09T19:37:34.587000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Ya we don’t support it, I don’t recall anyone asking for it either, so I think it’s flown under the radar of our users tbh.",
+        "created_at": "2024-02-09T20:42:41.338000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Not sure how I feel about supporting it, feels a bit odd conditioning users to trust a remote endpoint for filling in tx details.",
+        "created_at": "2024-02-09T20:45:30.551000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I mean, they would otherwise fill it themselves via getTransactionCount, baseFee, estimateGas, etc.",
+        "created_at": "2024-02-09T20:52:05.731000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "So it's kind of the same just more convenient (and less round trips)",
+        "created_at": "2024-02-09T20:52:16.540000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "They already trust your endpoint",
+        "created_at": "2024-02-09T20:52:30.117000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "True..",
+        "created_at": "2024-02-09T21:01:11.990000+00:00",
+        "attachments": []
+    }
+]

@@ -1,0 +1,234 @@
+[
+    {
+        "author": "80raghavendra",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "\u003c@456226577798135808\u003e In the stateless ethereum call you mentioned two strategies for migrating towards a merkelized code setting. From my reading/hearing, the first strategy is that \n* There exists an intermediate stage where the merkelizaion of code has not happened fully. Meaning some nodes chunk the code and some nodes don’t. Even the nodes that chunk the code need to maintain the code Hash, in addition to the Merkle Patricia trie.\n* So, all nodes maintain a map: chunk —\u003e sets of jump destinations, it contains\n* Validation. If a miner who has done chunking sends the needed chunks for a transaction executing a contract call, then the miner with the whole code looks up the jumpdest table and collects the other chunks from its database, and stitches all the chunks, computes the hash of the whole code, and then checks with the stored code hash to ascertain that the sender has sent the chunks without tampering.\n* A stateless client cannot validate here. Only the validator with full code can validate.\nThe next stage is where all nodes have merkelized code and are maintaining the Merkle Patricia trie. Then transition to the merkelized world, by replacing codeHashes with codeRoots through a hard fork. Am I right?\n\nI do not understand your second strategy, where you first determine the contracts that contain invalid jumps. Please elaborate.",
+        "created_at": "2020-06-23T02:11:58.417000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "I meant slightly different two strategies. Number 1) perform the calculation of valid jump-dest at deployment (or one-off transformation), and prepend the list of valid jump dest to the code before computing merkle tree hash on it. So 1 or more first chunks will contain the list of valid jumpdest, and will always be part of the witness if the contract is invoked.",
+        "created_at": "2020-06-23T07:07:49.112000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Number 2) during deployment or one-off transformation, perform more sophisticated analysis, with the attempt to prove that regardless of the input and the state, the contract execution will never make an invalid jump. If the proving is successful, this is marked accordingly in the contract's object. Now, for contracts that are marked this way, code chunking can be done in any way, because it is known that invalid jumps never occur. For contracts that are not marked this way (it was not possible to prove the absense of invalid jumps), witness includes the entire bytecode",
+        "created_at": "2020-06-23T07:11:13.988000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Our hypothesis is that it is not too hard to make an algorithm where this analysis succeeds on overwhelming majority of contracts. For those where adversary introduces invalid jumps on purpose, or makes it unprovable, we use default strategy, which will make such contract more expensive to use",
+        "created_at": "2020-06-23T07:12:44.295000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "treyzania",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Uninformed outsider here: is the code merklization scheme part of the consensus protocol or would it be up to clients to decide how to merklize it efficiently?",
+        "created_at": "2020-06-23T07:15:15.338000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "it has to be part of the consensus",
+        "created_at": "2020-06-23T07:15:56.192000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "80raghavendra",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "do you assume a jumpdest approach of code-merkelization for the first approach?",
+        "created_at": "2020-06-23T07:16:56.349000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "nope, I think we should just use fixed-sized chunks",
+        "created_at": "2020-06-23T07:17:24.253000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "80raghavendra",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "What is the role of the list of jumpdests? How does it help a stateless client to validate the sent chunks?",
+        "created_at": "2020-06-23T07:18:58.209000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "it will help decide for any jump whether it is valid or not, which the main reason why we cannot simply chunk fixed size without some extra things",
+        "created_at": "2020-06-23T07:30:36.179000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "because even if it looks like a jump going into a JUMPDEST opcode, it is not clear for a stateless client whether this JUMPDEST opcode is really opcode, or part of PUSHDATA",
+        "created_at": "2020-06-23T07:31:50.125000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "80raghavendra",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "\u003c@259648573401071617\u003e idea was to maintain a one byte along with the chunk that says the offset for the first instruction in the chunk",
+        "created_at": "2020-06-23T07:38:53.323000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "80raghavendra",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "I was thinking of the migration question that \u003c@273808422753796097\u003e  asked. How do we go replacing the codehash with the trie structure globally and updating the state Merkle root? I thought you had two strategies that were not an one-shot approach.",
+        "created_at": "2020-06-23T07:41:22.409000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "given that the size of the bytecode is still relatively small, I think it would be quite easy to do straightforward migration where everyone just re-hashes the contracts",
+        "created_at": "2020-06-23T07:42:50.601000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "80raghavendra",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Would that require mainnet downtime?",
+        "created_at": "2020-06-23T07:43:45.773000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "no",
+        "created_at": "2020-06-23T07:43:51.830000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "80raghavendra",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Hardfork?",
+        "created_at": "2020-06-23T07:44:03.182000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "hardfork would be required, because the way we calculate state root changes, but not for the migration",
+        "created_at": "2020-06-23T07:44:58.336000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "migration to the binary tree would also be relatively easy in the world where all implementations use flat state data model.",
+        "created_at": "2020-06-23T07:45:59.293000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "80raghavendra",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Yes, I understand that. So the two strategies that you described above are not for migration, I think you were describing code Merkelization approaches actually. Right?",
+        "created_at": "2020-06-23T07:52:37.388000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Yes, on the call I misunderstood the question",
+        "created_at": "2020-06-23T08:00:37.354000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "80raghavendra",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Thanks for the clarification",
+        "created_at": "2020-06-23T08:02:33.115000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "80raghavendra",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "So, from the call we don't have any ideas for migration other than one shot. Right?",
+        "created_at": "2020-06-23T08:03:10.418000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "correct. At this point, it seems like more complex strategies would be an overkill",
+        "created_at": "2020-06-23T08:03:44.956000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "but there are lots of details even with the one-shot",
+        "created_at": "2020-06-23T08:04:10.983000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "80raghavendra",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Like what? Please..",
+        "created_at": "2020-06-23T08:12:13.886000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "like (not exhaustive list) 1) will the cost of code-reading opcodes change and if yes, how? 2) what will EXTCODEHASH return?",
+        "created_at": "2020-06-23T12:07:29.999000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "treyzania",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Could you version code so that you wouldn't have to rehash the state roots?",
+        "created_at": "2020-06-23T23:51:09.751000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "treyzania",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "If I'm understanding right, perhaps when a later merklized scheme is decided you could just change the version number",
+        "created_at": "2020-06-23T23:52:21.527000+00:00",
+        "attachments": []
+    }
+]

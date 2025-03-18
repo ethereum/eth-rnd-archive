@@ -1,0 +1,58 @@
+[
+    {
+        "author": "ryanleeschneider",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ah you're right, it's headers not blocks/chains that it's importing once caught up:\n\n```\nINFO [02-15|18:46:15.400] Imported new block headers               count=192 elapsed=35.687ms    number=13440 hash=\"1f3446…3c32ed\" age=36m9s\nINFO [02-15|18:46:15.403] Imported new block receipts              count=192 elapsed=\"557.839µs\" number=13440 hash=\"1f3446…3c32ed\" age=36m9s     size=768.00B\nINFO [02-15|18:46:18.859] Imported new block headers               count=142 elapsed=21.576ms    number=13582 hash=\"032a2c…71b618\"\nINFO [02-15|18:46:18.861] Imported new block receipts              count=77  elapsed=\"351.171µs\" number=13517 hash=\"852f83…080675\" age=16m57s    size=308.00B\nINFO [02-15|18:46:22.154] Imported new block headers               count=1   elapsed=\"491.123µs\" number=13583 hash=\"06bdea…9bd87e\"\nINFO [02-15|18:46:38.107] Imported new block headers               count=1   elapsed=\"803.795µs\" number=13584 hash=\"b4313f…6570b2\"\nINFO [02-15|18:46:54.197] Imported new block headers               count=1   elapsed=\"355.226µs\" number=13585 hash=\"cced7b…d2e707\"\n```",
+        "created_at": "2021-02-16T02:47:55.654000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It's not just the counter, the state tries themselves are missing, e.g. `eth_getBlockByNumber(\"0x100\", false)` gives back `missing trie node b205a05b6fbe95873b829eeea45f562d35c825a128234191f40e388773769afa`  AFAICT none of the state beyond the genesis block has been pulled.",
+        "created_at": "2021-02-16T02:52:52.015000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "oh weird, it pulled _some_ state but stopped at block `0x44`:\n\n```\n\u003e eth.getBalance(\"0xdf0a88b2b68c673713a8ec826003676f272e3573\", \"0x44\")\n9.04625697166532776746648320380374280103671755200316906558262375061821325312e+74\n\u003e eth.getBalance(\"0xdf0a88b2b68c673713a8ec826003676f272e3573\", \"0x45\")\nError: missing trie node b3f2ae3bb3dec1c9a4a700b7f48f48e43f31fc11a54ebfb8a236fc1ce937650a (path )\n    at web3.js:6347:37(47)\n    at web3.js:5081:62(37)\n    at \u003ceval\u003e:1:15(5)\n```\n\nIs it possible the sealer is still having issues delivering state?",
+        "created_at": "2021-02-16T02:54:51.153000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It considers `\"latest\"` as block `0` still as well.",
+        "created_at": "2021-02-16T02:59:07.578000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "oh actually the missing tries probably makes sense, since they were pruned.  I guess the weirder thing is that it has state tries for the first 0x44 blocks now that I think about it.  So maybe it's just that the block number is stuck at 0, lemme try again and see if later blocks work when manually queried for state.",
+        "created_at": "2021-02-16T03:01:18.890000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "hmm nope actually seems like the newer tries are missing, and trying to get recent block headers fails too:\n```\n\u003e eth.getBlockByNumber(\"0x354d\", true)\nnull\n\u003e eth.getBalance(\"0xdf0a88b2b68c673713a8ec826003676f272e3573\", \"0x354d\")\nError: missing trie node 143730750486bc4d31334589a94a634c3c0186f1cdadc9351d443c784ab5363f (path )\n    at web3.js:6347:37(47)\n    at web3.js:5081:62(37)\n    at \u003ceval\u003e:1:15(5)\n```",
+        "created_at": "2021-02-16T03:04:30.663000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Oh ya on shutdown you can see that the last full block is still `0`:\n\n```\nINFO [02-15|19:06:24.886] Imported new block headers               count=31  elapsed=5.869ms     number=13663 hash=\"050a3e…41ce81\"\nINFO [02-15|19:06:30.019] Got interrupt, shutting down...\nINFO [02-15|19:06:30.020] IPC endpoint closed                      url=/Users/ryans/Library/Ethereum/yolo-v3/geth.ipc\nINFO [02-15|19:06:30.078] Deallocated state bloom                  items=365 errorrate=0.000\nWARN [02-15|19:06:30.078] Rewinding blockchain                     target=11614\nINFO [02-15|19:06:30.227] Loaded most recent local header          number=11614 hash=\"2e6c18…b5ba0c\" td=23229 age=8h32m54s\nINFO [02-15|19:06:30.227] Loaded most recent local full block      number=0     hash=\"f1f287…6967b7\" td=1     age=2d12h58m\nINFO [02-15|19:06:30.227] Loaded most recent local fast block      number=11614 hash=\"2e6c18…b5ba0c\" td=23229 age=8h32m54s\nINFO [02-15|19:06:30.227] Loaded last fast-sync pivot marker       number=13599\nWARN [02-15|19:06:30.227] Rolled back chain segment                header=13663-\u003e11614 fast=13598-\u003e11614 block=0-\u003e0 reason=\"syncing canceled (requested)\"\n```\n\nAnyways this is probably a bit off-topic for this channel, and fast and full sync seem to be fine.",
+        "created_at": "2021-02-16T03:09:20.239000+00:00",
+        "attachments": []
+    }
+]

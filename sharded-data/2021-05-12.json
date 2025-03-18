@@ -1,0 +1,58 @@
+[
+    {
+        "author": "nashatyrev",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Right, something like this. \n\u003e - Side note, we probably should change `grandparent_epoch_confirmed_commitments` from `Vector` to `List`\nYes, and probably change `Vector[DataCommitment, ...]` to `Vector[Union[null, DataCommitment], ...]` to denote the absence of confirmed commitment. (we need to use the `Union` somewhere finally 😄 )",
+        "created_at": "2021-05-12T14:21:16.379000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "terence0083",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Not looking forward to that, we dont have generics in Go 😢  Although it'll be fun though!",
+        "created_at": "2021-05-12T14:24:28.112000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "protolambda",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "In ZRNT I worked around it by not putting the limit/max type info in there, and instead make it accessible as argument in the SSZ functions",
+        "created_at": "2021-05-12T14:25:28.622000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "protolambda",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Then specify an interface for it, and define a struct that wraps the configurable SSZ interface with a config instance, to get an SSZ interface that doesn't require configuration when you call it",
+        "created_at": "2021-05-12T14:27:31.501000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Oh, BTW `List[DataCommitment, 1]` could be used instead of `Union` to denote `Optional`",
+        "created_at": "2021-05-12T14:39:40.399000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Little stuck on another thing: if `committee_count_per_slot` \u003c `active_shard_count` then at some `slotN` for a `shardM` there would be no committee to attest a blob. Is it correct? \nIf yes then two questions here:\n1. Should we include such blob headers to the state? \n2. Should we reject/ignore such blobs and headers on Gossip level?",
+        "created_at": "2021-05-12T15:28:35.546000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Another idea here: what if replace all state structures `current/previous_epoch_pending_shard_headers` and `grandparent_epoch_confirmed_commitments` with a single ring buffer of 2 or 3 epochs:\n```py\nclass BeaconState:\n    shard_headers: Vector[List[ShardHeaders, MAX_SHARDS], 2 (or 3) * SLOTS_PER_EPOCH]\n\nShardHeaders = NewType('ShardHeaders', \n    Union [\n        # Not yet confirmed competing headers\n        List[PendingShardHeader, MAX_SHARD_HEADERS_PER_SHARD] \n        # Confirmed commitment\n        DataCommitment\n    ])\n\nclass PendingShardHeader(Container):\n    # KZG10 commitment to the data\n    commitment: DataCommitment\n    # hash_tree_root of the ShardHeader (stored so that attestations can be checked against it)\n    root: Root\n    # Who voted for the header\n    votes: Bitlist[MAX_VALIDATORS_PER_COMMITTEE]\n```\n(sorry for maybe incorrect Python code)\n\nAll the blob headers are first appended to the `List[PendingShardHeader]` to the Union element corresponding to `(slot, shard)`. Once confirmed (with either optimistic or non-optimistic case) the list is replaced by the `DataCommitment` in the `Union`. BTW an 'empty' `PendingShardHeader` might be included to a pending headers list 'lazily' (only when an attestation with empty blob root is included)\n\nThe path to the `DataCommitment` is static. One thing to be additionally checked is that containing  `Union`  type index `== 1`\n\nThis structure seems to be more space and performance efficient (especially for optimistic scenario) and straightforward.",
+        "created_at": "2021-05-12T16:21:21.785000+00:00",
+        "attachments": []
+    }
+]

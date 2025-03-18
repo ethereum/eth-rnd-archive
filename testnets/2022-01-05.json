@@ -1,0 +1,98 @@
+[
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Prater isn't finalizing again. On of the EF nodes was down and it took a bunch of VMs with it - Its back up and nodes are syncing(mainly prysm). \n\nMy teku nodes that have been up all the time show this in its logs,\n```\n20:44:05.027 ERROR - Validator   *** Failed to produce attestation  Slot: 2075618 Validator: 82563ac tech.pegasys.teku.core.signatures.SlashableConditionException: Refusing to sign attestation at slot 2075618 with source epoch 64814 and target epoch 64863 because it may violate a slashing condition (See log file for full stack trace)\n```\n\nMy nimbus nodes also show this:\n```\nWRN 2022-01-05 20:55:25.951+00:00 Slashing protection activated for attestation topics=\"beacval\" tid=1 file=validator_duties.nim:682 validator=a16a2144a88480532be04c252eb9ab1fe1617d102bdac8b7a324a3a4c210d7c99858a64b4d783315b372a23ac1bd4d45 badVoteDetails=\"(kind: SurroundVote, existingAttestationRoot: af2a5cffb0f69c9dd54a2950c7a2a6a296c085933a106528d9175529a86b5bb2, sourceExisting: 64815, targetExisting: 64816, sourceSlashable: 64814, targetSlashable: 64864)\"\n```\n\nLighthouse:\n```\nJan 05 20:57:04.122 CRIT Not signing slashable attestation       error: InvalidAttestation(NewSurroundsPrev { prev: SignedAttestation { source_epoch: Epoch(64815), target_epoch: Epoch(64816), signing_root: SigningRoot(0x170bec9b4722a9ded11d77e58e61b677f7dbdf296e077bb00a0f081a16650629) } }), attestation: AttestationData { slot: Slot(2075685), index: 40, beacon_block_root: 0x1b0feb588318ba60015a3e28c0b8788dc956f23d9ab505aa1ddbc326072a6e59, source: Checkpoint { epoch: Epoch(64814), root: 0x4eb6694370650015a5f1f27880703b6f3406eb5ceeb806a45203114670f1a544 }, target: Checkpoint { epoch: Epoch(64865), root: 0xd5023052f2361bf341f485f20266846b3aa7f5754ec120ac8ee137000867506e }\n```\n\nDoes anyone have an idea what's going on?",
+        "created_at": "2022-01-05T20:59:31.361000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".paulharris",
+        "category": "Testing",
+        "parent": "",
+        "content": "we're getting similar - refusing to sign attestations because they may violate slashing conditions",
+        "created_at": "2022-01-05T21:00:09.761000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".paulharris",
+        "category": "Testing",
+        "parent": "",
+        "content": "oh teku was above.. ignore me - but yes...",
+        "created_at": "2022-01-05T21:00:58.042000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm guessing you also have an issue with source_epoch 64814?",
+        "created_at": "2022-01-05T21:04:30.233000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yep, we're getting:\n```\nRefusing to sign attestation:  source epoch (64814) is unsafe, target epoch (64867) is safe.  Previously signed source epoch 64815, target epoch 64816\n```\n\nInterestingly some of our validators are still attesting - there's a mix even on the same beacon node.  So it looks like at some point epoch 64815 justified and then somehow the justified checkpoint went back to 64814. I don't think that should be possible but certainly seems to have happened.",
+        "created_at": "2022-01-05T21:15:43.908000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Going looking for actual evidence of that now.",
+        "created_at": "2022-01-05T21:15:54.181000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "raulj",
+        "category": "Testing",
+        "parent": "",
+        "content": "Prysm users seeing the same \u003c@!340345049063882753\u003e",
+        "created_at": "2022-01-05T21:16:04.866000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "raulj",
+        "category": "Testing",
+        "parent": "",
+        "content": "validator clients are refusing to sign attestations",
+        "created_at": "2022-01-05T21:16:15.556000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "I agree that this appears to be what happened.",
+        "created_at": "2022-01-05T21:33:34.537000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "From some local logs I see the following (using our teku node):\n\n```\n2022-01-05T15:42:29Z: GET /eth/v1/validator/attestation_data?slot=2074112\u0026committee_index=0 returns {\"data\":{\"slot\":\"2074112\",\"index\":\"0\",\"beacon_block_root\":\"0x817835d6d3a9aab19fca591f2cd9affda11dbb9f1907fa9d8f6bc62b9d326161\",\"source\":{\"epoch\":\"64815\",\"root\":\"0xaa7c1d7ecf9ec2285298c9f7277eb384d725256ab36ec0f36ef50763c8372671\"},\"target\":{\"epoch\":\"64816\",\"root\":\"0x817835d6d3a9aab19fca591f2cd9affda11dbb9f1907fa9d8f6bc62b9d326161\"}}}\n\n2022-01-05T15:42:39Z: GET /eth/v1/validator/attestation_data?slot=2074113\u0026committee_index=0 returns {\"data\":{\"slot\":\"2074113\",\"index\":\"0\",\"beacon_block_root\":\"0x6fab1a8d12cb9499c774886fef3cd394c0a214bde5cd84bb7f414909efaa7072\",\"source\":{\"epoch\":\"64814\",\"root\":\"0x4eb6694370650015a5f1f27880703b6f3406eb5ceeb806a45203114670f1a544\"},\"target\":{\"epoch\":\"64816\",\"root\":\"0x6872b11b326f865813876c5d33d2f7c334103644ffb3f5835d8c71ade7424e3d\"}}}\n```\n\nSo source epoch was 64815 at slot 2074112 and 64814 at slot 2074113.  I see basically the same for lighthouse (prysm started throwing \"syncing\" messages back, not sure if it is related or not).",
+        "created_at": "2022-01-05T21:42:46.213000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "(The good news is if we only have 1/32 of the validators proposing a source epoch 64815 we should be able to get prater back online by bringing some of the offline validators back.)",
+        "created_at": "2022-01-05T21:46:44.427000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "Another interesting point is that block 2074112 has a parent of 2074084, which is a distance of 28.",
+        "created_at": "2022-01-05T21:54:24.900000+00:00",
+        "attachments": []
+    }
+]

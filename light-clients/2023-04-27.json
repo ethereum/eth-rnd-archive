@@ -1,0 +1,18 @@
+[
+    {
+        "author": "uink45",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Following from the discussion with \u003c@881905303011086387\u003e, regarding the `Sync committee slashing #3321`, I currently don't see a way to prevent an EVM-based light client bridge from accepting a valid, but non-canonical `LightClientUpdate` from an attacker, unless there was an opcode in the EVM that allows it to get data (e.g. such as getting a `beacon_block_root` for previous blocks, similar to `BLOCKHASH`) from the beacon chain that can be used for verifying data provided in the transaction's `callData`.\n\nI am under the impression that block proposers would only accept attestations that are aggregated in `SignedAggregateAndProof`, and if there is an attacker (who is not eligible for aggregating the attestations) that creates non-canonical attestations, then those can be rejected by the proposer as it would verify the signature. Let me know if this is the case. Also, I wanted to confirm whether slashing detection currently occurs the moment where aggregators receive attestations from committees or when proposers broadcast their block to the network?\n\nRegarding implementing the slasher out of band, are you referring to individuals running a seperate slasher instance along with their validator stack to detect sync committee slashing? If so, then i think there is a risk that there may not be enough incentives for individuals to run that component, especially if running a slasher today has high hardware requirements and slashing itself occurs rarely.",
+        "created_at": "2023-04-27T01:38:49.041000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Thanks for taking a look at slashing!\n\nEVM will get such an opcode in the next upgrade (Dencun): https://eips.ethereum.org/EIPS/eip-4788\nHowever, for a bridge to be useful, it will have to live on a different chain. The light client sync protocol allows contracts on external chains to also follow the latest `beacon_block_root`. For example, a bridge contract living on Solana could verify that a user locked some tokens on Ethereum and then credit them on Solana.\n\nI agree that it is not possible to prevent such a bridge to accept a malicious `LightClientUpdate`. However, slashing is not about prevention, but instead about deterrence, by making the attacker slashable. Note that this always happens after the fact.\n\nThe attack doesn't happen on the Ethereum network itself, so following any `SignedAggregateAndProof` messages won't help too much. The malicious data doesn't need to be included on chain for the attack to succeed.\n\nA slasher would be a separate actor. For example, it could monitor the smart contract on Solana, and when it sees an update that is noncanonical being submitted, it could construct slashing evidence and submit it to Ethereum for punishment. The smart contract on Solana could also use this as a signal, to maybe, suspend its operation until the conflict is resolved through an out-of-band mechanism such as DAO vote, and pay a reward to the slasher for protecting its users.",
+        "created_at": "2023-04-27T08:26:04.084000+00:00",
+        "attachments": []
+    }
+]

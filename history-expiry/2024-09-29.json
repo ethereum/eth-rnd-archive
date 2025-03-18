@@ -1,0 +1,114 @@
+[
+    {
+        "author": "arnetheduck",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "of interest to this group may be https://github.com/status-im/nimbus-eth1/pull/2574 - this is a tool that can take blocks from a consensus client and applies them to an execution client by asking the execution client what its latest block is and \"topping up\" from the cl block history database - effectively, this allows an execution client that is synced to some point in time less than 5 months ago to be synced from the consensus client, allowing it to validate ethereum blocks without needing access to the eth1 devp2p network (it's still needed for mempool and/or older history / state). 5 months is the cutoff time for honest CL:s for how long they store blocks.\n\none use case for this that is available in nimbus-eth1 now is to import the entire block history from era1/era files - together with this top-up, this allows \"syncing\" a client without it ever touching any network. it's pretty neat.\n\nin theory, the tool should work with any EL/CL since it only relies on public rpc functions. on the el side, it simply feeds the blocks to the el via `newPayload`/`forkChoiceUpdated` as would happen during normal el/cl operation except that it starts at `eth_getBlockNumber` instead of \"current consensus head\".",
+        "created_at": "2024-09-29T15:35:42.104000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "of course, the tool could learn to do the same by reading blocks from portal or another el, but the tool only supports the consensus REST api right now.",
+        "created_at": "2024-09-29T15:38:08.291000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "With this approach catching up node would be able to not rely on the optimistic sync if it had not pruned EL transactions from the CL database. And if all clients use this approach + keeping EL transactions around utility of the optimistic sync would be reduced to syncing from scratch which is nice",
+        "created_at": "2024-09-29T15:45:07.258000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "indeed - that's the aim, sort of - ie the cl could \"drive\" this process as well - we didn't do it initially because el:s were too buggy at the time we tested it and everyone was really convinced optimistic sync was the way to go - it somewhat relies on the el not doing stupid things when it receives a payload and in our own execution client we can define what \"stupid\" means and act accordingly 😉",
+        "created_at": "2024-09-29T15:47:06.889000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "for archive nodes, what you technically need is an el synced up to the merge - from there, a cl archive node can \"sync\" it - it would be really slow, but we have some loose plans for a high-performance api as well (cc \u003c@486477492434239488\u003e - we discussed this in kenya at some point)",
+        "created_at": "2024-09-29T15:49:42.635000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ideally, we shall remove blocks from devp2p and EL's database but the main obstacle with that will be JSON-RPC API",
+        "created_at": "2024-09-29T15:55:56.894000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I do the same exact thing for Caplin - the solution is to use GRPC or something like ssz over HTTP",
+        "created_at": "2024-09-29T16:26:23.539000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "in caplin's case - it uses GRPC when ran as an external component, however it does not only require that but also quite a bit of refactoring of the engine api",
+        "created_at": "2024-09-29T16:27:24.816000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "grpc, no thanks 😉\n\nthere are some loose plans to ssz:ify the el/cl interaction (since the source data on the cl side is defined and transmitted using ssz) - this would probably be the most natural thing to do, to minimise pointless re-encoding - what's missing as well is batching, since with the current api, you have to wait for a response before feeding the next block and so on (this is part of the \"misbehaviors\" that makes the approach a bit slow, when using the standard api).",
+        "created_at": "2024-09-29T16:35:13.544000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "we support batching blocks - our api: https://github.com/erigontech/interfaces/blob/master/execution/execution.proto",
+        "created_at": "2024-09-29T18:07:03.717000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "grpc is just something we used everywhere but I do plan to re-archittect it with a different protocol",
+        "created_at": "2024-09-29T18:07:31.550000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "but that will take time",
+        "created_at": "2024-09-29T18:07:37.821000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "as i said - to do it properly, you would need to refactor the engine api like i did. batching is ofc not possible with current design, and you won't have any significant benefits until client teams switch to a better serialization format",
+        "created_at": "2024-09-29T18:08:13.526000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "not sure what misbehaviours means - but i think all ELs have a decent way to determine at what point the chain go bust after execution",
+        "created_at": "2024-09-29T18:18:13.618000+00:00",
+        "attachments": []
+    }
+]

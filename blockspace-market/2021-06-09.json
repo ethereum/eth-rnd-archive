@@ -1,0 +1,466 @@
+[
+    {
+        "author": "zsfelfoldi",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'd say (1) and (2) are slightly different versions of the same thing (what to do with the old GPO and how to keep it usable for both old apps and new wallets) while (3) is a different approach that provides more raw data and allows different estimation methods and different complexity wallet UIs and leaves a lot of room for future experimentation. As for the old GPO I agree with Peter about keeping it as similar as possible to the current version. (3) was meant to satisfy the requirements collected it the API wishlist based on last Friday's API call.",
+        "created_at": "2021-06-09T00:21:03.914000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Thanks, \u003c@!202397237962211328\u003e ! So in that case we leave the GPO as is, do *not* add an extra endpoint for only `maxPriorityFeePerGas`, and add an API to return the raw data as per your suggestion (possibly still subject to tweaks based on discussion here). \n\nDoes that generally make sense to everyone? If not, what are we missing 😅",
+        "created_at": "2021-06-09T00:23:22.319000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "zsfelfoldi",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "For the old GPO it still might make sense to add a new 1559 compatible endpoint if we want to make it usable for 1559 txs (so that old wallet UIs can be updated quickly). In order to keep it compatible with legacy stuff, `eth_gasPrice` will return legacy tx compatible gasprice which is `suggestedTip + baseFee`. While if we want to make it also usable for 1559 txs then we should use a different endpoint to return `suggestedTip` and probably also the suggested fee cap (probably `suggestedTip + 2*baseFee`.\nThis new endpoint for the old GPO could make the transition quick for existing wallet UIs while `feeHistory` could be used by new or more thoroughly updated UI designs that want to do congestion signaling, give different options for the user regarding speed vs cost and so on.",
+        "created_at": "2021-06-09T00:38:15.265000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ahh, got it. So in that case, we _should_ keep \u003c@!543900561460822016\u003e's suggestion of `eth_maxPriorityFeePerGas`, I think. There was consensus to not have an endpoint for the maxFee. \n\nAlso, `eth_maxPriorityFeePerGas` feels like something that's much easier to add given we already have the data, so more of a must have for the actual fork than `feeHistory`, which could come after worst case. WDYT?",
+        "created_at": "2021-06-09T00:40:39.859000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "zsfelfoldi",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I agree. I started working on `feeHistory` implementation in Geth but that's indeed not a must have for the fork. `eth_maxPriorityFeePerGas` is already implemented in Geth.",
+        "created_at": "2021-06-09T01:05:47.360000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "No.  The suggestion being discussed is to have clients not write an oracle at all but instead provide the data necessary for anyone to write an oracle (which is only a few lines of code).",
+        "created_at": "2021-06-09T02:36:46.277000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think we should *not* include any gas price estimators for 1559 transactions.  As Peter pointed out, things added to the client are much harder to change that things added to other tools because people depend on the client's functionality and we have to deal with version compatibility.",
+        "created_at": "2021-06-09T02:40:47.625000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "By including only the data for an oracle, tools can trivially beildman oracle on top of that and we don't have to worry about the endpoint changing behavior based on what we learn post-launch.",
+        "created_at": "2021-06-09T02:41:35.157000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "No, we shouldn't move forward with that PR.  What you said is the opposite of true I believe.  We should start with data, then much later after we have a ton of real world experience with 1559 transactions we can reevaluate.",
+        "created_at": "2021-06-09T02:41:57.842000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "so geth would only have the `feeHistory`-type endpoint for wallets to build their oracles on? I like that approach much better as well (and thanks \u003c@!202397237962211328\u003e for the proposal!)",
+        "created_at": "2021-06-09T06:03:00.343000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And `eth_gasPrice` for backward compatibility only.",
+        "created_at": "2021-06-09T07:51:59.160000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "zsfelfoldi",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I definitely prefer the raw data API (that's why I'm working on that) but initially I was torn between including `eth_maxPriorityFeePerGas` for Geth or not. Now I kind of agree with \u003c@!301186049323958275\u003e and \u003c@!486501030046203915\u003e that we probably shouldn't have it at all. Now the thing is that `eth_maxPriorityFeePerGas` is already exposed on the master branch of Geth (it's not released yet though). I'd probably even be in favor of removing it before the next release. Actually it's not even a really good estimator for 1559 priority fee because the legacy txs that will probably still be dominant in the beginning will result in really high tips being proposed. Until there are more advanced, `feeHistory` based suggestions, 1559 UIs should just use a fixed suggestion for the tip.\n\u003c@!206016661470314496\u003e \u003c@!211091239112671234\u003e \u003c@!360491619402776577\u003e how would you feel about removing this function?",
+        "created_at": "2021-06-09T08:00:26.576000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "also cc \u003c@!322222239850168331\u003e ^",
+        "created_at": "2021-06-09T13:35:38.641000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "gregthegreek",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "ya tbh this makes sense to me... as long as there is some consistent way of calculating it from the nodes. Would allow for quicker turn around on optimising a GPO down the road without cutting a release on the cleints",
+        "created_at": "2021-06-09T14:27:21.717000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "IIUC, this means clients will likely not provide wallets any mechanism for calculating fees immediately following the london fork?",
+        "created_at": "2021-06-09T14:28:22.786000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "gregthegreek",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Instead they would be providing enough raw data to make that calculation",
+        "created_at": "2021-06-09T14:31:31.597000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "gregthegreek",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i could create a tool in web3.js that can help wallets make some sort of prediction, im just finalizing 1559 TX's this week anyway, so thats the missing piece",
+        "created_at": "2021-06-09T14:32:00.479000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!322222239850168331\u003e and that would be done by querying past blocks from web3.js?",
+        "created_at": "2021-06-09T14:32:52.951000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "One thing I don't understand is that I thought `eth_gasPrice` already supports 1559 transactions in geth. \u003c@!301186049323958275\u003e what do you think it should return if passed with a 1559-style txn? Nothing?",
+        "created_at": "2021-06-09T14:35:39.772000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It does not.",
+        "created_at": "2021-06-09T14:36:17.624000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Well, not if you want 1559 transactions that aren't just legacy transactions in disguise.  🙂",
+        "created_at": "2021-06-09T14:36:28.970000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "From Peter:\n\n\u003e Geth's implementation currently:\n\u003e \n\u003e eth_gasPrice before London uses the current algorithm (deliberately won't say)\n\u003e eth_gasPrice after London will return the exact same number based on the total fees paid (tip + base)\n\u003e eth_maxPriorityFeePerGas after London will effectively return eth_gasPrice - baseFee",
+        "created_at": "2021-06-09T14:36:32.482000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "`eth_gasPrice` doesn't take a transaction as a parameter.",
+        "created_at": "2021-06-09T14:36:44.207000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e Auto-fill details:\n\u003e \n\u003e If the user doesn't specify either gasPrice or 1559 gas fields, we default to 1559 style transactions\n\u003e If the user doesn't specify maxPriorityFeePerGas, we default to the above estimation\n\u003e If the user doesn't specify maxFeePerGas, we default to maxPriorityFeePerGas + 2*baseFee",
+        "created_at": "2021-06-09T14:36:49.758000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So, AIUI, that's what Geth implemented today",
+        "created_at": "2021-06-09T14:37:17.088000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "`eth_gasPrice` is a JSON-RPC method that you can call.  It returns a *recommendation* on what gas price you should use for your transactions.",
+        "created_at": "2021-06-09T14:37:44.659000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It takes no parameters (I believe) and returns a single number.",
+        "created_at": "2021-06-09T14:37:56.105000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This behavior will not change with London.  It will still take no parameters and still return a single number.  This returned value should **not** be used for EIP-1559 transactions.",
+        "created_at": "2021-06-09T14:38:18.944000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ah ok",
+        "created_at": "2021-06-09T14:38:22.932000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I misread (no coffee yet!)",
+        "created_at": "2021-06-09T14:38:27.248000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "so eth_gasPrice isn't changed, but geth already implemented eth_maxPriorityFeePerGas",
+        "created_at": "2021-06-09T14:38:46.834000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So we would have to remove that, and then just expose eth_feeHistory, right?",
+        "created_at": "2021-06-09T14:39:05.398000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That seems to be the current popular proposal.",
+        "created_at": "2021-06-09T14:40:19.433000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Is the spec for `feeHistory` pretty settled now?",
+        "created_at": "2021-06-09T14:40:25.926000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I don't know how possible this is, but I would _really_ like if on ACD Friday we can get teams to agree on using it, and having the final spec would help a lot here 🙂",
+        "created_at": "2021-06-09T14:40:53.721000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Good question for \u003c@202397237962211328\u003e who seems to be taking the lead on that.",
+        "created_at": "2021-06-09T14:41:17.967000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@743395542196944977\u003e also seemed to have some thoughts.",
+        "created_at": "2021-06-09T14:41:29.688000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Because at this point it feels like JSON RPC may be our main blocker for London. We need to figure out `eth_call`, `eth_getTransactionReceipt` and this.",
+        "created_at": "2021-06-09T14:41:38.539000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think for those we just need to formalize/write down the agreement.  I don't think there is any disagreement.",
+        "created_at": "2021-06-09T14:42:02.180000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "What we need is a fleet of documentation authors.  😬",
+        "created_at": "2021-06-09T14:42:12.061000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ok, I'll try and summarize the various options today and share in ACD to get people's thoughts prior to the call.",
+        "created_at": "2021-06-09T14:42:54.816000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "gregthegreek",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "maybe i misread the above, I was under the impression some endpoint provides me an array of data (histogram?). Re-reading I'm seeing its just a fixed tip, so now im confused.",
+        "created_at": "2021-06-09T14:52:16.362000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That is the `feeHistory` endpoint mentioned above.  I don't think that is the actual/final name.",
+        "created_at": "2021-06-09T14:52:58.580000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i believe there _will_ be an endpoint for this, but my understanding is that it won't be ready before london?",
+        "created_at": "2021-06-09T14:53:07.866000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Why wouldn't it be ready before London?",
+        "created_at": "2021-06-09T14:53:19.919000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "My understanding is that it is pretty easy to implement, we just need to come to agreement on the details.  I'm hopeful zsfelfoldi and perama can tackle that soon™.",
+        "created_at": "2021-06-09T14:53:54.448000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "brad.decker",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Does eth_feeHistory return both maxFeePerGas and maxPriorityFeePerGas?",
+        "created_at": "2021-06-09T14:54:46.355000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "No, it returns neither.",
+        "created_at": "2021-06-09T14:54:55.669000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "okay great - i think i may have misunderstood something along the way, but if it will be ready by london i have no compliants",
+        "created_at": "2021-06-09T14:55:00.660000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It returns data so you can calculate those however you like.",
+        "created_at": "2021-06-09T14:55:04.497000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "brad.decker",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Do you have a link to the spec/what the dataset might look like?",
+        "created_at": "2021-06-09T14:55:24.831000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "https://gist.github.com/zsfelfoldi/473e29106d38525de6b4413e2ebcddf1",
+        "created_at": "2021-06-09T14:55:58.116000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "brad.decker",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Thanks \u003c@!301186049323958275\u003e !",
+        "created_at": "2021-06-09T14:56:11.627000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "gregthegreek",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We should be able to work with this!\n\nWhen test cases are available (for return values on the endpoint) can someone please ping me so we can get it moving on our end 🙂",
+        "created_at": "2021-06-09T14:58:13.590000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "zsfelfoldi",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "indeed, it should be `tx.gasUsed` in the pseudocode. Fixed it.\nRegarding `gasUsed` based or count based percentile: I favor the gas based version because the cost of adding a transaction is proportional to its gas used and therefore it feels natural to consider this a sort of \"weight\" of each transaction. If most of the blocks are almost fully occupied by high paying big txs and only a very low number of low paying small txs can ever get in then maybe the lower priority fee is not a good suggestion after all. This scenario feels unrealistic though, if 2 gwei is usually enough then for the big transaction's sender it's more imporant to be economical with the fee (since it's multiplied by `gasUsed` in the end) than for the small transaction's sender. So I don't see a reason to expect that txs using a lot of gas will also want to pay more per gas. The fees of those mega transactions are just as relevant. Also, if you want to pick up the smallest data points then you can always query for a very low percentile or even 0 percentile and just get the minimum.\nOn the other hand, count based calculation can easily be distorting the facts because the big transactions that make up the majority of actual miner rewards could look insignificant compared to a few miner-created 21k gas mini txs that may not represent the miner's actual preferences so well because their inclusion can be due to some other factors. If we think about this whole percentile calculation as a sort of \"outlier filtering\" then I'd rather consider 3 21k txs as \"outliers\" than one with 1M gas used.",
+        "created_at": "2021-06-09T15:52:15.319000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "zsfelfoldi",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm satisfied with it now and had some positive feedback here, I guess we can put it on the ACD agenda now. If it triggers more discussion then I'm open to it. I guess that's how proposals get settled 🙂",
+        "created_at": "2021-06-09T16:01:27.762000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ok, here's a doc I wrote trying to summarize everything, feedback welcome: https://notes.ethereum.org/@timbeiko/london-json-rpc",
+        "created_at": "2021-06-09T16:02:53.461000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think I'll open an issue on ethereum/pm as well for this so we can track clients' feedback there directly.",
+        "created_at": "2021-06-09T16:05:21.812000+00:00",
+        "attachments": []
+    }
+]

@@ -1,0 +1,202 @@
+[
+    {
+        "author": "albusdompeldorius",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Have there been any discussion about making the beacon chain agnostic to block execution (except reading deposits)? I.e. allowing invalid execution blocks in the beacon chain, and saying that the valid execution chain is the set of valid execution blocks. The execution chain could still have read-only access to the beacon chain, but the beacon chain would only have read-access to the deposit contract.",
+        "created_at": "2022-06-13T11:13:33.321000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "albusdompeldorius",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "The advantages would be:",
+        "created_at": "2022-06-13T11:13:41.006000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "albusdompeldorius",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "1) No risk of finalizing an invalid chain due to bugs in execution clients\n2) Less system requirements for validators\n3) Possibly allowing for multiple execution environments other than the Ethereum execution chain in the future?",
+        "created_at": "2022-06-13T11:15:57.006000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "albusdompeldorius",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I guess the main obstacle is that the state of the deposit contract is potentially affected by all previous execution history, so in order to read the deposits from the beacon chain, you would need to fully validate execution anyway.",
+        "created_at": "2022-06-13T11:54:58.428000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "It does sound like a downgrade of layer 1 from consensus around state machine to consensus around data availability. How would then EE rules be validated?",
+        "created_at": "2022-06-13T12:36:10.410000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "albusdompeldorius",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "That's the idea. Execution rules would be validated by fully validating nodes, just like today. Except they would just ignore invalid execution blocks.",
+        "created_at": "2022-06-13T12:46:31.716000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Do you mean that we don't need a consensus around world state at all or that it could be happening anywhere else, not on layer 1?",
+        "created_at": "2022-06-13T12:52:26.629000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "albusdompeldorius",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "The idea is that as long as there is consensus on data availability and ordering of execution blocks, any execution node can reconstruct the current execution layer state by processing the valid execution blocks in order, ignoring the invalid blocks.",
+        "created_at": "2022-06-13T12:57:06.705000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "In this design the world state view becomes completely subjective, whoever builds an execution block may orphan any previous one",
+        "created_at": "2022-06-13T13:01:29.471000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "albusdompeldorius",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "You would have to require the execution blocks to build upon the execution block in the previous beacon block, even if it is invalid. The execution node would just skip the invalid blocks.",
+        "created_at": "2022-06-13T13:07:45.940000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I am not sure if this requirement could be enforced in a way other than checking `post_state == state_transition(pre_state, block)` on EL",
+        "created_at": "2022-06-13T13:13:51.130000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "albusdompeldorius",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I'm not sure I see the problem here. Couldn't you define `state_transition` such that `state_transition(pre_state, block) == pre_state` whenever `block` is an invalid block?",
+        "created_at": "2022-06-13T13:23:19.792000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Right, and one will have to run state transition for every block in the history to get the most recent world's state which is unsustainable on the Mainnet considering the computation complexity",
+        "created_at": "2022-06-13T13:28:09.083000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "albusdompeldorius",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Ahh, I see your point. You could rely on fraud proofs, but that is probably less secure than economic finality. There might not be any simple way around that, until we are able to generate zk-proofs of the validity of the entire history.",
+        "created_at": "2022-06-13T14:18:29.903000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Yes, zk proofs is what has come to my mind as a potential solution. In case of a bug in EL that requires rewriting the world state after a fix there will still be issues with services that have made decisions based on the wrong state. Yes, we could reduce the complexity of recovery for validators (as there is nothing to recover basically) but for services it would remain the same",
+        "created_at": "2022-06-13T14:50:30.561000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I don't see the problem.  While I don't see a huge win from the design being proposed, I think it makes sense and it simplifies things from the CL perspective.",
+        "created_at": "2022-06-13T14:50:32.683000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Plus it makes the execution layer more modular (swappable) as the CL needs to understand even less about it.",
+        "created_at": "2022-06-13T14:50:49.650000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "CL essentially puts proposed blocks into slots (valid or not) and people vote just to assert, \"yep, there is data there and I agree it hashes to X\".",
+        "created_at": "2022-06-13T14:51:12.427000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I think at the *least* you would want `block.parentHash` to be validated by the CL, but maybe even that could be forgone.",
+        "created_at": "2022-06-13T14:52:03.473000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Hmm, guess the problem *is* the deposit contract...",
+        "created_at": "2022-06-13T14:52:27.355000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "OK, I don't see a way around the deposit contract, I'm all caught up with \"this probably can't work out of the box\".  😬",
+        "created_at": "2022-06-13T14:53:17.413000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I think that if we get to a point when each EL state transition has a zk proof computational complexity won't be an issue anymore. While re-writing the history because of a bug in EL is what will always remain as a big issue. Deposits and withdrawals flow is definitely an obstacle, imagine withdrawals are processed in EL block that is invalid, if validators don't care about it's invalidity then withdrawn ETH will be lost",
+        "created_at": "2022-06-13T14:59:02.613000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "albusdompeldorius",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I don't believe withdrawals in case of an invalid block is an issue, as you could require the first valid execution block to process all withdrawals since the last valid execution block. But I agree that deposits is a challenge.",
+        "created_at": "2022-06-13T15:12:46.644000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I would prefer us to move towards `(post_state, block)` as the only inputs to the state transition function rather than the opposite which makes transition to stateless execution smoother",
+        "created_at": "2022-06-13T15:20:52.300000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Deposits/withdrawals is definitely an issue. The ETH token is native to both the EL and the CL. Allowing them to not share state updates in lockstep could create some interesting attack vectors",
+        "created_at": "2022-06-13T16:46:49.132000+00:00",
+        "attachments": []
+    }
+]

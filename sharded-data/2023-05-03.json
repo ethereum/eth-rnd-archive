@@ -1,0 +1,466 @@
+[
+    {
+        "author": "inphi",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "nodes with invalid chain ids get booted out real quick during peering. Unless they're being malicious about it.",
+        "created_at": "2023-05-03T00:25:15.665000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yperbasis",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "That's not my reading of the spec. chain_id is a fixed-length type (uint256), so it will be serialized directly instead of an offset.",
+        "created_at": "2023-05-03T07:21:43.245000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yperbasis",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes, I agree. At this stage it makes more sense to use RLP for blob transactions.",
+        "created_at": "2023-05-03T07:24:12.134000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yperbasis",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "On second thought, we have a normalized transaction base class in the code, so I'm slightly against dropping optional `to`.",
+        "created_at": "2023-05-03T07:26:06.760000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "hsiaowei",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "FWIW, CL parses SSZ serialized blob tx to get `blob_versioned_hashes`: https://github.com/ethereum/consensus-specs/blob/dev/specs/deneb/beacon-chain.md#tx_peek_blob_versioned_hashes\n\nUsing RLP-serialized blob tx means introducing some RLP deserialization logic + big endian decode in CL.",
+        "created_at": "2023-05-03T07:50:55.441000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The `BlobTransaction` container is variable-length, so there is an additional `45000000` act the beginning of `SignedBlobTransaction`. Then comes the signature, as it's fixed length in case of the blob transaction, then comes the `BlobTransaction` with the chain id",
+        "created_at": "2023-05-03T07:57:54.331000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Example EIP-4844 transaction (without the blob):\n\n```\n034500000001a062837a62c4a11b53b935689626fb5963c728d263b968befa1e756a60acca74de1c446dff9f2e8a7bd160a048b3fff2b175a9249c19db03b1a8585bc9ee3b7539050000000000000000000000000000000000000000000000000000000000002a00000000000000153f141810000000000000000000000000000000000000000000000000000000153f1418100000000000000000000000000000000000000000000000000000000852000000000000c00000004de640bb00000000000000000000000000000000000000000000000000000000d5000000d50000000000000000000000000000000000000000000000000000000000000000000000d500000001d8da6bf26964af9d7eed9e03e53415d37aa960450190be472a05e72a4ae3ee7d166cc1e17defa2ae9c62d7b773833d632ebc9667\n```",
+        "created_at": "2023-05-03T08:00:15.201000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "we can just put the chain id into the mixed-in part (not part of the serialized transaction, but just part of `compute_sig_hash`). this way, it doesn't matter if it's in the payload or where it ends up being located",
+        "created_at": "2023-05-03T08:01:31.487000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yperbasis",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "But when we sign, we sign BlobTransaction rather than SignedBlobTransaction. So there's no offsets in the beginning.",
+        "created_at": "2023-05-03T08:03:12.445000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yep, but when you parse the tx it's a SignedBlobTransaction 🙂 so if there is a type 3 of different SSZ schema on another network, there's the issue (as long as there is only the single type 3 schema from EF, all's fine anyway)",
+        "created_at": "2023-05-03T08:05:36.261000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yperbasis",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "My point is that EIP-6493 tries to solve a problem that does not exist.",
+        "created_at": "2023-05-03T08:06:15.583000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yes, replay protection is only relevant when considering non-EF networsk",
+        "created_at": "2023-05-03T08:08:10.800000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "__flcl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Sounds logical, because after all blob txs themselves are important to have in next update. And the new encoding does not help to bring the update faster.\n\nBut we gained a lot of experience with SSZ and merkleization. And it does not seem good to decline that effort without a good attempt to define clear 2 step SSZfication",
+        "created_at": "2023-05-03T08:09:40.722000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "(Also, keep in mind that SSZ serializes chain ID as little-endian full-width while RLP uses a big-endian varlength format)",
+        "created_at": "2023-05-03T08:14:03.157000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yperbasis",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So mainnet chain id is serialized in SSZ as 01000000.... It's not possible for a RLP transaction to start with 01. Thereoretically there could be clashes in type-3 transactions between non-mainnet networks. But to my mind we're trying to solve an increasingly theoretical and irrelevant problem.",
+        "created_at": "2023-05-03T08:16:32.461000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Implemented the feedback, https://github.com/ethereum/EIPs/pull/6979 — hope it's less convoluted now",
+        "created_at": "2023-05-03T09:22:27.864000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "ok I'm in the process of reading https://hackmd.io/nz-IqXLPQ-yahFPFlPl62A",
+        "created_at": "2023-05-03T10:24:33.574000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e it brings significant complexity into the EL that may have made sense in the CL but may not provide value for this purpose (e.g. forkid as part of the domain)",
+        "created_at": "2023-05-03T10:24:43.482000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Is there a good summary of this concern?",
+        "created_at": "2023-05-03T10:24:53.649000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The thing that worries me about these \"let's not do SSZ right now because it adds complexity\" proposals is that they seem to kick the can down the road and potentially leave us in a state of having two serialization algos, not actually getting the benefits of having generalized indices for anything, etc etc, for a very long time. *That* is the problem that to me EIP-6493 is trying to solve.",
+        "created_at": "2023-05-03T10:30:24.170000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "In general I think proposals should be judged by \"complexity of the thing as a whole\" at least as much as \"complexity of the deltas from present-day codebases\"; L2s and ZK-EVMs are good examples there",
+        "created_at": "2023-05-03T10:31:26.237000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "And so there's value in front-loading more  format changes to before when L2s and ZK-EVMs get entrenched, so that L2s and Zk-EVMs never even have to implement the old stuff",
+        "created_at": "2023-05-03T10:32:03.542000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Is it accurate to say that option 2 is very similar to option 1, except we're basically introducing two different ways to compute a sighash, one that includes a `fork_version` (for CL objects) and one that does not (for EL objects)?",
+        "created_at": "2023-05-03T10:32:59.465000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "intuitively that does seem not-that-bad if it alleviates people's concerns",
+        "created_at": "2023-05-03T10:33:40.923000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think one concern with sig_hash to be ssz based was backward compatibility with hardware wallets (that might or might not be upgraded), else option 2 with sig_hash replaced by the keccak based should be good enough?",
+        "created_at": "2023-05-03T10:39:33.308000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "(basically option 3 )",
+        "created_at": "2023-05-03T10:40:38.108000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cadietrichs\u003e hm, don’t we basically only expect L2 sequencers to send blob txs? presumably they’ll do that exclusively from hot wallets, no hw wallets involved",
+        "created_at": "2023-05-03T10:41:28.328000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cvbuterin\u003e Post-4844, the explicit goal is that all new tx types would be SSZ-based",
+        "created_at": "2023-05-03T10:56:56.327000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cvbuterin\u003e So hardware wallets would have to keep making old-style txs",
+        "created_at": "2023-05-03T10:57:11.539000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cvbuterin\u003e The way that we can eventually remove RLP from the spec is, whenever we do the account abstraction EIP that allows EOAs to become smart contract wallets, they can choose to use smart contract code that can compute a sighash by constructing and hashing an RLP encoding",
+        "created_at": "2023-05-03T10:58:09.338000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cvbuterin\u003e And at some point EOAs can be phased out and that switch can be made mandatory somehow",
+        "created_at": "2023-05-03T10:58:44.559000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "If we are making a breaking change here onwards, then the original CL style domain based sig hash sounds just fine, and hardware wallets will get a leadup time to upgrade their algos for eventual transition (or for fund displacement to new wallets)\ncc: \u003c@543900561460822016\u003e",
+        "created_at": "2023-05-03T11:02:20.415000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "(or option 2 if we don't care about expiring messages on forks)",
+        "created_at": "2023-05-03T11:03:58.896000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Argument about not expiring txs on forks was: someone signing and storing a tx to be transmitted at (much much) later point. not sure what are the relevant use cases for that",
+        "created_at": "2023-05-03T11:08:10.080000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Do we know what hardware wallet has the problem? Do they just receive 32 bytes to sign? Then it's not an issue. Do they receive the full tx to display details on the screen for verification? Then the wallet needs to know about all signable tx types anyway (and yes, it needs sha256 support in that case)",
+        "created_at": "2023-05-03T11:18:17.075000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The signature itself is still ECDSA(32 bytes)",
+        "created_at": "2023-05-03T11:18:33.185000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Also, no existing functionality is broken for hardware wallets. It's just that blob transactions may need a sw update to the device. If that's not possible, what worked before still works",
+        "created_at": "2023-05-03T11:20:15.414000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "tbh, i am just recollecting the points put forward that day, and more or less i agree with you. I think real remaining issue is: include fork domain (original option) or not (option 2)",
+        "created_at": "2023-05-03T11:23:31.370000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Ah, okay, thanks for relaying that info from the call. Fork domain is only needed in case we want to deprecate transaction types and replace them with a new meaning (to invalidate an old version). Not necessary for transaction signatures, so I removed that aspect in https://github.com/ethereum/EIPs/pull/6979 — it's very close to option 2 now (with chain ID in the mix-in, instead of the payload — but if people don't like that I can move chain ID back into the payload)",
+        "created_at": "2023-05-03T11:25:30.388000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think, we shouldn't be any stricker than need to be (anyway domain based expiry can be introduced at later forks since anyway previous fork signed txs would go invalid), so option 2 is good, will checkout 6979",
+        "created_at": "2023-05-03T11:28:03.470000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "g11tech",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "i think post PR: 6979, the signature scheme should work just fine, however would leave it to other EL devs to express their opinion",
+        "created_at": "2023-05-03T11:39:18.128000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cEdFelten\u003e \u003e \u003cEdFelten\u003e  L2 sequencers will sometimes send non-blob txs, either because the blob space is full at the moment, or because the L2 is having lower traffic and wants to post a smaller batch rather than waiting to accumulate a full blob of data.  (Also some sequencers will post transactions for purposes other than posting calldata.) (re @adietrichs: hm, don’t we basically only expect L2 sequencers to send blob txs? presumably they’ll do that exclusively from hot wallets, no hw wallets involved)",
+        "created_at": "2023-05-03T12:13:59.119000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Right, I think the question is whether the incremental move to SSZ now with 4844 actually brings value, or if it’s better to just do a full transition all at once “someday”. \n\nRealistically, though, it’s unlikely that a “full transition to SSZ” ends up at the top of our priority list when competing with other major features, so maybe a piecemeal one is the only short term viable path",
+        "created_at": "2023-05-03T13:19:42.385000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "pretty sure hw wallets construct the sig hash themselves (this is how you \"know\" what you're signing when the hw wallet shows you the to address, value, etc",
+        "created_at": "2023-05-03T14:51:23.184000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "There isn't really a clear proposal for eradicating rlp completely - how do we eventually get ride of rlp sig hash of the 3 tx types we currently have? Right now it seems like the most likely thing that happens is we introduce ssz, get no real benefit from it, and are never able to fully transition to rlp. I would prefer we have a clear path to full SSZ migration and commit to making it a priority first before we start add pieces of ssz. It's very likely we add some ssz and have to change it anyways or it otherwise constrains our future possibilities",
+        "created_at": "2023-05-03T14:55:12.266000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "also, example of us thinking we’re being forward compatible- in 2718 we treat the data after the tx byte as “opaque” so that we can support other formats in the future, but it turns out that we were relying on the assumption that tx hashes would always be flat. we didn’t very well consider that HTR is the idiomatic way of ssz hashing and it is not clear how to reconcile 2718 and ssz txs nicely",
+        "created_at": "2023-05-03T15:51:40.700000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "looks great to me.",
+        "created_at": "2023-05-03T16:45:54.683000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "_And so there's value in front-loading more  format changes to before when L2s and ZK-EVMs get entrenched, so that L2s and Zk-EVMs never even have to implement the old stuff_\n\nThis benefit may be under-appreciated.  If we do go with SSZ in 4844 as planned, would be great to get a 1559-style 0-blob SSZ tx type that would allow for this soon after.",
+        "created_at": "2023-05-03T20:12:35.542000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The problem is that 4844 style transaction will not be compatible with the future ssz tx types, so everyone will need to support three encodings: rlp, hash of ssz, ssz-tree-root. I'm all for getting a full ssz tx type (and a full ssz blob tx type) in after 4844 together with the full ssz tx root. It feels to me like we're about to introduce this weird encoding for one tx type for ~6 months until we have to change it all again for full ssz",
+        "created_at": "2023-05-03T20:27:51.242000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "agreed, i'm not against moving to ssz i just want to do it the right way and i don't think we can know that until we actually make the plan for a full transition",
+        "created_at": "2023-05-03T20:38:10.138000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It's hard to say with certainty whether we've missed something, but 6493 is now in a pretty good state with respect to the objections raised so far, IMO.    I don't quite understand this:  _\"The problem is that 4844 style transaction will not be compatible with the future ssz tx types\"_   Can you elaborate \u003c@360491619402776577\u003e ?",
+        "created_at": "2023-05-03T20:41:56.974000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "FYI, here's the recording of this week's call: https://youtu.be/M2pYYEtM3Gw",
+        "created_at": "2023-05-03T21:58:48.704000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I _think_ Marius's point is that if we aren't certain about the long term direction we want for SSZ on the EL today, then it's likely whatever we do with 4844 gets changed in the future, as we come to consensus that we want to do something different for SSZ. \n\nIn that case, then it's probably better to stick with RLP now, because we'll only ever have two encoding schemes (full RLP and full SSZ) and a single RLP -\u003e SSZ transition. \n\nIn other words, if we do SSZ for 4844, but then decide to go another direction as part of an \"EL SSZ Overhaul\" in the future, then we have three encoding types: RLP, 4844-SSZ, and Overhaul-SSZ, which might include changing 4844-SSZ.",
+        "created_at": "2023-05-03T22:05:03.536000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "inphi",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "By Overhaul-SSZ, do you mean something quite different from EIP-6493?",
+        "created_at": "2023-05-03T22:07:08.979000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "inphi",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The proposed ssz transaction signing seems compatible with future ssz tx designs. Given that blob transactions are already special, I don't think we should be worried about keeping blob txs inline whatever design we decide to use for transactions in the future.",
+        "created_at": "2023-05-03T22:08:29.157000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I will let Marius and/or Matt answer this one 😛",
+        "created_at": "2023-05-03T22:24:48.578000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "EIP-6493 is simply a hedge against a future where everything is ssz. It alleviates the need to figure out how to migrate the blob tx type from rlp signing to ssz signing. IMO it is more of a side quest. EIP-6404 (that suite of eips i guess) where we convert all txs, receipts, and withdrawal accumulators to ssz is more of the overhaul i'm thinking",
+        "created_at": "2023-05-03T22:42:38.148000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "this is kind of what it would look like if 4844 was RLP: https://github.com/ethereum/EIPs/pull/6985",
+        "created_at": "2023-05-03T23:17:27.761000+00:00",
+        "attachments": []
+    }
+]

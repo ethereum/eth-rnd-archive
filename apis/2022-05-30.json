@@ -1,0 +1,210 @@
+[
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "we have precedent: hash and extradata are both `uint8` but serialize as a string (ie _not_ a list of numbers) - participationflags in the debug api is the exception here",
+        "created_at": "2022-05-30T06:22:57.750000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Which hash and extradata do you mean? `hash` from the beacon chain spec is Bytes32.  `extra_data` from bellatrix is a ByteList (and block_hash is Hash32).",
+        "created_at": "2022-05-30T06:28:49.217000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "yes, I meant that they are all `ListLike[uint8]`",
+        "created_at": "2022-05-30T06:29:47.266000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "But that's not what the spec says.  I'm confused where you're seeing them defined as anything involving uint8.",
+        "created_at": "2022-05-30T06:31:03.924000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "well - that's the crux - in the beacon chain spec, hash is `Bytes32` which is an alias `Vector[uint8, 32]`, and `ByteList` / `extra_data` is a `List[uint8, N]` while `ParticipationFlags` is also `uint8` with fields like `current_epoch_participation` being `List[uint8, N]`. The beacon API spec introduces a mismatch in types for `ParticiaptionFlags` by introducing a different serialization than hashes and extradata",
+        "created_at": "2022-05-30T06:35:26.797000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Got a link for those definitions? I haven't been able to find it in either the beacon chain or ssz specs.",
+        "created_at": "2022-05-30T06:39:02.120000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "https://github.com/ethereum/consensus-specs/blob/dev/ssz/simple-serialize.md#aliases=",
+        "created_at": "2022-05-30T06:39:57.731000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "and https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/beacon-chain.md#custom-types=",
+        "created_at": "2022-05-30T06:41:11.506000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "ah I see.  I can see the argument but I'm not entirely convinced it's correct to interpret `alias` as meaning precisely equivalent in every way, as opposed to having the same underlying representation in SSZ.  The very fact that both uint8 and byte are introduced as terms strongly suggests there are in fact meaningful semantic differences between the two.  Given the different semantic meanings it's then quite reasonable to have different representation in JSON even though they wind up with the same representation in SSZ.",
+        "created_at": "2022-05-30T06:43:56.234000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "And actually given uint8 is the one that's defined that would mean in theory everything should be quoted numbers and not hex.",
+        "created_at": "2022-05-30T06:44:37.115000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "well, yes, this would be .. natural - but then hex was introduced because even for json purists, serializing lots of `uint8` as sequences of numbers is considered nuts from an efficiency point of view 😉",
+        "created_at": "2022-05-30T06:46:11.747000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I mean JSON purists would use base64 encoding but I really don't want to get the Prysm gRPC folk going on that. 😛",
+        "created_at": "2022-05-30T06:46:53.781000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "what this prevents is having a 1:1 automated roundtrip between SSZ and JSON, which otherwise is quite useful when keeping standards in sync - ie _even_ protobuf has that minimum level of sanity 😛",
+        "created_at": "2022-05-30T06:47:59.370000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "ie alias is just that: a different name - not a different semantic - in most interpretations of the word",
+        "created_at": "2022-05-30T06:48:35.667000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Teku has 1:1 automated roundtrip between SSZ and JSON working fine. We just took a different name to be important which I still think is entirely reasonable (otherwise we should just simplify and replace all `byte` with `uint8` through the SSZ spec).",
+        "created_at": "2022-05-30T06:54:45.771000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "well, that's not possible - the basic types of SSZ are limited to `uint8` - you can add additional metadata to disambiguate `uint8` to aliases, but that indeed hinges on the interpretation of `alias` meaning more than \"different name for\" - de facto, there's no semantic difference between the various aliases for `uint8`, so it's a stretch to introduce some out-of-band interpretations for them - if you have a pure `SSZ` specification for an object (like `BeaconState`), you cannot read it (as json) using an SSZ-compatible spec alone",
+        "created_at": "2022-05-30T06:58:38.230000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "you can start with a JSON spec and \"simplify\" it to SSZ but this is backwards - you can also  give additional meaning to aliases that doesn't exist really, except as a help for the prospective (human) reader, though I think that goes against the \"simple\" part of  SSZ",
+        "created_at": "2022-05-30T07:00:03.184000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I've got to go cook dinner. It works in Teku and we did in fact start from the SSZ spec for the definitions. You seem to want to die on the hill of how to interpret alias and it seems to be making your life much harder than it needs to be.  I'm not personally concerned if participation lists wind up being  a list of bytes or a list of numbers but it's completely nuts to serialize uint64 as decimal and uint8 as hex in the JSON. It's similarly nuts to serialize a list of bytes as a list of quoted strings in the JSON so in the JSON format there's going to be a difference between byte and uint8 or we're going to have to do something utterly nuts.",
+        "created_at": "2022-05-30T07:03:39.376000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "well, I'm not sure about the dying part but.. it's more that it would be nice to settle this for future fields above all: ie either de-simplify the SSZ spec to give semantic meaning to \"alias\" formally, or simplify the json spec to use a single serialization across the board for aliases",
+        "created_at": "2022-05-30T07:10:43.638000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Sounds like moving `byte` from being an alias to its own base type would most cleanly address the issue.",
+        "created_at": "2022-05-30T07:13:05.777000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "maybe: another way to view this issue is that `ParticipationFlags` is not a \"canonical\" SSZ type - above, I mention less formally that SSZ and JSON cannot be round-tripped canonically:  more formally, ParticipationFlags is not specified in the SSZ spec itself but rather in an implementation thereof - it's the reason why a canonical SSZ-JSON can't be had unless we introduce the concept of semantic aliases to the ssz spec (aliases are explicitly stated as \"For convenience\" right now, not \"for semantic differentiation\")  - that said, if we give semantic meaning to byte vs uint8 in the ssz spec, that can later be used in out-of-band specs",
+        "created_at": "2022-05-30T07:29:03.110000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".paulharris",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "i'd be sticking with the same encoding then, because different encoding for the same type can be a little annoying",
+        "created_at": "2022-05-30T07:36:29.767000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "monti.eth",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Hi Guys, I explored the ETH2 apis provided from consensus clients like Teku, But they don’t have an api for get epochs or blocks data, Does anyone know how we can access these kind of apis in a running node?",
+        "created_at": "2022-05-30T12:51:54.018000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Not sure what you mean by \"get epochs\", but you can obtain blocks with https://ethereum.github.io/beacon-APIs/#/Beacon/getBlockV2",
+        "created_at": "2022-05-30T12:52:51.829000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "monti.eth",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I mean an api like this one: https://beaconcha.in/api/v1/docs/index.html#/Epoch/get_api_v1_epoch__epoch_",
+        "created_at": "2022-05-30T12:55:00.886000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "A lot of that information is high-level aggregated from the component API calls.  The beacon chain APIs are designed to expose the underlying beacon chain structures, rather than provide aggregated data that would require significant computational and/or storage effort on the part of beacon nodes.  If you want that type of information you may want to look at https://github.com/wealdtech/chaind to obtain it in an easily queryable fashion.",
+        "created_at": "2022-05-30T12:57:28.821000+00:00",
+        "attachments": []
+    }
+]

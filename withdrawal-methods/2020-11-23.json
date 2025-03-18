@@ -1,0 +1,370 @@
+[
+    {
+        "author": "jakepospischil",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Sorry, I did see this part but probably just didn't explain my statement in enough detail. I understand that with the DSWC you can use the `is_final` bit to set a *permanent* withdrawal address before you make your deposit, and that can be set to a contract address (which is precisely what you'd need to do for the withdrawal to be split trustlessly).\n\nWhat I was getting at is that it's difficult to write \u0026 deploy your own receiver contract (and set your validator to withdraw to it) safely before knowing what the mechanism for minting the validator balance onto the eth1 chain actually looks like. If we assume that minting the ETH can be implemented as a simple transaction (originating from e.g. `0x000...000` or the DSWC address) hitting the contract's `receive` method, that's all great. But if it turns out that it can't be implemented that way, and it ends up looking more like how block rewards are handled, that could cause issues. Specifically, if the impl ends up requiring new opcodes then we can't deploy a receiver contract until those are known, and therefore can't set the withdrawal creds on the DSWC until that time.\n\nNone of this is to say that I don't like or agree with the DSWC approach by any means, just thought it was important to note that we might need more clarity on the mechanics for minting validator rewards. Or possibly specify and commit to those mechanics now (e.g. a simple tx as described above) if at all possible.",
+        "created_at": "2020-11-23T00:43:18.413000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jakepospischil",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Yes, I see this as the main advantage of the DSWC over the alternative of simply submitting withdrawal creds with a different prefix byte (e.g. `0x01` for eth1 addresses). The DSWC adds a little complexity over that approach, so it would be good to know what the demand for such a feature is like (although I imagine we might not know that for some time, so would make sense to err on the side of caution!)",
+        "created_at": "2020-11-23T00:47:47.923000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jakepospischil",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I like this approach - assuming that the minting of validator balances can be implemented as a simple tx. I think setting `msg.sender` to `0x000...000` could also be intuitive since the balance is being newly minted from the perspective of the eth1 chain. But either way works as long as there is a standard :)\n\nPossibly worth noting that this assumes the requirement of a gas stipend high enough to set a boolean storage var to record that the validator balance was received.",
+        "created_at": "2020-11-23T00:53:17.342000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jakepospischil",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Assuming a \"push\" method which looks like a simple tx, yes. If it behaves more like block reward minting, that might not be the case.",
+        "created_at": "2020-11-23T00:54:35.308000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "alon.ssv.network",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Push method will be a tax nightmare... It has to be pull for that reason IMO.",
+        "created_at": "2020-11-23T07:33:39.528000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "alon.ssv.network",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "A pull method prompts the following issues:\n1) gas price and limit\n2) what key you use for pulling? If it's an eth1 than the beacon-chain needs to process eth1 transaction to identify a pull request.\n3) Metadata is important, might be able to work without it but it will make life much easier",
+        "created_at": "2020-11-23T07:42:23.994000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "alon.ssv.network",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003c@!695019898274840626\u003e not tying to be the negative dude here, i'm just afraid those details should be discussed before hand",
+        "created_at": "2020-11-23T10:58:59.047000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "The idea is to specify that there will be an actual tx, not just have the funds appear like block reward minting.",
+        "created_at": "2020-11-23T11:13:00.610000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Why are you under the impression that there will be any tax implication for push vs pull at all?  This seems very unlikely to me in the jurisdictions that I am familiar with",
+        "created_at": "2020-11-23T11:13:37.860000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I see no conflict at all between having something like the DSWC and having something with more metadata.  But the latter *will* neccessarily take months longer, that's just a fact.  Why not have both options and the people who don't need metadata don't need to wait?  There's no reason that doing something like the DSWC would even neccessarily delay the second one, they can be worked on in parallel.",
+        "created_at": "2020-11-23T11:15:40.665000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Honestly because of the total withdrawals that I expect will build up over the time period when withdrawals are not available, it will probably take more than 1 block to process all the withdrawals.  So *something* will have to trigger them.  What I see as simplest would be for the DSWC to have some type of keyvalue store of exited amounts per validator which is populated with all completed exits and updated each time a new exit completes, with the DSWC balance incremented to match, as well as with all the current withdrawal addresses which have already been set through the DSWC up until that point, and all the withdrawal credentials.  Then from the point of the hardfork introducing that on anyone can \"poke\" a validator with a non-zero balance to exit it to the designated address with a fixed gas stipend.  And for addresses which do not have the is_final bit they can be updated by the withdrawal credentials with the DSWC verifying the credential.  Again the details don't matter but just to give an example.  So there would be no problem with contracts themselves needing to already know how to trigger their transfers, and people can initiate the withdrawals they care about at their leisure.  I don't think there need to be any keys for the actual pull, nor do I see any problem with the beacon chain just dumping all completed exits into the withdrawal contract.  And of course the deposit contract would be modified to simply update the DSWC keyvalue store directly when new deposits are made.  There could be any metadata we like added to the keyvalue store of the DSWC at a later date, and methods available to read it. But that's just an example.",
+        "created_at": "2020-11-23T11:31:35.028000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "the details of however the DSWC works, or the metadata, can all be finalized later.  All that is needed for now is the specification that withdrawals will happen by regular tx, having the DSWC as sender, with some minimum gas stipend. How they are triggered/initiated etc. truly does not matter for the simplest set of use cases.  The ones which care about all of that can take as long as they need to come up with a spec.  But the ones who don't need metadata don't have to wait all that extra time.",
+        "created_at": "2020-11-23T11:31:53.185000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "alon.ssv.network",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "As long as the assets are in a staking account one can claim they are locked, if the rewards are pushed continuously to your account it's effectively realising gains.",
+        "created_at": "2020-11-23T11:42:31.419000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "alon.ssv.network",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Even without metadata there are still implementation decisions to consider. Setting a solution now will dictate how the implementation will look like in the future, with major implications IMO. 2 of those i've mentioned above",
+        "created_at": "2020-11-23T11:43:42.260000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I actually haven't seen any tax professional say that. Most have been saying the conservative assumption is that you declare your gains from staking in real time. And I strongly suspect that the remainder would call gains realized whenever the deposit contract goes live, regardless of when you do the transaction",
+        "created_at": "2020-11-23T12:08:41.903000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Which 2 do you mean?",
+        "created_at": "2020-11-23T12:10:05.100000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "alon.ssv.network",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "We the big 4 we've consulted the lockup will change significantly how the tax authorities will look at it. Pushing rewards kills all of those assumptions, you will be taxed for each push transaction. \n\nIf it's pull you need to process txs in the beacon-chain as they can appear as internal contract transactions.\n\nThose things are not small, i don't see the point of rushing into it..",
+        "created_at": "2020-11-23T12:16:21.447000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "alon.ssv.network",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "1) gas price and limit\n2) what key you use for pulling? If it's an eth1 than the beacon-chain needs to process eth1 transaction to identify a pull request.",
+        "created_at": "2020-11-23T12:16:35.837000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I really don't think pull vs push has any inherent implications for the beacon chain.  The whole exit process is already defined, and exits are and will remain beacon chain initiated.  From the beacon chain perspective it's perfectly fine to just specify that funds disappear once exited. It really doesn't matter how users interact with the DSWC.",
+        "created_at": "2020-11-23T12:19:41.138000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "But I'm happy to be corrected by someone deeper into the beacon chain spec work",
+        "created_at": "2020-11-23T12:20:16.173000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Which jurisdiction are you in?  Also if locking is that powerful surely a lock controlled by the contract in charge of withdrawals would have the same property, no?  There's plenty of room in contract design for adding a totally separate pull/push step.",
+        "created_at": "2020-11-23T12:21:52.305000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "alon.ssv.network",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I don't think suggesting people need to start deploying smart contracts to not be hit with tax liabilities is a good thing.\nWe have European and US presence.",
+        "created_at": "2020-11-23T12:24:21.321000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "It definitely wouldn't be forced on people.  You can just not set any withdrawal address and then no one can push a withdrawal to you.",
+        "created_at": "2020-11-23T12:25:09.612000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "DSWC is totally opt in",
+        "created_at": "2020-11-23T12:25:45.700000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "alon.ssv.network",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Exit is not withdrawal. \nYou need to verify a transaction asking to withdraw assets. If it's an eth1 transaction somehow you need to process that transaction, the beacon-chain for now has no way of doing that. \nThat's why i'm saying we need to specify those things, it's not a technical issue as much as a design issue. \nNone of those things are designed and just setting an eth1 address as a recipient without thinking of those things before hand is problematic.",
+        "created_at": "2020-11-23T12:26:52.186000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "alon.ssv.network",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Then i really don't understand what's the use... why create a system wide change for a very particular problem? \nTransactions are expected to work like eth1, that's what people expect..",
+        "created_at": "2020-11-23T12:28:10.116000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "alon.ssv.network",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "DSWC is not the issue here but rather the behind the scences. \nAny how, i'd really like eth1\u003c\u003eeth2 merger dev to be in this discussion..",
+        "created_at": "2020-11-23T12:29:50.786000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "alon.ssv.network",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I guess what i'm saying is i'm ok with DSWC just not with enabling it before we have a better understanding of the actual tx.",
+        "created_at": "2020-11-23T12:31:26.340000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I'd definitely like to hear from eth2 devs for sure",
+        "created_at": "2020-11-23T12:31:57.179000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I do think that the \"very particular problem\" is waay bigger a set of use cases than you realise though. Lots of people just want to be able to split funds into some fraction, or let one party get funds out after a delay, or tokenize whatever value gets withdrawn, or something like that.  They don't need more details to do that, a simple send is fine.",
+        "created_at": "2020-11-23T12:34:32.145000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "alon.ssv.network",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I think that the type of people that stake until phase 1.5 would potentially accept the situation as is. \nI understand the value, we are developing a pool so we count on that. On the other hand i'd rather not have it until we have a full picture of the actual merger. \nThe last thing we want is for people to build mountains on a feature which can change or might face difficulty.",
+        "created_at": "2020-11-23T12:43:36.732000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "For me there is a strong sense of time urgency",
+        "created_at": "2020-11-23T12:55:45.919000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "It's a black mark on the beacon chain that we don't have any trustless pool options ready for launch",
+        "created_at": "2020-11-23T12:56:17.750000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "We need at least some as soon as possible",
+        "created_at": "2020-11-23T12:56:31.290000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Even if they are dirt simple",
+        "created_at": "2020-11-23T12:56:42.309000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vshvsh",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I am fully with you on that \u003c@!695019898274840626\u003e",
+        "created_at": "2020-11-23T13:28:16.052000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vshvsh",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Full custody solutions don't have any obstacles to implement the service and on-chain ones are crippled. If custodial solutions have better product, they get the first mover advantage and it'll be hard to dislodge that",
+        "created_at": "2020-11-23T13:30:18.910000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "alon.ssv.network",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "That won't solve it, decentralized trustless pools is still under active R\u0026D (secret shared validators, consensus and more). \nHaving an eth1 address set is necessary but not sufficient for pools.",
+        "created_at": "2020-11-23T14:04:19.556000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "alon.ssv.network",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Most services do not hold the withdrawal key anyhow, most hold the validation key",
+        "created_at": "2020-11-23T14:05:01.133000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vshvsh",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "fully trustless pools are impossible and many shades of trust minimized are possible with only eth1 withdrawal credentials being implemented",
+        "created_at": "2020-11-23T16:12:22.479000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "It's all about looking at how long those R\u0026D cycles take.  Without a spec to develop against, you're pushing back the whole chain of contract development, testing, auditing that has to happen before trustless pools can actually go live.  I don't want to push that entire chain back by 1-2 months more than is necessary.",
+        "created_at": "2020-11-23T17:37:37.015000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "There are always degrees of risk and threat minimization.  But models with vastly lower counterparty threat or worst case risks are definitely possible, and with newer tools arriving I'm not willing to say that risk and threat models comparable to solo validation are impossible.  I agree it is a lot of work to get close though.",
+        "created_at": "2020-11-23T17:40:00.761000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "This is only true for 32*n offerings.  sub-32 offerings all hold the withdrawal key at present, for obvious reasons",
+        "created_at": "2020-11-23T17:42:57.664000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "emansipater",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Although obviously holding it within some type of trusted hardware may be seen as lower risk",
+        "created_at": "2020-11-23T17:43:29.242000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jakepospischil",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I can get behind this idea, but I think it raises a lot of questions which need to be answered before we know *for a fact* that it can be implemented this way, and we can commit to it, e.g.:\n\n1) How are eth1 miners incentivised to include validator withdrawals in eth1 blocks? E.g. do we add a static 'validator withdrawal bonus' per withdrawal processed, and if so do we reduce the base block reward to compensate? Or are they just paid gas fees from the tx (see #3)?\n\n2) How does the network verify that validator withdrawals in eth1 blocks are valid? Would this necessitate some type of \"eth2 voting\" system to include some eth2 block data in the chain, similar to how eth2 includes eth1 blocks (and if so, how would this even work on PoW)? Or are eth1 clients going to have to query a paired beacon node for every eth1 block to verify that the validator withdrawals in it are valid?\n\n3) What is the gas stipend for the validator withdrawal txs? Are we just sending enough to set a single bool storage variable (and maybe to log an event too), or is there more that might be required? Who pays the gas costs - do we just deduct those from the validator balance? If so, does this have any implications on / require changes to how gas is currently handled (seeing as this would seem to involve deducting an amount from `msg.value`, which is unusual)?",
+        "created_at": "2020-11-23T23:48:53.436000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jakepospischil",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003e What I see as simplest would be for the DSWC to have some type of keyvalue store of exited amounts per validator which is populated with all completed exits and updated each time a new exit completes, with the DSWC balance incremented to match\n\nI agree with this, but it does raise the question of how exactly the key/value store is updated. It sounds like some kind of internal tx would have to be generated for each exit, which would update the contract state. How do these txs get included in eth1 blocks, how are they verified, and who pays the associated gas costs?\n\n\u003e And of course the deposit contract would be modified to simply update the DSWC keyvalue store directly when new deposits are made. \n\nNot sure how useful this is since we will want to know exited balances, not balance at time of deposit. Also, not sure how likely it is for a new deposit contract to be deployed and for the beacon chain to be updated to reference it in a fork, that sounds dangerous and hard to communicate to people to stop them accidentally burning their ETH.",
+        "created_at": "2020-11-23T23:58:48.633000+00:00",
+        "attachments": []
+    }
+]

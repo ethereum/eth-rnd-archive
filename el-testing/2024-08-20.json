@@ -1,0 +1,266 @@
+[
+    {
+        "author": "chfast",
+        "category": "Testing",
+        "parent": "",
+        "content": "How long are you executing the `blockchain_tests/prague/eip2935_historical_block_hashes_from_state/block_hashes/block_hashes_history.json` test? For me it takes a long time, and most of the time is spent in MPT hashing. I have very simplistic MPT implementation just for tests. I wonder if MPT optimization is worth the effort.",
+        "created_at": "2024-08-20T09:33:25.642000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "danceratopz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Mario looked at this during the interop and, if I remember correctly, most of the time is due to calling the external binary so many times (once per block) in each test. I think the first optimization we should consider is to implement the t8n binaries as daemons/servers that the framework can post requests to, see:\nhttps://github.com/ethereum/execution-spec-tests/pull/548\n\nThis will be the case when using EELS/ethereum/execution-specs is used to fill tests.",
+        "created_at": "2024-08-20T09:38:59.868000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "chfast",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm not asking about filling the test, just consuming the JSON. There is nothing specific to the system contract just the test has a lot of blocks with relatively big state so there is a lot of hashing to get state root hash of all of it.",
+        "created_at": "2024-08-20T09:42:33.251000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "danceratopz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ah sorry!",
+        "created_at": "2024-08-20T09:43:48.268000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nordbjerg",
+        "category": "Testing",
+        "parent": "",
+        "content": "checking here, if someone wanted to write a t8n tool for eels, should we just model it after `evm t8n`? i.e. same cli interface, input and output?",
+        "created_at": "2024-08-20T14:47:41.471000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hey, EthJS has just started implementing t8n as well, and yes, that is the case 🙂",
+        "created_at": "2024-08-20T14:48:12.495000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nordbjerg",
+        "category": "Testing",
+        "parent": "",
+        "content": "great! 🫡",
+        "created_at": "2024-08-20T14:48:21.241000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Testing",
+        "parent": "",
+        "content": "cc \u003c@689161464829050960\u003e",
+        "created_at": "2024-08-20T14:50:19.171000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "danceratopz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hey, there is already an EELS t8n tool:\nhttps://github.com/ethereum/execution-specs/tree/fcd12750edd4443a91f138728689a1d0a503a7c1/src/ethereum_spec_tools/evm_tools/t8n",
+        "created_at": "2024-08-20T14:50:24.936000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nordbjerg",
+        "category": "Testing",
+        "parent": "",
+        "content": "sorry, I meant adding a tool compatible with the ones here: https://github.com/ethereum/execution-spec-tests/blob/main/.github/configs/evm.yaml",
+        "created_at": "2024-08-20T14:52:39.527000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Let me point you to some helpers which greatly helped me:\n\nInstall EELS: https://github.com/ethereum/execution-spec-tests?tab=readme-ov-file#quick-start\n\n(Up to step 2)\n\nNow in order to actually use it for your t8n, you need to add a wrapper here: https://github.com/ethereum/execution-spec-tests/blob/main/src/evm_transition_tool/evmone.py (this one points to evmone)\n\nThe t8n should output a `-v` version and this should output the regex on the `detect_binary_pattern`\n\nYou can now use EELS, to help with debugging: (ensure you are in the venv which you get after installing up to step 2)\n\nFor debug:\n`fill --fork Shanghai tests/eip3855_push0 --evm-bin=\u003cPOINT TO RETH BINARY\u003e --evm-dump-dir=/home/jochem/t8nlogs`\n\nThis will dump all the relevant files into the `--evm-dump-dir` here you can inspect the inputs to the t8n, and outputs (if you generated those). This runs the PUSH0 tests so rather \"simple\" tests. If you omit the `--evm-bin` you will instead run Geth, so you can inspect the inputs/outputs there as well 🙂",
+        "created_at": "2024-08-20T14:54:20.133000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nordbjerg",
+        "category": "Testing",
+        "parent": "",
+        "content": "tysm for the pointers!!",
+        "created_at": "2024-08-20T14:55:09.206000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "danceratopz",
+        "category": "Testing",
+        "parent": "",
+        "content": "https://ethereum.github.io/execution-spec-tests/main/getting_started/debugging_t8n_tools/",
+        "created_at": "2024-08-20T14:56:08.013000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "If you want to check if your output is the same as Geth, then run above command on both Geth (so without --evm-bin) and you (so with --evm-bin). You can then use `hasher -f ./fixtures` this will output hash of the flattened relevant output files of the `./fixtures` dir (this is the output of the EELS after processing your output of t8n). This should match, if this does not match you either have wrong values or missing fields 🙂",
+        "created_at": "2024-08-20T14:56:18.613000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "If you need any more pointers let me know, I started implementing t8ntool for EELS support like 3 days ago 🙂",
+        "created_at": "2024-08-20T14:58:02.140000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "samwilsn",
+        "category": "Testing",
+        "parent": "",
+        "content": "Isn't that wrapper already written: https://github.com/ethereum/execution-spec-tests/blob/main/src/evm_transition_tool/execution_specs.py ?",
+        "created_at": "2024-08-20T15:00:02.838000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "samwilsn",
+        "category": "Testing",
+        "parent": "",
+        "content": "I must admit, I'm not sure what this file specifies 😅",
+        "created_at": "2024-08-20T15:00:20.691000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nordbjerg",
+        "category": "Testing",
+        "parent": "",
+        "content": "seems to be used in `build-evm-action` which is used in `build-fixtures`:  https://github.com/ethereum/execution-spec-tests/blob/632d151ea8a71d09a3a0acbdb85d97fa18c8456b/.github/actions/build-fixtures/action.yaml#L22-L25",
+        "created_at": "2024-08-20T15:01:52.569000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nordbjerg",
+        "category": "Testing",
+        "parent": "",
+        "content": "so i'd assume for generating fixtures for `ethereum/tests`?",
+        "created_at": "2024-08-20T15:02:07.834000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "samwilsn",
+        "category": "Testing",
+        "parent": "",
+        "content": "And you're sure you aren't looking for `ethereum-spec-evm t8n`? Eg:\n\n```\nethereum-spec-evm t8n --help\nusage: ethereum-spec-evm t8n [-h] [--input.alloc INPUT_ALLOC] [--input.env INPUT_ENV] [--input.txs INPUT_TXS] [--output.alloc OUTPUT_ALLOC] [--output.basedir OUTPUT_BASEDIR] [--output.body OUTPUT_BODY]\n                             [--output.result OUTPUT_RESULT] [--state.chainid STATE_CHAINID] [--state.fork STATE_FORK] [--state.reward STATE_REWARD] [--trace] [--trace.memory] [--trace.nomemory]\n                             [--trace.noreturndata] [--trace.nostack] [--trace.returndata]\n\noptions:\n  -h, --help            show this help message and exit\n  --input.alloc INPUT_ALLOC\n  --input.env INPUT_ENV\n  --input.txs INPUT_TXS\n  --output.alloc OUTPUT_ALLOC\n  --output.basedir OUTPUT_BASEDIR\n  --output.body OUTPUT_BODY\n  --output.result OUTPUT_RESULT\n  --state.chainid STATE_CHAINID\n  --state.fork STATE_FORK\n  --state.reward STATE_REWARD\n  --trace\n  --trace.memory\n  --trace.nomemory\n  --trace.noreturndata\n  --trace.nostack\n  --trace.returndata\n```",
+        "created_at": "2024-08-20T15:03:35.653000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "This runs t8n from `ethereum-spec-evm` which seems to point to `execution-spec` repo. I think Reth wants to implement t8ntool to be used with Reth",
+        "created_at": "2024-08-20T15:03:47.084000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nordbjerg",
+        "category": "Testing",
+        "parent": "",
+        "content": "that seems to be modelled on `evm t8n` from geth (i assume that one existed first)",
+        "created_at": "2024-08-20T15:03:52.567000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "samwilsn",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yep",
+        "created_at": "2024-08-20T15:03:58.538000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nordbjerg",
+        "category": "Testing",
+        "parent": "",
+        "content": "yep",
+        "created_at": "2024-08-20T15:04:06.949000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "samwilsn",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ahh, I see",
+        "created_at": "2024-08-20T15:04:20.012000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nordbjerg",
+        "category": "Testing",
+        "parent": "",
+        "content": "essentially we want to be able to fill/generate tests as well for new eips:)",
+        "created_at": "2024-08-20T15:04:36.448000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "samwilsn",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e if someone wanted to write a t8n tool for eels\n\nthrew me off",
+        "created_at": "2024-08-20T15:04:41.077000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nordbjerg",
+        "category": "Testing",
+        "parent": "",
+        "content": "sorry for the confusion.. i guess eels is https://github.com/ethereum/execution-specs ?",
+        "created_at": "2024-08-20T15:06:06.196000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "peter.davies",
+        "category": "Testing",
+        "parent": "",
+        "content": "EELS: https://github.com/ethereum/execution-specs\nEEST: https://github.com/ethereum/execution-spec-tests",
+        "created_at": "2024-08-20T15:06:36.226000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Woops, I listed EELS in my readme, have edited, should be EEST. The readme I posted is about being able to fill execution-spec-tests. We are currently helping to fill the 7702 tests 🙂",
+        "created_at": "2024-08-20T15:07:26.557000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "nordbjerg",
+        "category": "Testing",
+        "parent": "",
+        "content": "makes sense 🙇‍♂️ we want to write a t8n tool for eest in that case. seems like the pointers by jochem should be enough to get us started. we want to write t8n to fill 7702 tests and others going forward",
+        "created_at": "2024-08-20T15:07:45.804000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "So this is def. what you want: https://discord.com/channels/595666850260713488/753271902520213625/1275467965957013658",
+        "created_at": "2024-08-20T15:07:49.136000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "danceratopz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Just to clarify, yes, it's a config file for ethereum/execution-spec-tests (EEST) CI, but it doesn't have anything to do with ethereum/tests. It configures which t8n tool should be used to fill the different artifacts generated in EEST fixture releases (stable, develop, eip7692,...).",
+        "created_at": "2024-08-20T15:08:42.077000+00:00",
+        "attachments": []
+    }
+]

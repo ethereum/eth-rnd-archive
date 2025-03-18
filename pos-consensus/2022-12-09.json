@@ -1,0 +1,162 @@
+[
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I suspect that a built block will often be non-timely if we haven't started the build process during two seconds into a slot interval. If a payload is supplied by a block builder thus provided instantly then the risk is lower",
+        "created_at": "2022-12-09T07:14:16.288000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "in our expected implementation of proposer head, there's always the possibility that we start the build process right before proposing: if we sync a late block we do not call FCU: we would call FCU at 6s with the previous parent as we always do when a block is not seen. If by 10/11s the incoming block hasn't gathered enough votes, we don't do anything. But if we're unlucky and when we check at 12s and the incoming block did manage to get the threshold, then we will propose in top of it with no time to produce a block",
+        "created_at": "2022-12-09T07:40:58.806000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Where start of the block building falls into in the most of such cases? Before one or two seconds into a slot? Not considering 0th slot of each epoch because `get_proposer_head` isn't used for these slots",
+        "created_at": "2022-12-09T08:57:30.091000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "So in these cases the start of the block building would be about 30ms into the slot, certainly before 1s",
+        "created_at": "2022-12-09T09:09:38.145000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "metachris_",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Can you point me to a reference or give me a tl;dr re `get_proposer_head` changes and the question regarding relays and builders?",
+        "created_at": "2022-12-09T10:12:40.596000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "metachris_",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "block building usually starts as soon as possible, our builders start as soon as a newPayload event is received internally in the beacon node",
+        "created_at": "2022-12-09T10:13:13.054000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "With `get_proposer_head` implemented proposer may deviate from proposing a new block on top of a block referenced by `get_head`, and favour proposing atop of the parent of the head block. There are a number of conditions when it will happen, the main one is when the head isn't a timely block.\n\nThe most important part for builders is that proposer makes its own local decision whether to propose atop of the head or its parent. Thus, builders should be ready to offer payloads built atop not only each viable head but also atop of a parent block of each viable head.",
+        "created_at": "2022-12-09T10:28:24.015000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sproul",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "What Mikhail wrote above is a good summary\n\nI think previously you said that builders will build payloads on “all viable heads”, which maybe I was too eager to interpret as “including the parent block when the block is late”",
+        "created_at": "2022-12-09T11:47:16.116000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "metachris_",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Thanks for the context! Pinging \u003c@861612909854588938\u003e to chime in about the block building specifics here.",
+        "created_at": "2022-12-09T11:48:06.823000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sproul",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "For ease of reference this is the spec: \u003chttps://github.com/ethereum/consensus-specs/pull/3034\u003e\n\nBuilders could use some of the same heuristics as BNs when deciding whether to build on the parent, i.e. block is late, the re-org is a single-slot, proposed block is not the first block of the epoch, etc. While the feature is being rolled out it’ll then be a gamble as to whether the proposer is using the re-org strategy and asks for the payload, but maybe that’s OK",
+        "created_at": "2022-12-09T11:54:36.495000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ruteri",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "We do build on all heads including on the parent, but only when the previous block was delayed by over 6 seconds. Ultimately it’s the proposer that chooses, and we are just making sure there is a block for all viable proposer choices",
+        "created_at": "2022-12-09T11:55:32.056000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ruteri",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "We follow Prysm’s implementation for this",
+        "created_at": "2022-12-09T11:56:03.671000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ruteri",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Also other builders are free to provide blocks however they see fit, they could build on the parent even without the reasonable delay",
+        "created_at": "2022-12-09T11:57:50.360000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "It can be gamed but in the worst case proposer won't find viable payload bid and do a fallback to local EL which ins't a bad outcome.",
+        "created_at": "2022-12-09T11:58:17.987000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Note that the proposal uses 4 seconds boundary to treat block as non-timely",
+        "created_at": "2022-12-09T11:59:31.138000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ruteri",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "So it’s even more relaxed than what we have. Nothing against",
+        "created_at": "2022-12-09T12:00:47.481000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "~~It~~ The boundary in the proposal sounds more strict to me. What does \"block was delayed by over 6 seconds\" mean in the context of your statement? Is this \"not received after 6 seconds into a slot\" or \"not received after 6 seconds passed since attestation threshold\"?",
+        "created_at": "2022-12-09T12:02:59.048000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sproul",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "This sounds great! Thanks for the input \u003c@861612909854588938\u003e \n\nSeems like we’d be safe to roll it out in clients and even if a few local fallback blocks are built, the builders have a good financial incentive (2 slots of ME) to anticipate the proposer’s decision",
+        "created_at": "2022-12-09T12:10:27.717000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ruteri",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "6s after slot start",
+        "created_at": "2022-12-09T13:57:46.183000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I see. Note that `get_proposer_head` uses 4s which is a more strict threshold",
+        "created_at": "2022-12-09T14:35:54.077000+00:00",
+        "attachments": []
+    }
+]

@@ -1,0 +1,66 @@
+[
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@486501030046203915\u003e we discussed this in Interop, but wanted to leave this here, to have it written somewhere. There is no need for new slashing conditions on slot auctions nor execution tickets if done correctly. The reason being that the payload, while not committed fully, it is committed to a particular blockroot, and therefore to the same target checkpoint, thus not presenting any risks from the point of view of FFG, since the checkpoints cannot be contending. This may allow us to actually use PTC-style voting for the execution block and only deal with equivocations as simple head split views. It'd be nice if people think this through, since slot auctions in this way represent little changes from the current ePBS spec, if viable and desired, it would be in principle very little change vs the current spec.",
+        "created_at": "2024-05-22T11:19:49.689000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Some notes/thoughts from interop on this:\n- Proposer has incentive to reveal private bids they receive from builders in order to elicit better bids from the market, either in-protocol or out-of-protocol. Where do these dynamics converge to? Do timing games factor into this? (e.g., when builder sends a bid to the proposer, builder can't be sure that they are shooting their last shot vs being able to adjust their bid later in time)\n- Not clear to me what builder best strategy is, limit the proposer to pull a single bid from them? But then what if the builder wants to adjust their bid upwards, don't see any reason to not allow the proposer to query again, especially if builder knows that the first bid they sent is now a losing bid.\n- Related: More clarity on cancellation dynamics with the in-protocol and out-of-protocol channels co-existing. Noting that in a forward-looking view of APS cancellations can't be a thing (the consensus bid is always trying to maximise the bid floor), but cancellations also make less sense as soon as you move from block to slot auction.\nBit of a jumbly mess but directions for further analysis (also pinging \u003c@322809371140816896\u003e who I've discussed this with)",
+        "created_at": "2024-05-22T12:45:02.691000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So you're saying the payload commits to the blockroot of the consensus block in the same slot? and the two then must be tethered one to the other? If this works it's cool, it doesn't give us total independence of beacon and exec blocks (e.g., exec block of slot N can be proposed even if the beacon block is missing) but that might be a more marginal improvement vs being able to ship block-content-independent commitments",
+        "created_at": "2024-05-22T12:47:24.092000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes, for slot auction this is immediate if we just make the consensus proposer of N sell the execution slot N. For Execution tickets or slot auctions with a delay, that is when either the protocol or the consensus proposer of N sells the execution rights of N+k, the situation is more complicated and I do not have a clear picture yet. But I think slot auctions for the current slot may be a simple pull from my current block auction spec.",
+        "created_at": "2024-05-22T13:00:59.365000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I want to add some notes from the interop on this:\n- We can let the PTC only attest to timeliness and not execution, this gives 9 seconds to validate the payload instead of the current 2. This may have been the biggest winner of the interop for me. There are ways of achieving this without PTC (by having a trailing slot execution commitment) but this requires changes to EL consensus, while the current EIP, if stripped from 7547, is purely a simple CL fork. \n- As a tradeoff of the above, the builder has only 6 seconds to build the block instead of the current 10. I'm told this is actually good for them, but I will talk directly to builders to confirm. \n- We can squeeze the time between broadcasting the payload and PTC validation since builders are supposed to be fast anyway. \n- We have to be careful with (block, slot, payload_present) voting to not be in a situation where \"empty\" always wins. We need to implement a backoff to tradeoff pure LMD voting for liveness. \n- With regard of staking builders, locked capital, and efficiency. I find the discussion a bit misleading. It is true that the current design forces the builder to have money staked in the beacon chain. We could move to effect the payments on the EL, but only as top of block payments. This opens the door for some more constructions from builders, like extracting gain from some liquidations or previous block backrunning to pay for the current block bid. But the tradeoff is in spec complexity. Other than this, builders **are still required** to have the capital locked and available since they need to include it in the first transaction of the block. We do not have a way to effect payments on the bottom of the block in a trustless way anyway. Another argument is that it is reasonable to expect at least 20% of validators to run vanilla software (client teams are Lido operators) , this means that either builders will be staked anyway or risk loosing 20% of blocks",
+        "created_at": "2024-05-22T13:11:50.791000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "or the tail end when a high MEV opportunity happens to be during such slot.",
+        "created_at": "2024-05-22T13:11:51.752000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Adding to this, actually as long as the protocol sells execution tickets or execution slots for the current epoch, we do not need new slashing conditions. During slot N we can sell tickets for N+k as long as N and N+k lie on the same epoch, we can always tie the payload to the given FFG checkpoint. This presents an interesting design variance:  This means that slot 0 will have to sell the current execution slot. But we could for example sell 2 tickets per slot, and thus the first few slots of the epoch are JIT, while the last ones have a 16 slot delay. Not sure if such things are viable.",
+        "created_at": "2024-05-22T14:43:37.823000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "terence0083",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Some thoughts about these topics, although I was not at the interop:\n\n- Bids over P2P are public. It's an open auction. Builders can monitor the P2P network similar to how they monitor relayers today. We might see a similar pattern, but I suspect serious builders probably won't use P2P because it's slow. P2P is good for setting a minimal bid value baseline for RPC to avoid centralization pressure.\n- Bids over RPCs to me feels more like a private auction. Proposers request bids over the builder's RPC port. We haven't clearly defined the interface yet; it should be defined in the builder spec. Some options include:\n  - The proposer request is similar to today, including public key, slot, etc. This allows anyone to copy the same proposer request and sniff bids from the builder.\n  - The proposer has to sign the request. Here, the builder verifies the request is from the proposer, but the issue still exists as the builder can use the same request against other builders.\n  - For a truly private auction, the proposer should sign the request containing the builder's key and a nonce. The builder checks the nonce is in order.\n\nI don't know enough about what type of auction and properties bids over RPCs should satisfy. I'm keen to hear some feedback or be pointed to relevant reading material.",
+        "created_at": "2024-05-22T17:41:56.137000+00:00",
+        "attachments": []
+    }
+]

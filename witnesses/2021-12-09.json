@@ -1,0 +1,50 @@
+[
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Taking a look at https://github.com/jldunne/py-witness/blob/main/src/witness.py what I'm seeing is aggregation of the individual tx level access lists into a single block level access list.  I'm curious if you have any intention of actually trying to generate access lists at the block level? or what the actually intended use case is otherwise since the access lists that `py-witness` generates are not actually going to included all of the accounts/state accessed in that block.",
+        "created_at": "2021-12-09T16:48:29.786000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jolenedu",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So I’m working off this EIP https://eips.ethereum.org/EIPS/eip-3584 which describes the block access list as a collation of the EIP-2930 transaction level access lists. I’m trying to answer some outstanding questions about whether a block access list constructed like this is sufficient to validate the different iterations of witnesses against",
+        "created_at": "2021-12-09T18:02:07.443000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jolenedu",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Note that I haven’t written the code to generate the block witnesses in there yet, which might be what you mean? If so then yes, I am planning to use the block data to get all the account and state info from storage, figure out which bits are relevant to the access list above and then compare them",
+        "created_at": "2021-12-09T18:02:18.286000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jolenedu",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If it works then it would be evidence that including these block access lists (the collated ones) in the header could be useful beyond the short term (which I understand was the concern with that EIP), and that the proposed structure is flexible enough to accommodate the different witnesses and transaction-level lists that are planned",
+        "created_at": "2021-12-09T18:02:45.785000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jolenedu",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I was also thinking that the block witness generation piece in particular may be useful to folks doing `wit/0` related testing, as there seems to be a few requests in this channel for witness generation tools to verify implementations. But as I said, that’s still to be written 🙂",
+        "created_at": "2021-12-09T18:03:49.891000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I know that for my intended use cases for witnesses, the meta-witness is \"potentially\" useful, but less so than something that actually exports the full set of trie/witness data needed for execution of a block.  To the best of my knowledge, all of the implementations thus far require monitoring trie access to aggregate which trie nodes were touched.  This is contrast to what I think would be more ideal which would be something that was able to only monitor what accounts/storage-slots are accessed and then to reach into the trie and pull all the relevant trie data.  I'll refer to these as \"observing\" vs \"deriving\".  The problem with the \"observing\" approach is that it requires a fully wired up EVM + storage engine and to do full block execution within that engine.  The \"deriving\" approach decouples things a bit, allowing a verkle/hexary-merkle agnostic approach to access list generation, and then a second decoupled stage that takes the access list and constructs the witness.\n\nThe complexity that arises in the \"derivation\" approach has to do with nuances of how the hexary patricia trie works.  cc \u003c@!425615769280315392\u003e who is the one who originally identified this complexity.  What happens when you naively try to convert and access list into a witness is that you end up with a few trie nodes which are actually required but aren't actually on any of the merkle paths that lead to the accessed data.  They are ?sibling extension nodes? which end up being needed for computing the post state-root because of small trie-reorganizations that can occur during inserts or deletions.  I don't think anyone has spent any real time trying to come up with a way to determine which of these pieces of trie data are needed as the problem has been solved indirectly by directly monitoring the trie itself during execution and seeing what gets accessed.",
+        "created_at": "2021-12-09T21:55:14.435000+00:00",
+        "attachments": []
+    }
+]

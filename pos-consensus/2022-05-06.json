@@ -1,0 +1,106 @@
+[
+    {
+        "author": "potuz",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "https://github.com/prysmaticlabs/prysm/pull/10648, if I undertood Teku's behavior, I think this would save us the call to updating weights in forkchoice which is fast and the getter for the balances at the justified checkpoint. It only worries me the case that the attestations being carried on this very same block may tip us to a different head. Which won't happen if I implement this.",
+        "created_at": "2022-05-06T01:14:02.065000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I just remembered one of the big reasons we have this - in Teku there's no difference between importing a block as part of a long sync operation and importing a block as part of tracking chain head. So in the case of long sync, not running fork choice after importing every block is a big win. When tracking the head, it's a very minor thing and we'll wind up running fork choice shortly afterwards anyway.",
+        "created_at": "2022-05-06T01:16:17.938000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "right this is what I am saying above, that to act on this block I'll need to do it anyway",
+        "created_at": "2022-05-06T01:17:12.449000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I have on my todo \"soon\" list to review how we handle pending attestations. I think our current approach could be more efficient and I'm starting to wonder if reworking that will make it worth changing our approach to be more like prysm and just run fork choice immediately after importing the block (and then take the short cut of updating head without fork choice only during long sync which will take a bit of refactoring...)",
+        "created_at": "2022-05-06T01:17:59.668000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "It depends what you mean by \"act on\" though. In terms of creating attestations yes you'd want to update.  You probably don't need to for most REST API queries though.",
+        "created_at": "2022-05-06T01:19:13.461000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "But a lot of the trade offs here are tied up with how expensive it is to run the full fork choice, how pending attestations are handled and when you're likely to need to run fork choice anyway. I don't think avoiding running fork choice is a particularly big advantage when tracking chain head - I don't think it's bad, just that the main advantage is actually in our long sync and that's fairly unique to Teku.",
+        "created_at": "2022-05-06T01:22:11.043000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I've learned a lot with this discussion and the one we have internally now because of this: it turns out that prysm already does  adhere to Michael's PR most of the time, but we may have a race: we do process attestations at the start of each slot, and immediately run forkchoice. The problem is that now we are not 100% sure that the proposer gets its block after this processing has finished.",
+        "created_at": "2022-05-06T01:23:46.635000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "hmm, actually that's an interesting twist.  If we did run fork choice at the start of the slot all the time, then it quite possibly is worth not having to run it again when you import the block. There might be some attestations in the block you hadn't seen but that should be fairly rare so it would be a potentially useful optimisation to not run fork choice again if the block extends your current head. Worst case the block contains attestations that would orphan itself but you'll catch up again on the next slot (and if your attestations lead to not orphaning that block then all the better for you really).",
+        "created_at": "2022-05-06T01:27:32.414000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "The other option would be to be more selective about when to run fork choice so you'd run it once per slot triggered by whichever comes first of:\n * Receiving a block for this slot\n * Being asked to propose a block for this slot\n * Being asked to create attestations for this slot",
+        "created_at": "2022-05-06T01:29:00.125000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003e There might be some attestations in the block you hadn't seen\nI was thinking about turning off attestation aggregates as a throughput optimisation for a node that isn't serving any validator. Not sure if this is relevant to your discussion. Just in case, if this optimisation makes sense and enabled blocks will be the only source of attestations",
+        "created_at": "2022-05-06T06:06:38.770000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "In the case of such optimisation running fork choice at attestation boundary may work as well",
+        "created_at": "2022-05-06T06:08:43.833000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I think that’s probably reasonable for most cases. You might wind up not reorging for slightly longer but would still wind up on the right chain soon enough. As long as you weren’t doing something crazy like MEV it would probably work well. \nThat said I’m not sure there’s any real need to skip the aggregate gossip - a non validating node barely uses any cpu anyway.",
+        "created_at": "2022-05-06T06:46:21.750000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "If it's not adding a ton of traffic then it doesn't seem like a valuable optimisation. I think MEV doers would like to be subscribed to everything that aiding faster catch up with the head",
+        "created_at": "2022-05-06T06:53:06.036000+00:00",
+        "attachments": []
+    }
+]

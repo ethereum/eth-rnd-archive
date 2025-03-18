@@ -1,0 +1,98 @@
+[
+    {
+        "author": "sproul",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003e nice! let me dig into it - and indeed - this is basically the bug / missing feature in clients, that it's somewhat tricky to maintain a data structure over which attestations are redundant because they've already been included in earlier block - a second bug of course is including redundant attestations within a single block when producing it - this should never happen and doesn't really require any difficult code\n\u003c@!449019668296892420\u003e\u003c@!340345049063882753\u003e  I'm a bit late to weigh in here.. but Lighthouse's approach is to use the state's `current_epoch_attestations` and `previous_epoch_attestations` vectors to work out which validators have already attested, and eliminate them from consideration when packing attestations into blocks. The `state` is already available, and neatly takes care of re-orgs. Over the set of attestations with \u003e0 new validators, we then run an approximation algorithm for the maximum coverage problem (I think all clients do this). As far as I can tell this seems to be good at not including junk on chain, and I regularly see my validators proposing blocks that aren't full, see e.g. https://beaconcha.in/blocks?q=I%20stay%20noided I'd love someone to confirm my hunch though\n\nThe relevant bit of code in Lighthouse is here: https://github.com/sigp/lighthouse/blob/304793a6ab1c8790b7df0633dd4028dd05cbe6b9/beacon_node/operation_pool/src/attestation.rs#L85-L115 In theory it could be a bit slow because we repeatedly iterate over all ~4K attestations for an epoch, but so far I don't think it's proved to be a bottleneck, so we haven't bothered caching that lookup.",
+        "created_at": "2020-11-02T00:29:22.913000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "That's a good idea.  There's still some challenges about knowing when you can drop attestations from the pool (because the block the attestation was included in might be re-orged back off the canonical chain).  But that could potentially be solved by a similar mechanism (with a bit of careful management to ensure the effort of pruning is actually worth it).",
+        "created_at": "2020-11-02T00:37:07.072000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sproul",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Yeah, we had issues with our initial pruning approach (prune on finality 💀 ), but have now switched to pruning anything older than 2 epochs (according to the wall-clock slot)",
+        "created_at": "2020-11-02T00:42:25.051000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sproul",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "It means there are a few more attestations hanging around in the pool, but they get filtered by the validity + non-zero checks before hitting the expensive optimisation algorithm",
+        "created_at": "2020-11-02T00:42:55.024000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "yep same here, we prune on wall clock since anything older can't be included anyway",
+        "created_at": "2020-11-02T07:37:50.564000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "thanks for the link \u003c@!602753420033785856\u003e!",
+        "created_at": "2020-11-02T07:38:05.099000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "We do prune on wall clock, but also on when we see the attestation in a block. Sounds like we should just give up and prune only on wall clock and simplify things.",
+        "created_at": "2020-11-02T07:41:31.209000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "one thing to consider here is that the number of committees per slot has grown, meaning that some of the attestations-per-block growth is legit even if it were a perfect network - this might also be part of why the network has be become harder to process",
+        "created_at": "2020-11-02T10:59:43.830000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "watching the ejections fly by on my nimbus node.. oh my, so many 😉",
+        "created_at": "2020-11-02T12:49:35.647000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "benjaminion",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Flying by at the rate of 4 every 6.4 minutes? If live validators remains at 32k, we will need to eject another 25k validators to get finality back (modulo vote weight reductions for remaining non-live validators). At 900 ejections per day that's another four weeks of non-finality to go...",
+        "created_at": "2020-11-02T13:51:14.247000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "benjaminion",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I suspect the vote weight reductions will get us there first. Inactive validators look to be losing around 1 Eth per day at the moment, and this amount is only going to increase, so most of them will be driven to zero balance long before they can get through the exit queues.",
+        "created_at": "2020-11-02T14:13:13.376000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Yeah, the \"exiting but still bleeding\" validators will definitely be the big factor.",
+        "created_at": "2020-11-02T14:19:57.997000+00:00",
+        "attachments": []
+    }
+]

@@ -1,0 +1,298 @@
+[
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So, on the topic of 2718, do receipts change at all?",
+        "created_at": "2020-07-10T09:00:40.426000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If not, then what about 2711?",
+        "created_at": "2020-07-10T09:00:50.874000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "In 2711, we introduce batch transactions with a single gas payer.  There will be a single transaction hash for the whole thing, so that leads us to believe that means there will be a single receipt for the whole thing.",
+        "created_at": "2020-07-10T09:01:30.500000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "However, there may be multiple transactions that are part of that receipt, each of which can succeed/fail independently.",
+        "created_at": "2020-07-10T09:01:45.510000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We could assert that batch transactions must all succeed, or all fail as part of 2711, which lets us get away with a single status code.",
+        "created_at": "2020-07-10T09:02:13.499000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Another option would be to have the status code field be a uint256, where each bit represents the success of an inner transaction in the batch (putting a limit of 256 transactions per batch).",
+        "created_at": "2020-07-10T09:02:56.070000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Transaction receipts also currently have a `from`, `to`, `contractAddress` in them, as well as a `logs` array.  `from` and `to` will need to be changed to something else or removed I think.  We could put the gas payer in for `from` in theory, and technically we don't need to separate out the logs by sub-transaction (can just have one big logs array for all nested transactions).",
+        "created_at": "2020-07-10T09:27:20.431000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This is making me wonder if we should version transaction receipts as well?",
+        "created_at": "2020-07-10T09:27:29.043000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "A more useful transaction receipt would have something like `childReceipts` which contains an array of sub-receipts where each sub-receipt had a from, to, contractAddress, status field in it.",
+        "created_at": "2020-07-10T09:28:57.695000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If we do version transaction receipts, it feels like we should do it in 2711 so that receipt types align with transaction types, so each transaction type would define both the transaction payload and the transaction receipt types.",
+        "created_at": "2020-07-10T09:29:36.736000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "To mirror what was discussed briefly on the call.  We need to decide whether:\n\n1. We keep the current transaction format used in the current DevP2P protocols unchanged, which results in the inability to propogate new transaction types beyond `TransactionType == 0` back to the older protocol versions.\n    - This would effectively deprecate all of the protocol versions prior to the first one supporting the new format, kicking all of those nodes out of the network since they would be unable to follow the chain without updating (which is already the case with hard forks...)\n2. Propogate the change to RLP transaction format to the old protocol versions which is a backwards incompatible change which will result in both:\n    - old outdated clients sending network messages which would be considered invalid\n    - old outdated clients receiving messages that they will fail to decode because they use the new format.",
+        "created_at": "2020-07-10T15:50:40.573000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "What is the situation where you have a client that is up-to-date on forks but running an old devp2p version?",
+        "created_at": "2020-07-10T16:09:46.968000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Today you can be up-to-date on forks but the client may only support up to ETH/63 (this is common today I believe).\n\nI *think* there might be some ?miners? that use ?ETH/62? to avoid having to support `GetNodeData`.",
+        "created_at": "2020-07-10T16:11:16.812000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This *might* be the first EIP that would end up coupling the consensus protocol with the networking protocol versions.",
+        "created_at": "2020-07-10T16:12:39.177000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "According to the devp2p docs page you sent me, the transaction format isn't actually part of devp2p.  That being said, I can imagine that a client who receives a valid devp2p message with contents it doesn't understand would disconnect the sender.",
+        "created_at": "2020-07-10T16:12:41.010000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "There was a change to transaction receipts a while back, how was that handled?",
+        "created_at": "2020-07-10T16:13:12.607000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "New clients would be shipping receipts over the wire that would not match the receipt format expected by older clients.",
+        "created_at": "2020-07-10T16:13:37.056000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e There was a change to transaction receipts a while back, how was that handled?\nThe original receipt had a `state_root` field that became obsolete many forks ago.  The field was re-used for the new `status` field.",
+        "created_at": "2020-07-10T16:14:06.838000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So the RLP encoding didn't change, only the way that clients interpreted that field.",
+        "created_at": "2020-07-10T16:14:26.551000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Is it inconsequential/pedantic to argue that devp2p treats transactions as opaque bytes?",
+        "created_at": "2020-07-10T16:15:07.579000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If it is I'll stop bringing it up.  :)",
+        "created_at": "2020-07-10T16:15:19.950000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think it is typical for clients to have an RLP \"schema\" of sorts associated with each devp2p message, so they aren't opaque bytes because they have to be decoded in order to actually do anything with the data (as well as to validate the response)",
+        "created_at": "2020-07-10T16:15:59.580000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The transport doesn't actually care, but as soon as you crack open the payload you need to be up to date to actually decode.",
+        "created_at": "2020-07-10T16:16:00.417000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So yes, we absolutely could backport the RLP schema to the previous protocol versions if that is deemed acceptable which is entirely possible.",
+        "created_at": "2020-07-10T16:17:02.379000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So in your view, devp2p is not just a transport layer, it is transport + protocol?",
+        "created_at": "2020-07-10T16:17:24.266000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "My first vote is to keep devp2p spec opaque to the payload.  When you negotiate devp2p versioning, you can send new transactions over any version of the transport.  It is up to clients to decide how to handle the receipt of transaction payloads they don't understand.",
+        "created_at": "2020-07-10T16:20:35.577000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Same clients may decide to just drop transactions they don't understand, for example.",
+        "created_at": "2020-07-10T16:21:17.649000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Or they may decide to blacklist the sender.",
+        "created_at": "2020-07-10T16:21:27.517000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think this is option (2) of what you proposed.",
+        "created_at": "2020-07-10T16:21:57.243000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That being said, I'm not against bumping devp2p and saying that if you want to participate in Ethereum, you have to follow latest devp2p protocol.  It just seems unnecessary to me at the moment to dictate that behavior to clients.",
+        "created_at": "2020-07-10T16:23:15.549000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That being said, maybe clients are looking for an excuse to delete a bunch of code (legacy devp2p support)?",
+        "created_at": "2020-07-10T16:23:37.809000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm really \"ok\" with this going either way.  I think that backporting the new format into the old protocol versions is probably the right way to go foregoing a good argument against it which I'm not currently finding but will continue to look for.",
+        "created_at": "2020-07-10T16:32:10.892000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Here is a place in the spec where the transaction RLP format is codified into the DevP2P ETH protocol: https://github.com/ethereum/devp2p/blob/master/caps/eth.md#transactions-0x02",
+        "created_at": "2020-07-10T16:33:00.387000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Admittedly, it is very loosely specified there, only in the small code-block and would be easy to change.",
+        "created_at": "2020-07-10T16:33:58.254000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@364458974906548225\u003e From that link:\n\u003e The items in the list are transactions in the format described in the main Ethereum specification.",
+        "created_at": "2020-07-10T17:19:16.082000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Given that the Ethereum specification is an unversioned living document, that means that the transaction payload can change over time without versioning devp2p (pedantically).",
+        "created_at": "2020-07-10T17:19:52.355000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "AFAICT, in geth transactions are treated as opaque data blobs until the protocol deserializes them here: https://github.com/ethereum/go-ethereum/blob/b8dd0890b3dbc5d3c1b71a0f5de026b46993a851/eth/handler.go#L790",
+        "created_at": "2020-07-10T17:50:07.084000+00:00",
+        "attachments": []
+    }
+]

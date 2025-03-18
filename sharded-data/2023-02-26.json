@@ -1,0 +1,282 @@
+[
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "In fact it doesn't even matter if the payments are valid or not. The blobs have to be included in slot n at the end of the block, but not processed until n+1 at the start of the block. The proposser of n+1 already knows the validity of the blob part of n so if they are invalid he treats n as a pure execution block without blobs. Otherwise he bases his execution block on top of the blobs of n after processing them, and packs it's own blobs at the end. I'll formally propose this on ethresear.ch or something",
+        "created_at": "2023-02-26T10:46:54.844000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "And here it is https://ethresear.ch/t/uncouple-blobs-from-the-execution-payload/14906",
+        "created_at": "2023-02-26T11:58:53.271000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e ah, nice\nwhen I was thinking about this a while ago, I was hung up on the fact that if we pass transactions to buidler or they pass us blob-txs, that there are big latency concerns on \"finishing\" the block\n\nthe delayed execution model here is really interesting\n\nit does turn the state transition function into `state_transition(pre_state, block, prev_block)` which isn't the worst given that it's bound to just the prev. but a departure from our attempted model nonetheless",
+        "created_at": "2023-02-26T13:56:23.907000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e ah, you oculd put the transactions (less blobs) in the state to keep the function with the current inputs",
+        "created_at": "2023-02-26T13:58:37.803000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdankrad\u003e So an imprecision in your post is that the difficulty in building full danksharding blobs is not computing KZG commitments. In fact this is trivial because transactions already come with all the KZG commitments so there is nothing to compute :)\nThe difficult part is computing (1) the KZG proofs for the individual samples and (2) distributing them including the data. The first needs a serious amount of computing power (probably a state of the art GPU can do it) and the second a multi-GBit internet connection.\n\nI feel like there are better ways to achieve what you want, and there is a design space where you can build entire blocks (including execution and blob transactions) locally while getting someone else to do the hard work. EIther you can simply get designated centralized entities who will do this for a small fee, or we can even build mechanisms into the P2P networking design that allow to do this in a distributed way (probably with higher latencies)",
+        "created_at": "2023-02-26T14:14:05.564000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdankrad\u003e The relay architecture you suggest also does not quite work, as the transactions that a proposer suggests might eliminate the MEV a builder is expecting to get from blob transactions. So you cannot simply have the relay make the change — it would have to be all the way through, with the proposer sending a complete list of their transactions to the relay, the relay sending it to all the builders, the builders then responding with bids for the blob transactions, the proposer selecting one of their bids, and then making a block. So will add quite a bit of latency there, but not impossible. Doesn't really improve censorship though as builders can simply choose not to cooperate if your transactions include any that they don't like, and you will just end up with no/poor list of blob tx.",
+        "created_at": "2023-02-26T14:23:06.153000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I discussed this internally and \u003c@833706406699073536\u003e had a similar suggestion as yours about gossiping full blobs and deferring computing the KZG proofs to the builder. I feel that would be a major engineering task and probably unfeasible with networking latencies. I kind of have given up on small stakers even having the bandwidth to produce full blobs, but they should easily be censor resistant and decentralized in execution if they want with a proposal like mine, without forfeiting blobs rewards from the builder.",
+        "created_at": "2023-02-26T14:25:00.191000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdankrad\u003e no, what you have to do instead is that you have some mechanism of ensuring availability of the transaction blobs, so the proposer would not have to download the full blob transaction — only the execution part and the commitment. The builder would take the role of downloading the actual data for it",
+        "created_at": "2023-02-26T14:26:30.150000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdankrad\u003e builders could communicate which blob transactions they have data for to make sure that there is no data availability problem",
+        "created_at": "2023-02-26T14:26:51.580000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I believe that the MEV game is not going to be as you are proposing, perhaps I am getting this all wrong, but I would expect the major providers of blob transactions would be L2 batch posters. These are not in the game of extracting MEV from L1 in their transactions. MEV may go the other way around with L1 transactions taking MEV from the blob transactions, but this is still feasible in a trustless way with my approach, since the blob is already available and is executed prior to the transactions that the proposer is sending",
+        "created_at": "2023-02-26T14:27:35.497000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdankrad\u003e \u003e If they were invalid, the block N+1 will act as if the block N had no blobs in it.\n\nI don't understand what you are trying to achieve here. Why would the blob transactions be invalid? Is it because the builder is trying to grief the proposer? In that case, remember that there are other ways of doing this anyway, like not publishing the block or not publishing the data. So I think this does not achieve anything here [although I am generally a fan of post state roots, I would do them for whole blocks rather than blob transactions though, I think your particular separation doesn't do anything]",
+        "created_at": "2023-02-26T14:29:31.968000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdankrad\u003e \u003e \u003cdankrad\u003e  The point is, I'm not making any assumptions about MEV at all. If we've learned anything trying to guess where MEV is or is not is a dangerous game as it can massively change in a matter of months, a timescale where the base protocol has no time to react (re @sharded_data_bot: \u003cpotuz\u003e [reply]: I believe that the MEV game is not going to be as you are proposing, perhaps I am getting this all wrong, but I would expect the major providers of blob transactions would be L2 batch posters. These are not in the game of extracting MEV from L1 in their transactions. MEV may go the other way around with L1 transactions taking MEV from the blob transactions, but this is still feasible in a trustless way with my approach, since the blob is already available and is executed prior to the transactions that the proposer is sending)",
+        "created_at": "2023-02-26T14:30:55.009000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This was in reply to your own question:\n\u003e How do you know there is enough in the accounts to pay for the blobs?\nThere may be situations in which the transactions themselves in the block invalidate the blob transactions later (eg the transaction sender trying to grief the builder by sending an execution transaction with the same nonce as the blob transaction he sent to the builder). Or even if the builder fucks up and sends an invalid blob \"block\", this mechanism is resilient against this",
+        "created_at": "2023-02-26T14:33:01.472000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdankrad\u003e ah, I think the only way to avoid this is by sending the builder the full execution block",
+        "created_at": "2023-02-26T14:33:46.240000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdankrad\u003e if what you are trying to do is to only send the header of the execution block, then I think your construction is broken",
+        "created_at": "2023-02-26T14:34:11.179000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I will make the following statement about MEV: it cannot be extracted if there's no execution. So I believe it is impossible for a blob transaction to extract value of execution transactions",
+        "created_at": "2023-02-26T14:34:16.328000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This is what I say in my proposal too, but I think we don't want to send this execution block beforehand though (so a difference is that I'm sending it after the builder committed to the blobs), there's definitely space to change the builder API",
+        "created_at": "2023-02-26T14:35:19.377000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdankrad\u003e \u003e \u003cdankrad\u003e  First, this is wrong. The simple act of including a blob may constitute MEV already.\n\nSecond, blob transactions are full EVM transactions with universal execution. (re @sharded_data_bot: \u003cpotuz\u003e [reply]: I will make the following statement about MEV: it cannot be extracted if there's no execution. So I believe it is impossible for a blob transaction to extract value of execution transactions)",
+        "created_at": "2023-02-26T14:35:55.762000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdankrad\u003e \u003e \u003cdankrad\u003e  I mean in that case I can brick your construction by just sending blob and non-blob transactions from the same accounts, continuously, so you will never get any blobs included (re @sharded_data_bot: \u003cpotuz\u003e [reply]: This is what I say in my proposal too, but I think we don't want to send this execution block beforehand though (so a difference is that I'm sending it after the builder committed to the blobs), there's definitely space to change the builder API)",
+        "created_at": "2023-02-26T14:37:19.879000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "why?",
+        "created_at": "2023-02-26T14:40:35.690000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdankrad\u003e the non-blob transactions will invalidate the blob transactions, so the blob part will become invalid",
+        "created_at": "2023-02-26T14:41:07.420000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah, but I don't understand this grieving? in the very worst case scenario here, what this sender achieves is that the proposer that includes this transaction is like the status quo right now",
+        "created_at": "2023-02-26T14:41:53.108000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I can always submit blocks without blobs",
+        "created_at": "2023-02-26T14:42:14.021000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdankrad\u003e they lose all revenue from blob transactions",
+        "created_at": "2023-02-26T14:42:25.182000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Anyway such a transaction invalidates the blob, it has to have the same nonce and a higher bid",
+        "created_at": "2023-02-26T14:43:38.784000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "so even the builder won't include that blob",
+        "created_at": "2023-02-26T14:43:49.199000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdankrad\u003e why would it have to have a higher bid?",
+        "created_at": "2023-02-26T14:45:03.787000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdankrad\u003e the proposer won't even know about the blob transaction, so he has no idea that it exists when he includes the non-blob tx",
+        "created_at": "2023-02-26T14:45:44.694000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "so the player is submitting the blob transaction on a private mempool then that the builder has access to? yeah, I believe if that transaction makes it to the public pool then the proposer may lose its blob, however the builder will know about the public transaction and if it's not in the game may prefer not to include this blob because of the contradicting nonce",
+        "created_at": "2023-02-26T14:51:42.788000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdankrad\u003e I just don't understand how your construction is better than sending a list of blob commitments to the builder and asking them to compute the proofs and distribute them with the data?",
+        "created_at": "2023-02-26T14:54:25.936000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Oh I have nothing about this either, just believe it may be hard to implement given bandwidth constraints. If it turns out that the latency is not bad and that a homestaker on a normal internet connection can do that as well, I'm all for it.",
+        "created_at": "2023-02-26T14:55:56.671000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdankrad\u003e I'm not asking to send the data, only the commitments",
+        "created_at": "2023-02-26T14:57:40.683000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdankrad\u003e builders can advertise which commitments they have data for, proposer selects one and sends a subset that they want data availability to be provided for",
+        "created_at": "2023-02-26T14:58:06.654000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'll have to think about this, I don't quite understand how proposers will be able to pick anything without the data.",
+        "created_at": "2023-02-26T14:59:03.685000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cdankrad\u003e They will have the tx with commitments. They need to know the data is available to the builder so they can safely include the tx.\nSimple solution: Builders publish lists of tx or commitments they have data for\nHarder solution: Build a transaction mempools that allows data availability sampling for transactions",
+        "created_at": "2023-02-26T19:21:04.640000+00:00",
+        "attachments": []
+    }
+]

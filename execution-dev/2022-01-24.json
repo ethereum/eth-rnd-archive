@@ -1,0 +1,1090 @@
+[
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "During the last CL call, we discussed the issue that EL clients don't like deep reorgs that comes from CL. Some clients (like Erigon) even have deep-reorg-unfriendly architecture. My proposal was to look at the issue from the other side - currently, EL on PoW handles forking pretty well. So what can we do on the PoS side in order to make the forking dynamics closer to the current PoW? This way allows reusing EL as it is now without too much hassle. \n\nA question for EL clients - how do you deal with deep reorgs? Do you have some depth level that you just support (even if that is expensive) and if the level is exceeded you start to do some checks like difficulty check in order to decide whether it's worth maintaining that deep fork state? More details on this would be helpful. \u003c@\u0026836981603216654336\u003e \u003c@\u0026688101493978562687\u003e \u003c@\u0026688090867927482525\u003e  \u003c@\u0026652918665943056397\u003e",
+        "created_at": "2022-01-24T09:40:11.351000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yperbasis",
+        "category": "general",
+        "parent": "",
+        "content": "In Erigon we can do deep re-orgs once in a while just fine. The default max re-org depth is 90K blocks (the user can override that). The problem is that in Erigon we do not have the multi-state. In other words, at one point at time there one current world state corresponding to a particular block, so we cannot execute blocks from multiple side chains concurrently (but we can and do save them into the DB). To perform a re-org Erigon reverts state changes from a loser chain and execute blocks from the winner chain, so it can be a relatively heavy operation. In the PoW world we do it only when a side chain wins, i.e. its total difficulty becomes the largest overall.",
+        "created_at": "2022-01-24T10:41:42.601000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "When we were discussing sync last year, we already proposed to define the 'calcified block' exactly for this purpose.",
+        "created_at": "2022-01-24T10:44:53.241000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "The idea was: the calcified block is the canon chain block with number `head - 128`.",
+        "created_at": "2022-01-24T10:45:40.076000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "For reorgs that go below the calcified block, consensus clients would need to take special care because the execution client may take a longer time to perform the reorg.",
+        "created_at": "2022-01-24T10:46:41.084000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "I still think this is a good idea because it allows for some optimizations in the execution clients.",
+        "created_at": "2022-01-24T10:47:14.306000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks, so Erigon can't ping-pong between deep forks. So if at some point you see that you are actually on the loser chain, only then you do that expensive reorg? You basically build on your current chain until you see that there is some fork that has more difficulty? \n\nAnd for Geth, do you currently behave differently depending on how deep is the fork? I mean, do you already have something kinda 'calcified block', but at a different depth (not 128)?",
+        "created_at": "2022-01-24T11:00:22.768000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yperbasis",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, that's right for Erigon.",
+        "created_at": "2022-01-24T11:01:30.122000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "In geth, we have special handling for states up to 128 deep",
+        "created_at": "2022-01-24T11:03:42.835000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "Switching to these states is much cheaper than switching to a deeper state",
+        "created_at": "2022-01-24T11:03:56.388000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "Basically, states up to 128 depth are available 'immediately'",
+        "created_at": "2022-01-24T11:05:06.096000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "what is the reason that it's up to 128? Do you use memory cache for it? Or store some diffs on disk?",
+        "created_at": "2022-01-24T11:05:11.762000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "there is a memory cache",
+        "created_at": "2022-01-24T11:05:27.278000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "we do this because reorgs of a few blocks are very common",
+        "created_at": "2022-01-24T11:05:38.846000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "geth actually has a tree of such states, so it's not just for canon blocks",
+        "created_at": "2022-01-24T11:06:05.416000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "I see, I believe extending this cache to much deeper than 128 doesn't sound very good?",
+        "created_at": "2022-01-24T11:07:42.873000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "no, it's not possible to extend it much deeper",
+        "created_at": "2022-01-24T11:08:00.313000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "I actually discussed this a lot with the other guys in geth team, because I wanted to simplify the reorg handling for the merge",
+        "created_at": "2022-01-24T11:08:51.668000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "But I'm not saying everyone should be like geth",
+        "created_at": "2022-01-24T11:09:12.698000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "What I'm saying is: we should generally treat deep reorgs as expensive",
+        "created_at": "2022-01-24T11:09:39.232000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "Setting a clear boundary in terms of number of blocks can help to preserve some of the optimizations that EL clients already have",
+        "created_at": "2022-01-24T11:10:08.857000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "So I would prefer to have this concept included in the spec",
+        "created_at": "2022-01-24T11:10:41.018000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "To preserve EL optimizations for sure would be an ideal way, otherwise, it would take a lot of extra time to implement new optimizations.",
+        "created_at": "2022-01-24T11:12:28.650000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "Let me formalize that a bit more:",
+        "created_at": "2022-01-24T11:13:32.834000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "I think the spec should \n\n- define the calcified block as 'the canonical-chain block with number head - 128'\n\n- define the concept of shallow reorgs like: 'EL clients should be able to reorg quickly to any previously-inserted block of height above the calcified block. such reorgs can be performed by simply setting the block as canonical'. We could go further here and say 'EL clients should take at most 5s to perform shallow reorgs'.\n\n- define deep reorgs like: 'EL clients should also be able to rewind their head state to any canonical block with depth above head - 90k. Performing such deep reorgs may be a destructive operation, i.e. any state above the deep reorg destination may become inaccessible after the operation has completed'. IMHO we should define a separate API call for this.\n\n- reorgs beyond head - 90k are not possible. If reorgs of such depth are required, the client must resync.",
+        "created_at": "2022-01-24T11:14:34.925000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@!583892532644151312\u003e lmk if these definitions could work for you",
+        "created_at": "2022-01-24T11:21:43.685000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "general",
+        "parent": "",
+        "content": "but a few is not 128",
+        "created_at": "2022-01-24T11:24:15.018000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "we could also reduce it",
+        "created_at": "2022-01-24T11:24:27.494000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "I'm not married to 128 exactly",
+        "created_at": "2022-01-24T11:24:36.303000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "general",
+        "parent": "",
+        "content": "a few on mainnet is like 2 or 3",
+        "created_at": "2022-01-24T11:24:48.620000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "on testnets, reorgs can be deeper sometimes",
+        "created_at": "2022-01-24T11:25:00.730000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "general",
+        "parent": "",
+        "content": "I've yet to notice a longer one",
+        "created_at": "2022-01-24T11:25:03.528000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "vorot93",
+        "category": "general",
+        "parent": "",
+        "content": "testnets be testnets",
+        "created_at": "2022-01-24T11:25:08.074000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "sure, but the algorithm must also work on testnets",
+        "created_at": "2022-01-24T11:25:20.035000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "can you just let me know if you think my proposed rules would work for your implementation? It seems you are unhappy about putting the calcified cutoff at 128. We can decide the precise number later.",
+        "created_at": "2022-01-24T11:27:34.321000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yperbasis",
+        "category": "general",
+        "parent": "",
+        "content": "Have to measure what depth we can handle sub-5s. But do we need to put it into the spec at all? For Erigon you can say that all re-orgs are destructive in a sense that we have to re-execute blocks. As I see it, specifying this calcified block is a good fit for geth's architecture but not for Erigon's.",
+        "created_at": "2022-01-24T11:32:35.057000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "we don't need to put the 5s in the spec",
+        "created_at": "2022-01-24T11:33:11.097000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "but it would be good to know how quickly erigon can do it",
+        "created_at": "2022-01-24T11:33:34.524000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "I'm proposing the calcified block also because it would allow us to put a precise limit on the range where the CL can switch chain heads instantly. AFAIK, the CL people would really like to have this possibility.",
+        "created_at": "2022-01-24T11:36:06.352000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "I understand that not all clients can do it equally well with their respective architectures, but we do want to find a common ground here.",
+        "created_at": "2022-01-24T11:37:12.718000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Different to difficulty, on PoS it's perfectly possible to bounce continuously between two branches for a while if blocks are arriving slightly late. This is more probable if clients are being delayed cause the EL can't verify the block",
+        "created_at": "2022-01-24T11:38:18.962000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "If erigon wants to maintain exactly one state for database optimization reasons, it's OK, but then its reorg routine needs to be optimized enough to still support quick switching above calcified. I hope that's a tradeoff we can agree on.",
+        "created_at": "2022-01-24T11:39:54.101000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "We can define the cutoff block number to match what clients can support. If, say, erigon can do reorgs of depth \u003c 64 in 5s, we set it at 64.",
+        "created_at": "2022-01-24T11:41:58.582000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "For geth, I know it's 128 because that's the depth of the snapshot tree.",
+        "created_at": "2022-01-24T11:42:40.754000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "For besu/nethermind, we have to check how their caches are constructed and which depth they can support.",
+        "created_at": "2022-01-24T11:43:11.512000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yperbasis",
+        "category": "general",
+        "parent": "",
+        "content": "Do you have an estimate on how deep the branch forking point can be and how often this might happen?",
+        "created_at": "2022-01-24T11:52:22.964000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "yperbasis",
+        "category": "general",
+        "parent": "",
+        "content": "Also, if it's quite common and deep, isn't that a really nasty user experience? Uncertainty for a long time if your transactions makes it or not.",
+        "created_at": "2022-01-24T11:58:41.117000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "in current mainnet I personally didn't see these hopping more than 3, that means depth 4. There may be more cases. But blocks in mainnet arrive a second zero currently. After the merge this is exacerbated due to block delay, and if we are all running Erigorn by then, my understanding from your comment above is that at least the delay would be linear in the number of blocks that need to be applied. \nHow bad can this get no one knows, Medalla took several thousand blocks with jumping from fork to fork.",
+        "created_at": "2022-01-24T11:58:48.628000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "It's not common at all, typical reorgs in mainnet happen when slot 1 gets reorged cause it  proposed without seeing slot 0 that was late. Bouncing requires an almost identical attestation power on each branch and blocks being late (close to the 4 second mark) so that half the network see them",
+        "created_at": "2022-01-24T12:00:52.342000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "with proposer_boost coming up this becomes even less common",
+        "created_at": "2022-01-24T12:01:16.711000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "What I worry is about liveliness in the case of failure, say like in the Medalla event.  But perhaps I'm exaggerating since  I don't know how will this plays with optimistic_sync: if the EL is busy reorging to validate a block, it will return `SYNCING`  to the consensus layer client on the next one. This one can continue keeping track of the whole tree without trouble optimistically, but this validator is knocked out from the point of view of the network cause it can't attest. My gut feeling is that if we see bad forking like in Medalla and EL clients can't allow a validator to attest for one or two slots after one reorg, then probably this means those events are irrecoverable",
+        "created_at": "2022-01-24T12:05:56.352000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "my take on this is that shallow and deep reorgs have fundamentally different purposes: it's important to be able to service shallow reorgs quickly because CL fork choice is constantly updating based on incoming events. deep reorgs are needed when there is some kind of extraordinary network event, and you want to leverage the EL state.",
+        "created_at": "2022-01-24T12:09:18.859000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "but once we are deeper than 128, is it expensive switching between those reorgs? Or is it just expensive to build a deep fork once?",
+        "created_at": "2022-01-24T12:10:38.381000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "general",
+        "parent": "",
+        "content": "I don't quite remember well (and I'm certainly not a client dev), but wasn't Medalla about clients struggling to keep track of many different chains? I don't think that the fork choice rule pointed to a new head on a different chain often though",
+        "created_at": "2022-01-24T12:10:59.741000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "under my definition from earlier, it would not be possible to 'switch' so easily for reorgs \u003e 128 blocks depth.",
+        "created_at": "2022-01-24T12:11:09.066000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "the CL would need to roll back to the common ancestor point, then re-insert blocks to get back up to the other fork head.",
+        "created_at": "2022-01-24T12:11:41.411000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "I think it's OK to make it do that because such reorg situations are rare",
+        "created_at": "2022-01-24T12:13:16.696000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I agree with the concept of a calcified block, and for the purpose of shallow forks it evens sounds reasonable to have this number much lower, certainly lower than 32",
+        "created_at": "2022-01-24T12:14:07.225000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "the larger we make it, the more wiggle room fork choice has to do its thing",
+        "created_at": "2022-01-24T12:14:37.580000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "so I would not advise to make it extremely shallow",
+        "created_at": "2022-01-24T12:14:48.760000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "yeah, but it seems that it would need a compromise with Erigorn",
+        "created_at": "2022-01-24T12:14:52.515000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "we need to get the numbers to decide that",
+        "created_at": "2022-01-24T12:15:02.312000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "basically, how long does it take to apply reorgs of 16 / 32 / 48 / 64 etc. blocks on mainnet state",
+        "created_at": "2022-01-24T12:15:36.979000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I think indeed this was the general situation, but frequent hops did happen with large chunks of validators being turned on/off",
+        "created_at": "2022-01-24T12:16:16.364000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm, I don't remember well then. I read here recently that the CL clients don't like deep reorgs either ( https://discord.com/channels/595666850260713488/692062809701482577/931186360499466320 ), so I was under the assumption that didn't happen very often (or if it did, that it took a relatively long time).",
+        "created_at": "2022-01-24T12:19:17.935000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "yeah, certainly deep reorgs are expensive as well on prysm, it requires reapplying slots as well, I do not know if any client keeps a state diff on different branches for long",
+        "created_at": "2022-01-24T12:22:44.130000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "general",
+        "parent": "",
+        "content": "OK. But if the CL clients and EL clients behave similarly for shallow/deep reorgs (fast and slow respectively), I don't think there's an issue with just using forkChoiceUpdated for arbitrary depth reorgs no? As in, I don't think there's an assumption in the CL clients that a deep reorgs is fast, because they themselves are also slow.",
+        "created_at": "2022-01-24T12:24:55.206000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "This is true, my understanding is that in this situation the CL would simply optimistically sync the next slot",
+        "created_at": "2022-01-24T12:27:12.659000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "if there is no hoping between branches this is a non-issue, only those validators that need to attest in the next slot will be affected, and they will not attest, thus not adding weight to any other branch, and therefore not contributing to any hop",
+        "created_at": "2022-01-24T12:28:19.171000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "The upcoming changes to Engine API spec allow for `forkchoiceUpdated` to validate a payload if it hasn't been validated yet before updating the forkchoice state. Though, if validating a payload involves executing its ancestors to obtain the parent state the client must return `SYNCING`. Effectively, it means that Erigon as EL client will turn a node into an optimistic state in case if re-org involves more than 1 block.\n\nThere are two options for CL:\n- Do nothing special in this case and wait till the `VALID` status is returned after submitting a subsequent payload. In this case validator won't be able to attest/propose for a number of slots required to turn `SYNCING` into `VALID`\n- Call `forkchoiceUpdated` with the same parameter set until it responds with `VALID` or next payload is submitted. This allows for attesting in the next slot if a few seconds would be enough for Erigon to obtain the parent state and execute a payload",
+        "created_at": "2022-01-24T12:43:08.491000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "the difference between shallow and deep reorgs is: shallow reorgs can be done 'synchronously' because it is expected that they are done very quickly. deep reorgs must be done asynchronously because they can take hours in extreme cases.",
+        "created_at": "2022-01-24T12:43:37.100000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Adding the concept of a calcified block into the spec will make a restriction on the design of EL clients",
+        "created_at": "2022-01-24T12:43:45.842000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "but that's OK, it's important to make it very clear what the expectations between CL and EL are",
+        "created_at": "2022-01-24T12:44:27.471000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "if CL can't rely on any guarantees (e.g. any reorg could take 2h), it's much harder to implement it well",
+        "created_at": "2022-01-24T12:45:06.521000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "For validators it's important to be able to re-org a few blocks as fast as it's possible. For other users probably not that important, if client chooses not to support multiple state which allows for fast re-orgs then validators won't choose this client as their EL.\n\nThere is no high expectations between CL and EL with respect to the time that the re-org is happening. As long as CL receives clear signals from EL it will operate normally, including turning into the optimistic mode. It rather users' expectations that matter here.",
+        "created_at": "2022-01-24T12:52:42.447000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "hmm",
+        "created_at": "2022-01-24T12:53:22.827000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "not sure if I like this view. Specifically, I have an issue with the statement `then validators won't choose this client as their EL`, because it implies that users who want to run validators will be aware of the subtleties surrounding this issue.",
+        "created_at": "2022-01-24T12:54:36.038000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "as a user, you will only really find out how good your EL client is once you experience a serious reorg.",
+        "created_at": "2022-01-24T12:55:00.459000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "that's not great",
+        "created_at": "2022-01-24T12:55:03.633000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "I would rather have us set reasonable expectations for all EL implementations. Users will still have free choice of EL and they can then choose based on general client features.",
+        "created_at": "2022-01-24T12:56:13.550000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "In the PoW world, I am not sure if miners are using Erigon, probably not because of this exact feature of keeping only one state and not supporting immediate re-orgs. I would say that this is a feature of Erigon which users should be aware of when picking up a client. But I also understand your point of view on this; as this feature may reduce network security by temporarily knocking out validators using Erigon",
+        "created_at": "2022-01-24T12:59:08.385000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I am curious how hard would it be to add support of storing a few states in Erigon? cc \u003c@!583892532644151312\u003e",
+        "created_at": "2022-01-24T13:00:56.190000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "Like I said, it doesn't need to store any states if the reorg is fast enough.",
+        "created_at": "2022-01-24T13:01:20.586000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "AFAIK, erigon is supposed to be fast.",
+        "created_at": "2022-01-24T13:01:34.467000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Right, but CL client needs to be smarter if it wants to better support clients with this kind of design. It should poll the state of recent `forkchoiceUpdated` if it returned `SYNCING` in attempt to resolve `SYNCING` faster than waiting til a subsequent payload is received.\n\nIf this is done by CL clients and if Erigon is able to execute `N` blocks in a few seconds, where `N` is max boundary on the number of blocks in re-orgs that are common to the beacon chain then we don't need calcified block concept in the spec. The latter condition should be satisfied as Erigon is fast enough, the former depends on CL client implementers.",
+        "created_at": "2022-01-24T13:06:21.723000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "In theory this continuously polling of `forkchoiceUpdated` should happen only if the beacon needs to submit attestation data or a block right at that slot. Although given the separation of BN/VC this is probably impossible to know.",
+        "created_at": "2022-01-24T13:08:53.258000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I think that if implemented this polling should happen every time `forkchoiceUpdated` responds with `SYNCING`.  We may introduce separate `EXECUTING` status (if that would reduce the complexity of CL implementation) to highlight the case when EL client is only executing blocks due to re-org and not missing any data",
+        "created_at": "2022-01-24T13:15:11.736000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "The issue here is that you may never know how much time it will take to do the re-org. It's really difficult to recognize the case when it's worth doing a re-org in an async fashion, i.e. when it's not fast enough. Because it depends on how large are the blocks, what hardware the client is running on, how many blocks are needed to be executed in order to re-org",
+        "created_at": "2022-01-24T13:19:00.310000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Or EL may respond with a number of blocks require to be executed to complete a re-org. Then CL client may decide if it less than e.g. 8 blocks then it polls, otherwise, gives up and waits for the next payload",
+        "created_at": "2022-01-24T13:20:12.817000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "hehe, but this is why I want the distinction with the calcified block in the first place. Because with that, you DO know it will be quick for certain reorgs.",
+        "created_at": "2022-01-24T13:22:33.124000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "What else techniques than storing multiple states could guarantee a re-org to be of a constant time disregarding a number of blocks? In my view, the calcified block concept makes supporting multiple states a requirement.",
+        "created_at": "2022-01-24T13:26:57.073000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "I will create a writeup summarizing my position",
+        "created_at": "2022-01-24T13:50:05.451000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "general",
+        "parent": "",
+        "content": "I'm not an Erigon developer, but I have read some of the relevant code and picked apart the database. I would imagine that with Erigon, as part of CL interop adding an in-memory state tree cache for recent branches seems feasible up to some N blocks deep if bouncing between branches is required. But it's true the main database only stores canonical chain states, and that needs to be wound back then forward when committing to a new branch. On the bright side, Erigon already has code to hold multiple blocks worth of state changes in memory, and commit them efficiently to the database all at once.  That's part of how it performs execution so quickly during sync, by batching large numbers of block state changes in memory before committing them to the database.",
+        "created_at": "2022-01-24T15:40:02.355000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "It seems that it boils down to \u003c@!194432762315407360\u003e's comment \u003chttps://discord.com/channels/595666850260713488/688075293562503241/935145817155727431\u003e, if we measure the time it takes Erigorn to reapply N blocks in a reasonable time (\u003c4 seconds is a starter to get the CL client ot submit an attestation) then perhaps this can be used as a calcified block",
+        "created_at": "2022-01-24T15:46:28.002000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "general",
+        "parent": "",
+        "content": "I am a Nimbus-eth1/EL developer currently.  That doesn't show up in discussions much at the moment because Nimbus-eth1 isn't ready to use (unlike Nimbus-eth2 which is quite mature).",
+        "created_at": "2022-01-24T15:47:26.241000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "My summary so far (split below means running two chains at once):\n\n1) A few blocks deep split - not a problem for any EL client, we can forget about this problem;\n2) Up to 128 depth split - not a problem for Geth, but a serious problem for some clients like Erigon;\n3) Deeper than 128 depth split - pretty much no EL client can handle such split efficiently;\n\nEven if we could adjust 128 to a smaller number N that is well supported among all the EL clients, then this number becomes an attack vector and doesn't help with deeper splits anyway.\n\nWe probably could do some heuristics on the CL side. If we see that there is a deep split in CL (especially if we detect that we are on minority chain), we keep asking EL to validate all the chains we see on CL and keep validating until it reaches the depth of N. Then we stop asking EL to validate/reorg the other chains unless we are very sure that we must switch (let's say the other chain gets finalised, but generally it's not trivial to tell the criteria). Sure, we are still left with a disaster scenario when the new chain has an invalid payload according to our EL, but that's a fatal problem anyway.\n\nWe could also try to heavily penalize building on the blocks that are deeper than N (blocks are signed by the proposer, so it looks doable). Potential liveness issue, but maybe could be solved. This would help to limit forking on the CL level and will help to eventually decide the canonical chain that is worth switching to.",
+        "created_at": "2022-01-24T15:48:33.473000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "general",
+        "parent": "",
+        "content": "The Nimbus storage design is different from both Geth and Erigon, in that it _can_ be made to store multiple branches indefinitely deep if requested, in storage not just RAM, and execute from any of those branches with similar, reasonable performance, without rewinding. I haven't decided whether that capability is actually worth implementing though, and I didn't know it might be relevant to CL support, so this discussion is really useful.",
+        "created_at": "2022-01-24T15:49:11.032000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "Network conditions make this \"perfectly possible\" in any consensus algorithm including PoW (as do concerted attacks with high economic weight in each). But given a moment of synchrony, both PoW and PoS would quickly coalesce on a head due to the cryptoeconomic fork choices of difficulty and attestations.\n\nThe highest stress points we've seen in the PoS algorithm have been due to client bugs, rather than the algorithms themselves. Additionally, this discussion is premised upon the PoS forkchoice flip flopping between forks, but that is not in fact what we saw on kintsugi. We saw very out-of-sync nodes building at strange chain depths. These essentialy auto-orphans were requested to be executed on EL which induced \"forking\" on EL to execute even though forkchoiceupdated was never to be sent.",
+        "created_at": "2022-01-24T15:52:20.296000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "general",
+        "parent": "",
+        "content": "If a split depth D \u003e constant N is possible, would it be useful to allow a \"time to execute split\" proportional to O(D) as part of the EL specification?  I expect all ELs can reorg in a time proportional to O(D).",
+        "created_at": "2022-01-24T15:53:20.249000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "Do the updated semantis of the engine api not allow for this flexbility in EL design?",
+        "created_at": "2022-01-24T15:54:30.168000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "that's the general goal of the updated PR -- all EL's handle non-canonical branches a bit differently. We should allow them to continue to do so",
+        "created_at": "2022-01-24T15:54:52.812000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "I didn't check the new spec yet.",
+        "created_at": "2022-01-24T15:56:07.467000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "The problem here is that reorg time pretty soon will be too high to reorg multiple times (number of forks) during the 12 seconds slot.",
+        "created_at": "2022-01-24T15:58:19.896000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "general",
+        "parent": "",
+        "content": "I'm thinking that _execution_ from a non-canonical state (i.e. switching branches multiple times) can be fast for any EL that holds an in-memory cache of the last N blocks (with optional durable log), and perhaps such a cache is not too difficult to add, as part of adding other CL interop support anyway to the clients that need it.  Updating the reorg'd \"canonical\" state in the main state database is what requires slow rewinds in some ELs. There may not be a need to do multiple reorgs of the latter kind during the 12 second slot, only the former kind.",
+        "created_at": "2022-01-24T16:02:58.433000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "My understanding from Erigon's response was that the problem is not the blocks, the problem (heavy operation) is actually to reverse the state back and apply those blocks. \u003c@\u0026688101493978562687\u003e maybe could tell how long roughly does it take to go back 128 blocks and apply new 128 blocks on the mainnet?",
+        "created_at": "2022-01-24T16:06:47.100000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "general",
+        "parent": "",
+        "content": "Another way of putting that is, for CL interop, Erigon might need to add some kind of cache, similar to Geth's in-memory tree, to handle executions rapidly switching branches a small number deep anyway (e.g. 3). If that must be added anyway, perhaps it doesn't matter if the number is 3, 64 or 128.",
+        "created_at": "2022-01-24T16:07:27.480000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "in Erigon currently 1 block unwind takes around the same time as applying 1 block \"forward\"",
+        "created_at": "2022-01-24T16:13:11.089000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "2 blocks back is similar time to 2 blocks forward",
+        "created_at": "2022-01-24T16:13:41.095000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "etc.",
+        "created_at": "2022-01-24T16:13:44.193000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "general",
+        "parent": "",
+        "content": "Do (all) CL clients expect/depend on an instantaneous VALID response from EL clients when calling forkchoiceUpdated to a non-canonical one? What's wrong with getting SYNCING back?",
+        "created_at": "2022-01-24T16:13:56.291000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "very roughly how much 1 block is in ms?",
+        "created_at": "2022-01-24T16:14:24.405000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "It depends on disk commit times. On Linux it is usually better than on MacOSX, anything 100-600ms",
+        "created_at": "2022-01-24T16:15:40.940000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "on MacOSX for some reason commit are longer",
+        "created_at": "2022-01-24T16:15:53.421000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "there is no fundamental reason why we cannot put caches in, it is just we found that most caches we had before did not actually make things faster 🙂 so we removed most of them, and now adding back only if we know they actually help",
+        "created_at": "2022-01-24T16:17:24.215000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "general",
+        "parent": "",
+        "content": "My understanding is Erigon commits multiple blocks worth of state changes in batches during sync.  I have always assumed this is because, if the batch is large enough and sorted, that's more efficient for the B-tree.  Would it be possible to use the same for reorg updates above a useful size?",
+        "created_at": "2022-01-24T16:18:51.228000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, it is true. In the same way, if there is a deep reorg, it will likely happen in a single db transaction",
+        "created_at": "2022-01-24T16:20:11.842000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "if reorgs becomes performance bottleneck, we will optimise them. So I would not hang up on this matter too much 🙂",
+        "created_at": "2022-01-24T16:21:45.068000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "general",
+        "parent": "",
+        "content": "I wonder if there's a way we could set up a test suite for that?",
+        "created_at": "2022-01-24T16:28:34.854000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "timbeiko",
+        "category": "general",
+        "parent": "",
+        "content": "Is the time to deal with deep reorgs dependent on state size? If not, it should be quite doable?",
+        "created_at": "2022-01-24T16:29:02.570000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "general",
+        "parent": "",
+        "content": "If reorg reaction time is important post merge, even though it doesn't happen often, it would make sense to explicitly test for it. Maybe add something to the test network that causes it intentionally.",
+        "created_at": "2022-01-24T16:30:10.767000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "jlokier",
+        "category": "general",
+        "parent": "",
+        "content": "It is the sort of whole-system behaviour that I could imagine passing a test suite and then failing in real deployment where other functionality is running at the same time.",
+        "created_at": "2022-01-24T16:31:54.024000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "nothing, CL will start syncing optimistically, but won't perform duties",
+        "created_at": "2022-01-24T16:34:00.618000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "I'm slightly lost on the problem we are trying to solve. The general problem I see is that once we are deeper than N (128 in Geth) we can't really run multiple forks in CL as the EL will just be too busy switching between deep forks. So do we want to support deeper splits than N (for whatever reason it happens, bouncing attacks, client bugs etc.). Or do we say that if such a deep split happens then it's staker's responsibility to get on track manually (seems that was the solution in Kintsugi)?",
+        "created_at": "2022-01-24T16:40:00.634000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "\"run multiple forks in CL\" I mean run multiple EL VALIDated forks.",
+        "created_at": "2022-01-24T16:51:24.273000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "general",
+        "parent": "",
+        "content": "just FYI Netyhermind uses currently similar approach to Geth, but with 64 limit instead of 128. But we are currently experimenting with different storage models, so that may change in the future. We will be doing everything to be in line with the merge though.",
+        "created_at": "2022-01-24T17:02:05.225000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "general",
+        "parent": "",
+        "content": "What does the CL client do if, within a second or two, the EL client signals this SYNCING -\u003e VALID switch [0]? Does the CL client immediately resume duties then?\n\n[0] Assuming that's how it works, i.e. that the EL tells the CL it's caught up again. Or is the CL the one that should poll?",
+        "created_at": "2022-01-24T18:18:43.040000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The CL needs to poll, that's why \u003c@!425572898787426305\u003e suggestion",
+        "created_at": "2022-01-24T18:21:37.545000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "general",
+        "parent": "",
+        "content": "I see, although I think it's not very useful for a CL client to know how deep a reorg is if it doesn't know how long that reorg will take.\nI'd assume that, based on the fixed 4-second windows of the beacon chain slots, a CL client has a few rather well defined \"last-call\" moments to check if the EL has caught up again for the CL to fulfill its duties.",
+        "created_at": "2022-01-24T18:24:32.056000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "that applies for attestations, if you need to propose it's a different game though",
+        "created_at": "2022-01-24T18:26:32.931000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "general",
+        "parent": "",
+        "content": "different how?",
+        "created_at": "2022-01-24T18:27:05.064000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "that there's no deadline, you want to submit the block as soon as possible, 4 seconds is already too late",
+        "created_at": "2022-01-24T18:27:54.793000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "general",
+        "parent": "",
+        "content": "Sure, so the CL client will then poll more often?",
+        "created_at": "2022-01-24T18:29:05.267000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "not that I know, I *think* prysm does not do this",
+        "created_at": "2022-01-24T18:30:54.113000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "pietjepuk",
+        "category": "general",
+        "parent": "",
+        "content": "I think I'd be good if EL clients are fast with (short) reorgs. And that if Erigon has room for improvement here, that that's something they can work on. I don't see any particular reason to enshrine a particular reorg depth as \"fast\" though. Replying a reorg depth from EL to CL doesn't seem particular useful either, as it doesn't say much about how long that'll take. You could then argue \"EL should reply time estimate\", but the CL will for proposal duties still optimistically poll more often in the hope that the EL client was wrong in its estimate or something.",
+        "created_at": "2022-01-24T18:32:46.002000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "As a CL developer I *really* don't want to have to handle shallow vs deep reorgs differently to work around EL optimisations. I've got no problem getting a `SYNCING` response back from the EL if they can't handle a `forkChoiceUpdated` message fast enough and the CL has plenty of information about when it's likely to need to perform duties so it can poll fairly intelligently to avoid skipping duties unnecessarily.\n\nThat said, I also don't see why the EL should respond with `SYNCING` if it can quickly apply a couple of blocks to handle a short re-org. In some designs a short-reorg requires taking some time to execute a couple of blocks, in other designs it takes some time to load a different world state into cache and other designs have to perform other work. The key thing isn't what work has to be done it's whether it can be done quickly. Hard to spec admittedly but that's the reality of it.",
+        "created_at": "2022-01-24T21:20:31.008000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "The problem we've seen so far hasn't been about performance of the EL as such, it's just been because the execution engine API was too limiting.  The CL needs to call `executePayload` on all it's blocks to verify the block hash and it was the `executePayload` call the CL had to poll to check if syncing had finished.  That amounts to a DOS attack on the EL but it's entirely because of the API available, not because the way the CL works is incompatible with the EL.  With the new approach of replacing `executePayload` with `insertPayload` and not requiring actual execution on that call the CL won't be polling that and it can now just poll `forkChoiceUpdated` and be told if the chain has turned out to be invalid.  That's a much better fit for both the CL and the EL.  The EL should essentially be seeing the same kind of forking behaviour that they have today with PoW - mostly very short forks and occasionally longer ones (and that's when things are going badly wrong as we've seen on Medalla and Ropsten).",
+        "created_at": "2022-01-24T21:25:12.888000+00:00",
+        "attachments": []
+    }
+]

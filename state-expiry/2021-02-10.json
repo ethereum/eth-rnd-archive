@@ -1,0 +1,82 @@
+[
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Reading contract storage might be a bad design decision but in this particular case it allows for getting rid of dependency on historical data with relatively low cost. Though, checkpoints of deposit contract state should not take that much space and if they are linked to weak subjectivity checkpoints which would make sense. But in this case it would require to get eth1 state downloaded at the weak subjectivity checkpoint and process all eth1 blocks towards the head of the chain in order to bootstrap eth1 data provider. If we want to start processing eth1 blocks only when the head is reached and eth1 state is downloaded (which happens much later than reaching the head) then bootstrapping eth1 data provider directly from the contract storage seems like the only viable solution. I would think about this later when we were making a final decision regarding sync and deposit processing after the merge",
+        "created_at": "2021-02-10T05:53:54.101000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Actually if you don’t have to respect the follow distance (ie post merge) then there is an accessor function on the deposit contract to get the current merkle root. You’d just assume any deposit log events are valid (came from your own eth1 node which is already trusted) and so you just include any deposits from the block immediately and the merkle tree root the contract can provide.",
+        "created_at": "2021-02-10T06:17:01.410000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "With the follow distance the world state has generally been pruned already so you can’t access it.",
+        "created_at": "2021-02-10T06:17:33.714000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, if we were validating deposits against deposit events that have been a result of deposit transactions from e.g. previous slot then we wouldn't need deposit root at all. But that requires even more tight relationships between eth2-client and eth1-engine which is what we are trying to avoid to keep the design forward compatible with eth1 shard for the case if we would like to push eth1 to a shard in the future. And for this case you'd need to keep deposit processing loosely coupled with deposit roots and merkle proofs. Though, we _may_ read deposits from receipts in the executable beacon chain but bring back the old machinery if there will be a demand on pushing eth1 to a shard.",
+        "created_at": "2021-02-10T07:30:05.227000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Aaah, I see, it's not about validating deposits, it's about being able to create new ones",
+        "created_at": "2021-02-10T10:08:54.787000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But then.... that only requires looking up history up to the current deposit queue length, right?",
+        "created_at": "2021-02-10T10:09:14.279000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It depends on how merkle proofs computation is bootstrapped. IIUC, currently deposit tree is recreated with historical receipts from scratch to allow merkle proofs computation for new deposits. There is an option to make checkpoints with deposit tree data to get rid of dependency on receipts that are too old in the past.",
+        "created_at": "2021-02-10T10:18:19.943000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "After the merge, if we reduce follow distance to `1` it will be possible to get bootstrapped with the recent deposit contract state. It's indeed not a perfect design solution to read contract's storage directly (without corresponding accessors in the contract) but technically it should be possible.",
+        "created_at": "2021-02-10T10:21:42.993000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "You definitely should be able to generate the next N merkle proofs knowing only the right-side branch stored in the deposit contract itself",
+        "created_at": "2021-02-10T12:00:46.357000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So no need to reconstruct the entire tree",
+        "created_at": "2021-02-10T12:01:02.710000+00:00",
+        "attachments": []
+    }
+]

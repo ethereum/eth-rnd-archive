@@ -1,0 +1,114 @@
+[
+    {
+        "author": "paulhauner",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "\u003c@607055410104500244\u003e made a good point that neither he or I have noticed any works on the builder API to support 4844 yet. I'm wondering if there's anyone taking on that effort, yet? Perhaps we missed it.\n\nGetting the builders involved as soon as reasonably possible seems like a good idea, given past experiences. We are happy to contribute to this, but we have our hands full with client development and wouldn't be able to start until that cools down a bit.",
+        "created_at": "2022-11-04T00:43:49.026000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "terence0083",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "This is certainly a good point, and we should start as early as possible to prevent last min scramble.\nI'm hoping for minimal CL client changes. Probably the only invasive change is `submitBlindBlock` v2 will include `blobs_sidecar` in the response \nFor the relayer side, there's more work, they probably want to verify blobs, the commitments, and the version hashes are valid. Those will be coming from the builders \n\ncc \u003c@388610194608750595\u003e",
+        "created_at": "2022-11-04T00:56:50.981000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "metachris_",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Thanks for the heads-up. Will make an update to builder specs (adding submitBlindBlockV2 - seems we can't reuse the v1 API because adding/changing fields breaks the SSZ encoding, and also mev-boost rejects payloads with unknown fields, thus older mev-boost versions would break when doing that call with new fields.).\n\nCreated an issue in the mev-boost repo to track this: https://github.com/flashbots/mev-boost/issues/392",
+        "created_at": "2022-11-04T08:10:37.569000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "stefanbratanov",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Shouldn't there be v2 which will be the Capella change only (withdrawals in the header and the payload)  and then v3 4844 on top?",
+        "created_at": "2022-11-04T09:27:21.790000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "We typically haven’t added a new version for each hard for. There’s a header added when using SSZ to indicate which hard fork the data is from which allows it to be parsed. That matches the json representation which has a metadata field to indicate which milestone is in use.",
+        "created_at": "2022-11-04T09:33:47.362000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "metachris_",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "I see. I wonder how that works with the current SSZ encodings, also pinging \u003c@144468805697929216\u003e here... I don't think the current types respect that header when doing the SSZ encoding/decoding. \n\nAlso, mev-boost disallows unknown fields in the JSON payloads, so sending a signed-blinded-beacon-block with a new field would be rejected, and the slot would be missed because the payload isn't even forwarded to the relays. Maybe this is too strict and should be loosened (was added after the first audit to prevent resource exhaustion attack vectors).",
+        "created_at": "2022-11-04T09:36:30.702000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "You would need to add support for the new hard fork which would make those fields not unknown anymore.",
+        "created_at": "2022-11-04T09:37:27.265000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "metachris_",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "yes, but users running older mev-boost versions wouldn't be able to complete the getPayload call (meaning they'd miss the slot)",
+        "created_at": "2022-11-04T09:37:58.404000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "And we’ve gone through bellatrix with this approach fine without needing to add a new version of apis.",
+        "created_at": "2022-11-04T09:38:02.251000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "I wouldn’t expect they would be able to anyway given it wouldn’t parse the block right.",
+        "created_at": "2022-11-04T09:38:21.647000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "metachris_",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Hmmm, yeah right, if the builders/relays return the new payloads that would break the mev-boost flow too 🤔 \n\nHow to best approach this... if this is rolled out without a new API version, all mev-boost users (80% of all proposers) would need to upgrade to a new mev-boost version that at least is more liberal with unknown fields, otherwise they are guaranteed to miss their slots.",
+        "created_at": "2022-11-04T09:42:29.996000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "metachris_",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "maybe a good first step would be to remove the strict JSON payload decoding requirements in mev-boost (disallowing unknown fields), which would allow the requests to pass through even if the new fields are not yet known (so these changes wouldn't strictly require a new API version): https://github.com/flashbots/mev-boost/pull/393",
+        "created_at": "2022-11-04T09:50:55.585000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "metachris_",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "I guess there's two options to make these changes (payload changes in Capella and EIP-4844) compatible with mev-boost:\n\n1. allow unkown json payload fields in mev-boost (https://github.com/flashbots/mev-boost/pull/393) and have all users upgrade to at least this version of mev-boost (otherwise they might miss their slots), and/or have relays not return payloads for any lower mev-boost version to ensure proposers are not missing slots\n2. create a new getPayload API version in the builder-specs for each change to the payloads",
+        "created_at": "2022-11-04T10:18:27.538000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ajsutton",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Bear in mind that all users will have to upgrade their EL and CL to support the hard fork as well. Seems pretty reasonable to also require an upgrade to MeV-boost. But if we can smoothly detect the not upgraded version and not try to build a block obviously that’s a nice feature to have",
+        "created_at": "2022-11-04T11:00:10.271000+00:00",
+        "attachments": []
+    }
+]

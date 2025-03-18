@@ -1,0 +1,290 @@
+[
+    {
+        "author": "rimeissner",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "concerning `Before calling PAYGAS, AA transactions cannot access external state or contracts (other than precompiles).` (in https://hackmd.io/y7uhNbeuSziYn1bbSXt4ww?view) does this include bytecode from other contracts? E.g. could I perform a delegate call before I call PAYGAS?",
+        "created_at": "2020-05-24T20:17:41.076000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "For our MVP implementation `DELEGATECALL` is indeed among the restricted opcodes (i.e. couldn't be called before `PAYGAS`), as the validity of an AA transaction could otherwise depend on external state (delegate call target has not yet been created / has been created / has been selfdestructed). We do plan to look into that use case specifically though to see if we can come up with a way around that.",
+        "created_at": "2020-05-24T20:38:38.828000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "yeah I understand that. Didn't think about it in detail, but the delegatecall checks might be easier to enforce than normal storage access, but totally makes sense to not include that in a first version.",
+        "created_at": "2020-05-24T20:41:46.651000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "but yeah ... the more I think about it the more edge cases come to my mind ....",
+        "created_at": "2020-05-24T20:44:56.078000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "😄",
+        "created_at": "2020-05-24T20:45:00.892000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Yes exactly, that was our thinking as well. Basically, `SELFDESTRUCT` seems like the main problem, where one `SELFDESTRUCT` of a library contract could potentially invalidate an arbitrary amount of pending transactions...",
+        "created_at": "2020-05-24T20:45:33.919000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "yeah, and then you also need to check that there is not another delegate call that allows you do \"load\" the `SELFDESTRUCT` into the library",
+        "created_at": "2020-05-24T20:46:57.497000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "basically I was hoping that it would be possible to reuse existing proxies to convert an existing smart contract account to use account abstract by pointing it to a new master copy",
+        "created_at": "2020-05-24T20:48:02.973000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "but that seems a little bit too early to do 😛",
+        "created_at": "2020-05-24T20:48:14.595000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "ah, interesting",
+        "created_at": "2020-05-24T20:49:59.879000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "I am not all that familiar with proxy patterns, but I assume you would still want to use the existing \"entry point contracts\" and only point them to a new master copy that uses AA? I think that would be tricky to support in either case, as we right now only allow AA transactions that start at special AA contracts (with the bytecode prefix), so you couldn't start such a transaction at an existing proxy contract.",
+        "created_at": "2020-05-24T20:52:45.539000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Actually that would be fine with me. I just would push that check (bytecode prefix) into the mastercopy. Most of the proxy pattern load the mastercopy address from storage and perform a delegatecall to that address. Assuming that this new address is then a template for AA (with the bytecode prefix) it would perform the check and decide to either revert or call PAYGAS (same limits apply, e.g. 40k gas)",
+        "created_at": "2020-05-24T20:55:16.152000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "but again, not super important right now, as there are many things to get ready before",
+        "created_at": "2020-05-24T20:56:25.207000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "thinking further ahead, I can speak out of experience, that users don't like to migrate their funds, so adding support for this might make migration for users easier in the future",
+        "created_at": "2020-05-24T20:58:02.096000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "That makes sense. I think once we are past the \"figuring out if / how AA can work at all\" phase, these will be important questions.",
+        "created_at": "2020-05-24T21:02:19.608000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Also on a different topic regarding the \"read-only from other contract\", I think this make sense if it is expected that AA is used to write \"wallet accounts\" that hold tokens. As ERC721 and ERC1155 make use of contract callbacks.",
+        "created_at": "2020-05-24T21:02:24.067000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "\u003e  \"figuring out if / how AA can work at all\" phase, these will be important questions.\nFor sure ... should these questions be noted down somewhere?",
+        "created_at": "2020-05-24T21:02:58.324000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "or do we just leave them here for now",
+        "created_at": "2020-05-24T21:03:11.405000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Btw, I think I have seen you around here in Berlin in the past? If you are still around, I'd be happy to talk about some of these topics in person some time!",
+        "created_at": "2020-05-24T21:04:46.369000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "I am part of the Safe team and am working from Fullnode 😉",
+        "created_at": "2020-05-24T21:05:08.989000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "\u003e For sure ... should these questions be noted down somewhere?\nBut for now I was just going to write those down in one of our hackmd documents so it won't get lost",
+        "created_at": "2020-05-24T21:05:26.722000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "sounds good 🙂",
+        "created_at": "2020-05-24T21:05:37.247000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "\u003e I am part of the Safe team and am working from Fullnode 😉\nAh, that explains that! Is Gnosis already back at the office? Would be happy to come by some time (even had a floating desk there pre-Corona 🙂 )",
+        "created_at": "2020-05-24T21:08:28.186000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "some of the Gnosis people are back (at least a couple days per week). There is quite a lot of space so normally it is easy to get around even when keeping 2m distance 😉",
+        "created_at": "2020-05-24T21:09:46.323000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "maybe little bit off topic for this channel 😬",
+        "created_at": "2020-05-24T21:10:07.369000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "rimeissner",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "sorry",
+        "created_at": "2020-05-24T21:10:08.970000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "True. I think getting some thoughts from people who might actually end up using AA would be really helpful though. If you want to ping me on telegram, I'm adietrichs there as well.",
+        "created_at": "2020-05-24T21:10:45.013000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "In the long run, banning SELFDESTRUCT may be the right thing to do",
+        "created_at": "2020-05-24T21:11:43.052000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "That one opcode just breaks waaaaay too many invariants",
+        "created_at": "2020-05-24T21:11:52.477000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "First, that the code of a contract is immutable",
+        "created_at": "2020-05-24T21:12:03.424000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Second, that there is a cap on the amount of storage that can be changed with N gas",
+        "created_at": "2020-05-24T21:12:27.221000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "As a SELFDESTRUCT can destroy an unbounded number of storage slots",
+        "created_at": "2020-05-24T21:12:37.119000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "So it makes even eg. single layer state schemes harder to implement",
+        "created_at": "2020-05-24T21:13:01.398000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "Makes sense. In the context of AA I assume this would be one of these things then though where one would first bring a more restrictive version of AA to mainnet and then later on potentially remove `DELEGATECALL` from the restricted opcode list if we ever got rid of `SELFDESTRUCT`",
+        "created_at": "2020-05-24T21:39:49.825000+00:00",
+        "attachments": []
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "(of course here under the assumption that `DELEGATECALL` would be fine before `PAYGAS` if and only if there was no `SELFDESTRUCT`)",
+        "created_at": "2020-05-24T21:41:52.646000+00:00",
+        "attachments": []
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Channel Graveyard",
+        "parent": "",
+        "content": "yeah, that makes sense",
+        "created_at": "2020-05-24T23:33:25.847000+00:00",
+        "attachments": []
+    }
+]
