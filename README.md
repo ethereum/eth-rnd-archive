@@ -21,12 +21,18 @@ Format of the files:
             {
                 "type": "<mime type of the attachement>",
                 "origin_name": "<original name of the attached file>",
-                "content": "<base64 encoded bytes of the attachement>"
+                "content": "<hash of the attachement bytes>"
             }
         ]
     }
 ]
 ```
+
+Attachements are located for each channel in the sub directory `attachements`.
+The attachement files are named as `<attachement hash>.bin`
+
+All attachements are using **Git LFS** for storage. So make sure to have git lfs installed when you want to interact with the attachement files.
+
 
 ## Updates
 
