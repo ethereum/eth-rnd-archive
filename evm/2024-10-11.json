@@ -1,0 +1,138 @@
+[
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yes, I agree. One way that we could come up with a reasonably-complete set of instructions, would be to actually implement EVM-MAX + SIMD as I describe, and create implementations of SHA256, BLAKE3 and Poseidon in it, and check if there are trivial opcodes to add that would make the implementations significantly more efficient",
+        "created_at": "2024-10-11T02:32:17.330000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "rodiazet",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We also want to do it this way but we would start with non SIMD implementation to have a reference to compare how much real speedup we get.",
+        "created_at": "2024-10-11T06:12:04.045000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I do think that you need the SIMD bits to really figure out the gains on the 32-bit stuff (both classical hashes and poseidon), otherwise it still gets dominated by EVM overhead",
+        "created_at": "2024-10-11T06:17:36.505000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@273808422753796097\u003e \u003c@450651770243252225\u003e \u003c@425274498732916736\u003e I made a draft for a new spec incorporating batched/vectorized arithmetic operations:  https://hackmd.io/ouxz-L0ASGehx2z6EgHGTw\n\nIt doesn't include cost models.  But we can get an idea of where things stand (for odd moduli \u003e= ~256 bits wide) based on the last spec iteration and the associated benchmarks (in the EIP and the bls precompile EVM implementation benchmarks linked in the first comment on that thread): https://ethereum-magicians.org/t/eip-7747-evm-modular-arithmetic-extensions/20608 .  some next steps would be:\n* implement SIMD-backed arithmetic ops, benchmark them and establish a cost model.\n* more investigation to determine an appropriate per-call-frame memory cap for the virtual registers / slots:  we want to ensure that we can mostly force the EVMMAX-memory to be contained within L1/L2 cpu data cache.  Otherwise, I think the latency overhead would nullify the gains from SIMD (i.e. it could be implemented with slightly more overhead compared to SIMD via latency hiding).\n\nI will be mostly focusing on Geth work and can't spare much time to continue investigating this atm.",
+        "created_at": "2024-10-11T07:31:06.953000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "rodiazet",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I was thinking of C++ implementation with and w/o SIMD. Implementing this in EVM does not make sense at all.",
+        "created_at": "2024-10-11T08:46:14.487000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "When I implemented bls add/mul in EVM, I was hamstrung by a lack of language tooling (the need to map variables of field elements, points, field extension elements, etc. to virtual registers).  Furthermore, if composing code via modules, individual mappings need to be \"stitched together\" into a global mapping in the final bytecode.\n\nI ended up building this as a template system built on top of Huff.  It was quite frankly, a huge pain in the ass to implement and debug otherwise-simple crypto algorithms in my  EVM \"assembler\".",
+        "created_at": "2024-10-11T09:36:08.940000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "that being said, it provided useful insights for:\n* control-flow overhead (iirc close to half of the cost for g1 ecmul in EVM)\n* code size vs cost tradeoff when looping-vs-unrolling",
+        "created_at": "2024-10-11T09:38:07.379000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "BTW Huff has been discontinued. I don't know any tool we could extend to EVMMAX.",
+        "created_at": "2024-10-11T12:16:59.692000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yep... It's rather unfortunate.",
+        "created_at": "2024-10-11T12:24:21.920000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "https://github.com/fjl/geas",
+        "created_at": "2024-10-11T12:34:14.389000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "😉",
+        "created_at": "2024-10-11T12:34:15.464000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Or https://github.com/quilt/etk ?",
+        "created_at": "2024-10-11T13:10:31.507000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "not sure, \u003c@689161464829050960\u003e you still maintaining etk?",
+        "created_at": "2024-10-11T13:25:06.056000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samwilsn",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Nope",
+        "created_at": "2024-10-11T14:27:20.967000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I mean some time ago we considered huff or etk for EVMMAX playground. None of them are maintained currently 🙂",
+        "created_at": "2024-10-11T15:22:59.559000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "wjmelements",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "https://github.com/wjmelements/evm",
+        "created_at": "2024-10-11T19:38:43.424000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "wjmelements",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I like my push syntax better",
+        "created_at": "2024-10-11T19:41:30.406000+00:00",
+        "attachments": null
+    }
+]

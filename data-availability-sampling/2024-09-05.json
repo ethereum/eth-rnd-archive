@@ -5,7 +5,7 @@
         "parent": "",
         "content": "I mentioned on the call as well - the distributing blob building approach can also be an alternative to solving this.\n\nThe proposer CL could publish the block first and start computing the cell proofs in parallel.\n- Once other nodes in the network receive the block, they would likely be able to fetch the blobs from the EL (`getBlobsV1`) and make the block available before having to receive columns from gossip.\n- if they're supernodes, they can compute the cell proofs from the EL blobs (they'll likely have enough CPU power to compute it quickly), and then publish it to the network.\n- If the proof computation is the proposer's bottleneck, they might even receive the data columns via gossip first.\n\nThis only works for blob tx in the public mempool, if the builder includes a blob tx from the private pool, they'll need to have enough resources and bandwidth to build and disseminate the columns themselves.",
         "created_at": "2024-09-05T05:54:30.930000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jimmygchen",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "we've got a working implementation and could deploy to peerdas-devnet-2  too.\nI'm in the process of collecting more metrics, but initial local testing show that this approach is possible with 32 blobs (with one of the proposer not publishing data columns at all), although it's a lot more stable with 16 blobs.",
         "created_at": "2024-09-05T05:58:22.202000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jimmygchen",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "^ this is not mutually exclusive with option 3 though. With option 3, even if the CL can compute the proofs on time, the other bottleneck is publishing up to 32mb of data (16 blobs with gossip amp) to the network timely.",
         "created_at": "2024-09-05T06:17:18.539000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "parithosh",
@@ -29,7 +29,7 @@
         "parent": "",
         "content": "oh shit, I'm so sorry about that :/\nI'll change the behaviour to use all CPU cores if set to 0, that should be the expected outcome",
         "created_at": "2024-09-05T08:10:33.984000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "nishant0",
@@ -37,7 +37,7 @@
         "parent": "",
         "content": "hey this is what i have:\n```\nBenchmark/ComputeCellsAndKZGProofsParallel(count=1)-8                    5     204123746 ns/op    20527800 B/op       81809 allocs/op\nBenchmark/ComputeCellsAndKZGProofsParallel(count=2)-8                    5     416978469 ns/op    20527896 B/op       81810 allocs/op\nBenchmark/ComputeCellsAndKZGProofsParallel(count=4)-8                    2     777799406 ns/op    20527848 B/op       81809 allocs/op\nBenchmark/ComputeCellsAndKZGProofsParallel(count=8)-8                    5     212051057 ns/op    20527838 B/op       81809 allocs/op\nBenchmark/ComputeCellsAndKZGProofsParallel(count=16)-8                   5     216389924 ns/op    20527857 B/op       81809 allocs/op\nBenchmark/ComputeCellsAndKZGProofsParallel(count=32)-8                   5     214870414 ns/op    20527876 B/op       81809 allocs/op\nBenchmark/ComputeCellsAndKZGProofsParallel(count=64)-8                   5     216945505 ns/op    20527896 B/op       81810 allocs/op\n```\nInterestingly, using multithreaded ops makes it worse ( count is the number of goroutines it runs with)",
         "created_at": "2024-09-05T08:41:46.749000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "nishant0",
@@ -45,7 +45,7 @@
         "parent": "",
         "content": "ah ! That makes a lot more sense",
         "created_at": "2024-09-05T08:43:14.600000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "nishant0",
@@ -53,7 +53,7 @@
         "parent": "",
         "content": "The problem with distributed blob building is that the latency for column broadcast still increases. In order for the supernodes to be able to construct all these data columns they need to receive the block first. This would roughly take 1 second to be gossiped across the network and then only can these nodes start building all the cells and proofs. The added latency of a data column across the network would be `block_propagation_time + column_construction_time` which would come up to around ~1.5 seconds for a powerful node.  This becomes even trickier in the context of timing games by proposers where they release a block at 2s instead of 0s in the slot which would move this window dangerously close to the 4s deadline. \n\nGenerally everything should be ready to go at 0s in the slot, its fine to have this as a fallback in the case where the proposer can't broadcast the data columns at all. But this shouldn't be computed in the 4s proposal window in the normal case",
         "created_at": "2024-09-05T09:06:09.595000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "bridge-bot",
@@ -61,7 +61,7 @@
         "parent": "",
         "content": "\u003cdankrad\u003e Maybe we could add a gossipsub channel to send block headers, that would be much faster than sending full blocks?\n\nThen at least the supernode could start building as soon as they receive the header, and don't have to wait for the full block. \n\n(proposer can't send a header different from block to DOS attack because then they could be slashed)",
         "created_at": "2024-09-05T13:44:35.772000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "fradamt",
@@ -69,7 +69,7 @@
         "parent": "",
         "content": "It doesn't need to be broadcast across the network though. Every node will likely be connected to many supernodes, and one should get it within two hops at most",
         "created_at": "2024-09-05T14:51:48.601000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "fradamt",
@@ -77,7 +77,7 @@
         "parent": "",
         "content": "Can we agree on a word other than supernode? It really fails at communicating what kind of node we are talking about imo",
         "created_at": "2024-09-05T15:07:20.578000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "parithosh",
@@ -85,7 +85,7 @@
         "parent": "",
         "content": "masternode /s",
         "created_at": "2024-09-05T15:08:01.388000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "bridge-bot",
@@ -93,6 +93,6 @@
         "parent": "",
         "content": "\u003cdankrad\u003e Telegram group to continue discussion on distributed block building: https://t.me/+_WyAuIAMVfxhZDlk",
         "created_at": "2024-09-05T15:23:32.179000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

@@ -1,0 +1,138 @@
+[
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "In my understanding, the goal of a new client is to create something unique. There are a few problems with using existing libraries:                                          \n \n* It doesn't contribute much to client diversity because clients using the same library inherit the same bugs;\n* Using an existing library doesn't bring something new that other clients could benefit from;\n* Using existing core libraries often means that the rest of your code is built around the ideas of those shared core libraries. So your client becomes similar to the client that you share the core libraries with. This doesn't apply to all the libraries as some of those are pretty isolated from the core consensus (i.e. `libp2p`);\n* Later when you rewrite those shared core libraries you likely will need to rewrite your entire codebase heavily.   \n\n2.5 months is not a lot of time to build a consensus client. If you glue together a bunch of existing libraries you may build something that you can showcase but it's unlikely that it will be a unique client with unique ideas. So you probably need to decide if you prefer to build something in short time to showcase or do you prefer to build something unique.",
+        "created_at": "2023-09-06T07:56:53.291000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dapplion",
+        "category": "general",
+        "parent": "",
+        "content": "EIP7002 will be extended to support that type of message. Did not want to include it to not clutter the PR https://eips.ethereum.org/EIPS/eip-7002",
+        "created_at": "2023-09-06T08:07:32.644000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks, I think I'll leave 7002 out of the ePBS one we're starting to implement for the time being. If we're going to extend the protocol to allow the EL to get messages in the CL block body like that, then I think there is no need to have a possibly invalid message queued and force them to be noops. At any rate, it requires extra engine API calls and the such which aren't specified in the max EB PR either. I'll keep this out of mine for simplicity, although acknowledging that we will need something like this before",
+        "created_at": "2023-09-06T10:37:49.352000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "A generic mechanism of 7002 doesn't allow EL to verify whether exist or withdrawal is valid. CL would need a mechanism to point out to EL which of requests that are bubbled up from EL's queue are invalid during block creation if we want only valid entries to be included into a built payload. From that perspective It looks simpler to make them noops",
+        "created_at": "2023-09-06T12:23:37.359000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "This seems brittle by nature, and it also breaks the order of communications we have now (although I'm doing the same in all ePBS proposals I can think of). I'll think about this problem, in principle I agree that the noop seems to be the simplest way of dealing with this",
+        "created_at": "2023-09-06T12:28:22.722000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I would think the opposite, that potential ways to provide EL with information required to validate exits would be brittle and noop as invalidation looks like a solid solution to me. For instance, if we rely on beacon roots exposed to EL to safely read CL's data we can face with a race condition when validator has already exited after submitting such an exit to EL. Which way do you think it is brittle?",
+        "created_at": "2023-09-06T12:35:40.907000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dapplion",
+        "category": "general",
+        "parent": "",
+        "content": "You can implement a happy UX MaxEB without partial active withdrawals, with customizable ceilings",
+        "created_at": "2023-09-06T13:19:48.762000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "What I think it's brittle is to possibly be spamming blocks with noops that may hinder the UX. I haven't really thought of this problem, but since withdrawals are inherently a CL construct that needs to be fulfilled in the EL, I would have expected the message to be gossiped in the CL P2P with signature verification by a call to the EL. This way the CL can include a valid partial withdrawal and pack it deterministically on the beacon block without the need to change the mechanics of withdrawals.",
+        "created_at": "2023-09-06T13:36:48.458000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I see what you mean. 7002 has a built-in 1559-like fee which will grow if too many exits/withdrawals are submitted which gives a spam protection without a requirement to validate submitted request. The reason for partial withdrawals to utilise 7002 is that we want only an owner of withdrawal credentials to be able to trigger it. Enforcing such requirement with CL triggered partial withdrawals is possible only for BLS cred validators",
+        "created_at": "2023-09-06T13:45:20.092000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "That's why I say with signature verification on the CL: it would be trivial for us to simply call the EL on gossip validation to check the signature passing the last 20 bytes of the withdrawal credentials. It's a bit ugly but it keeps the withdrawal validation itself within the CL",
+        "created_at": "2023-09-06T14:13:15.172000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "this makes it much simpler to implement: just add them with the rest of the withdrawals in the regular blocks later",
+        "created_at": "2023-09-06T14:13:52.652000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "got it! This is an interesting idea! Delegating secp256k1 sig verification to EL client via Engine API is somewhat alternative to 7002. I don't know if we have explored this approach before. IMO def worth exploring if we haven't done this yet",
+        "created_at": "2023-09-06T14:19:45.015000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "having a pool of exits/withdrawals on CL should not be an issue in terms of sig processing latency as these messages won't require super fast dissemination",
+        "created_at": "2023-09-06T14:23:48.319000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Cc \u003c@291925846556540928\u003e, since that's the most naive and first approach that came to mind, surely Danny thought about it and discarded it for some reason. Probably the CL p2p network is already at limit?",
+        "created_at": "2023-09-06T21:33:56.785000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I'd be very nervous about having to make a call to the EL as part of validating each gossip message. The cost of validation roughly needs to be below the cost of generating a new p2p id and sending an invalid gossip message.  Making a JSON http call is pretty expensive in comparison. IP banning may be enough protection but it feels less than ideal.",
+        "created_at": "2023-09-06T21:43:20.912000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "That said, as long as the verification is against the withdrawal credentials, the CL should be able to verify the signature natively and not need to call the EL. It would mean the CL has to have a secp256k1 implementation but most probably already do.",
+        "created_at": "2023-09-06T21:44:33.323000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "This is my thinking, we most probably will implement this anyway. But as a side, I'm interested in this because I need this for the flavor I want of ePBS and on there anyway we're calling the EL on gossip to validate the inclusion list",
+        "created_at": "2023-09-06T21:46:49.522000+00:00",
+        "attachments": null
+    }
+]

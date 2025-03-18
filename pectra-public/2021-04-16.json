@@ -1,0 +1,282 @@
+[
+    {
+        "author": "garyrong",
+        "category": "general",
+        "parent": "",
+        "content": "Hi researchers! I have a question about the transition. The verification rule is changed whenever the first `FinalisedBlock` message received in the eth1 client. And in theory this block shouldn't be reorged. I think in eth1 we need a block number to indicate the blocks before X using the old rules for verification while after that using the new rules. \n\nAccording to the https://notes.ethereum.org/@n0ble/rayonism-the-merge-spec#Finalise-Block, there is only a block hash of the finalised block attached in the message. So how can the eth1 client knows that what's the exact switching block number?",
+        "created_at": "2021-04-16T06:45:44.658000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I would break the transition in the follow steps (pow client perspective):\n1) Merge code is deployed but node operates in a PoW mode, everything is happening as usual\n2) First `NewBlock` and related `SetHead` is received. After that node still operates as usual but external fork choice takes precedence over max total difficulty rule. It means that node listens to PoW block gossip, propagate, verify and insert them according to PoW network rules. At the same time node receives blocks from consensus engine and processes them accordingly.\n3) First `FinaliseBlock` is received. After that PoW block gossip is disabled.\n\nSo, the node is ready to process `NewBlock` and `SetHead` all the time since the updated code is deployed (there is no certain block for that). Fork choice rule switch happens on the first `SetHead` received (no certain block again). Block gossip is switched off upon the first `FinaliseBlock` message. So, there is no block numbers at any of this steps, just careful listening to what consensus engine is sending and behaving accordingly.",
+        "created_at": "2021-04-16T07:53:42.482000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@!425572898787426305\u003e Yes, so my question is more for the consensus verification rules. For example in PoS, the total difficulty should be 1, while in the PoW it's determined by formula. So once we enter the PoS, these new verification rules are applied on all the following blocks.",
+        "created_at": "2021-04-16T08:44:14.345000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "general",
+        "parent": "",
+        "content": "This is the reason we somehow need the explicit transition block number for consensus rules.",
+        "created_at": "2021-04-16T08:44:38.201000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "general",
+        "parent": "",
+        "content": "And another big reason for the explicit transition block number is that: for example the new node wants to sync the network, in theory it should first sync the pre-merge blocks with original rules and then sync the post-merge blocks with new rules.",
+        "created_at": "2021-04-16T08:47:39.638000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e just careful listening to what consensus engine is sending and behaving accordingly.",
+        "created_at": "2021-04-16T08:48:16.669000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "general",
+        "parent": "",
+        "content": "So how about the offline nodes? How can they also finish the transition when they restart again and connect to the new post-merge chain?",
+        "created_at": "2021-04-16T08:49:14.871000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Could different rules be applied to the blocks coming from PoS engine and from the PoW network at the same time?",
+        "created_at": "2021-04-16T08:51:05.625000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, but the blocks from the PoW network can always existent(miners will keep mining). So the transition should be explicit instead of just an event from the consensus engine?",
+        "created_at": "2021-04-16T08:55:21.239000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "One option is to have a flag for running a node in post-transition time. But it requires user interaction which is not that ideal. The other option is to start syncing as usual and restart sync process if `NewBlock` + `SetHead` is received from the consensus; there is no user intervention required but node could potentially start sync with invalid chain",
+        "created_at": "2021-04-16T08:56:41.417000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "general",
+        "parent": "",
+        "content": "For example, like the hardfork there is a number to indicate the transition. So whenever the node joins the network it can sync the blocks and do all the transition with the same rules.",
+        "created_at": "2021-04-16T08:58:12.113000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "general",
+        "parent": "",
+        "content": "So I am thinking whenever the consensus engine sends the first `FinalisedBlock` message to eth1 client, could it somehow determines the consensus verification rules transition block number at the same time?",
+        "created_at": "2021-04-16T08:58:50.074000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Using a PoW block number for the transition process can be exploited by the hashpower minority and can result in double spend attack that is finalised by PoS at the end of the day",
+        "created_at": "2021-04-16T08:59:45.079000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "this is why total difficulty is used",
+        "created_at": "2021-04-16T09:00:11.778000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "It will be explicit up to a certain total difficulty number computed once `TRANSITION_EPOCH` happens. But the last word in the transition is the first finalized block",
+        "created_at": "2021-04-16T09:02:22.730000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "probably, we should jump on a call?",
+        "created_at": "2021-04-16T09:04:11.507000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "and discuss it",
+        "created_at": "2021-04-16T09:04:24.599000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "general",
+        "parent": "",
+        "content": "Sorry I have to go(catch the train). And I will rethink about it. But basically",
+        "created_at": "2021-04-16T09:05:50.664000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "general",
+        "parent": "",
+        "content": "```\nPoW B1 -\u003e PoW B2 -\u003e  ... -\u003e PoW BX -\u003e PoS B X+1\n\nNewHead                  FinalisedBlock\n```",
+        "created_at": "2021-04-16T09:05:54.341000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "general",
+        "parent": "",
+        "content": "The PoW Bx is not easy to be determined?",
+        "created_at": "2021-04-16T09:06:11.024000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "PoW Bx is the last PoW block in the canonical chain?",
+        "created_at": "2021-04-16T09:07:16.199000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "general",
+        "parent": "",
+        "content": "Yes",
+        "created_at": "2021-04-16T09:07:21.724000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "This block will depend on proposer's choice and potentially (if we have a proposal failure due to malicious or inactive proposer) this Bx may be `first_block_with_required_td.number` or `first_block_with_required_td.number + 1` or `first_block_with_required_td.number + 2`, etc. Ideally this is `first_block_with_required_td.number`",
+        "created_at": "2021-04-16T09:09:51.003000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "but this is not certain, even if the block has been already proposed it could be orphaned; that's why we should wait for `FinaliseBlock` to signify the end of transition process",
+        "created_at": "2021-04-16T09:10:50.441000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "general",
+        "parent": "",
+        "content": "sorry I have to go now. I will think about it. Thanks!",
+        "created_at": "2021-04-16T09:11:33.084000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "np, reach me out for more details if you need",
+        "created_at": "2021-04-16T09:11:47.534000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "Basically, the reason why we can't have a regular \"fork block height\" for the merge is that using height is insecure: an attacker could mine a low-difficulty chain and get to the target number more quickly than the legitimate chain even if they have only a fairly low amount of hashpower",
+        "created_at": "2021-04-16T20:36:04.057000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "So instead, there's this min total difficulty rule",
+        "created_at": "2021-04-16T20:36:49.267000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "When the execution node receives an execution block, it knows whether that block is a PoW block or if it came as part of a beacon block from the consensus engine",
+        "created_at": "2021-04-16T20:37:23.598000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e And another big reason for the explicit transition block number is that: for example the new node wants to sync the network, in theory it should first sync the pre-merge blocks with original rules and then sync the post-merge blocks with new rules.",
+        "created_at": "2021-04-16T20:37:54.562000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "Is there any problem with doing this?",
+        "created_at": "2021-04-16T20:37:59.619000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "Once the merge has happened, it's easy to see what the PoW chain that needs to be downloaded is",
+        "created_at": "2021-04-16T20:38:48.463000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "It's the chain of ancestors of the first embedded execution block",
+        "created_at": "2021-04-16T20:38:58.008000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dkdkdkdkdkdk",
+        "category": "general",
+        "parent": "",
+        "content": "interesting, so it would go in the opposite direction compared to now?",
+        "created_at": "2021-04-16T20:56:29.776000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Yes and no. It’s a lot like a fast sync - select a pivot block and then sync up to there. That pivot block is effectively finalised from your nodes point of view and any chain you download that isn’t leading there should be discarded. \n\nYou can do that forwards and throw out chains that get to the wrong place but it likely makes sense to either go backwards fetching headers so you can verify those headers lead to the target you want without having to download them all.",
+        "created_at": "2021-04-16T21:00:08.113000+00:00",
+        "attachments": null
+    }
+]

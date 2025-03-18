@@ -1,0 +1,162 @@
+[
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think this is wrong. You can have a LVH with VALID descendants and INVALID ones as well. At least with the current specs",
+        "created_at": "2022-03-29T00:00:44.121000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "This was part of the complication in our previous implementation",
+        "created_at": "2022-03-29T00:01:02.162000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes sorry, I did say that wrong. \nOn the fork that we original sent, the first child of the LVH will be marked invalid then every descendent of *that* block on any fork will be marked invalid (no valid block can have an invalid ancestor).",
+        "created_at": "2022-03-29T00:04:33.498000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "We're having an internal discussion where I'm willing to bet a beer that no two teams will get the same weight for the LVH after prunning INVALID nodes. Do we have spec tests vectors for this? Although it's very hard to trigger, we can have a situation where there are three forks, one of them optimistic, two VALID, the optimistic one is the current head. we get an INVALID from FCU and we prune the optimistic fork. Now suddenly we are left out with a non-optmistic node that can perform duties immediately. And a wrong computation of the weight in LVH right after the pruning can lead to either one of the two remaining VALID forks being the head. This is a consensus failure right there.",
+        "created_at": "2022-03-29T00:27:48.341000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "I almost feel optimistic sync spec should be a subset of the fork choice spec. If we can introduce optimistic sync status or some conforming APIs to the fork choice store and nodes, maybe we can test all these via the fork choice spec tests",
+        "created_at": "2022-03-29T00:31:28.210000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm not aware of any test vectors for optimistic sync in fork choice. I would be open to such a thing, but unfortunately I don't have the bandwidth to do that at the moment.",
+        "created_at": "2022-03-29T00:35:05.680000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "We're doing our weights calculation in `apply_score_changes` (AFAIK, this is a \"standard\" proto-array function). I found it surprisingly simple reason about there. If an invalid node has weight, subtract the weight from it and the \"deltas\", which will subtract it from all ancestors.",
+        "created_at": "2022-03-29T00:38:09.604000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I can't guarantee that I didn't miss anything, but as a fun-fact I was surprised at how simple that turned out to be.",
+        "created_at": "2022-03-29T00:38:52.580000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yep that's the same approach we're taking in Teku and I was quite pleased with the simplicity of it too.",
+        "created_at": "2022-03-29T00:39:12.446000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Also worth noting that it's reasonably normal for nodes to have different views of the network and different weights for nodes in protoarray - they will have seen different sets of attestations.  The key thing is that it will at some point the system will reach agreement.",
+        "created_at": "2022-03-29T00:40:09.671000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "We have two different implementations, in the protoarray implementation we remove right there when prunning, from the VALID ancestry the weight of the first INVALID node. There's another implementation in which each node tracks the weight that directly voted for it, and the total weight of the node. In this implementation we simply delete the first invalid node from the tree. The next call to head updates the weights accordingly",
+        "created_at": "2022-03-29T00:42:19.007000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "It's worth mentioning that proposer-boost needs to be considered too.",
+        "created_at": "2022-03-29T00:43:14.524000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "perhaps I got this wrong that's why I'm asking here, but if there was any proposer boost applied to the invalid node, that would anyway be gone when removing this weight from the ancestry",
+        "created_at": "2022-03-29T00:44:09.255000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I guess it depends on implementation specifics, we had to be aware of it because we remember the \"previous proposer boost\" value and try to subtract it before we apply the new one. That risks an underflow if we just set the node's weight to zero.",
+        "created_at": "2022-03-29T00:45:31.881000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "It turns out that most of our complexity came from the fact that we serve non-canonical historical blocks. And we wanted to track the optmistic status of these blocks that are no longer in fork-choice, without having to store it on DB. We devised a cool system for doing so, but this added a bit of complexity. After talking to Adrian and realizing that perhaps we are the only team serving these blocks, we decided to simply serve them as optimistic and not worry about this.",
+        "created_at": "2022-03-29T00:46:59.886000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Oh right, I'm sure one of the implementations is imune from this, but I'm not sure of the other one. Will have to check this, thanks!",
+        "created_at": "2022-03-29T00:48:41.514000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "yep, indeed our implementation would error out if the proposer boost was applied to the INVALID node, glad you were here at the right time.",
+        "created_at": "2022-03-29T00:57:44.004000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I guess we'll just set the previous root and score to zero and that's it.",
+        "created_at": "2022-03-29T00:58:54.251000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@!360491619402776577\u003e, out of interest, what does \"Beacon chain gapped\" mean please?",
+        "created_at": "2022-03-29T06:48:39.578000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "It means that there is a gap between the header that we just imported and our existing skeleton chain during download",
+        "created_at": "2022-03-29T06:52:21.336000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,482 @@
+[
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "wait so reverse-sync is only expected if we use a snapshot of the beacon-chain?",
+        "created_at": "2022-03-17T09:38:46.963000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "No, the update from the CL to us for the new head is only really needed for snap sync",
+        "created_at": "2022-03-17T09:40:39.574000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "The full sync can just sync to a block 1000 blocks behind current head and then fully import the blocks",
+        "created_at": "2022-03-17T09:41:13.981000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "We can't do that for snap sync",
+        "created_at": "2022-03-17T09:41:24.736000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "okay, how does geth handle syncing up with the beacon chain when it is getting spoon-fed?",
+        "created_at": "2022-03-17T09:41:49.666000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "what is happening is that newPayload + forkchoice are sent for each block when we are syncing up from the CL",
+        "created_at": "2022-03-17T09:42:12.641000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "that's a reasonable straightforward interpretation of the engine API specs from the CL side, yes. There are ways to optimize this (for example, if there's a run of blocks along the same fork, and the EL client has already via opt sync or or some other means found out enough to validate them as part of `newPayloadV1`, then one can skip the intermediate `executionPayload`s optimistically too)",
+        "created_at": "2022-03-17T09:45:00.293000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "okay, thing is that we call forkchoice immediately after for each one of them, which should cristalize them into the chain, how do we tell we are just syncing up or we are on the head",
+        "created_at": "2022-03-17T09:46:36.521000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "But from a CL perspective, optimistic sync as directly read from the engine API and CL specs involves basically what you see -- the difference is that whereas without optimistic sync, the CL would basically stop and wait each time for the EL client to catch up, in this scenario the CLs, well, optimistically proceed and invalidate later if need be",
+        "created_at": "2022-03-17T09:46:57.691000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "(the EL client figures out later, once it has enough information to determine, that, no, those payloads from 50 blocks ago were actually invalid -- then the CL-side descendents are too)",
+        "created_at": "2022-03-17T09:47:38.508000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes, the fcU-after-every-newPayload is per spec.",
+        "created_at": "2022-03-17T09:48:12.650000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "okay, that is slow for ELs because of opening/closing batches and other reasons, how is that handled then according to spec, is one-by-one execution expected of EL according to spec?",
+        "created_at": "2022-03-17T09:49:33.368000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "at least for Erigon since we use modular stagedsync and not all-in-one sync like geth for example",
+        "created_at": "2022-03-17T09:51:28.284000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e Client software MAY skip an update of forkchoice state and MUST NOT begin a payload build process `forkchoiceState.headBlockHash` doesn't reference a leaf of the block tree. That is, the block referenced by `forkchocieState.headBlockHash` is neither the head of the canonical chain nor a block at the tip of any other chain.",
+        "created_at": "2022-03-17T09:53:16.703000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "https://github.com/ethereum/execution-apis/blob/v1.0.0-alpha.8/src/engine/specification.md#engine_forkchoiceupdatedv1",
+        "created_at": "2022-03-17T09:54:01.017000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "okay, thank you, will look into it 🙂",
+        "created_at": "2022-03-17T09:54:10.931000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "But also:\n\u003e Client software [i.e., my annotation: it means the EL in this context] MUST update its forkchoice state if payloads referenced by `forkchoiceState.headBlockHash` and `forkchoiceState.finalizedBlockHash` are `VALID`.",
+        "created_at": "2022-03-17T09:55:05.708000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "EL may respond `SYNCING` on `newPayload` and `fcU` as long as it's syncing. And use information grabbed from these messages that are constantly arriving to feed its sync process. Once the sync is finished and EL has all dependencies (state, parent block etc) to execute given payload it should do this and respond accordingly, i.e. `VALID/INVALID`.\n\nI feel like in your case the problem is to understand when it worth reverse download headers to bootstrap pipeline sync process. I would say that it worth doing after CL sends the finalized block that is closest to the head of the chain at the moment. But this option requires EL to be able to recognize this event, it could check if `timestamp` field of the most recent finalized blocks is close enough to the current time. Another option is to pipeline sync blocks up to a weak subjectivity checkpoint and then move onwards with regular sync. Unfortunately I don't understand all subtleties of Erigon sync to understand which option would be better. Note that WS checkpoint may be several weeks behind the head of the chain.",
+        "created_at": "2022-03-17T11:04:06.956000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e Note that WS checkpoint may be several weeks behind the head of the chain.\nWhen I tested Geth resynchronisation after pausing it for 5 weeks, that alone took Geth 7.25 hours on a fast CPU (AMD 5950X), which was longer than it took complete snap sync from nothing on the same machine.",
+        "created_at": "2022-03-17T11:58:57.645000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Testing",
+        "parent": "",
+        "content": "In other words, it would be rather suboptimal to sync to a WS state several weeks old then execute forward.",
+        "created_at": "2022-03-17T12:01:15.893000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "so it is not an erigon exclusive problem",
+        "created_at": "2022-03-17T12:01:50.633000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Testing",
+        "parent": "",
+        "content": "It isn't, and besides Erigon isn't the only EL trying to optimise sync and execution performance.  I think similar issues occur in any implementation.  Any EL trying to sync as quickly as possible needs to obtain canonical chain headers with pipelining and batching, rather than one at a time, just because of latency even with headers being small.  Then if its sync strategy is execution-based (rather than near-head-state-based), it will want to obtain bodies also in batches and pipelined, and execute them with some overlap before returning a validation result, for CPU parallelism and faster I/O.  In implementations where execution has been sped up nicely, body fetching is often one of the slowest parts (due to sheer size, it's a network and peer bandwidth bottleneck), so anything that ensures maximal download throughput, i.e. latency hiding and multiple peers, makes a noticeable difference to sync time.",
+        "created_at": "2022-03-17T12:38:21.783000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "While being in a `SYNCING` mode EL is free to ignore any messages that are coming from CL",
+        "created_at": "2022-03-17T12:41:32.143000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Do I understand correctly that the problem is for EL to understand whether the most recent payload is near the head or not, i.e. whether EL needs to start its batch sync process? I can also imagine how EL is forward downloading blocks and checking that finalized blocks received from CL do belong to the chain of headers that has been pulled from the network",
+        "created_at": "2022-03-17T12:46:09.691000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "basically the problem is that we are process each block, block by block which is really inneficient because of memory batches/state root computations and many other reasons, what could help is maybe getting the head of the beacon chain supplied and then reverse-sync from there, and then do one by one, perhaps the beacon chain could fetch the latest block hash from a peer and then send it to us",
+        "created_at": "2022-03-17T12:57:27.940000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "that could be a solution, but i am not an expert of the Consensus Layer side",
+        "created_at": "2022-03-17T12:57:46.861000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "or CL can go on without us and supply us with blocks once it is synced and then it start talking to EL",
+        "created_at": "2022-03-17T12:59:30.467000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Without having a pre-state for a block CL can't verify whether this block is valid or not with respect to the proposer's signature which is similar to Ethash check in PoW. Thus, it can't say anything about validity of this block, and it has to obtain the pre-state first, i.e. download the chain and processs it",
+        "created_at": "2022-03-17T13:00:01.670000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "okay, then there is no solution to this and we should all use snapshots from the beacon chain",
+        "created_at": "2022-03-17T13:01:14.950000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "if we need the state to sync then there is nothing to do",
+        "created_at": "2022-03-17T13:01:24.383000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Won't finalized blocks received from CL help to forward download chain data?",
+        "created_at": "2022-03-17T13:23:44.451000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Or EL may store block headers upon receiving `newPayload` and reverse download missed headers in parallel. This is what \u003c@!360491619402776577\u003e  has been describing IIUC",
+        "created_at": "2022-03-17T13:26:30.963000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Though, I can see the complexity if EL say 1000 blocks behind the head and is catching up. It could be caught up in one batch if EL would know in advance that there is a thousand blocks to process, but it doesn't know until CL reaches the head spoon-feeding EL along the way. In this particular case checking `block.timestamp` is what comes to my mind. CL verifies that timestamp hits the slot boundary and from this perspective the check `current_timestamp - block.timestamp \u003c START_BATCH_SYNC_THRESHOLD` looks safe, haven't thought about other implications 🤔",
+        "created_at": "2022-03-17T13:33:06.168000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Testing",
+        "parent": "",
+        "content": "this is my understanding of the issue:",
+        "created_at": "2022-03-17T13:45:24.567000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Testing",
+        "parent": "",
+        "content": "when CL is syncing blocks between transition and the head, it does not send batch of blocks to EL, but instead insists full validation of previous block before it sends the new one, right?",
+        "created_at": "2022-03-17T13:45:30.069000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Testing",
+        "parent": "",
+        "content": "if at least blocks arrived in large batches, it could be more efficient",
+        "created_at": "2022-03-17T13:46:45.160000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Testing",
+        "parent": "",
+        "content": "I thought there is this thing called weak subjectivity to allow CL to find out the recent hash and send it to EL so it can reverse sync, or is it not a thing anymore?",
+        "created_at": "2022-03-17T13:48:51.867000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "Testing",
+        "parent": "",
+        "content": "Recent can be “a few weeks”",
+        "created_at": "2022-03-17T13:49:53.978000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Testing",
+        "parent": "",
+        "content": "Weak subjectivity can be several weeks old (months I suspect), so the remaining blocks to sync are still a substantial number.  As noted above, Geth takes longer to execute 5 weeks of state than it takes to do a complete snap sync from nothing (subject to hardware \u0026 network of course).",
+        "created_at": "2022-03-17T13:52:07.747000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "there is an easier way to identify this: if fcU comes one after another rather than one every 12 seconds, its better for EL to wait (and just reply SYNCING and keep forming for e.g. their skelton chain) and then batch up the backfill. I think \u003c@!758579010027782144\u003e might have implemented something like that as far as I know",
+        "created_at": "2022-03-17T13:52:31.655000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Testing",
+        "parent": "",
+        "content": "IIUC, `SAFE_SLOTS_TO_IMPORT_OPTIMISTICALLY` limits how far ahead optimistic sync can go before the CL requires a validation result from the EL, so that limits the calculation batch size. Its value is 128. I don't have measurements, but my hunch is that's too low for optimal EL state updates when sync speed is the goal.",
+        "created_at": "2022-03-17T13:52:50.793000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "This is actually a good idea. `fcUs` with increasing block numbers should only be counted as there could be multiple `fcUs` per slot if a node is jumping from one head to another upon receiving more attestations from the wire.",
+        "created_at": "2022-03-17T14:24:10.153000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "This timeout affects only transition block. If EL responds with `SYNCING` upon receiving transition payload then CL will have to wait when it's wall clock are beyond `SAFE_SLOTS_TO_IMPORT_OPTIMISTICALLY` before this transition payload is permitted to be applied optimistically.",
+        "created_at": "2022-03-17T14:26:30.573000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Testing",
+        "parent": "",
+        "content": "Are the steps fcU, reply `SYNCING`, fcU, reply `SYNCING` (repeat) required to be one block at a time during sync, so that the network round trip times are forced to be sequential?",
+        "created_at": "2022-03-17T14:27:00.656000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "EL should respond to every message and must process message in the same order they have arrived",
+        "created_at": "2022-03-17T14:29:04.859000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "It doesn't send batches but it also doesn't insist on validating every block. EL is free to respond with `SYNCING` and this will be a signal for CL that it shouldn't expect execution to happen for a while, until EL responds with `VALID` again, and in this mode CL will be catching up with the head and sending every payload to EL. This mode of CL operation is called optimistic sync",
+        "created_at": "2022-03-17T14:32:26.339000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Testing",
+        "parent": "",
+        "content": "Perhaps an example would say what I meant better.  Let's say the round trip time for fcU -\u003e `SYNCING` is 50ms, and there are 90,000 blocks to catch up with, and each fcU is one block forward, that's ~~1250~~ 1.25 hours just to agree on headers.  If fcU can fast forward, that's 50ms instead.",
+        "created_at": "2022-03-17T14:32:29.220000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ugh, sorry math thinko.  It's 1.25 hours vs 50ms.",
+        "created_at": "2022-03-17T14:33:16.170000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ok, and the limit of how many blocks can be sent that way is `SAFE_SLOTS_TO_IMPORT_OPTIMISTICALLY` ?",
+        "created_at": "2022-03-17T14:33:17.505000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "There is no limit on that, actually, CL will catch up with the head with its own pace propagating every payload down to EL. `SAFE_SLOTS_TO_IMPORT...`  is only applied to the transition block and doesn't affect the sync post Merge.",
+        "created_at": "2022-03-17T14:34:42.257000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Testing",
+        "parent": "",
+        "content": "ok, will need to test it then",
+        "created_at": "2022-03-17T14:35:02.746000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I see what you mean. Yes, in current design it will keep sending `fcUs`. Btw, one thing that I have recalled right now is that some CLs (at least Teku does it this way) are sending `fcUs` once per slot when they are catching up with the head, so, it's not like `fcU` per imported block. \n\nSo, using a number of `fcUs` per slot might not always work as an indicator for being far away from the head. cc \u003c@!792822129019584562\u003e \u003c@!758579010027782144\u003e",
+        "created_at": "2022-03-17T14:37:04.430000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "gonna be afk during next hour, sry",
+        "created_at": "2022-03-17T14:37:46.366000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "Testing",
+        "parent": "",
+        "content": "What's the overall implementation status of `fCU.safeBlockHash` param in fCU across different clients?  Looking at geth and besu I don't see it really being used yet, and in teku I don't see anywhere where `safeBlockHash` differs from `headBlockHash`.",
+        "created_at": "2022-03-17T16:31:30.352000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "This PR https://github.com/ethereum/consensus-specs/pull/2851 stubs `safe_block_hash` with `head_block_hash` value in the spec. AFAIK, this is how it's implemented in all CL clients. This is a temporal solution until we have `get_safe_head` function implemented on CL side.\n\nUntil then it probably doesn't worth to add a notion of `safe` block into Ethereum JSON-RPC. Though, I don't think we have strongly decided on whether to add or not to add `safe` block tag pre-Merge. It can still be added but in case of that it's gonna be stubbed with the head block.",
+        "created_at": "2022-03-17T16:37:06.223000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thanks Mikhail, I wasn't aware that `safe` might not make it into Belltrix/Paris/The Merge, good to know!",
+        "created_at": "2022-03-17T16:39:01.527000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah, it's not firmly decided yet, just one of the possibilities.",
+        "created_at": "2022-03-17T16:41:39.653000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm late to this discussion and replying while reading but finalized blocks can still be optimistic. While it's true that it's a panic situation if we finalize an optimistic block that turns out to be invalid, it seems like a chicken an egg problem to try to bootstrap an EC sync from a finalized (possibly not validated) block. What I suppose Marius was saying above is that the EC should be trying to sync however they like to a certain distance of the current head and then sync forward block by block",
+        "created_at": "2022-03-17T23:41:35.052000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e when CL is syncing blocks between transition and the head, it does not send batch of blocks to EL, but instead insists full validation of previous block before it sends the new one, right?\nThis is not the case, we will ask what's the EL status, and if the EL responds with SYNCING we will continue validating only the CL part and feed the EL with the payloads. Eventually the EC will catch up and respond with ether VALID (and then we know our chain was right and mark our blocks as valid) or INVALID, in which case we will need to rewind and start syncing a different fork.",
+        "created_at": "2022-03-17T23:46:44.417000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "It's the other way around, we can optimistically sync if the chain is **longer** than `SAFE_SLOTS_...` so we don't require full validation. That bound of 128 blocks is only valid for a brief period of time across the merge fork. In most practical scenarios, it will not be applied.",
+        "created_at": "2022-03-17T23:52:47.856000+00:00",
+        "attachments": null
+    }
+]

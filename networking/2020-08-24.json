@@ -5,7 +5,7 @@
         "parent": "",
         "content": "Hey everyone. Two things I'd like to address: \n1. Gossip anonymity. It would be ideal that all our implementations support empty protobuf fields in the message.source, message.sequence_number and message.signature\n\n(We don't want the publisher to be verified or known for that matter. Also we don't require sequence numbers). \n\nWhat is the state of everyone's implementation to support this?\n\n2. I'm looking at designing a set of gossipsub 1.1 scoring parameters. One in particular defines how many messages we expect per topic. Peer's that don't propagate this minimum threshold get scored negatively. Peers also shouldn't propagate messages whilst they are syncing because they cannot verify them. \nOne potential way around this could be setting mesh_n and mesh_high to 0 whilst syncing. This way you won't join/GRAFT to the mesh of any other peer and so don't require to meet the tolerance. \nAlternatively, we could avoid subscribing during sync. \nIf peers are currently subscribing during sync and dropping messages, it's not great for our overlay network as we've got nodes acting as sinks (censoring) preventing propagation. \nCan people weigh in with the current state of these two points for their clients and/or thoughts moving forward. \nCheers",
         "created_at": "2020-08-24T02:09:43.444000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "nishant0",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "1) For us it should be easy enough to implement this. \u003c@!203220829473996800\u003e already added it to the go pubsub repo over here so I can get started on changing it.\nhttps://github.com/libp2p/go-libp2p-pubsub/pull/359\n\n2)  \n\u003e Alternatively, we could avoid subscribing during sync.\nThis would require more work to implement as this can make subscription and re-syncing logic complicated for us. We generally subscribe to all topics at startup(excluding subnets) . Although there is incoming support for dynamic registration of topics for peer scoring in go-libp2p so that might ease our burden here.\n\n\u003e One potential way around this could be setting mesh_n and mesh_high to 0 whilst syncing. This way you won't join/GRAFT to the mesh of any other peer and so don't require to meet the tolerance. \nThis would be easier to implement although this does seem more hacky than the first solution.\n\nWe would have to eventually implement some way to disable gossip while syncing so I can take a deeper look at it for any other solutions on our end. The obvious solution would be the first one I guess. Curious on what solutions other clients are looking at for this. What is lighthouse's current position on this ?",
         "created_at": "2020-08-24T02:38:34.137000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "agemanning",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "Thanks! \nFor 1. We are using a dummy peer_id for pseudo-anonymity. It needs a \"hack\" of sorts in 1.1. We're ready to switch to sending empty protobuf fields for everything (which would make everything a bit cleaner and still be backwards compatible, however we need other clients to not instantly reject our gossip messages before switching over). \n\nFor 2. We also are currently subscribing on startup and haven't switched over because of the intricacies of sync as you've mentioned. \nWe're going to not subscribe on start up and as soon as sync completes subscribe (and stay subscribed regardless of sync status). We may implement some heuristics that unsubscribe us if we are far from head and syncing again, but that will be  a second order modification.",
         "created_at": "2020-08-24T02:43:09.681000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "agemanning",
@@ -29,7 +29,7 @@
         "parent": "",
         "content": "For 2. One reason for losing attestations could be that we have enough clients syncing on the aggregate attestation channel and dropping the aggregates such that they don't all propagate to listening peers (i think we'd need a good % of censoring nodes, but could be a contributing factor)",
         "created_at": "2020-08-24T02:47:59.015000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "nishant0",
@@ -37,7 +37,7 @@
         "parent": "",
         "content": "\u003e For 1. We are using a dummy peer_id for pseudo-anonymity. It needs a \"hack\" of sorts in 1.1. We're ready to switch to sending empty protobuf fields for everything (which would make everything a bit cleaner and still be backwards compatible, however we need other clients to not instantly reject our gossip messages before switching over). \ngreat, sounds good.\n\n\u003e For 2. We also are currently subscribing on startup and haven't switched over because of the intricacies of sync as you've mentioned. \n\u003e We're going to not subscribe on start up and as soon as sync completes subscribe (and stay subscribed regardless of sync status). We may implement some heuristics that unsubscribe us if we are far from head and syncing again, but that will be  a second order modification.\n\nThat makes sense too, although I wonder how something like this would play in the situation we had last week. Gossip was very much fragmented for a while because no peer could reliably verify an incoming block/attestation as they didn't have its parent/target object. This would appear to external peers as censoring and might entrench network partitions where each peer is stuck on the same fork with the same set of peers and is unable to follow the 'correct' fork",
         "created_at": "2020-08-24T02:55:09.830000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "agemanning",
@@ -45,7 +45,7 @@
         "parent": "",
         "content": "Yes. The weighting for block gossipsub censoring would be low, I imagine. However, with Lighthouse, we don't rely on block gossip to find the current head of the chain, rather the RPC and status messages. For us, scoring peers down that didn't recpricate our block gossip would have been better to prevent constant block gossip from peers on forks. It would have been nicer to discriminate these peers easier so we could partition the network to peers following the correct chain. I think this is a good thing? It definately would have helped us sync faster and deal with long forks if we could have just removed those peers easily from our peer list.",
         "created_at": "2020-08-24T03:02:16.923000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "nishant0",
@@ -53,7 +53,7 @@
         "parent": "",
         "content": "\u003e It would have been nicer to discriminate these peers easier so we could partition the network to peers following the correct chain. I think this is a good thing?\nDont we want peers to eventually know about all know forks so that they can appropriately decide on which fork to follow ? While rpc and status messages are most effective for us to sync to the most 'current' head, once we are synced there is always the chance that we might end up following the wrong fork.",
         "created_at": "2020-08-24T03:16:51.317000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "agemanning",
@@ -61,7 +61,7 @@
         "parent": "",
         "content": "Yep thats right. Block gossip is useful for finding diverging peers. \nA diverging peer should rejoin the canonical chain relatively quickly via gossip. If it continues to diverge for a long period of time, i think it's reasonable to penalize it",
         "created_at": "2020-08-24T03:30:30.584000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "nishant0",
@@ -69,7 +69,7 @@
         "parent": "",
         "content": "\u003e If it continues to diverge for a long period of time, i think it's reasonable to penalize it\nMakes sense, it should mostly resolve in the short term.  I guess any potential issues will come up in the simulation. In the previous call, you mentioned that lighthouse was performing simulation experiments for the scoring params. How would the simulation set up be like ?",
         "created_at": "2020-08-24T03:35:05.858000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "agemanning",
@@ -77,7 +77,7 @@
         "parent": "",
         "content": "Yep, we wanted to test our rust implementation, but there's quite a bit of overhead in doing that. \nThere are testground plans already establishing with malicious nodes (that were used to test the 1.1 implementation and scoring parameters). We're modifying these, using paramters that closely fit the eth2 network and seeing how it behaves. \n\nWe plan on integrating into lighthouse and spinning up some testnets to see how the rust-impl performs with the params on a live network. Perhaps its useful to have a multi-client testnet, to check them also",
         "created_at": "2020-08-24T03:37:14.286000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "nishant0",
@@ -85,7 +85,7 @@
         "parent": "",
         "content": "Great  looking forward to that 👍",
         "created_at": "2020-08-24T03:44:02.081000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "protolambda",
@@ -93,7 +93,7 @@
         "parent": "",
         "content": "We could extend the fafafa nimbus-lighthouse net to more clients. I think nimbus wanted to try their gossipsub with more clients anyway, now that it's more stable. Or we spin up another net",
         "created_at": "2020-08-24T09:04:50.461000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "djrtwo",
@@ -101,7 +101,7 @@
         "parent": "",
         "content": "We've discussed a migration path for (1) on Medalla. Essentially,\na. have all gossipsub implementations add support for empty fields conforming the go-libp2p implementation\nb. roll this out as a default to clients, but do not put strict validation requirement on them being empty\nc. swap to strict validation requirement ~10 days after initial release [potentially monitoring traffic to estimate % swap over]",
         "created_at": "2020-08-24T15:53:52.460000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "djrtwo",
@@ -109,7 +109,7 @@
         "parent": "",
         "content": "We should do [a] and [b] immediately",
         "created_at": "2020-08-24T15:54:04.071000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "djrtwo",
@@ -117,7 +117,7 @@
         "parent": "",
         "content": "If current implementations flat out reject empty source fields, then we need to do an [a.1] that is roll out a libp2p upgrade that doesn't drop empty messages",
         "created_at": "2020-08-24T15:56:18.324000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "djrtwo",
@@ -125,7 +125,7 @@
         "parent": "",
         "content": "then move only [b] a week later",
         "created_at": "2020-08-24T15:56:26.136000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "protolambda",
@@ -133,7 +133,7 @@
         "parent": "",
         "content": "For the latest state of that:\nspecs issue, need teku to confirm their status change, but it looks like they are ready from what I heard from nishant - https://github.com/ethereum/eth2.0-specs/issues/1981#issuecomment-679152075\nprysm PR to start omitting the fields: https://github.com/prysmaticlabs/prysm/pull/7093",
         "created_at": "2020-08-24T16:57:15.735000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -141,7 +141,7 @@
         "parent": "",
         "content": "Yes, Teku should be fine with empty source fields now.",
         "created_at": "2020-08-24T20:49:09.828000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "protolambda",
@@ -149,7 +149,7 @@
         "parent": "",
         "content": "Ok, will update the table in the github issue, thanks",
         "created_at": "2020-08-24T20:52:46.454000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "protolambda",
@@ -157,7 +157,7 @@
         "parent": "",
         "content": "We can then move into the \"allow omitting seqno/signature/from field\" period, start testing to omit it, and plan to completely omit the fields in ~2 weeks from now or so.",
         "created_at": "2020-08-24T20:53:49.343000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "protolambda",
@@ -165,7 +165,7 @@
         "parent": "",
         "content": "Technically, if clients all already support omitting fields for a while, we may already omit the data. Just like to give testnet users some time to update",
         "created_at": "2020-08-24T20:55:20.342000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -173,7 +173,7 @@
         "parent": "",
         "content": "We were seeing massive numbers of errors without that PR so I'd be very surprised if anyone is still running it on Medalla.",
         "created_at": "2020-08-24T20:57:19.480000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "djrtwo",
@@ -181,7 +181,7 @@
         "parent": "",
         "content": "Which pr \u003c@340345049063882753\u003e?",
         "created_at": "2020-08-24T21:44:18.773000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -189,7 +189,7 @@
         "parent": "",
         "content": "\u003c@!291925846556540928\u003e https://github.com/libp2p/jvm-libp2p/pull/132 Sorry, wound up having this conversation across a few channels.",
         "created_at": "2020-08-24T21:55:34.546000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "djrtwo",
@@ -197,6 +197,6 @@
         "parent": "",
         "content": "got it\n\nso we seem to be at [a.1] where these fields are considered optional across the board",
         "created_at": "2020-08-24T22:01:56.499000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

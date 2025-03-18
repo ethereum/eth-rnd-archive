@@ -1,0 +1,210 @@
+[
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Am I correct that if we wanted to minimize the harm to the network (in terms of throughput reduction) of missed slots, then we would want to increase the gas limit, but not mess with the base fee?",
+        "created_at": "2024-02-27T04:34:30.342000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "general",
+        "parent": "",
+        "content": "We’d want to mess with the target so that we target the same throughput per unit of time, with or without missed slots; we might want to mess with the limit if there is “a lot to catch up on”, for instance introducing a buffer; and yes probably the best thing is to keep the base fee resulting from the last non-missed slot to apply to the next non-missed slot, regardless of how many slots are in between. If we wanted to be more clever we could increase base fee in anticipation of the greater demand piling up, but imo it’s enough to let it figure it out once slots become non-missed again (it can adjust faster if we allowed for the target to be different)",
+        "created_at": "2024-02-27T07:39:45.680000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Okay, I need to spend some more time looking at fork choice and proposer boost.  I'm pretty sure that we still see late blocks being voted on, I'll dig into it to see the numbers are behind it.",
+        "created_at": "2024-02-27T07:51:44.777000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "If a late block is voted that's a client bug or  someone modding a vc to play games. The deadline is 4 seconds, if you got PB you are before, if you didn't you couldn't be attested for",
+        "created_at": "2024-02-27T08:54:00.895000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Will take a closer look and generate some numbers.  probably after dencun at this point.",
+        "created_at": "2024-02-27T08:54:35.954000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "general",
+        "parent": "",
+        "content": "yea dropping base fee might not be a good thing because proposers may collude to drop a block and collect more profit on the next block, so target and limit could probably be modified by tracking a cumulative `unusedGasTarget` or `unusedGasLimit` which gets \"accumulated/consumed\" on each unit of time (12) sec (with a 10x ?), also this will allow lean period to tideover/smoothen an upcoming congestion period",
+        "created_at": "2024-02-27T12:13:17.434000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "general",
+        "parent": "",
+        "content": "Are you describing this EIP essentially? https://eips.ethereum.org/EIPS/eip-4396",
+        "created_at": "2024-02-27T12:18:14.926000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "general",
+        "parent": "",
+        "content": "essentially yes, but i tracking unusedGasTarget allows us to even accumulate unused capacity during lean times not just missed slot",
+        "created_at": "2024-02-27T12:30:06.627000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "general",
+        "parent": "",
+        "content": "(and thanks for sharing the EIP reference 🙏 ❤️ )",
+        "created_at": "2024-02-27T12:30:33.193000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "general",
+        "parent": "",
+        "content": "I am not sure what you mean by lean times?",
+        "created_at": "2024-02-27T12:33:06.864000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "general",
+        "parent": "",
+        "content": "like blocks are 10% full (of gasLimit), so rest 40% gets accumulated in unusedGasTarget, which is available to next block,(so if the next block is 90%, its still under target for n+2's base fee calcs without even any missed slots)",
+        "created_at": "2024-02-27T12:34:35.964000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "general",
+        "parent": "",
+        "content": "also limits get raised as well, can't see where EIP dynamically raises limit",
+        "created_at": "2024-02-27T12:35:07.999000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "general",
+        "parent": "",
+        "content": "so unused from previous + any slot misses gets carried over and be available to new block",
+        "created_at": "2024-02-27T12:37:58.891000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "general",
+        "parent": "",
+        "content": "This might be mixing up a few things, you can't change the target based on what the previous block did, the point of the target is to ensure that you get the average throughput that you are targeting, if you make it dynamic, you won't have that property",
+        "created_at": "2024-02-27T12:38:04.800000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "general",
+        "parent": "",
+        "content": "no, if for excess calc we can still use the main target constant",
+        "created_at": "2024-02-27T12:39:06.656000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "general",
+        "parent": "",
+        "content": "as well as for time based compensation to target and limits (so not based on parents limit and target)",
+        "created_at": "2024-02-27T12:39:37.860000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "general",
+        "parent": "",
+        "content": "You may want to say \"if the block was 10%, we can increase the limit of the next block because the processing doesn't pile up\", but the limit is there to cap the per slot amount of computation, so imo it should be as high as possible already, while setting the target consistent with our long-term average requirements",
+        "created_at": "2024-02-27T12:40:03.796000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "general",
+        "parent": "",
+        "content": "Could you write up a small pseudocode? maybe this is easier to coordinate",
+        "created_at": "2024-02-27T12:41:07.080000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "general",
+        "parent": "",
+        "content": "limit as we already know are quite low, just few hundered ms of compute for geth or nethermind, but yes that could be a different conversation and imposes a hard limit so essesntially yes i agree on the limit being static part",
+        "created_at": "2024-02-27T12:41:12.508000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "general",
+        "parent": "",
+        "content": "sure will churn something out for your review",
+        "created_at": "2024-02-27T12:41:43.063000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks 🙂",
+        "created_at": "2024-02-27T12:42:29.932000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "general",
+        "parent": "",
+        "content": "but this could be a different limit than the normal one (a higher limit to bound the extra compute) even if we don't wanna raise the normal limit for whatever reasons since ELs clearly can deal with it",
+        "created_at": "2024-02-27T12:44:44.243000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "general",
+        "parent": "",
+        "content": "for what reasons wouldn't we want to raise the normal limit if we can deal with it well enough to want to do it occasionally?",
+        "created_at": "2024-02-27T12:46:30.117000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "The gas limit constrains disk growth.",
+        "created_at": "2024-02-27T12:48:31.272000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "It also constrains CPU and network, but those two aren't the bottleneck at the moment.",
+        "created_at": "2024-02-27T12:49:01.681000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "general",
+        "parent": "",
+        "content": "The target does. We could still have 15M target and 45M limit, or whatever",
+        "created_at": "2024-02-27T12:49:57.474000+00:00",
+        "attachments": null
+    }
+]

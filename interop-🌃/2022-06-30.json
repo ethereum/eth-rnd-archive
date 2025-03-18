@@ -1,0 +1,82 @@
+[
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "We figured out the teku-erigon issue, the deadlock has been patched.\n\nThere's still a problem where erigon is unable to find a block even with static peers, but that could just be because of some shadow fork idiosyncrasies. \n\nTLDR: Erigon was timing out on a `fcu` due to not finding a block. Teku didn't retry the `fcu` and erigon didnt attempt to find the block again. So the pair deadlocked. \n\nThat should be the last issue for MSF7 that we needed to figure out. So i'll be deprecating MSF7 in a few hours.",
+        "created_at": "2022-06-30T07:53:40.012000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "What happens with beacon blocks which payload has  `NOT_VALIDATED` status (according to Optimistic Sync spec) after CL client is restarted? Is `NOT_VALIDATED` status persisted anyhow, or may be the opposite, beacon blocks with `NOT_VALIDATED` payloads aren't persisted and CL client tries to pull them from the wire if that need be (upon receiving an attestation or a descendant block)?",
+        "created_at": "2022-06-30T11:13:58.444000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003csigpaul\u003e In LH those blocks and their status are persisted.",
+        "created_at": "2022-06-30T11:19:08.602000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Will `NOT_VALIDATED` payloads be resent to EL on startup?",
+        "created_at": "2022-06-30T11:21:06.018000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "in lodestar we have a simplistic treatment for this: each time lodestar starts it starts from the last finalized written into db (or fetched from wss), and we start with it as NOT_VALIDATED status, blocks post this will be fetched from wire and send to EL/added to forkchoice as normal op",
+        "created_at": "2022-06-30T11:25:44.657000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "we don't persist our forkChoice (yet)",
+        "created_at": "2022-06-30T11:26:50.275000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think it can be assumed that latest finalized and even justified block are `VALID` with respect to execution",
+        "created_at": "2022-06-30T11:29:43.378000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "In prysm we persist this status, except for blocks that haven't been finalized, those are treated as non-validated. We keep track of the last finalized checkpoint that has been fully validated",
+        "created_at": "2022-06-30T11:54:02.218000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "Not necessarily, we’ll send a fcU on startup for the head but we won’t try and resend newPayload for all NOT_VALIDATED blocks. We might send descendants of them though, if we see them in P2P or via the API.",
+        "created_at": "2022-06-30T14:12:41.935000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "We have been discussing that LVH is important to be supported by EL clients to avoid the situation when a fully synced node that is lock-stepping is forced to sync with the chain that has invalid block and is unable to get recovered unless the honest chain progresses and eventually outperforms the malicious one.\n\nThe only way to force fully synced node to switch to optimistic sync is to force the node to follow the chain that starts at a block with pruned EL state trie. This can only happen during period of non-finality. Also, adversary will have to have enough power to force validators to follow this chain which is another condition of this attack. This is very much of an edge case and very unlikely to occur on Mainnet.\n\nSuppose, CL and EL have been restarted after the node happened to be in this bad situation and was forced to process an adversarial chain that is mentioned above. After a restart CL doesn't replay payloads from optimistically synced blocks but expecting EL to resolve `SYNCING` while EL itself won't be able to do so as invalid payload from adversarial chain won't be available neither locally nor on EL network. This was pointed out by \u003c@206016661470314496\u003e.\n\nI don't think CL which doesn't replay payloads of optimistic blocks after restart should change their behaviour. Assuming majority of nodes hasn't been restarted and has rejected the malicious chain, the honest chain should make progress which will pull restarted CLs back to the honest chain. Posting it here to know if anyone has another opinion on that.",
+        "created_at": "2022-06-30T16:20:36.519000+00:00",
+        "attachments": null
+    }
+]

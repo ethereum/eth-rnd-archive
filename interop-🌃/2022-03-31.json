@@ -1,0 +1,242 @@
+[
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "So my local node thinks it's in sync on the beacon chain but hasn't seen a block for 21041 slots now and it has 46 peers.  It is indeed not sending anything to Geth. I can reproduce this locally so I suspect we need to adjust Teku to send the same fCU if it's been some amount of time since the last one regardless of whether it has changed or not.",
+        "created_at": "2022-03-31T00:55:38.498000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "We’re not doing any sort of fcU polling, FYI",
+        "created_at": "2022-03-31T01:05:49.924000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Same here",
+        "created_at": "2022-03-31T01:06:19.175000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Usually I don't think that will matter because the next block will come in and you'll send another fcu.  In this case it's a bit of an issue because there are no blocks and all the nodes are trying to sync but can't because there's no blocks trigging new fcu.  At least from what I can tell.  I haven't found a goerli shadow fork explorer to check if there really aren't any blocks at all.",
+        "created_at": "2022-03-31T01:11:06.807000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "That said, with some creative restart timings I got teku to send Geth an fcu and the world state sync progressed a bit but has stalled again even though geth has the very latest info on the chain head now.",
+        "created_at": "2022-03-31T01:12:21.861000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "We do push an \"artificial\" fcU at startup. That's primarily a relic that was used back in lock-step days to break a deadlock.",
+        "created_at": "2022-03-31T01:12:41.788000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah we'll wind up sending fcu at startup but particularly in docker-compose setups where both nodes are starting at the same time it tends to get lost a lot.",
+        "created_at": "2022-03-31T01:13:16.135000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hmm, so geth is making some slow progress syncing the world state, but despite having definitely received a fcu from Teku (to which it replied SYNCING) it's still saying \"Local chain is post-merge, waiting for beacon client sync switch-over...\".",
+        "created_at": "2022-03-31T01:22:09.785000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "So I've changed teku locally to keep sending fcu to geth (using the ethereum/client-go:latest docker image) even when it hasn't changed and it's been running for a few hours and geth is making very little progress on getting the world state (gone from 30-33% synced).  It's still waiting for the beacon client sync switch-over and each time fcu is called it logs \"Forkchoice requested unknown head\".\nIf I had to guess I'd say that it isn't starting a backwards sync when it gets a fcu for a block it hasn't previously had `newPayload` called on.  Since there are no blocks it won't get a newPayload called and needs to trigger everything off of the fcu call, but that's entirely a guess.",
+        "created_at": "2022-03-31T04:26:34.852000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes exactly we can not start the sync with a fcu alone (since we need a full header for the sync) so we need a newpauload fcu combo to continue our sync",
+        "created_at": "2022-03-31T06:36:33.549000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "https://github.com/ethereum/go-ethereum/blob/de6a113f843822165b7fb26eb4147e493ce5d8b2/eth/catalyst/api.go#L152-L167 -- is this split handling of head/finalized an intentional effort to do something useful with a specified head without a usefully specified finalized block hash? The engine API seems not to make that distinction in an obvious way",
+        "created_at": "2022-03-31T07:46:07.570000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "there's not an API-supported way, really, for the CL not to have \"advertised a finalized block\"",
+        "created_at": "2022-03-31T07:46:41.159000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "I don't know if I understand this correctly. In the time between merge and first finalized block we don't have a finalized block so we need to split handling of finalized and head.\nWe require the finalized block to be part of the canonical chain (which is specified in the specs afaik)\nAnd we handle finalized and safe block hash differently, because we want to surface them in the API later on.\nThe CL can not advertise a finalized block by setting it to 0x000....00",
+        "created_at": "2022-03-31T07:54:17.480000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "alright, wanted to confirm, that's been my approach too (for a while Nimbus didn't send fcU at all for a couple epochs because of this)",
+        "created_at": "2022-03-31T07:55:00.553000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "and it didn't seem entirely correct to treat the terminal block as \"finalized\" exactly",
+        "created_at": "2022-03-31T07:55:12.664000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "because that's a CL concept",
+        "created_at": "2022-03-31T07:55:16.155000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "\"The CL can not advertise a finalized block by setting it to 0x000....00\" isn't explicit in the specs though that I can find? https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md#forkchoicestatev1  https://eips.ethereum.org/EIPS/eip-3675#block-validity etc. It's a reasonable interpretation, but would be good to have stated, not only in some Geth code/comments",
+        "created_at": "2022-03-31T07:57:36.550000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hmm that’s a problem then because there are no new blocks at the moment. Is the requirement for a full block something about geth’s current architecture or something to do with dev p2p etc?",
+        "created_at": "2022-03-31T10:32:04.084000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "And would it be possible to request the head block from fcu by root from devp2p then use that to start the sync proper?",
+        "created_at": "2022-03-31T10:32:42.915000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "It would theoretically be possible to get this block from the network and start the sync after.\nBut that is a bit of a hassle in the current architecture.\nWe don't need the full block, only the header to start the sync",
+        "created_at": "2022-03-31T10:34:08.504000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Afaict we only use the hash, parenthash and number from the header, but having the full header is the easiest way for us to transport this information through the subsystems",
+        "created_at": "2022-03-31T10:36:20.879000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah I can certainly see how you’d want those elements. \nIt’s definitely not a common scenario for the whole chain to come to a halt and have all validator nodes resyncing but it does seem like something that is probably worth having on the to fix list because it is possible so being able to recover would be handy. 🙂",
+        "created_at": "2022-03-31T10:39:56.397000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "I’m tempted to add a periodic resend of fcu to teku to cover this kind of scenario just in case. I’d like to avoid having to resend new payload as that’s more awkward for us to implement and feels a bit wrong in terms of the execution engine api.",
+        "created_at": "2022-03-31T10:41:33.863000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Is this on shadow fork 1 or 2?",
+        "created_at": "2022-03-31T10:41:48.506000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "1",
+        "created_at": "2022-03-31T10:50:40.243000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ah right, these long stretches of skipped slots also surfaced a bunch of bugs for prysm",
+        "created_at": "2022-03-31T10:52:33.718000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "I mean there long and then there 20,000+ 😂",
+        "created_at": "2022-03-31T10:59:56.646000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Do I understand correctly that `newPayload` with a block that is being advertised by `fcU` has been sent some time ago and geth has it in the local storage? cc \u003c@!360491619402776577\u003e",
+        "created_at": "2022-03-31T13:14:52.889000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "There are actually two places in the spec where `finalizedBlockHash=0x00...00` is mentioned:\nConsensus specs:\nhttps://github.com/ethereum/consensus-specs/blame/dev/specs/bellatrix/validator.md#L117\nEIP-3675:\nhttps://github.com/ethereum/EIPs/blame/master/EIPS/eip-3675.md#L51\nEngine API also refers to the EIP in the `fcU` section:\n\u003e The values `(forkchoiceState.headBlockHash, forkchoiceState.finalizedBlockHash)` of this method call map on the `POS_FORKCHOICE_UPDATED` event of EIP-3675 and **MUST** be processed according to the specification defined in the EIP\nThe above references implies `finalizedBlockHash == 0x00..00` before any payload is actually finalized",
+        "created_at": "2022-03-31T13:19:38.458000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "newPayload was sent but it has since resync'd and lost the block.  In my local case I think I was originally running besu then switched to geth so besu got the newPayload message and geth is just getting fcu and because block production on the chain has completely stopped, has never received a newPayload call.",
+        "created_at": "2022-03-31T21:09:34.885000+00:00",
+        "attachments": null
+    }
+]

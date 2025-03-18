@@ -1,0 +1,170 @@
+[
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e Replacing dynamic jumps with chains of if-then just acts to make the number of nodes increase to match the number of edges, so that it looks like linear time in nodes again, at the cost of using additional storage space for the contract, and additional execution time. \nYes.  The extreme dynamic jump attack is a contract with the maximum number of jumps and traversal time quadratic in the size of the code.  If there are no dynamic jumps then it is as you say - more if/else are needed (or jump-table instructions that require bigger tables) that take more space and time -- so DoS fails.",
+        "created_at": "2022-03-25T15:30:39.941000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm still not convinced that we can enforce _no underflow_  ( let alone all other such properties) on code that cannot be traversed in linear time.  But I'd like to be convinced.  I think it would take a working algorithm to convince me.\n\nOne reason I'm not convinced is that both the JVM and Wasm chose to enforce linear-time traversal with no underflow.  I think they had reasons.  I don't know all of the reasons, but suspect one is just that it's easier (even if not necessary) to deal with code that has that structure in the ways that, e.g. a compiler needs to deal with it.  E.g. it really is better if you know that your JIT will never be given code that makes it go quadratic.  And it really is better if you know that your VM will never encounter code that makes it underflow stack.",
+        "created_at": "2022-03-25T15:34:05.740000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I know that a compiler I wrote for the JVM depended on these promises for efficiently mapping stack code to register code.\n\nI'm not sure if I could have done it differently.",
+        "created_at": "2022-03-25T15:47:14.316000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\"Linear-time traversal\" is, I think, often misleading. Linear-time analysis works only for some kinds of analysis, such as stack layout if push/pop operations are balanced, but not even that otherwise. It doesn't work for other kinds such as general value range and structure type inference. It also doesn't work for function/subroutine calls in general, unless the call graph is also constrained, not just the control flow graph. Unlike control flow graph, the call graph is not constrained by choice of opcodes.",
+        "created_at": "2022-03-25T15:48:53.370000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, but it can be constrained.  I'm not saying that enforcing linear-time analysis and other rules solves all problems, just some that do matter.",
+        "created_at": "2022-03-25T15:50:19.390000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "In other words, when linear-time analysis is a requirement (as it seems to be for the EVM protection), rather than linear-time opcode traversal, you need extra constraints on top anyway.  Once you have those extra constraints in place, does the linear-time opcode traversal provide a further benefit, and does it have a cost?",
+        "created_at": "2022-03-25T15:51:46.668000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I guess I'm arguing that it has a cost: Expanding jump tables to if/then chains makes them take a little more space and a little more time, and jump tables themselves have to be duplicated even if they are identical, which takes more space if they are used in many places.  The cost seems likely to be small in most EVM programs (an interpreter written in EVM would probably grow a lot, but who's likely to write one of those).",
+        "created_at": "2022-03-25T15:53:27.329000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "(We aren't currently proposing jumptables because Solidity never uses JUMP that way.  Doesn't even have a switch statement.)",
+        "created_at": "2022-03-25T15:54:39.361000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think (again, I need to see working algorithms) that being able to do linear-complexity enforcement of rules like balanced push and pop makes other things either possible or easier, that all.",
+        "created_at": "2022-03-25T15:55:21.468000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "As it has a cost, then does it have a benefit? I realised that counting edges against gas during CFG traversal is just as effective as counting opcodes or bytes, without the storage and execution time cost, and you have to traverse all edges anyway so in some way this comes for free, and lets you pick and choose whatever kinds of mandatory analysis you like.  So you could give more freedom to call-graph choices, for example.",
+        "created_at": "2022-03-25T15:56:21.010000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Thing is, the EVM counts gas, but validating and compiling EVM code is done natively by the client -- there is no gas counting.",
+        "created_at": "2022-03-25T15:58:11.116000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Linear-complexity enforcement of balanced push/pop comes out whichever way you do it.",
+        "created_at": "2022-03-25T15:58:28.740000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "(And yes, validated static jumps and subroutines are significantly faster at runtime than dynamic jumps.)",
+        "created_at": "2022-03-25T15:59:26.980000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Sure, but my proposal is that if you're adding a structural constraint that the to-EVM compiler must validate in future contracts, it could just as easily be a requirement on edge counts or other traversal metric than on opcode/byte counts.  It's just that at the moment, byte counts are implicitly constrained by the gas cost of initialising a constract.  In my idea that gas cost would be a function of the analysis cost, allowing you more freedom to define analysis how you like, and more freedom to change it in future as well.",
+        "created_at": "2022-03-25T16:02:17.718000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And I'm saying, yes, that solves the problem of DOS attacks on the initialization phase.  it doesn't provide various downstream benefits.",
+        "created_at": "2022-03-25T16:03:32.805000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But I'm still wanting to be convinced ...",
+        "created_at": "2022-03-25T16:04:01.562000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e a structural constraint that the to-EVM compiler must validate in future contracts\nI'm adding constraints that the EVM deployment phase must validate when it puts code on the chain.  Typically these constraints are already enforced by high-level languages.",
+        "created_at": "2022-03-25T16:06:20.730000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The \"linear-in-bytes traversal time\" constraint means the analysis is weaker than it could be regarding function/subroutine calls, for example, especially recursion.  This isn't necessarily a bad thing as the EVM is not for general purpose computation, but I think it's worth thinking about.  Especially in regards to \u003c@!273808422753796097\u003e's question about long term roadmap for EVM as a compiler target.",
+        "created_at": "2022-03-25T16:06:24.361000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Agreed.",
+        "created_at": "2022-03-25T16:06:40.467000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I don't believe this is true.\n\nSomehow I read your question as: Can we make EVM \"high level\" enough so there is no need for intermediate representation (IR). E.g. in solidity yul works as IR.\n\nIn my view, the reason many languages compile to wasm is rather software-engineering: the wasm backend was added to LLVM. And LLVM is the codegen for Rust, C, C++ and many other languages. The two most popular usages of wasm target are just based on LLVM: Rust and Emscripten (C/C++). Other languages are progressing rather slowly. And some languages cannot be compiled to wasm at all (e.g. JavaScript).\n\nAdding wasm backend to LLVM is a substantial work but it has been done and  continues improving. Yet wasm not being \"close to metal\" makes quite some trouble in LLVM and it has to take a lot of custom paths. So this is rather not an advantage in this case. And also there is still LLVM IR in the middle so compilers do not target wasm directly.\n\nBased on this I assume you consider wasm being \"high level\" while EVM being \"low level\". I don't think this matters so much. There are some EVM features what would make it exceptional hard to create LLVM backend for it (ETC tried though with something working). But you rather cannot describe it with single \"high-low level\" concept.",
+        "created_at": "2022-03-25T16:19:25.127000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, the differences are more complex than high/low.\n\nBoth JVM and Wasm are \"low-level\" in the sense that they support the same fundamental operations and data types that modern hardware does.  They are \"high-level\" in providing some higher-level control operations (e.g. iteration) and enforcing some structure on low-level control flow and stack use.  And in how they provide a higher-level structure for composing code as objects and/or subroutines.\n\nEVM is low-level so far as a having a small set of fundamental arithmetic and control operations, and high-level so far as the arithmetic being 256-bit software  rather than 64-bit machine native operations.  But it's those wide operations that (as intended) make the EVM efficient for crypto work.\n\nWork so far has concentrated on more efficient control flow, safer control flow, and a small set of wide operations for even more efficient crypto work (without so many precompiles.). I think there is enough work to have a coherent set of proposals ready soon after Shanghai.  I think most everything is at least a Draft EIP by now, and over the last 6 years some version of most of it has been implemented in at least one client.",
+        "created_at": "2022-03-25T16:39:26.066000+00:00",
+        "attachments": null
+    }
+]

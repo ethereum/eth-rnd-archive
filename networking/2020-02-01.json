@@ -5,7 +5,7 @@
         "parent": "",
         "content": "\u003c@!449019668296892420\u003e \u003c@!498009160982724610\u003e \u003c@!476250636548308992\u003e How are you all doing the length prefixes in sync rpc, when doing compression?\n\nWhen reading responses, the length of the compressed data seems pretty useless if you already read to EOF, and can decompress like a stream (by snappy-chunks internally), not requiring a lot of pre-allocation for the de-compression step. Meanwhile if you want to stream that into SSZ decoding, it would be super useful to have the actual message length known, to not have to buffer all data just to derive some list lengths from the scope during decoding.\n\nWhen writing responses I also think it should be the length of the actual response data, not the length of the compressed data. You can more often than not compute the ssz-length from just the type, or some fast navigation around the ssz value (e.g. a list of fixed size elements: multiply length by element type size). For encoding the compressed length however, you need to buffer the full compressed data before being able to write it.\n\nCan we solve that TODO point in the spec about length-prefix benefits, and clarify the \"encoding dependent header\" part? I think actual message length makes sense. Compressed length not so. Am I missing something? (FYI: I'm implementing a minimal RPC implementation in Go for testing and tooling purposes. Almost done, but blocked by this confusing bit).",
         "created_at": "2020-02-01T17:37:10.046000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "nishant0",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "\u003c@!203220829473996800\u003e you don't actually have to read it till EOF, since the first byte is the length prefix of the incoming chunk, you can allocate the corresponding size in your buffer and only read the data till there\n\n\u003e For encoding the compressed length however, you need to buffer the full compressed data before being able to write it.\nFor decompressed data, you would still have to hold the serialized object in memory, no ? It doesn't seem like a big issue to me. Having the length prefix of the decompressed data does not make sense here",
         "created_at": "2020-02-01T22:09:38.534000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "protolambda",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "Deserialization can be streamed if you already know the amount of the bytes you are about to read",
         "created_at": "2020-02-01T22:10:52.655000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "protolambda",
@@ -29,7 +29,7 @@
         "parent": "",
         "content": "\u003e  you don't actually have to read it till EOF,\nYes, but yet we do, as it is single stream per request/response, and spec says EOF otherwise is handled as failure",
         "created_at": "2020-02-01T22:12:04.734000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "protolambda",
@@ -37,7 +37,7 @@
         "parent": "",
         "content": "And snappy has \"frames\", so you can stream the decompression",
         "created_at": "2020-02-01T22:13:07.335000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "protolambda",
@@ -45,7 +45,7 @@
         "parent": "",
         "content": "So if I had the length known of the actual data, and read till EOF while decompressing on the fly, I stream responses directly into (in my case Golang, using zssz) data structures",
         "created_at": "2020-02-01T22:14:27.728000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "protolambda",
@@ -53,7 +53,7 @@
         "parent": "",
         "content": "And by using that actual length instead, you can compress on the fly, and don't need to buffer the full compressed thing. Getting the byte-length of an ssz value should be super cheap to compute too in comparison",
         "created_at": "2020-02-01T22:18:03.160000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "nishant0",
@@ -61,6 +61,6 @@
         "parent": "",
         "content": "\u003e Yes, but yet we do, as it is single stream per request/response, and spec says EOF otherwise is handled as failure\n\nOn this part it is easy enough to check if this is an invalid request/response, according to the spec \n\n\u003e If there are any length assertions for length N, it should read exactly N bytes from the stream, at which point an EOF should arise (no more bytes). Should this not be the case, it should be treated as a failure.\n\nwe would not need to hold the whole req/response chunk in the buffer, if it exceeds the expected length, we can mark it as a failure and move on\n\n\u003e So if I had the length known of the actual data, and read till EOF while decompressing on the fly, I stream responses directly into (in my case Golang, using zssz) data structures\n\u003e And by using that actual length instead, you can compress on the fly, and don't need to buffer the full compressed thing. \n\nI guess this might make sense if we were streaming large objects over the network, but with the largest objects being blocks ,if I am not wrong , this would have minimal gains. I would be interested to know what the other client teams thought on this",
         "created_at": "2020-02-01T23:24:14.161000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

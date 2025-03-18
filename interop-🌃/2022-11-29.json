@@ -1,0 +1,890 @@
+[
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ah, we currently _accept_ them if they're signed with the Bellatrix fork version, queue them, and then never include them in blocks once Capella hits, because the Capella fork invalidates the signature check 😅 \n\nI guess the best option would be to pre-emptively verify execution changes against the Capella fork version if the current fork is still Bellatrix. That way we can queue address changes that are valid for inclusion in the lead up to the fork, and reject ones signed with the Bellatrix fork version.\n\nTools like `ethdo` would need to ensure they sign using the Capella fork version if the current epoch is still Bellatrix, does that sound OK from your side \u003c@144468805697929216\u003e?\n\nFor later forks we'll need to sign with the current fork version (rather than always Capella). And we'll have a similar problem where messages signed for fork `n` get invalidated once fork `n + 1` kicks in. This is a problem unique to `BlsToExecutionChange`, because the other operations like slashings and exits have a slot/epoch field that enables validation across fork boundaries.\n\nActually thinking about it more this queueing behaviour might be a pain, because we have to modify the P2P gossip conditions to include the logic for verifying with the fork from `min(current_epoch, CAPELLA_FORK_EPOCH)`. It might be simpler just to ban `BlsToExecutionChange`s before the Capella fork kicks in.",
+        "created_at": "2022-11-29T01:41:32.820000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "This is where having gossip topics verify signatures based on the fork digest in the topic name would make everything work out so much nicer than the current behaviour of verifying against the head state.",
+        "created_at": "2022-11-29T01:46:40.029000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm not sure what's the robust way of dealing with this honestly. On the one hand I do want to give users the option of storing before the fork a precooked list of changes that they can save on a file and distribute to pools for example for those that are racing against hackers. On the other hand putting in the pool a change that may be invalid by the time is packed makes the logic of removing it a little awkward. We currently remove from the pool when we see them included in blocks. Our own block would fail validation so we need to make sure that we remove them from the pool right there too and moreover it makes us check validity at block proposal time which is not optimal. I think the easiest most preformant is simply not include anything in the pool until Capella and then at each fork purge the pool",
+        "created_at": "2022-11-29T01:52:03.754000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Based on prior experience, I'd say you want to check validity at block proposal time - otherwise you're going to have a whole heap of fun when the next milestone activates because you'll have operations in the pool from Capella that are then invalid once D-star activates.",
+        "created_at": "2022-11-29T01:57:05.045000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Right so what I was thinking is the simple logic of pruning the full pool at forks",
+        "created_at": "2022-11-29T02:05:37.860000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "There's no economic incentives in including bls changes anyway",
+        "created_at": "2022-11-29T02:06:16.149000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "Testing",
+        "parent": "",
+        "content": "once they're no longer valid, no point keeping them anyway",
+        "created_at": "2022-11-29T02:10:25.309000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think it's cheaper to check at pool insertion time than at block processing time... For the capella fork itself I think it's fine to keep them in a file or any storage and include them immediately after the fork",
+        "created_at": "2022-11-29T02:10:52.840000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah, and it's much simpler logic than checking on each proposal",
+        "created_at": "2022-11-29T02:11:20.271000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "Testing",
+        "parent": "",
+        "content": "could be a task during the fork change to prune, but not a time when you want a time hit i guess",
+        "created_at": "2022-11-29T02:11:27.420000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "What do you mean, pruning the pool is as simple as removing a single pointer to the pool and creating a new one. At least for us is like a noop",
+        "created_at": "2022-11-29T02:12:27.462000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "Testing",
+        "parent": "",
+        "content": "just iterating the pool if there's a lot, should be cheap per op, as long as the pool isn't too full",
+        "created_at": "2022-11-29T02:13:06.249000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "Testing",
+        "parent": "",
+        "content": "because you'd basically iterate each pool so there's a number of prunes to happen potentially... it'd show up as a problem in some cases maybe, if you were block proposing first slot post transition",
+        "created_at": "2022-11-29T02:14:12.526000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "Testing",
+        "parent": "",
+        "content": "just that boundary potential... probably less of a problem than my brain says 🙂",
+        "created_at": "2022-11-29T02:14:50.150000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "By pruning I literally mean removing all objects. So it's a simple\n```\ndelete(pool)\npool = new()\n```",
+        "created_at": "2022-11-29T06:13:01.934000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "we do this for the gossip cache on fork boundaries but _not_ the op pool (which we prune iteratively)",
+        "created_at": "2022-11-29T06:21:04.205000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@412614104222531604\u003e we just fixed the consensus bug that we and prysm faced, also our withdrawals PR is merged so you may now directly use `chainsafe/lodestar:next` docker image for a withdrawals testnets",
+        "created_at": "2022-11-29T06:39:25.963000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "^Conceptually I really like this idea! I've opened a spec PR for further discussion: \u003chttps://github.com/ethereum/consensus-specs/pull/3135\u003e\n\nWe don't currently have the fork version on hand when verifying gossip messages in Lighthouse, but should be able to get it with a bit of plumbing",
+        "created_at": "2022-11-29T06:46:17.925000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yep I can create a \"minimum fork version of capella\" style of signing.  Will do that now, given that versions of this signed with an earlier fork are useless.",
+        "created_at": "2022-11-29T07:17:54.006000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "Lodestar still not syncing.",
+        "created_at": "2022-11-29T08:14:16.860000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "do I need to resync the db?",
+        "created_at": "2022-11-29T08:16:04.822000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "hm looks like it did end up syncing, and now should be at the HEAD.",
+        "created_at": "2022-11-29T08:31:22.866000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@755590043632140352\u003e \u003c@363800010518822915\u003e \u003c@476250636548308992\u003e any news about the new prysm image?",
+        "created_at": "2022-11-29T09:18:06.443000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "I dont think we have one yet",
+        "created_at": "2022-11-29T09:19:00.709000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@476250636548308992\u003e the latest Capella should work, we haven't tried it locally though",
+        "created_at": "2022-11-29T09:49:06.931000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "is it fixed ?",
+        "created_at": "2022-11-29T09:49:21.410000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "You may want to give it a spin, can you build it?",
+        "created_at": "2022-11-29T09:49:26.594000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "I can give it a try.",
+        "created_at": "2022-11-29T09:49:29.203000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "ok I can build it, if the latest commit fixes it",
+        "created_at": "2022-11-29T09:49:43.611000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "It's supposed to fix the panic",
+        "created_at": "2022-11-29T09:50:02.986000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@476250636548308992\u003e can you let me know how you build the image?",
+        "created_at": "2022-11-29T09:50:14.998000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "done",
+        "created_at": "2022-11-29T09:54:15.218000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@412614104222531604\u003e",
+        "created_at": "2022-11-29T09:54:17.631000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "use the `capella` tag",
+        "created_at": "2022-11-29T09:54:23.079000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ok",
+        "created_at": "2022-11-29T09:54:27.867000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "```\nbazel run //beacon-chain:image_bundle\n```\nThis should upload the image to your local docker registry",
+        "created_at": "2022-11-29T09:56:11.769000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "updated the images",
+        "created_at": "2022-11-29T10:00:01.693000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "no longer crashing",
+        "created_at": "2022-11-29T10:00:04.277000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "nice",
+        "created_at": "2022-11-29T10:01:14.805000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "```time=\"2022-11-29 10:01:16\" level=warning msg=\"Skip processing batched blocks\" error=\"could not process block in batch: could not insert batch to forkchoice: could not determine ancestor root: invalid nil or unknown node\" prefix=initial-sync\ntime=\"2022-11-29 10:01:24\" level=error msg=\"Could not compute head from new attestations\" error=\"head at slot 10464 with weight 0 is not eligible, finalizedEpoch, justified Epoch 325, 326 != 327, 327\" prefix=blockchain```",
+        "created_at": "2022-11-29T10:01:32.285000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "do you see this often ?",
+        "created_at": "2022-11-29T10:01:48.723000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "it should resolve after a while",
+        "created_at": "2022-11-29T10:01:53.731000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ok. Gonna let it sync up",
+        "created_at": "2022-11-29T10:02:01.328000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "looks like slots are now processed after the critical slot.",
+        "created_at": "2022-11-29T10:02:17.526000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "Prysm/Nethermind ```time=\"2022-11-29 10:01:57\" level=info msg=\"Processing block batch of size 40 starting from  0xead374f4... 11233/33954 - estimated time remaining 28m9s\" blocksPerSecond=13.4 peers=7 prefix=initial-sync\ntime=\"2022-11-29 10:03:58\" level=error msg=\"received an undefined ee error\" error=\"invalid method parameter(s)\" prefix=blockchain```",
+        "created_at": "2022-11-29T10:02:28.967000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ah that's the long fork that's why the weight zero messages",
+        "created_at": "2022-11-29T10:02:36.958000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Are we peered with lodestar?",
+        "created_at": "2022-11-29T10:02:59.002000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "Geth/Prysm: ```time=\"2022-11-29 10:02:47\" level=info msg=\"Processing block batch of size 41 starting from  0x12c58e84... 11104/33958 - estimated time remaining 25m8s\" blocksPerSecond=15.2 peers=7 prefix=initial-sync\ntime=\"2022-11-29 10:02:47\" level=error msg=\"received an undefined ee error\" error=\"invalid method parameter(s)\" prefix=blockchain```",
+        "created_at": "2022-11-29T10:03:02.328000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "current peering is with lh and teku",
+        "created_at": "2022-11-29T10:03:27.075000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "Lodestar just caught up, I can restart tho with the new enr",
+        "created_at": "2022-11-29T10:03:39.014000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "Only prysm is lagging behind on the current chain tho, so any peers should work.",
+        "created_at": "2022-11-29T10:03:59.276000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Uh that sounds again like \u003c@363800010518822915\u003e's rewrite 😦",
+        "created_at": "2022-11-29T10:04:25.471000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Different timezones suck",
+        "created_at": "2022-11-29T10:04:35.981000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "```time=\"2022-11-29 10:03:58\" level=error msg=\"received an undefined ee error\" error=\"invalid method parameter(s)\" prefix=blockchain``` this is something that is a potential issue",
+        "created_at": "2022-11-29T10:04:39.976000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "I now see this error message popping up on both client pairs",
+        "created_at": "2022-11-29T10:04:57.668000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah my previous message is about that",
+        "created_at": "2022-11-29T10:05:00.137000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "ah ok",
+        "created_at": "2022-11-29T10:05:05.239000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "Shall I try to resync from genesis?",
+        "created_at": "2022-11-29T10:05:16.014000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "No",
+        "created_at": "2022-11-29T10:05:20.610000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I want to see if it recovers, unfortunately today I can't even look at Terence's branch, we'll have to wait until he wakes up again 😦",
+        "created_at": "2022-11-29T10:06:01.608000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Both clients are now synced up to Capella right? They passed the bad block",
+        "created_at": "2022-11-29T10:07:02.047000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "looks like syncing is ongoing still",
+        "created_at": "2022-11-29T10:07:26.584000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah I have an idea what that invalid parameters can be",
+        "created_at": "2022-11-29T10:07:51.787000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "```time=\"2022-11-29 10:07:17\" level=info msg=\"Processing block batch of size 34 starting from  0x1e220e43... 11810/33981 - estimated time remaining 37m8s\" blocksPerSecond=9.9 peers=7 prefix=initial-sync\ntime=\"2022-11-29 10:07:17\" level=warning msg=\"Skip processing batched blocks\" error=\"beacon node doesn't have a parent in db with root: 0xf3e3fe358b9d535e6f5824f34a12938eea75076500e1d5452503799fba6f0fa3 (in processBatchedBlocks, slot=11810)\" prefix=initial-sync\ntime=\"2022-11-29 10:07:25\" level=debug msg=\"Unable to cache headers for execution client votes\" error=\"(1669701540 \u003e 1669434612): provided time is later than the current eth1 head\" prefix=powchain\ntime=\"2022-11-29 10:07:27\" level=info msg=\"Processing block batch of size 42 starting from  0x2a232246... 11616/33982 - estimated time remaining 46m35s\" blocksPerSecond=8.0 peers=7 prefix=initial-sync\ntime=\"2022-11-29 10:07:28\" level=error msg=\"received an undefined ee error\" error=\"invalid method parameter(s)\" prefix=blockchain\ntime=\"2022-11-29 10:07:28\" level=debug msg=\"Slowing down for rate limit\" peer=16Uiu2HAkvew84u8boqs6YM68H45D7C9hc3Xg5gnsEHWQCbeEZqq3 prefix=initial-sync\ntime=\"2022-11-29 10:07:29\" level=info msg=\"Processing block batch of size 39 starting from  0xc85e14ae... 11680/33982 - estimated time remaining 37m21s\" blocksPerSecond=9.9 peers=7 prefix=initial-sync\ntime=\"2022-11-29 10:07:29\" level=error msg=\"received an undefined ee error\" error=\"invalid method parameter(s)\" prefix=blockchain\ntime=\"2022-11-29 10:07:29\" level=info msg=\"Processing block batch of size 34 starting from  0x1e220e43... 11810/33982 - estimated time remaining 31m43s\" blocksPerSecond=11.7 peers=7 prefix=initial-sync```",
+        "created_at": "2022-11-29T10:07:53.789000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "Looks like its actually just keep looping back",
+        "created_at": "2022-11-29T10:08:04.009000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "so its not syncing properly.",
+        "created_at": "2022-11-29T10:08:11.515000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I can look",
+        "created_at": "2022-11-29T10:08:45.130000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "nahhh there's something very wrong, head is still at genesis",
+        "created_at": "2022-11-29T10:11:48.440000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "hmmm, it seems that prysm won't take the good fork, because of FFG reasons, it keeps replaying since the last state before the fork",
+        "created_at": "2022-11-29T10:16:02.906000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "awesome, sorry this week i am little less available",
+        "created_at": "2022-11-29T10:23:02.355000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "No worries. Will ping you if anything is broken on Lodestar's side.",
+        "created_at": "2022-11-29T10:23:50.848000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@412614104222531604\u003e can you resync from genesis, prysm is at a bad forkchoice state that I do not know how it happen but I don't think it will recover, will need to see how that happened, I have all the info I need, will need to study it",
+        "created_at": "2022-11-29T10:32:36.187000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ok.",
+        "created_at": "2022-11-29T10:32:46.113000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "which one? We could keep one as is, other one from genesis",
+        "created_at": "2022-11-29T10:32:59.883000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "if you restart from scratch in the meantime I can see what the hell it went wrong you will still see the ee errors but hopefully not the \"ineligible\" ones",
+        "created_at": "2022-11-29T10:33:08.445000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "you can restart geth for sure (I am looking at it) and I suppose Nethermind is throwing the same errors",
+        "created_at": "2022-11-29T10:33:36.690000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I need to run now",
+        "created_at": "2022-11-29T10:33:38.996000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "will be at the cell",
+        "created_at": "2022-11-29T10:33:43.395000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ok, nuking geth/prysm now.",
+        "created_at": "2022-11-29T10:35:32.805000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "restarted it now.",
+        "created_at": "2022-11-29T10:36:40.110000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@412614104222531604\u003e did it sync?",
+        "created_at": "2022-11-29T11:14:42.127000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "syncing",
+        "created_at": "2022-11-29T11:15:58.025000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Do you know if it passed the bad point?",
+        "created_at": "2022-11-29T11:19:04.164000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "Looks of it yes",
+        "created_at": "2022-11-29T11:19:45.994000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "```time=\"2022-11-29 11:18:45\" level=info msg=\"Processing block batch of size 31 starting from  0xa78098bd... 16705/34338 - estimated time remaining 29m5s\" blocksPerSecond=10.1 peers=7 prefix=initial-sync```",
+        "created_at": "2022-11-29T11:19:49.170000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "and looks like its progressing actually",
+        "created_at": "2022-11-29T11:20:01.627000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thanks! I can't explain the bad status of the previous instance. We had advanced the finalized checkpoint to an impossible one",
+        "created_at": "2022-11-29T11:22:20.820000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Is the devnet finalizing now?",
+        "created_at": "2022-11-29T11:23:29.475000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "yeah it should be as only the prysm blocks are missed, and there are only 9 validators left from prysm",
+        "created_at": "2022-11-29T11:24:16.757000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@602753420033785856\u003e \u003c@755590043632140352\u003e `ethdo` will now generate withdrawal credential change operations with a minimum hard fork of Capella.  For systems that don't provide a fork schedule including Capella it is also possible to hard-code the fork version (and genesis validators root if required) from the command line.\n\nhttps://github.com/wealdtech/ethdo/releases/tag/v1.26.1",
+        "created_at": "2022-11-29T14:32:53.046000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "Prysm has a new image which fixes the issue above http://gcr.io/prysmaticlabs/prysm/beacon-chain:capella-dfa0ccf",
+        "created_at": "2022-11-29T15:44:52.345000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "ok, should I restart nethermind+geth/prysm with the new fixed image?",
+        "created_at": "2022-11-29T15:45:26.154000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cterencechain\u003e Yes please",
+        "created_at": "2022-11-29T15:45:40.068000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "validator?",
+        "created_at": "2022-11-29T15:45:50.130000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "Just the beacon node",
+        "created_at": "2022-11-29T15:46:00.011000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "DB can stay ?",
+        "created_at": "2022-11-29T15:46:12.103000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah",
+        "created_at": "2022-11-29T15:46:25.219000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "ok",
+        "created_at": "2022-11-29T15:46:28.095000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "validator process fails: ```time=\"2022-11-29 15:54:24\" level=warning msg=\"Running on custom Ethereum network specified in a chain configuration yaml file\" prefix=flags\ntime=\"2022-11-29 15:54:24\" level=error msg=\"There were some issues parsing the config from a yaml file\" error=\"yaml: unmarshal errors:\n  line 89: field EIP4844_FORK_EPOCH not found in type params.BeaconChainConfig\"\ntime=\"2022-11-29 15:54:24\" level=error msg=\"could not open wallet: no wallet found. You can create a new wallet with `validator wallet create`. If you already did, perhaps you created a wallet in a custom directory, which you can specify using `--wallet-dir=/path/to/my/wallet`\" prefix=main```",
+        "created_at": "2022-11-29T15:55:50.114000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "Beacon reports: ```time=\"2022-11-29 15:56:12\" level=debug msg=\"Can not trigger event\" epoch=1121 error=\"slot is higher than the finalized slot\" event=tick highestExpectedSlot=35696 noRequiredPeersErrRetries=2 prefix=initial-sync start=35879\ntime=\"2022-11-29 15:56:27\" level=warning msg=\"Block is not processed\" error=\"could not process block: could not validate new payload: could not set node to invalid: invalid nil or unknown node\" prefix=initial-sync```",
+        "created_at": "2022-11-29T15:56:26.053000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "Updated geth and nethermind too. Feel free to login and try to debug.",
+        "created_at": "2022-11-29T15:56:48.309000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "Any reason to have `EIP4844_FORK_EPOCH` in the config? Prysm complains that being there",
+        "created_at": "2022-11-29T15:58:07.710000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "LH needs it.",
+        "created_at": "2022-11-29T15:58:27.146000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "Teku also complained, I removed it for them. As far as I understand flags like EIP4844 should be ignored by other clients.",
+        "created_at": "2022-11-29T15:59:05.151000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "But I can get rid of it.",
+        "created_at": "2022-11-29T15:59:12.804000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@363800010518822915\u003e this looks like a prysm bug on capella this time",
+        "created_at": "2022-11-29T16:40:02.083000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "http://164.92.243.41:8080 is behind",
+        "created_at": "2022-11-29T17:25:49.984000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "Odd that I can't sync the first block. It complains genesis block is not in the DB\n```\n[2022-11-29 14:29:29]  WARN initial-sync: Skip processing batched blocks error=beacon node doesn't have a parent in db with root: 0x75b263bf2778f2b68f76f05508932444ff6026738ae7b5184a951f6dfcab0e6e (in processBatchedBlocks, slot=1)\n```",
+        "created_at": "2022-11-29T22:30:21.287000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hi \u003c@412614104222531604\u003e , is the genesis state correct here? https://github.com/ethpandaops/withdrawals-testnet/blob/withdrawals/withdrawals-testnet/custom_config_data/genesis.ssz\nPart of me suspect that genesis state may be wrong for me to see that",
+        "created_at": "2022-11-29T22:43:08.892000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "Testing",
+        "parent": "",
+        "content": "i'll try to sync again, couldn't sync from genesis yesterday locally",
+        "created_at": "2022-11-29T22:52:27.829000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "Testing",
+        "parent": "",
+        "content": "i definitely can't sync using that state, but i wasn't able to download a genesis state off our node so had to go from finalized",
+        "created_at": "2022-11-29T23:36:54.840000+00:00",
+        "attachments": null
+    }
+]

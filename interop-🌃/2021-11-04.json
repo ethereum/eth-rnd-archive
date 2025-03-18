@@ -1,0 +1,522 @@
+[
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "A proposed change of the `engine_forkchoiceUpdated` method based on the early feedback from \u003c@!360491619402776577\u003e that is about to be merged soon with the corresponding release of the spec and update to the Kentsugi spec:\nhttps://github.com/ethereum/execution-apis/pull/109",
+        "created_at": "2021-11-04T10:41:06.639000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Should we bump the version number with this? The payloadID and the forkchoiceUpdated changed since I implemented it. \nIts fine not to do it, but it would be nice to be more consistent with versioning in the future",
+        "created_at": "2021-11-04T10:44:19.163000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I would say that we're in the active development and design phase where the version could be bumped for multiple times with no strong reason for that. I'd keep it the same.",
+        "created_at": "2021-11-04T10:47:41.031000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "IMO, we should start bumping version per each update after the production release",
+        "created_at": "2021-11-04T10:49:25.290000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "Just went over it, what are the three first arguments of forkChoiceUpdatedV1?",
+        "created_at": "2021-11-04T10:53:15.527000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "it should be two if they are finalizedhash and head hash but there are 3 + the request for a new payload",
+        "created_at": "2021-11-04T10:53:49.819000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "head, safehead, finalized",
+        "created_at": "2021-11-04T10:54:12.724000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "But the format will change with this https://github.com/ethereum/execution-apis/pull/109",
+        "created_at": "2021-11-04T10:54:39.527000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "Also, i would not merge the payload build process and the forkChoiceUpdate event on one call, unless there is a good reason, that is an horrible design constraint IMHO. Merging two actions in one method is not something that i would do.",
+        "created_at": "2021-11-04T10:59:01.401000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "Anyway thank you for sending the spec",
+        "created_at": "2021-11-04T10:59:56.544000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Same 😄 (but there's good reason for it I think)",
+        "created_at": "2021-11-04T11:06:03.027000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "There is a strong reason behind this. Payload building process is only valuable if it happens on top of the most recent head. In the previous design there was a separate method that initiated the building process. And the separate method would have us to deal with the consistency with respect to the recent `forkchoiceUpdated` method call. Which is even worse than this not that ideal design that we have now if we deal with asynchronous calls. Having them separate appears to be more complicated in the end",
+        "created_at": "2021-11-04T11:07:43.123000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "It does seem like an awkward gluing together of two fundamentally different functions.  Sounds like it could be handled inside the execution client:\n  - when a `preparePayload` is received start building on the current head\n  - when a `forkchoiceUpdated` is received and a `preparePayload` is active then restart building on the updated head",
+        "created_at": "2021-11-04T11:18:14.017000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "When the head is updated the `PayloadAttributes` will be changed and it requires another call to `preparePayload` to rewind the building process in a proper way. I would disagree on that they are fundamentally different. They have different semantics but `preparePayload` is obviously depends on the `forkchoiceUpdated`",
+        "created_at": "2021-11-04T11:25:34.910000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "The goal of gluing them together is to make these two semantically different actions to be processed atomically which eliminates the space of odd states when these two calls are inconsistent, like when either prepare is called before the update or prepare isn't called after the update for any reason or was just missed and didn't restart the build process when it was needed",
+        "created_at": "2021-11-04T11:28:56.013000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "I agree that `preparePayload` depends on `forkchoiceUpdated`, but that shouldn't require them to be a single call.  Feels like we'll end up with another set of issues here due to the decision to prepare a payload not being able to be carried out independently of the fork choice.  Will have a think to see if I can come up with specific concerns.",
+        "created_at": "2021-11-04T11:42:24.433000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I do agree that twofold semantics of any method isn't a good design choice, it breaks the single responsibility principle with all related outcomes. But in our context it seems like a reasonable solution considering the complexity caused by keeping these two actions in separate methods",
+        "created_at": "2021-11-04T11:47:33.315000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e Will have a think to see if I can come up with specific concerns.\ncool 👍",
+        "created_at": "2021-11-04T11:48:37.213000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "Testing",
+        "parent": "",
+        "content": "If they (prepare and forkchoice update) were two separate methods, also consider that due to the synchronous relation, you need to call one after the other. And then it's not just consistency that is a concern, but also the extra time it takes, which could be invested in building a higher-value block instead.",
+        "created_at": "2021-11-04T12:44:26.687000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Can someone dm me the link to the consensus layer call?",
+        "created_at": "2021-11-04T13:04:18.535000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Testing",
+        "parent": "",
+        "content": "it will be in one of the main channels here",
+        "created_at": "2021-11-04T13:05:20.856000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c#598292067260825641\u003e i think",
+        "created_at": "2021-11-04T13:05:27.017000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Testing",
+        "parent": "",
+        "content": "hmm perhaps not",
+        "created_at": "2021-11-04T13:06:13.818000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ah damn, I thought it was 14:00 CET not GMT",
+        "created_at": "2021-11-04T13:06:15.900000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Testing",
+        "parent": "",
+        "content": "i'll get it to you",
+        "created_at": "2021-11-04T13:06:16.418000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Testing",
+        "parent": "",
+        "content": "1 more hr",
+        "created_at": "2021-11-04T13:06:22.360000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "Testing",
+        "parent": "",
+        "content": "DM'ed",
+        "created_at": "2021-11-04T13:06:40.123000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "Testing",
+        "parent": "",
+        "content": "That said, there must be better ways to share. I agree we can just post it here (in consensus dev channel). And change the password if we get zoom-bombed or something.",
+        "created_at": "2021-11-04T13:08:29.004000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "yeah, I'm okay posting here. zoom bombing is less cool than it used to be",
+        "created_at": "2021-11-04T13:09:34.651000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "No it would likely be insignificant time improvement and i doubt that for such operation you would actually want to come up with something like this. It is not enough of an excuse IMO",
+        "created_at": "2021-11-04T13:43:36.213000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "You need the API also to be readable and not be spaghetti thats probably more important",
+        "created_at": "2021-11-04T13:44:16.359000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "Especially if it is a core functionality",
+        "created_at": "2021-11-04T13:44:29.129000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "note that these duplicate semantics actually map well to existing functionality in a client\n\npending blocks are built and constantly updated triggered by the pow fork choice updating\n\nin PoS, you know if you will be the next proposer so it's essentialy a flag to \"update forkchoice and build\" or just \"update forkchoice\". Where the former is the existing functionality today",
+        "created_at": "2021-11-04T13:46:19.411000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@687974325072035882\u003e it matches current behavior, reduces API, gets rid of consistency and error edge cases, improves (albeit by a small amount) the time to build proposal, and was well received thus far (almost a month since it was discussed at initial interop). If you're going to wave away things so strongly, please just participate more actively in the first place, so we don't have to discuss these things so late in the process.",
+        "created_at": "2021-11-04T13:55:28.505000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "call now!",
+        "created_at": "2021-11-04T14:01:08.440000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "Unfortunately i have no time to actively participate in your discussion because of my life to join . However, this is a design flaw so obvious that i really cannot point it out. It is of course just my opinion, and it is entirely your job to consider it not mine. I really do not care what the specs ends up being, i just raise my concerns when i have some and i ask my questions when i have some. My job is to adapt it on erigon not to make the specifications.",
+        "created_at": "2021-11-04T14:12:24.473000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "Sorry i answered the wrong person",
+        "created_at": "2021-11-04T14:13:45.686000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thanks for sharing your concern. It's been considered",
+        "created_at": "2021-11-04T14:17:21.676000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "https://hackmd.io/z2h_RAJoTHWSRka-9MDEVg \u003c- Please add your testing ideas and things you feel we should look at before the release",
+        "created_at": "2021-11-04T14:26:52.885000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@!425572898787426305\u003e The current spec does not specify how the payloadid should be computed anymore, can I just decide it for myself?",
+        "created_at": "2021-11-04T15:46:34.721000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e yes",
+        "created_at": "2021-11-04T15:52:35.109000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "I've updated the test vectors one final time. In order to make sure that you know to which version they belong, I've added a link to the latest spec commit that they implement: https://notes.ethereum.org/rmVErCfCRPKGqGkUe89-Kg?both",
+        "created_at": "2021-11-04T16:03:03.474000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "Nice. Can we also update https://hackmd.io/@n0ble/kintsugi-spec#Kintsugi-Spec to include https://github.com/ethereum/execution-apis/pull/109 ?",
+        "created_at": "2021-11-04T16:07:59.209000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cn0ble\u003e yes, EL responsible for payloadId computation is implied by the change (re @amphora_interop_bot: \u003cMariusVanDerWijden\u003e\u003c@425572898787426305\u003e The current spec does not specify how the payloadid should be computed anymore, can I just decide it for myself?)",
+        "created_at": "2021-11-04T16:10:48.265000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cn0ble\u003e we're waiting for the release of the execution-apis spec, then the version will be updated cc \u003c@543900561460822016\u003e (re @amphora_interop_bot: \u003cterence\u003eNice. Can we also update https://hackmd.io/@n0ble/kintsugi-spec#Kintsugi-Spec to include https://github.com/ethereum/execution-apis/pull/109 ?)",
+        "created_at": "2021-11-04T16:12:39.725000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cprotolambda\u003e FYI, if you need the kintsugi links, you can now use the merge wiki domain:\nhttp://kintsugi.merge.wiki (milestones)\nhttp://spec.merge.wiki (will update to next spec after kintsugi)",
+        "created_at": "2021-11-04T16:42:51.748000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cn0ble\u003e thanks a lot Proto!",
+        "created_at": "2021-11-04T16:51:13.372000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm curious, what is the downside of *never* passing `null` for `payloadAttributes`? EL client is always building payload based on new head. Is such behavior discouraged? The benefit here is CL can reduce two `engine_forkchoiceUpdatedV1` calls down to one and buys more time for EL client to build payload",
+        "created_at": "2021-11-04T17:07:10.222000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "it is resource intensive",
+        "created_at": "2021-11-04T17:18:13.450000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "the idea of telling to build or not is to eliminate this (almost always) wasteful \"pending\" block activity",
+        "created_at": "2021-11-04T17:18:32.506000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "and only do it when neededd",
+        "created_at": "2021-11-04T17:18:36.181000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "Got it. Validator should only pass in `payloadAttributes` if is in fact the proposer of subsequent slot. Slightly more complexibility from code for us, but we can make it work",
+        "created_at": "2021-11-04T17:21:36.068000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "it isn't necessarily incorrect to always call the biuld process but you are then inducing some amount of additional load (not sure exactly how much) that yuo could otherwise avoid",
+        "created_at": "2021-11-04T17:24:30.289000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "im curious what the tradeoffs look like, will do some benchmarks and report back",
+        "created_at": "2021-11-04T17:25:30.910000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "you'd need to simulate a mainnet size/complexity mempool to get an accurate view",
+        "created_at": "2021-11-04T17:26:09.750000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "could maybe run mainnet geth with and with \"pending block\" but I don't think this is behind a configuration value",
+        "created_at": "2021-11-04T17:26:44.562000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cvdWijden\u003e Geth by default always produce a pending block",
+        "created_at": "2021-11-04T18:31:43.461000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cvdWijden\u003e But this is something that we actually want to get rid of soon",
+        "created_at": "2021-11-04T18:31:57.416000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "right\n\ndo you have estimtes on the load this requires?",
+        "created_at": "2021-11-04T18:32:07.775000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cvdWijden\u003e Not really, I could build a version without it and measure",
+        "created_at": "2021-11-04T18:33:14.040000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cvdWijden\u003e We need the pending block for some user facing api's now, so we would love to get rid of them",
+        "created_at": "2021-11-04T18:33:59.843000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "does anyone use those?! I suspect \"pending block\" and what is actually seen on mainnet continues to diverge",
+        "created_at": "2021-11-04T18:34:39.652000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cvdWijden\u003e That's why want to get rid of it :D",
+        "created_at": "2021-11-04T20:10:37.346000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cvdWijden\u003e It's needed for transaction creation (nonce) and gas estimation for succinct transactions",
+        "created_at": "2021-11-04T20:11:31.371000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah Besu mostly doesn't implement the `pending` option in JSON-RPC but had to add it for at least getTransactionCount (for getting the next nonce). Not sure if there's any pending support around gas estimation but I can see how it could be useful there.",
+        "created_at": "2021-11-04T21:22:17.330000+00:00",
+        "attachments": null
+    }
+]

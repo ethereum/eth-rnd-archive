@@ -1,0 +1,154 @@
+[
+    {
+        "author": "hossein_mohebbi",
+        "category": "general",
+        "parent": "",
+        "content": "Hey! so I know with the shapella hard fork, we will have withdrawal capability from validators...\nI had a question/issue I was trying to figure out and would really appreciate any help on it!\nTo summarize we have 3 cases that lead to a reduced balance:\n\n1. voluntary full withdrawal where the user unstakes and retrieves all funds + rewards. Leads to exiting.\n2. an automatic withdraw when the user takes no action after the upgrade. Excess balance (over 32 eth) is automatically returned. Validator remains active.\n3. slashing when there is a violation in attestation. Penalty is applied in balance and leads to exiting. Full withdrawal becomes available afterwards.\n\nThe issue I have is that I am not sure how to tell these 3 situations apart. All we see from the beacon chain is a reduced balance but that does not give any information about the cause of that. \n\nI was wondering if there  are any events or APIs on the beacon chain that check rewards, slashes and withdrawals. Do these currently exist? If so can you give me the API docs to check this?\n\nBased off this article https://www.attestant.io/posts/understanding-the-validator-lifecycle/ we have a few event types each with their own statuses \n- deposited\n- pending\n- active\n- exiting\n- slashing\n- exited\n\nWill there be a new status or event type for withdrawals?\nCan that be used to help figure this problem out? (ie. checking state before balance reduction through some api?)\n\nAny resources / advice is appreciated!",
+        "created_at": "2023-02-03T05:46:42.981000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I mean that currently some CL clients use `eth_getBlockByHash` to request payload bodies, switching to new `engine_` methods asap is highly desirable because the `eth_` method is suboptimal in terms of computational resources for EL. I do agree that it would be great to test new methods on devnets, shadow forks and testnets. There are a bunch of hive tests coming that covers payload bodies calls as well.\n\nMy point was: EL clients must support these methods as part of Shanghai as per our decision. While CL should use them but if related work results in a Shanghai/Capella delay because one or two clients aren't ready yet then I would consider shipping these CL clients Capella-compliant but without payload bodies offloading in it and adding it later on in one of the next releases.",
+        "created_at": "2023-02-03T08:05:21.673000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "siladu",
+        "category": "general",
+        "parent": "",
+        "content": "Got you, sounds good to me. I guess there would be nothing stopping us from creating a post-Capella devnet after launch just to test this. \n\nI guess it’s up to CLs: whenever they make the switch to the engine_ methods be aware it may be buggy, especially at scale.",
+        "created_at": "2023-02-03T08:24:47.664000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, I can see how stress testing and testing at scale may be helpful here 👍",
+        "created_at": "2023-02-03T08:26:56.666000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "metachris_",
+        "category": "general",
+        "parent": "",
+        "content": "anyone here has the zhejiang genesis validators root at hand? can't find it in https://github.com/ethpandaops/withdrawals-testnet/tree/master/zhejiang-testnet/custom_config_data (nvm, found it at https://beacon.zhejiang.ethpandaops.io/eth/v1/beacon/genesis)",
+        "created_at": "2023-02-03T10:03:14.677000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "if you have access to the beacon chain then you can distinguish partial withdrawals from full withdrawals by simply checking the current balance of the validator, if it is \u003e= 32ETH then it was a partial withdrawal.  You can check if a validator was slashed in its status as you point out. You can get the validator status from `eth/v1/beacon/states/head/validators/\"insert_index_here\"`",
+        "created_at": "2023-02-03T11:07:28.835000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "hossein_mohebbi",
+        "category": "general",
+        "parent": "",
+        "content": "Thank you for the reply!! Why is it that you said \u003e=32 eth for partial withdrawal? Why can there be a case it isn’t 32 eth exactly?",
+        "created_at": "2023-02-03T15:00:28.543000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Because rewards will continue to accrue to the active validator until its next partial withdrawal.",
+        "created_at": "2023-02-03T15:07:50.568000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "hossein_mohebbi",
+        "category": "general",
+        "parent": "",
+        "content": "So I know for users who take no action upon the Shapella hardfork , the excess balance (rewards) after 32 eth will be automatically retrieved as a partial withdrawal. That would make the balance exactly 32 eth I assume? When will there be future partial withdrawals and how so?",
+        "created_at": "2023-02-03T15:10:41.392000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "well, if for example you are in a sync committee or if you become offline, then right after the partial withdrawal you will have 32 ETH, but the very next slot you can have more or less. What you know for sure is that you won't have zero. For a full withdrawal you will have zero right after the full withdrawal. But there are some edge cases where you may still have a little bit more in the very next slot",
+        "created_at": "2023-02-03T15:14:36.143000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "And for a fair few slots afterwards, if you are in a sync committee...",
+        "created_at": "2023-02-03T15:15:14.050000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "hossein_mohebbi",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@755590043632140352\u003e \u003c@144468805697929216\u003e  yes there is also validator leaks / missed attestations. That makes sense, thank you. However, back to the problem I was trying to solve, I basically wanted an API that could tell me the cause after a balance reduction. It seems I have to build that system first by using an endpoint to monitor validator balances and detect reductions and once I detect them use another endpoint to check the state at that same slot where the reduction happened. So if this is how I am doing it, for a partial withdrawal the slot that the reduction was detected should be 32 and the slot where a full withdrawal was detected should be 0, right? I understand there may be other cases where a reduction happens (like validator leak) but we just have to detect those from the other cases. Thank you so much for your replies btw",
+        "created_at": "2023-02-03T15:22:02.931000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "You may be better off not looking at balances directly and instead looking at the validator's duties and operations.  Monitoring the balance alone isn't a useful proxy for \"validator working well\" once capella hits.",
+        "created_at": "2023-02-03T15:24:12.404000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "hossein_mohebbi",
+        "category": "general",
+        "parent": "",
+        "content": "How can I detect those 3 events (full withdraw, partial withdraw, slash) by using the validators duties and operations?",
+        "created_at": "2023-02-03T15:27:48.447000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "The one you probably care about most is \"poor attestation\", as that's going to be the most common.  You also are about missed sync committee contribution.\n\nYou can calculate if a withdrawal was full or partial based on the validator's state (if it is active then it was a partial withdrawal), and a slashing likewise (slashed flag goes from false to true).",
+        "created_at": "2023-02-03T15:34:17.980000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "hossein_mohebbi",
+        "category": "general",
+        "parent": "",
+        "content": "Thank you so much for the explanation. So I am a little confused on what you originally meant by validator “duties and operations” , like is this a field we check with an api? Also not sure what you meant about missed sync contributions. But I get what you mean by utilizing the validator’s state. We should be able to detect changes to the validator by monitoring the state. If it exited then it was either a slash which we can check that field to know or it was a full withdrawal which would be if there is no slash and we know it  exited by the exit eposch. If it was a partial withdraw then nothing really changes and it remains active. However partial withdrawals are only for eth1 wallets right? Eth2 wallets who take no action remain as they were before and continue gaining rewards?",
+        "created_at": "2023-02-03T15:44:34.449000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "This channel really isn't the best place for this discussion, perhaps take it to ethstaker.",
+        "created_at": "2023-02-03T15:46:53.381000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "when do we include eip4844 in deneb? ie there are non-eip-4844 changes to do that should target deneb so we can either create a \"deneb\" folder then merge eip4844 when it's ready _or_ simply yolo-rename eip4844",
+        "created_at": "2023-02-03T16:28:36.482000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "cc \u003c@552133098075193354\u003e ^",
+        "created_at": "2023-02-03T16:28:55.859000+00:00",
+        "attachments": null
+    }
+]

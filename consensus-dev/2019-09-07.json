@@ -1,0 +1,130 @@
+[
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**schroedingerscode**\nHey folks, I'm a bit unsure why we add one to the `DEPOSIT_CONTRACT_TREE_DEPTH` during `verify_merkle_branch` in `process_deposit`. The comment says an additional elem is added to the list to handle the SSZ length mixin, but the best I can tell, deposit proofs are stored in a vector, which is neither serialized nor tree hashed with a length mixin.\n\nUpdate: it would appear as though the vector is sized as DEPOSIT_CONTRACT_TREE_DEPTH+1 in the Deposit class anyway, which is slightly perplexing to me, but I'm gonna blame it being late on a Friday night.",
+        "created_at": "2019-09-07T01:37:44.662000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "The deposit root is the root of an ssz list rather than vector. It has a length mixed in which adds one to the depth you get jjst from a pure merkle tree of the deposit data",
+        "created_at": "2019-09-07T01:51:14.852000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**schroedingerscode**\nThanks. Totally missed this part: `deposit_data_list = List[DepositData, 2**DEPOSIT_CONTRACT_TREE_DEPTH](*leaves[:index + 1])`\n\nMakes sense now.",
+        "created_at": "2019-09-07T01:56:01.010000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "No worries! We decided to make the contract deposit root a valid ssz root to avoid having a separate merkle tree construction for this one thing (as it was before)",
+        "created_at": "2019-09-07T03:00:28.254000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@539495253418180618\u003e \n\u003e but it avoids having more special casing in the phase 0 spec that we will all have to maintain in perpetuity\nwhat casing are you referring to?",
+        "created_at": "2019-09-07T12:49:27.848000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "having to do ad-hoc things to juggle the fact that we don't have proper values for e.g. the justified and finalized checkpoint in the early epochs",
+        "created_at": "2019-09-07T14:32:16.935000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I might be missing something but isn't `Checkpoint(epoch = 0, root = signing_root(genesis_block))` a valid finalized and justified checkpoint for genesis state?",
+        "created_at": "2019-09-07T14:34:49.196000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "it is",
+        "created_at": "2019-09-07T15:20:33.328000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "but the genesis state has `finalized_checkpoint == Checkpoint(0, 0x0)`",
+        "created_at": "2019-09-07T15:20:47.749000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "it isn't updated until a few epochs have played out and validators have justified some of the early stuff",
+        "created_at": "2019-09-07T15:21:06.746000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Right. But what is the obstacle to passing `genesis_block_root` into genesis initialisation to have `finalized_checkpoint == Checkpoint(0, genesis_block_root) ` in the genesis state?",
+        "created_at": "2019-09-07T15:24:47.018000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "Circular dependency",
+        "created_at": "2019-09-07T15:25:17.815000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "the genesis_block contains the genesis state root",
+        "created_at": "2019-09-07T15:25:26.602000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "So we could potentially clean it up in the first slot transition after genesis but that was pretty ugly",
+        "created_at": "2019-09-07T15:25:55.929000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "instead, opted for Checkpoint(0, 0) == GenesisCheckpoint locally",
+        "created_at": "2019-09-07T15:26:28.755000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "got it! this dependency is the thing that I missed, thanks for clarification",
+        "created_at": "2019-09-07T15:38:23.761000+00:00",
+        "attachments": null
+    }
+]

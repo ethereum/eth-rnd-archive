@@ -1,0 +1,133 @@
+[
+    {
+        "author": "big_tech_sux",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "following up from yesterday's EOF call,\n1)\nextdatacopy / extcodecopy, right now erc5202 uses initcode stored on chain for create operations. vyper's implementation will extcodecopy code into some memory buffer and then CREATE/CREATE2 based on that. per \u003c@403707149043105803\u003e my understanding is that we don't want code introspection in the sense of generating initcode at runtime, so i had a couple ideas about that, but after sleeping on it i think the cleanest is actually to introduce CREATE5 (or keep CREATE3 but change the arguments a bit). CREATE5 basically operates the same as CREATE3 but can use code from an external contract. or CREATE3 can just be changed to take another `address` argument (potentially with some gas saving carveout in the case that the address to read from is the same as the executing contract), and it reads the initcode from the `(address, initcode_section)` pair.\n\nif we further add `initcode` section kind, the initcode could be validated just 1 time at deployment, saving initcode validation on all future deployments because we know it was already done when the contract containing the initcode was deployed to begin with.\n\ni *think* with the `initcode` section kind, also the `data_offset` and `data_size` arguments can be dropped, since any different initcodes will simply be stored in different `initcode` sections (i don't think there are many use cases where one initcode is somehow some substring of another initcode). but maybe it's not really worth it to drop those arguments since they could turn out to be handy at some later time.",
+        "created_at": "2023-06-29T17:10:30.498000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "big_tech_sux",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "2)\n\nthe stack validation requirement in its current form hurts code outlining (and therefore code size). a simple example which demonstrates this is shared assert blocks. this kind of code is generated extensively in vyper as assertions are possibly the most commonly generated sequence of code in vyper (and i'm guessing other languages but am not as familiar). because there is no conditional CALLF (or JUMPF), what is currently basically `\u003ccond\u003e PUSH2 \u003cshared revert block\u003e JUMPI` has to turn into a jump around the callf: `\u003ccond\u003e ISZERO RJUMPI \u003cjoin point\u003e CALLF \u003crevert subroutine\u003e \u003cjoin point is here\u003e`. the `ISZERO` can sometimes but not always be optimized out, so basically we are looking at an extra 3-4 bytes per assert. the upshot of this is that even with the benefit of JUMPDEST removal, vyper code targeting EOF actually ends up producing larger code (roughly 2-5%) than non-EOF. attached assembly screenshots help demonstrate this (note the jumpdest is in there for debugging and is not actually emitted in the bytecode).\n\ni *don't* think the answer here is adding a conditional CALLF/JUMPF instruction, that seems architecturally off to me. i *do* think the answer is to remove the stack validation requirement. during client-side compilation/jit/interpretation of the EVM code, i think there are ways to avoid breaking linear-time stack height analysis, for instance the jumped-to basic block can be outlined and (in x86 terms) a `call` can be emitted instead of a `jmp`. and maybe a gas adjustment added to penalize. but without removing or relaxing the stack validation requirement, there is nothing that can be done that can be done to \"fix\" the resulting bloat during EVM code generation on the compiler side.",
+        "created_at": "2023-06-29T17:37:57.401000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "Screenshot_from_2023-06-29_10-12-56.png",
+                "content": "95ade67d62848b200bfd1d11c9d78bced3ace27d50440a46b34405cfa3f74cc5"
+            },
+            {
+                "type": "image/png",
+                "origin_name": "Screenshot_from_2023-06-29_10-19-43.png",
+                "content": "15075bc44a5950ad155ea1a690daad383e371e74e20c7dc6a186d0e9b917ad26"
+            }
+        ]
+    },
+    {
+        "author": "big_tech_sux",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "3.\n\ni think having a single, global code section will result in better optimization opportunities (code sharing and stack sharing immediately come to mind but maybe more will come to mind if i think about it longer) than one-code-section-per-subroutine. i haven't thought too deeply about this subject though and maybe there are some reasons why the per-subroutine design is required that i am missing. EIP 4750's motivation section hints there are some analysis opportunities that can be achieved with the per-subroutine architecture but it does not describe them and it does not balance that with the optimization opportunities which it restricts from the compiler side.",
+        "created_at": "2023-06-29T17:53:07.603000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "big_tech_sux",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "also - maybe there should be a dedicated EOF channel? afaict it is pretty encapsulated from other EVM changes, and search functionality/discussion focus could be better if it were dedicated.",
+        "created_at": "2023-06-29T18:00:00.994000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Are the stack issues mostly being encountered around actions like reverts and returns?  At one point we were discussing making JUMPF chill about the stack validation rules if the code section didn't have a RETF or other CALLFs, something where section exits being only RETURN, STOP, or REVERT would guarantee.",
+        "created_at": "2023-06-29T18:12:29.991000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "big_tech_sux",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i'm not sure if that is really related. maybe one way to think about this issue (although it does not really get to the heart of the issue, which as i wrote above is really about stack validation) is that CALLF/JUMPF do not have a conditional counterpart, so existing JUMPIs cannot translate cleanly to EOF. in other words, relaxing stack validation issues for JUMPF does not really fix the problem.",
+        "created_at": "2023-06-29T18:31:33.752000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So a hypothetical CALLFI and JUMPFI would address size and stack issues?",
+        "created_at": "2023-06-29T21:19:42.550000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This also came up as we discussed with Solidity, but nobody was fully convinced it would be worth it (given how we inflate instruction count).",
+        "created_at": "2023-06-29T21:21:04.362000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It definitely is a very nice to have feature.",
+        "created_at": "2023-06-29T21:21:13.351000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "However looking at code snippets above reminded me that I think EIP-663 was used in the tests, as it is assumed to go around EOF. That could significantly reduce code size.",
+        "created_at": "2023-06-29T21:21:45.908000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "In the interim we still have space, although this would push us to 17 new instructions, and only 5-8 deprecated",
+        "created_at": "2023-06-29T21:22:26.966000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "big_tech_sux",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "hmm, yes i think so. it feels awkward though architecturally (i can't think of an architecture which has a conditional call instruction) and my intuition is dropping the stack validation requirement is better / more future proof but yea - it solves this issue.",
+        "created_at": "2023-06-29T22:43:31.505000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "big_tech_sux",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "hmm looks like old arm architectures had conditional calls (well conditional everything, using cpu flags), but the feature apparently does not exist on newer arches for reasons as explained here: https://stackoverflow.com/a/22169950/2152666",
+        "created_at": "2023-06-29T22:49:35.427000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Stack validation is a key feature of EOF as it allows for optimizations on the EVM.",
+        "created_at": "2023-06-29T22:50:20.874000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "big_tech_sux",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "you can still do the analysis for stack height at every instruction, but just not require the stack height invariant - instructions with different stack heights from different entry points can be out-lined (potentially with a gas penalty as i suggested above)",
+        "created_at": "2023-06-29T22:52:32.460000+00:00",
+        "attachments": null
+    }
+]

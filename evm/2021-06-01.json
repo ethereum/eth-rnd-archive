@@ -1,0 +1,154 @@
+[
+    {
+        "author": "hugo_delacruz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hi, I already shared this in \u003c#745077610685661265\u003e , also posting here for visibility,\nThis is analysis based on the proposal to charge `350` gas for accessing\nindividual code chunks (https://notes.ethereum.org/@vbuterin/code_chunk_gas_cost).  The analysis shows how this would impact gas costs at block level, and also how this would impact transactions cost in for example, transactions calling the most gas-consuming contracts.\n\nYou can see the analysis and results here:\n\nhttps://notes.ethereum.org/@ipsilon/code-chunk-cost-analysis",
+        "created_at": "2021-06-01T01:04:16.474000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!425343240212971521\u003e  Has anyone worked out how much this will actually slow down the EVM?  \u003c@!273808422753796097\u003e's description looks like a lot of per-instruction work, possibly worse that the 350 gas price per chunk, which is already a lot - do I correctly understand this to be adding over 10 gas to every executed instruction?",
+        "created_at": "2021-06-01T14:13:59.862000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!425274498732916736\u003e and \u003c@!211091239112671234\u003e looked into the speed impact, see the implementations: https://github.com/ethereum/go-ethereum/pull/22886 and https://github.com/ethereum/evmone/pull/326",
+        "created_at": "2021-06-01T14:51:41.738000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ok! Existing contracts wouldn't be able to make use of that, but it would be possible to change solidity to observe it. Exposing that to the users though I imagine would take a long time, as user-defined keys have been a contentious feature request since 2015.",
+        "created_at": "2021-06-01T14:54:31.849000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "For non-looping code, yes",
+        "created_at": "2021-06-01T14:56:52.758000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes. Unless you loop or execute the same functions multiple times.",
+        "created_at": "2021-06-01T14:57:03.559000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But code that takes up a lot of gas pretty much has to be either loopring or SLOAD/SSTORE/precompile dominant",
+        "created_at": "2021-06-01T14:57:17.611000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "In terms of performance, you need chunk index check in every instruction. Chunk size does not matter very much, but powers of two are better.",
+        "created_at": "2021-06-01T15:24:48.147000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "@Pawel can the this be moved to the beginning of blocks, like gas and stack checking?",
+        "created_at": "2021-06-01T17:14:36.684000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!273808422753796097\u003e I'm concerned about code that doesn't use (much) storage, but loops doing things like dense crypto computations.  The EVM is often good enough for this purpose, and is getting better.  If we add this much gas and overhead I fear we could lose pretty much all of our progress in that direction.",
+        "created_at": "2021-06-01T17:23:54.565000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "What's the concern? That adding one array check per jump would break the efficiency?",
+        "created_at": "2021-06-01T17:33:11.305000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ah yes, you should be able to do the chunk check once per jump/jumpdest/call, as between those ops access is predictable",
+        "created_at": "2021-06-01T17:34:09.253000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So at least the happy case (\"already seen this code chunk\") should be quite fast",
+        "created_at": "2021-06-01T17:34:36.255000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!273808422753796097\u003e  Looking at those implementations it  looks to be a lot more work than one array check.  And a lot of complexity.  It's good if the work can be done once per block, but at present only evmone implements that optimization for gas and stack checks.  I have an unfinished draft PR on that for turbogeth, which has already taken a non-trivial amount of work, and we don't know yet how effective it will be.",
+        "created_at": "2021-06-01T18:07:35.688000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hmm why would that be the case",
+        "created_at": "2021-06-01T18:14:32.708000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "In the EVM loop you would have an if statement: `if not accessed[pc//31]: ...`",
+        "created_at": "2021-06-01T18:15:17.127000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And in the already accessed case, you need to do nothing else",
+        "created_at": "2021-06-01T18:15:27.713000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, but this is \"chunk check once per instruction\" not \"per jump/jumpdest/call\".",
+        "created_at": "2021-06-01T22:09:08.425000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!273808422753796097\u003e For most instructions the additional geth code in the main loop is this:\n\n```\n        if curChunk := uint16(pc / 31); codeChunkingActivated \u0026\u0026 curChunk != chunk {\n            // Crossed to a new chunk here. Add cost if it hasn't already been\n            // accessed\n            if in.evm.StateDB.AddCodeChunkToAccessList(callContext.Contract.Address(), curChunk) {\n                // Need to add to cost\n                cost = 350\n                if !contract.UseGas(350) {\n                    return nil, ErrOutOfGas\n                }\n            }\n            chunk = curChunk\n        }\n```\nwhere `AddCodeChunkToAccessList` is non-trivial.  For PUSH instructions (which are very common and cheap) we also run this code every time (not just every chunk):\n```\n    if codeChunkingActivated \u0026\u0026  op \u003e= PUSH1 \u0026\u0026 op \u003c= PUSH32 {\n            firstChunk := uint16((pc + 1) / 31)\n            lastChunk := uint16((pc + 1 + uint64(op - PUSH1)) / 31)\n            var pushdataCost uint64\n            for i := firstChunk; i \u003c= lastChunk; i++ {\n                if in.evm.StateDB.AddCodeChunkToAccessList(contract.Address(), i) {\n                    // Need to add to cost\n                    pushdataCost += 350\n                }\n            }\n            if !contract.UseGas(pushdataCost) {\n                return nil, ErrOutOfGas\n            }\n            cost += pushdataCost\n        }\n    }\n```\nSo the interpreter code becomes slower, more complex, and harder to understand and implement.  And improving the speed makes the complexity of implementation even worse.",
+        "created_at": "2021-06-01T23:05:15.040000+00:00",
+        "attachments": null
+    }
+]

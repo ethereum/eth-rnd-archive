@@ -1,0 +1,218 @@
+[
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "There is a standard error code `-32602: Invalid params` that can be used with the corresponding \"err\":\"forkchoice state is inconsistent\" in the response , we may add a new one, like `Inconsistent forkchoice state`. Thoughts on existing one vs new one? cc \u003c@!360491619402776577\u003e \u003c@!758579010027782144\u003e",
+        "created_at": "2022-02-09T04:14:42.148000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "well spotted, I'll submit a PR with a fix. Actually, a `payloadStatus` must be obtained from payload validation process if it's been run during processing the call and validation process should fill `latestValidHash` when payload is deemed `INVALID`",
+        "created_at": "2022-02-09T04:20:26.784000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "I've been thinking about faulty ELs sending back a junk `latest_valid_hash` value.\n\nPresently, Lighthouse will just invalidate all ancestors back the finalized block which will cause the client to shutdown due to the justified checkpoint becoming invalid. This seems like a severe reaction.\n\nIt would be nice to check to see if `latest_valid_hash` is already known, however that can quite expensive since we don't have a DB mapping for execution block *hash* like we do a beacon block *root*.",
+        "created_at": "2022-02-09T04:54:12.471000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ethdreamer",
+        "category": "general",
+        "parent": "",
+        "content": "Sorry.. to clarify, are you making a PR to populate `latestValidHash` on `INVALID`?",
+        "created_at": "2022-02-09T05:38:07.460000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "general",
+        "parent": "",
+        "content": "Yep. Just got merged: https://github.com/ethereum/execution-apis/pull/173",
+        "created_at": "2022-02-09T05:49:41.091000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "general",
+        "parent": "",
+        "content": "Question. Is it possible to get `INVALID` from `engine_newPayloadV1` or it's only just from `engine_forkchoiceUpdatedV1`?  The spec seems to miss the `engine_newPayloadV1` case",
+        "created_at": "2022-02-09T05:51:04.640000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Interesting. It's definitely worth checking `latestValidHash` exists before reversely invalidate blocks. Also, have you considered the case when a subtree is invalidated, not only a subchain? For example:\n```\nA \u003c- INV \u003c- C \u003c- D\n       \\\n         \u003c- C'\n```\n`INVALID` in response to `newPayload(D)` with `latestValidHash: A` should invalidate `INV \u003c- C \u003c- D` and also `C'`",
+        "created_at": "2022-02-09T05:57:38.353000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Yep, we are invalidating all descendants of an invalid payload.",
+        "created_at": "2022-02-09T05:58:25.781000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e It's definitely worth checking latestValidHash exists before reversely invalidate blocks.\nEven if it is quite difficult and involves a new mapping in the DB of hashes-\u003eroots?",
+        "created_at": "2022-02-09T05:58:52.352000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "It doesn't miss it, it instead specifies the following as one of possible responses:\n\u003e with the payload status obtained from the Payload validation process if the payload has been fully validated while processing the call\nWhich implies both valid and invalid cases",
+        "created_at": "2022-02-09T05:59:26.582000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "What is the complexity (other than storage) does this index introduce? Note that we might need this index in other places, like `web3.beacon` API to serve consensus data for a payload by its block hash -- we have been considering this use case previously. Also, this index should be able to have multiple beacon blocks per payload's block hash as it's theoretically possible to have several beacon blocks with the same payload",
+        "created_at": "2022-02-09T06:11:38.180000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "For Teku, we search protoarray for the latest valid hash and only apply if it is found.  If the latest valid hash isn't found we don't apply that knowledge.  Which does mean we don't crash if the EL gives us a rubbish value, but also means we may not detect if we've finalized an invalid block, we'd just get stuck in optimistic sync forever with a small chance we could manage to work our way back up the tree invalidating one block at a time based on the forkChoiceUpdated messages we'd send, but new blocks may keep us for making any progress with that.",
+        "created_at": "2022-02-09T06:21:17.359000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "can you detect an invalid justified block this way?",
+        "created_at": "2022-02-09T06:28:34.330000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Yes justified we still have in protoarray but that doesn’t expand the window much if we’re syncing. \nOnly a problem if 2/3rds of validators attest to a bad block. It’s critical we don’t treat it as valid but given the whole network would be in chaos if that happened I’m less concerned about which confusing behaviour the user gets. \nI think I’ll go make the error message about not finding the last valid hash bigger and scarier though.",
+        "created_at": "2022-02-09T06:34:52.958000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Then the difference would just be whether they get a big scary message and crash loop or repeated big scary messages which is a pretty similar outcome really.",
+        "created_at": "2022-02-09T06:35:32.779000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Sounds reasonable. So, the algorithm will 1) find an invalid block reversely and then 2) invalidate a subtree starting at this block. Also, worth considering that this isn't a frequent case and may not worth an optimisation, i.e. adding an index",
+        "created_at": "2022-02-09T06:40:16.246000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "What's the structure of your protoarray node? do you keep a doubly linked tree where each node has pointers to their children and their parent or just the parents? for us pruning after an INVALID block has found is becoming a major pain, in part because we do not keep children so traversing down the tree becomes harder.",
+        "created_at": "2022-02-09T08:50:42.805000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "general",
+        "parent": "",
+        "content": "I'm using `-32602: Invalid params` in this situation. For me, it doesn't matter if we return Invalid params or the new status. However IMO, it will be good to add such cases to spec explicitly. It will make \u003c@!892053833121923094\u003e job a bit easier, and it will reduce the risk of forgetting about these cases by other EL devs or doing it in the wrong way as returning `INVALID`.",
+        "created_at": "2022-02-09T09:03:47.956000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "IMO, i don't think this check should be a MUST, it should rather be optional, i.e. MAY, as not every EL client may want to add this additional check and be relying on CL instead. This optionality is still messy in terms of testing",
+        "created_at": "2022-02-09T09:52:48.432000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "general",
+        "parent": "",
+        "content": "I see your point, so we (ELs) don't have to add these checks. We can assume that the parameters from CL are correct. In terms of testing, it means that we should focus on testing that CL doesn't send such values (if possible) rather than if EL handles it \"correctly\".",
+        "created_at": "2022-02-09T10:48:45.281000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "My assumption that it could be expensive to check consistency of provided `forkchoiceState`, i.e. `finalized \u003c= safe \u003c= head`. In general case, it requires reverse header traversal from `head` to `finalized`, are there any optimisations available in this case?",
+        "created_at": "2022-02-09T12:36:59.494000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "We only have pointers to the parent node, so we can walk backwards fine but finding and invalidating all children means iterating through the protoarray from the index of the first invalid block and keeping track of blocks we invalidate so we can invalidate all child chains in one pass. So that's O(n) in the number of non-finalized blocks after the invalid block but it's a simple comparison operation on each node.",
+        "created_at": "2022-02-09T20:39:03.192000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks that's the only option we have now, but I'm thinking on moving the entire protoarray  to a doubly linked structure, most algorithms would be simpler to read and less bug prone. This particular one becomes trivial. I guess we'll find out in a couple of days if it's worth it",
+        "created_at": "2022-02-09T20:43:15.894000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Given you have to follow every child chain I wouldn't have expected following child links to be simpler personally. You'd just wind up keeping track of all the child chains you haven't followed yet.  But will be interested to see how it comes out and what the additional cost of maintaining those child links are.",
+        "created_at": "2022-02-09T20:45:48.078000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "It becomes an issue of being recursive instead of going on loops, it has some advantages to readability and ease to recompute for example weights when we prune a Node, although for you this may be already simple if you keep a single directed tree. What we keep is an ordered list of nodes, so removing one implies copying the rest and changing indices everywhere. Just moving to a simply directed tree I think would be already the biggest gain, I would agree that from simply directed to double directed it's probably marginal compared to the other jump",
+        "created_at": "2022-02-09T22:43:28.585000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "oh worth noting that I don't remove invalid nodes from the actual array. I just remove the blockRoot-\u003earrayIndex lookup which makes methods like contains() return false and mark it as invalid. The weighting process automatically zeros out weight for any invalid nodes. markInvalid code is https://github.com/ConsenSys/teku/blob/f283a44a7411a1a665505983d3068cde135a4153/protoarray/src/main/java/tech/pegasys/teku/protoarray/ProtoArray.java#L273 and the weighting is removed with line 623 in `applyDelta`.\nThe invalid nodes just get pruned as finalization moves forward same as for all blocks.",
+        "created_at": "2022-02-09T22:48:22.455000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Ahh that's nice, hadn't thought about keeping the nodes will chew over this.",
+        "created_at": "2022-02-09T22:51:45.525000+00:00",
+        "attachments": null
+    }
+]

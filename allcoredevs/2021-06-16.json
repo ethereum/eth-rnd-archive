@@ -1,0 +1,224 @@
+[
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Hey all, last ACD there was an agreement apparently to add `effectiveGasPrice` to the receipt and (?) remove the current gasPrice from the transaction object on RPC",
+        "created_at": "2021-06-16T08:26:46.713000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "I think that's a bad idea",
+        "created_at": "2021-06-16T08:26:53.355000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "calculating the effectiveGasPrice does not require the receipt, so anyone interested in it will have to do a database lookup (and for geth even more reconstruction) just to discard everything at the end",
+        "created_at": "2021-06-16T08:27:34.918000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "the tx object returned now already has computed fields: block number, block hash, tx index. these all depend on the block they were included in",
+        "created_at": "2021-06-16T08:27:58.068000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "in that vein effectiveGasPrice also depends on the block it was included in and could be filled easily without additional data",
+        "created_at": "2021-06-16T08:28:14.943000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "removing the gasPrice also breaks any software that looks at it currently, for both legacy and new txs, so more or less instantly at fork time",
+        "created_at": "2021-06-16T08:29:11.521000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "I don't really see any benefit for introducing `effectiveGasPrice` into the receipts, only downsides. Similarly, I only see downsides to removing `gasPrice` from the transaction object, no upsides",
+        "created_at": "2021-06-16T08:29:46.320000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I think the problem is that it is a leaky abstraction.  From an API user's point of view, `effectiveGasPrice` is something associated with the post-inclusion transaction details.  Having the APIs return data based on the database layout means we are leaking database layout to API consumers and designing APIs in a way that isn't obvious to a consumer (things feel randomly distributed across the API rather than in places that one expects).  This is further complicated by the fact that not all clients share database layout anymore (Erigon especially) which I think strengthens the argument that we should be designing APIs around what makes sense to an API consumer rather than what is the closest match to the database layout.",
+        "created_at": "2021-06-16T12:34:19.518000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "For backward compatibility reasons, I agree that we shouldn't be *removing* things from the `eth_getTransactionByHash` (which includes `gasPrice`, `blockNumber`, `blockHash`, etc.), but I don't think we should double down on leaking the abstraction further.",
+        "created_at": "2021-06-16T12:35:17.775000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I feel like what we really need is something like GraphQL where the user can be more specific about which pieces of data they want returned.  This way we can have the API designed in a way that makes sense for API users (ignoring backing database design), and at the same time avoid doing unnecessary lookups for data that the user doesn't actually want/need.",
+        "created_at": "2021-06-16T12:36:56.152000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "We *sort of* do this already for the boolean flag on the `eth_getBlockBy*` methods, where we only do the additional work if the user requests it.  I don't think that specific pattern scales particularly well though (adding another flag for every individual field).",
+        "created_at": "2021-06-16T12:37:46.956000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "I think it's a general fallacy to ignore implementation details when designing APIs.",
+        "created_at": "2021-06-16T13:31:28.506000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "I get it that we should be striving towards an API that's as nice and logical as possible, but it should not sacrifice performance",
+        "created_at": "2021-06-16T13:32:15.154000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "GraphQL is indeed the nicer approach, but nobody supports it, so it's moot unfortunately",
+        "created_at": "2021-06-16T13:32:46.877000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "general",
+        "parent": "",
+        "content": "This was the rationale for including it in the receipt, \u003c@!206016661470314496\u003e",
+        "created_at": "2021-06-16T14:06:24.812000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "Screen_Shot_2021-06-16_at_7.05.41_AM.png",
+                "content": "bb98a7312ae98b4dd81e3b5b67e8ed2a972fcc2515194cc05e5dd7575000d800"
+            }
+        ]
+    },
+    {
+        "author": "timbeiko",
+        "category": "general",
+        "parent": "",
+        "content": "Link: https://discord.com/channels/595666850260713488/804019759934078987/849289094689587282",
+        "created_at": "2021-06-16T14:06:30.229000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "general",
+        "parent": "",
+        "content": "Yes it is this version : https://github.com/hyperledger/besu/releases/tag/21.7.0-RC1",
+        "created_at": "2021-06-16T15:38:52.851000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Does changing the receipt in that way change the receiptHash in the headers? i.e. does it require another consensus change?",
+        "created_at": "2021-06-16T15:40:43.888000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "or is this just for JSON api representation of the receipt?",
+        "created_at": "2021-06-16T15:41:04.376000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "general",
+        "parent": "",
+        "content": "AIUI, it's just JSON RPC API",
+        "created_at": "2021-06-16T15:41:34.566000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "yes, just an RPC thing",
+        "created_at": "2021-06-16T15:54:34.799000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "0xraino",
+        "category": "general",
+        "parent": "",
+        "content": "Can confirm that's the version for the testnets",
+        "created_at": "2021-06-16T17:15:00.257000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Didn't someone do a spike to add GraphQL to Geth a while back?  What ever happened to that project?",
+        "created_at": "2021-06-16T18:57:44.443000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "general",
+        "parent": "",
+        "content": "I thought Geth supported it? Besu does 😄",
+        "created_at": "2021-06-16T19:00:01.606000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yorickdowne",
+        "category": "general",
+        "parent": "",
+        "content": "It does. `--graphql` enables that.",
+        "created_at": "2021-06-16T19:07:17.318000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Is it reasonable to start adding features to GraphQL that aren't available via the Ethereum JSON-RPC?",
+        "created_at": "2021-06-16T19:32:33.569000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "probably not (at least in the `eth` namespace imo)",
+        "created_at": "2021-06-16T19:36:07.364000+00:00",
+        "attachments": null
+    }
+]

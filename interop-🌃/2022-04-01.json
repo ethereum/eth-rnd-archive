@@ -1,0 +1,238 @@
+[
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I see, with EL switching this becomes even more advanced edge case",
+        "created_at": "2022-04-01T06:24:52.270000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "It would be the same scenario if I’d just resyncd geth though. So it’s a pretty good simulation of a major bug which requires resyncing to recover from. But we’d be pretty unlucky to have such a big hit all the EL clients - even a single new block should resolve the issue.",
+        "created_at": "2022-04-01T09:20:28.165000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hey Nimbus team, we have an unhealthy nimbus-geth node on goerli. It looks like nimbus is syncing/replaying a bunch of old blocks on geth. The log has a couple of these errors:\n```\nERR 2022-03-31 10:17:09.840+00:00 Unexpected missing parent at finalized epoch slot topics=\"syncman\" request=6176:32@1455 peer=16U*zi7wRo direction=forward rewind_to_slot=6176 blocks_count=26 blocks_map=xx..xxxxx.x.xx.xxx.xxxxxxxxxxxxx sync_ident=main\nERR 2022-03-31 10:42:34.927+00:00 Unexpected missing parent at finalized epoch slot topics=\"syncman\" request=6176:32@5802 peer=16U*r5vir8 direction=forward rewind_to_slot=6176 blocks_count=26 blocks_map=xx..xxxxx.x.xx.xxx.xxxxxxxxxxxxx sync_ident=main\n```",
+        "created_at": "2022-04-01T09:23:05.048000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Zooming into one of those it looks like nimbus will replay a bunch of blocks again",
+        "created_at": "2022-04-01T09:25:09.157000+00:00",
+        "attachments": [
+            {
+                "type": "text/plain; charset=utf-8",
+                "origin_name": "message.txt",
+                "content": "ea9adac79e5feb6ff071e5eb421fcb456814570e13e2e78c23c5a6f03c817c1b"
+            }
+        ]
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Another bit of log: here nimbus starts executing blocks like: 6633114 and later on pushes 6633051 (earlier blocks) to geth",
+        "created_at": "2022-04-01T09:28:16.089000+00:00",
+        "attachments": [
+            {
+                "type": "text/plain; charset=utf-8",
+                "origin_name": "message.txt",
+                "content": "52b5c2d7222473c7a7e5fef1924b20063b685c8d89f46a8e7e55fe4179803c03"
+            }
+        ]
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Judging from the log I believe `DBG 2022-04-01 09:26:02.332+00:00 Rewind to slot has happened                topics=\"syncman\" reset_slot=6176 queue_input_slot=6464 queue_output_slot=6176 rewind_point=\"Some((failSlot: 6269, epochCount: 2))\" direction=forward sync_ident=main` this has something to do with it",
+        "created_at": "2022-04-01T09:31:04.810000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ahh in the geth log I see the following:\n```\nDEBUG[03-31|10:24:51.814] Served engine_newPayloadV1               reqid=3937 duration=15.371803ms\nWARN [03-31|10:24:51.843] Ignoring already known beacon payload    number=6,633,119 hash=51dfda..34ccc7 age=26m27s\nDEBUG[03-31|10:24:51.844] Served engine_newPayloadV1               reqid=3938 duration=10.997462ms\nWARN [03-31|10:24:51.869] Ignoring already known beacon payload    number=6,633,120 hash=a1b56a..ac2c64 age=26m15s\nDEBUG[03-31|10:24:51.870] Served engine_newPayloadV1               reqid=3939 duration=8.740588ms\nWARN [03-31|10:24:51.878] State not available, ignoring new payload \nDEBUG[03-31|10:24:51.878] Served engine_newPayloadV1               reqid=3940 duration=2.483545ms\nWARN [03-31|10:24:52.856] Ignoring already known beacon payload    number=6,633,039 hash=923eea..a1d259 age=44m28s\nDEBUG[03-31|10:24:52.856] Served engine_newPayloadV1               reqid=3941 duration=3.686945ms\nWARN [03-31|10:24:52.872] Ignoring already known beacon payload    number=6,633,040 hash=207d27..cfb43c age=43m52s\nDEBUG[03-31|10:24:52.872] Served engine_newPayloadV1               reqid=3942 duration=5.652093ms\n```\nWe recently changed some behavior here: If we don't have the state available for a block that is passed by `newPayload`, we will not execute the block (because we can't) and return `ACCEPTED` instead of `VALID`. If a node sends us a `FCU` with that block, we will reorg to that block and replay as many blocks as needed to create the state and execute the block.",
+        "created_at": "2022-04-01T09:36:37.268000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ahh there might be some dragons here. I will have to discuss it with the geth team a bit more",
+        "created_at": "2022-04-01T09:36:59.671000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "yeah I've been doing bugfixes related to that",
+        "created_at": "2022-04-01T09:48:01.611000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "Nimbus just didn't handle \"accept\"",
+        "created_at": "2022-04-01T09:48:06.966000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "we ran into this on our own fleet, Nimbus/geth",
+        "created_at": "2022-04-01T09:48:20.422000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "basically because of the database schema change, we wiped Nimbus database, got it resyncing, it got to merge point, and geth started returning accepted, which it handled poorly",
+        "created_at": "2022-04-01T09:49:09.094000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "basically what you show above",
+        "created_at": "2022-04-01T09:49:16.954000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "I just posted a PR to `unstable` (actively finishing up merging the kiln branch into the release branch) which shows this: https://github.com/status-im/nimbus-eth2/pull/3563",
+        "created_at": "2022-04-01T09:50:06.372000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "I wrote a  paragraph-length comment on the topic",
+        "created_at": "2022-04-01T09:50:18.703000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "there may have been dragons in Geth here, but also, a straightforward Nimbus bug, now fixed in our testing",
+        "created_at": "2022-04-01T09:52:04.407000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "and yeah, the fix is basically to send the fcU in that situation",
+        "created_at": "2022-04-01T09:53:15.821000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "I do have a question, on our fleet, Geth is returning\n\u003e {\"lvl\":\"INF\",\"ts\":\"2022-03-30 20:32:28.802+00:00\",\"msg\":\"newPayload failed\",\"msg\":\"{\"code\":-32601,\"message\":\"the method engine_newPayloadV1 does not exist/is not available\"}\"}\nfrom a couple of the nodes",
+        "created_at": "2022-04-01T09:54:26.179000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "which don't seem to have had any configuration change. But they also don't show catalyst mode being enabled in their logs anymore",
+        "created_at": "2022-04-01T09:54:52.685000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Right, but it's not that common situation I guess when you swap your EL client or re-syncing an EL part. If a re-sync would also include CL side, am I right that in this case everything will be fine?",
+        "created_at": "2022-04-01T09:55:05.626000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "all the Geth instances, engine-API-available-and-not, are being run with `--http.api=eth,net,web3,personal,admin,engine --ipcpath=/data/geth.ipc --ws --ws.addr=0.0.0.0 --ws.port=9547 --ws.api=eth,net,web3,personal,admin,engine --ws.origins=localhost`",
+        "created_at": "2022-04-01T09:56:23.054000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "(ports differ a bit)",
+        "created_at": "2022-04-01T09:56:33.912000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Did you init with a correct genesis? Catalyst is automatically enabled if the genesis has ttd set",
+        "created_at": "2022-04-01T09:58:06.081000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "I don't think the genesis was supposed to change, but will check",
+        "created_at": "2022-04-01T09:58:32.250000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "as in, they'd all been working before (using `merge-kiln-v2` from 3 weeks ago, according to `docker images`), then a couple days ago, two of them got restarted in place, and now they're not enabling catalyst",
+        "created_at": "2022-04-01T10:00:13.280000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thats weird I can take a look at it later today",
+        "created_at": "2022-04-01T10:02:57.229000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "alright, will double-check whether the genesis somehow got reset, and whether the TTD is still there",
+        "created_at": "2022-04-01T10:03:31.100000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "All the genesis.json files are unchanged for weeks, since basically Kiln launch, all (sha256sum) identical to each other, and .. hm, all have the same wrong/old ttd:\n```\n    \"terminalTotalDifficulty\": 1000000000000\n```\nbut there is a TTD, which apparently should trigger catalyst mode",
+        "created_at": "2022-04-01T10:11:05.102000+00:00",
+        "attachments": null
+    }
+]

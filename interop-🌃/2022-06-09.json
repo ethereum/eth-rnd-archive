@@ -1,0 +1,456 @@
+[
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Can we please agree on whether `eth_getBlockByNumber(latest)` should wait for FCU or not. According to https://github.com/ethereum/execution-apis/pull/200, latest means \"The most recent block in the canonical chain observed by the client\". I take it that a newPayload extending the canonical chain is enough to update the latest block w/o a need to wait for an FCU.headBlockHash confirmation. However, tests in Hive (e.g. latest Block after NewPayload) expect that we do wait for an FCU confirmation.",
+        "created_at": "2022-06-09T08:55:51.335000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'd have expected head to only ever change on fcu. The newPayload may be sent before the beacon block is fully validated so it's not safe to make it the chain head.",
+        "created_at": "2022-06-09T08:58:08.864000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, it is exactly as Adrian have described and as Hive tests are written",
+        "created_at": "2022-06-09T09:00:11.528000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "So is the idea to send an FCU after each fully validated block even when there is no fork change, only chain extension?",
+        "created_at": "2022-06-09T09:00:15.894000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Right, CL clients should do it his way to signify that the block is fully valid and that the head has been updated. Deferring entire responsibility of fork choice updates to CL is the right thing to do as EL has not enough data to make any decision on that",
+        "created_at": "2022-06-09T09:02:38.902000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "One caveat here is that `newPayload` call may be made with valid payload in terms of EE but coming from invalid beacon block which I guess means that the payload of invalid beacon block becomes accessible via `getBlockByHash`. But a number of cases when user would request such a payload should be negligible",
+        "created_at": "2022-06-09T09:06:20.342000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Right, I was making a point that in this case `LVH` would be a tip of a branch from EL perspective. And in this case EL MUST begin the build process if it has been requested by CL. It may skip validation though, as LVH should be validated before but it MUST update its fork choice state and set LVH as the head",
+        "created_at": "2022-06-09T09:11:19.673000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "OK, that's how it's currently implemented in latest Erigon.~~ But we're seeing on Ropsten that CL (lighthouse v2.3.0) sends us FCU only infrequently, leading to `eth_getBlockByNumber(latest)` returning old blocks. \u003c@361447803194441738\u003e or other Lighthouse team members, please advise.~~ Actually, no, we see FCUs. We'll investigate on our side.",
+        "created_at": "2022-06-09T09:23:13.950000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Testing",
+        "parent": "",
+        "content": "if we now change the semantics of what `latest` means in JSON RPC, it may unfortunately create some discrepancies for the RPC methods that access the \"current state\" (this is mostly relevant for \u003c@\u0026688101493978562687\u003e and \u003c@\u0026688090867927482525\u003e with snapshot). If it is not always the case that the \"current state\" (or geth snapshot) is consistent with what is the latest fcU, then this can lead to some unexpected results. What do you think?",
+        "created_at": "2022-06-09T11:22:00.519000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Testing",
+        "parent": "",
+        "content": "previously, we assumed that `latest` is consistent with the current state (or state snapshot), but now it seems this assumption does not always hold",
+        "created_at": "2022-06-09T11:23:00.084000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Testing",
+        "parent": "",
+        "content": "perhaps it would be better not to reuse `eth_` namespace for Engine API after all 🙂",
+        "created_at": "2022-06-09T11:23:32.500000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "oh, I can see how this can be a problem. How does Erigon handle queries over canonical blocks that aren't the head?",
+        "created_at": "2022-06-09T13:20:21.501000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "There is a strict subset of `eth_` namespace exposed on the Engine API port, are you referring to any specific method?",
+        "created_at": "2022-06-09T13:21:20.370000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Testing",
+        "parent": "",
+        "content": "I am not an expert in the semantics of JSON RPC, and I suspect it has never been clearly defined. People always assumed that `latest` block means the block with the largest total difficulty. Which is the same as \"canonical\". After the merge, we have `executePayload` which as far as I understand can be ahead of `forkChoiceUpdate`. If we know that `forkChoiceUpdate` is always an ancestor to what the latest `executePayload` was, then we can resolve it by accessing history when queries are done against `latest`. But this throws away some optimisations",
+        "created_at": "2022-06-09T13:28:29.178000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Testing",
+        "parent": "",
+        "content": "I meant that because JSON RPC api semantics was not clearly defined, but assumed for any methods accepting `latest` as an argument, re-using it would risk breaking some un-written assumptions",
+        "created_at": "2022-06-09T13:29:44.833000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "In most of the cases `newPayload` is ahead of `forkchoiceUpdated`, e.g. when a node is lock-stepping it should always be the case. Yes, I can see how `latest` block that follows \"the head of canonical chain\" semantics may not have a post-block state available. But I don't know if it's a big problem or not, considering that the corresponding `fcU` call comes shortly after `newPayload` responds `VALID`  in a normal case",
+        "created_at": "2022-06-09T13:36:34.925000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Testing",
+        "parent": "",
+        "content": "I know that some people care a great deal about performance of `eth_call` on the `latest` block 🙂 so we have special handling for that. For `latest` block we use the \"current\" state instead of history (I assume geth is going the same), but also we have state cache in RPC daemon which keeps a hot subset of the current state for even faster responses. If we know that most of the time `fcU` comes really really quickly after `newPayload`, then this would be ok. However, if there is always a significant gap, then the average performance of such `latest` requests will go down significantly",
+        "created_at": "2022-06-09T13:41:34.924000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Testing",
+        "parent": "",
+        "content": "Does Engine API rely on `latest` semantics being `fcU` ?",
+        "created_at": "2022-06-09T13:41:56.595000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Testing",
+        "parent": "",
+        "content": "We may need to apply a special strategy for handing this, to preserve the performance",
+        "created_at": "2022-06-09T13:43:08.493000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Testing",
+        "parent": "",
+        "content": "to keep the `newPayload` in an overlay and only apply it to the current state when `fcU` is received. It does add some extra complexity of course",
+        "created_at": "2022-06-09T13:43:56.945000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Engine API doesn't rely that much. CL clients uses `latest` for Eth1Data poll to update the head and process deposits, but this happens at a follow distance and shouldn't be a problem at all.",
+        "created_at": "2022-06-09T13:47:49.347000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "The problem is that CL expects to see validity status of the payload before it sends and `fcU`. So, the payload should be executed first which for Erigon would mean the update of the current state, right?",
+        "created_at": "2022-06-09T13:48:41.317000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, in most cases `fcU` is a no-op",
+        "created_at": "2022-06-09T13:50:04.216000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Testing",
+        "parent": "",
+        "content": "Oh, that means it is probably just the requirement of hive-tests",
+        "created_at": "2022-06-09T13:50:28.274000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think Hive tests are expecting `latest` to follow \"the head of canonical chain\" semantics",
+        "created_at": "2022-06-09T13:51:18.574000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I guess geth may easily handle requests over `latest` if it's a block designated by the most recent `fcU` and not a tip of the chain that EL observes. This is because geth has access to historical state versions up to a certain extent",
+        "created_at": "2022-06-09T13:55:47.214000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hive tests expect on `latest` what has been set by `fcU(head)`",
+        "created_at": "2022-06-09T16:33:23.506000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, and this is reasonable. I am curious how other EL clients handle `latest`:\n1) The most recent block designated as the head by `fcU`\n2) The most recent valid block in the canonical chain, i.e. `newPayload` extending the canonical chain would change `latest` without the corresponding `fcU` call",
+        "created_at": "2022-06-09T16:40:53.192000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "According to https://hivetests2.ethdevops.io/\n1) geth, nethermind \n2) besu, erigon",
+        "created_at": "2022-06-09T16:47:29.961000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "nimbus-el is also on (1)",
+        "created_at": "2022-06-09T16:49:34.570000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hey folks, I wanted to bring up the topic of the hive tests “Invalid Ancestor Chain Re-Org, .* Reveal using sync”, which are currently failing on every client.\n\nThe test attempts to verify the scenario described here https://github.com/txrx-research/TestingTheMerge/blob/main/tests/engine-api.md as “SYNCING with invalid chain”, but it has been suggested that the test needs to be rewritten such that the invalid payload is delivered via p2p somehow by another client, because otherwise the test is not passable. I wanted to bring up the topic to reach consensus on how the test should be rewritten if at all.\ncc \u003c@425572898787426305\u003e \u003c@360491619402776577\u003e",
+        "created_at": "2022-06-09T17:22:51.867000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "My WIP implementation here: https://github.com/ethereum/hive/pull/560 It has some issues still left, but basically I start the node directly from go so that I can feed it invalid blocks",
+        "created_at": "2022-06-09T17:27:24.193000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thanks so much, I need to take a look, my main concern is not reducing coverage with any changes, so would like \u003c@425572898787426305\u003e opinion also 👍",
+        "created_at": "2022-06-09T19:25:23.996000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@\u0026595683849225240704\u003e  `Jun 09 21:59:00.159 WARN Error processing HTTP API request       method: GET, path: /eth/v2/validator/blocks/74095, status: 500 Internal Server Error, elapsed: 139.631011ms`",
+        "created_at": "2022-06-09T22:03:09.465000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "what is this?",
+        "created_at": "2022-06-09T22:03:12.027000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "my node seems to have lost the ability to propose blocks",
+        "created_at": "2022-06-09T22:03:24.626000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "what does the VC show in its logs? usually it will show the full error from the request",
+        "created_at": "2022-06-09T22:12:20.772000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "it was running in the background, how do i get the logs?",
+        "created_at": "2022-06-09T22:14:17.958000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "i restarted it",
+        "created_at": "2022-06-09T22:14:20.869000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "it still does not work ugh",
+        "created_at": "2022-06-09T22:21:00.106000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "",
+        "created_at": "2022-06-09T22:25:08.779000+00:00",
+        "attachments": [
+            {
+                "type": "text/plain; charset=utf-8",
+                "origin_name": "lh.log",
+                "content": "1c9ea14abbce1fb1ca419d152763c88b26e3aa6b1834bbf79d74d59c62d38d96"
+            }
+        ]
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "here is the log file of the most recent lines",
+        "created_at": "2022-06-09T22:25:10.162000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Most of the errors are `ERRO Validator is missing fee recipient `, which can be fixed by adding the fee recipient flag. \n\nNot sure about this one tbh: `ERRO slog-async: logger dropped messages due to channel overflow, count: 11, service: preparation`",
+        "created_at": "2022-06-09T23:01:15.002000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "logs seem a bit cleaner now. I still do see this however:\n```\nJun 09 23:06:48.105 CRIT Error whilst producing block            message: Recoverable(\"All endpoints failed http://127.0.0.1:5052/ =\u003e RequestFailed(Recoverable(\\\"Error from beacon node when producing block: ServerMessage(ErrorMessage { code: 500, message: \\\\\\\"UNHANDLED_ERROR: GetPayloadFailed(EngineErrors([Api { id: \\\\\\\\\\\\\\\"http://127.0.0.1:8551/\\\\\\\\\\\\\\\", error: Json(Error(\\\\\\\\\\\\\\\"invalid variable list: OutOfBounds { i: 40, len: 32 }\\\\\\\\\\\\\\\", line: 0, column: 0)) }, Api { id: \\\\\\\\\\\\\\\"http://127.0.0.1:8551/\\\\\\\\\\\\\\\", error: Json(Error(\\\\\\\\\\\\\\\"invalid variable list: OutOfBounds { i: 40, len: 32 }\\\\\\\\\\\\\\\", line: 0, column: 0)) }]))\\\\\\\", stacktraces: [] })\\\"))\"), service: block\n```",
+        "created_at": "2022-06-09T23:07:55.602000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "tagging \u003c@361447803194441738\u003e \u003c@602753420033785856\u003e for visibility. Seems like the lighthouse validator throws the above error when its proposing a block, A corresponding `Jun 09 23:12:48.118 WARN Error processing HTTP API request       method: GET, path: /eth/v2/validator/blocks/74464, status: 500 Internal Server Error, elapsed: 110.630649ms` error is seen on the lighthouse beacon node.",
+        "created_at": "2022-06-09T23:13:12.795000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "the invalid variable list is interesting..",
+        "created_at": "2022-06-09T23:14:39.743000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thanks Mario, I will take another look...",
+        "created_at": "2022-06-09T23:14:41.778000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "the async-logger thing is just the logging system getting overwhelmed by the number of log messages and dropping stuff",
+        "created_at": "2022-06-09T23:15:15.633000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@687974325072035882\u003e \u003c@199561711278227457\u003e I think the `OutOfBounds` is because Erigon is giving back more than 32 bytes for the payload's `extraData` field. Is it configured to write some 40 byte value there?",
+        "created_at": "2022-06-09T23:20:16.080000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "okay well yes",
+        "created_at": "2022-06-09T23:22:04.521000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "i was using it to see the blocks in the explorer",
+        "created_at": "2022-06-09T23:22:18.864000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "ok cool\n\nwe also have `--graffiti` for that on the beacon node side, but I understand the desire to write more 😉",
+        "created_at": "2022-06-09T23:23:01.794000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "Erigon should probably refuse to set an `extraData` longer than 32 bytes",
+        "created_at": "2022-06-09T23:23:19.606000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "or auto-truncate it",
+        "created_at": "2022-06-09T23:23:30.421000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "oh okay",
+        "created_at": "2022-06-09T23:23:35.944000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ok I analyzed that as well as \u003c@360491619402776577\u003e while back, this one:\n\nBasically the tests do the following:\n- Set up our blockchain as CommonAncestor◄─ P1 ◄─ P2 ◄─ P3 ◄─ ... ◄─ Pn\n- Create a second blockchain CommonAncestor◄─ P1' ◄─ P2' ◄─ ... ◄─ INV_Pi ◄─ ... ◄─ Pn' with INV_Pi being an invalid payload at height i\n- Now the test feeds our node INV_Pi, Pi+1', ... , Pn' to our node which we optimistically accept\n- And the test feeds P1', ..., Pi-1' to our peer\n- Now the test will try to set head us to Pn'\n- We will start a beacon sync to Pn' but can never succeed since our peer has no valid chain until Pn'\n- The test expects us to sync P1', ..., Pi-1' and combine that with the INV_Pi, Pi+1', ... , Pn' that we have \"available\" via the engine api\nand determine that INV_Pi is invalid. But I don't think that this is even possible.\nI think we need to change the tests s.th. our peer serves us the invalid chain and we detect that the chain is invalid.\n\nAnd I think \u003c@360491619402776577\u003e might be wrong here, the test should work fine. We do have INV_Pi, Pi+1', ... , Pn' fed from CL client we don't need to get them from peer in sync mode.\nWe will be debugging those tests on our side to see why they are not working for us.",
+        "created_at": "2022-06-09T23:50:42.348000+00:00",
+        "attachments": null
+    }
+]

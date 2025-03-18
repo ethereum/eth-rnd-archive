@@ -1,0 +1,178 @@
+[
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Sorry, the assumption in the first part of this message is wrong. The `parent_hash` is taken from the state, not from the parent block. Sending `0x00..00` as the `finalizedBlockHash` before finality has been advanced is correct behaviour according to the spec",
+        "created_at": "2023-10-13T05:02:41.610000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "The quick fix could be:\n```\ngenesis_payload = ExecutionPayload(block_hash=genesis_state.latest_execution_payload_header.block_hash))\ngenesis_block_body = BeaconBlockBody(execution_payload=genesis_payload)\ngenesis_block = BeaconBlock(state_root=hash_tree_root(genesis_state), body=genesis_block_body)\n```\nI am not sure how critical it is and what changes to CL client's code this fix would require. Maybe if the complexity is low and it is important for EL to receive genesis block hash as finalized hash before finality has advanced the fix worth it. Otherwise, I would leave it as is.",
+        "created_at": "2023-10-13T05:13:54.619000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah, it would be a breaking change for existing networks like Holesky that start merged from genesis too (we'd need to maintain the old way as well). Probably not worth it.",
+        "created_at": "2023-10-13T05:15:09.899000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "I was thinking that the 0x0 genesis block had been causing Lighthouse to try to do the merge transition. But the spec uses the `latest_execution_payload` header, so I'm either mistaken, or there's a Lighthouse bug",
+        "created_at": "2023-10-13T05:15:59.347000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Sorry, forgot what I was saying previously about `0x00..00` finalized hash. We have figured out that sending `0x00..00` as the `finalizedBlockHash` before finality has been advanced is the correct behaviour as per the CL spec. So this part of the test is correct",
+        "created_at": "2023-10-13T05:16:53.816000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah, the status of the merge transition is read from the state. So, if the `latest_execution_payload_header` isn't empty the transition is considered as complete",
+        "created_at": "2023-10-13T05:18:20.423000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "right, so far as the practicality of the matter goes, genesis for EL is finalized weather CL sends or not sends `0x00..0` and i don't think ELs will behave any differently",
+        "created_at": "2023-10-13T05:23:43.752000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "correct, we don't build genesis block with genesis's latest execution payload's hash, but we cache it in our proto block and use it to send fcU",
+        "created_at": "2023-10-13T05:25:19.760000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "so we can let it be implementation dependent? both scenarios can be handled correctly by the ELs (and seems like they have been since lodestar seems to be playing nice in all the post merge genesis networks)",
+        "created_at": "2023-10-13T05:26:08.915000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "we can relaunch holesky lol 😆",
+        "created_at": "2023-10-13T05:29:26.122000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think this can really be implementation dependent, don't see any compatibility issues with that",
+        "created_at": "2023-10-13T05:32:20.135000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "tl-dr: ELs won't accept/should throw on revert in finalized in hivetests unless its along the current canonical chain (i.e CL's data get wiped) and would not update their `finalized` unless it moves forward ?\n\ncc \u003c@508125616940515329\u003e \u003c@602753420033785856\u003e \u003c@425572898787426305\u003e \u003c@892053833121923094\u003e \u003c@654267572107083777\u003e",
+        "created_at": "2023-10-13T13:10:44.276000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "I would argue this is part of some discussion since at this point I am not sure what is \"right\"",
+        "created_at": "2023-10-13T13:20:20.566000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "what are your doubts?",
+        "created_at": "2023-10-13T13:21:18.362000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Sam and Andrew added blob support for Xatu, we deployed it on the devnet-9 teku nodes. You can see the data on this dashboard: https://grafana.observability.ethpandaops.io/d/be15cc56-e151-4268-8772-f4a9c6a4e246/blobs?orgId=1\u0026from=now-6h\u0026to=now\n\nYou'll be able to see:\n- time blob sidecars took to propagate through the network\n- heatmap on when they were seen\n- difference between when they were seen across sentries\n- when a block and its corelating blob were seen\n\nThe datapoints are still quite limited, since the blob topic on the event stream has been merged just on teku. We also didn't do a multi region teku setup for devnet-9. We'll surely be doing multi region for devnet-10, so we would get better metrics on how they propagate through the network.",
+        "created_at": "2023-10-13T13:54:51.563000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pawandhananjay",
+        "category": "Testing",
+        "parent": "",
+        "content": "FYI, lighthouse also merged the blob sidecar event stream PR into the `deneb-free-blobs` branch if you want to run it on the sentries",
+        "created_at": "2023-10-13T14:02:15.634000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "whee, rolling it out 😄",
+        "created_at": "2023-10-13T14:03:01.602000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I would say that hive tests should not expect that EL will revert finality. This allows for such behaviour to be implementation dependent.",
+        "created_at": "2023-10-13T14:26:55.333000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@792822129019584562\u003e I opened a PR to remove safe/finalized from ever changing from zero on re-org tests here: https://github.com/ethereum/hive/pull/907\n\nlet me know if this sounds fine, or we can also do genesis block if that works better too",
+        "created_at": "2023-10-13T15:13:56.643000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think `0x00..00` is fine and should be handled by every EL as this is what would happen with a real CL if it strictly follows the spec",
+        "created_at": "2023-10-13T15:20:51.332000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "agreed",
+        "created_at": "2023-10-13T15:23:56.269000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes should work 🙂",
+        "created_at": "2023-10-13T15:24:39.270000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,376 @@
+[
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah I can certainly see how we got here.  I like this history because it suggests I might have actually be right when I implemented the block based follow distance and just missed the change to timestamp based and I like that better than just being completely wrong. 🙂\n\nI'm just looking forward to getting rid of all this. The Eth1Data should clearly just match the embedded ExecutionPayload, though exactly how to get the right set of deposits from the EL is still a bit unclear. In my dreams new deposits in a block are just reported back via the engine API but I'm avoiding thinking about it too much because I suspect there's some reason it won't work and then my dreams will be shattered...",
+        "created_at": "2022-06-02T00:04:26.837000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e I might have actually be right when I implemented the block based follow distance and just missed the change to timestamp based\nThis seems very likely!\n\nI also dream of the deprecation of the current eth1 voting scheme 🤤",
+        "created_at": "2022-06-02T00:05:41.819000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "Eth1 voting is looking a little more consistent on Ropsten, although we're still a long way from majority:\n\n```\n0xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87[0]: 330 (incumbent)\n0x667f720e0afd45a5b4c69bb3d4806c4c2406261ff420afac77c4bfb34dda6ac7[351]: 271\n0x667f720e0afd45a5b4c69bb3d4806c4c2406261ff420afac77c4bfb34dda6ac7[321]: 135\n0x01dacfc2810db4e6439930df9aa06f437fe8183b91115071ebc0097bd30e9472[321]: 74\n0x667f720e0afd45a5b4c69bb3d4806c4c2406261ff420afac77c4bfb34dda6ac7[320]: 54\n0x94d03788078c489ca544f1bf1396936533a46d29f1ee91e714518340d272800c[0]: 1\n0xb7e4e4f554b003ed3d68b46ef433b50fe2a1a74c1c9366f5f798570e5919ebed[0]: 1\ntotal votes in period: 866, slots remaining: 1165\nparticipation: 98.19%\n```\n\n\u003c@476250636548308992\u003e do you have any updates on Prysm's deposit count issue?\n\nAlternatively if the 330 (37%) of validators voting for the incumbent started voting with the 271 bloc we could also reach majority. Yesterday it seemed that a lot of the incumbent voters were running Nimbus, \u003c@449019668296892420\u003e do you know if your Ropsten EEs are synced?",
+        "created_at": "2022-06-02T00:41:54.483000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "We would have to hack prysm to ignore the follow distance when processing deposits which is why i havent done it yet . But since the deadlock continues on today, i can take a look at temporarily unblocking ropsten",
+        "created_at": "2022-06-02T01:14:54.579000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "What do you mean by ignoring the follow distance? Do you mean a block follow distance?",
+        "created_at": "2022-06-02T01:16:23.955000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes",
+        "created_at": "2022-06-02T01:16:31.942000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hmm if that teenager wasn't mining and raising the difficulty I'd be tempted to try to get a deposit in and fork it off on the pow network. That would be a nice experiment when I start reading those statements",
+        "created_at": "2022-06-02T01:18:21.627000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "And we're all on the same page that the spec defines the follow distance purely on time right? (it's just a pain in the neck to implement)",
+        "created_at": "2022-06-02T01:18:47.740000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "For voting it would be via time (distance * block_time), however the follow distance itself would just be referring to the block number",
+        "created_at": "2022-06-02T01:25:25.342000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "We haven't ever processed deposits which come inside the follow distance. The spec defines it as 2048 eth1 blocks rather than a period of time. I can change it to be inline with voting, but it just feels odd",
+        "created_at": "2022-06-02T01:32:53.611000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "hmm, that's not my understanding - it's what teku used to do but it leads to these problems. \u003c@361447803194441738\u003e  was giving some history on this earlier: https://discord.com/channels/595666850260713488/892088344438255616/981708184412651520",
+        "created_at": "2022-06-02T01:33:49.398000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "And looking at the spec (https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/validator.md#eth1-data) `eth1_chain` is all blocks on the eth1 chain and then `is_candidate_block` filters entirely based on time. I don't believe there's anything that uses `ETH1_FOLLOW_DISTANCE` by itself - it's always multiplied by `SECONDS_PER_ETH1_BLOCK` to convert it to a time.",
+        "created_at": "2022-06-02T01:35:07.127000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "That's my reading as well, the only place where I see it referring to blocks alone is in the validator spec\n\n\u003e This takes a minimum of ETH1_FOLLOW_DISTANCE Eth1 blocks (~8 hours) plus EPOCHS_PER_ETH1_VOTING_PERIOD epochs (~6.8 hours).",
+        "created_at": "2022-06-02T01:41:41.729000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "I maybe misremembering the spec then, I will have to take a another look at it.",
+        "created_at": "2022-06-02T01:44:11.698000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I do think that the quoted sentence above is unfortunate though cause it's in contradiction with the filter in `is_candidate_block` whenever the block distance is greater than `SECONDS_PER_ETH1_BLOCK`",
+        "created_at": "2022-06-02T01:48:17.397000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e \u003e \u003cdannyryan\u003e  This sentence is legacy to how it used to work and should be amended (re @amphora_interop_bot: \u003cpotuz\u003e That's my reading as well, the only place where I see it referring to blocks alone is in the validator spec\n\n\u003e This takes a minimum of ETH1_FOLLOW_DISTANCE Eth1 blocks (~8 hours) plus EPOCHS_PER_ETH1_VOTING_PERIOD epochs (~6.8 hours).)",
+        "created_at": "2022-06-02T01:49:36.229000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e It was simplified to the time mechanism late in the process of finalizing phase 0",
+        "created_at": "2022-06-02T01:49:57.132000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "The voting should be resolved on our end, we have just rolled out the latest patch and it seems to agree with LH and teku",
+        "created_at": "2022-06-02T03:23:02.486000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "```\nLooking back from current epoch 596 back to 576\nNext period starts at epoch 640 (4h40m0.100901331s)\n====Eth1Data Voting Report====\n\nTotal votes: 605\n\nVotes\ndeposit_root: 0x2f79297e2a018a605183cdb31089f38e43e545740d796d96ea52251f02df14f1, eth1_hash: 0x69b0fba2c1d6c6fce15ff1c64acdc97dfa8e947e0d98f51bf55e0e5d969d0236, deposit_count: 0= 1\n\ndeposit_root: 0xd70a234731285c6804c2a4f56711ddb8c82c99740f207854891028af34e27e5e, eth1_hash: 0xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87, deposit_count: 0= 243\n\ndeposit_root: 0x319697c5a733fd6558d41fa9b8c5ef2b389036829a6ac28e77305970f543ceed, eth1_hash: 0x97de639a417b76d1fb5372aa832bb9aa9f420d0d0cabd8944a1a362fcc72df02, deposit_count: 0= 1\n\ndeposit_root: 0xfac983df229353975f72986deb0f5a3009a8b4d37ad5189adc768ec7bb7b2c89, eth1_hash: 0x019926e81539c8613e93af0fd4a74dccf7157db765ee10c1a59f0522eb6fa82e, deposit_count: 351= 50\n\ndeposit_root: 0xf480c40f1d43ac6bf37a0e163bf5d2d73ef2468aa39b6a056506ed07cdc60cd0, eth1_hash: 0x79592c516020c56cc7c01ec5849bea616edc7935817c648ca62007a8e8f83721, deposit_count: 0= 1\n\ndeposit_root: 0x97a290832009f133232e341e5f2ba6f31d7251cdd894f1681064b835f02d1c0b, eth1_hash: 0x7abf770cc4b096a9fb73435d8eaf188aaf600e23ee1c2372bb5765009c9706b2, deposit_count: 323= 11\n\ndeposit_root: 0xa63b196aa0c625bca6d97cb4ab139e23ee7c8c18eab1d81f1c32a5902c4178df, eth1_hash: 0x7abf770cc4b096a9fb73435d8eaf188aaf600e23ee1c2372bb5765009c9706b2, deposit_count: 354= 261\n\ndeposit_root: 0xe82d406341d2ae1a2e2489469039a0e0b6e42d7beb0035320cc1c4be35a5af68, eth1_hash: 0x7abf770cc4b096a9fb73435d8eaf188aaf600e23ee1c2372bb5765009c9706b2, deposit_count: 324= 25\n\ndeposit_root: 0x46beb9a5e6a0d1070f33a70a31622a78f9a66abaa5e738d4fd18d43ad6566565, eth1_hash: 0x7abf770cc4b096a9fb73435d8eaf188aaf600e23ee1c2372bb5765009c9706b2, deposit_count: 321= 12\n```\nUnfortunately still don't think a majority can be achieved",
+        "created_at": "2022-06-02T06:37:28.113000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "yeah we need some of the incumbent-voting vals to come online",
+        "created_at": "2022-06-02T07:59:22.592000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "Pari updated all EF run prysm nodes so that might give it a small boost",
+        "created_at": "2022-06-02T07:59:48.806000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "Cool, we’ll have our fix in `unstable` soon-ish. We’ll ping you \u003c@199561711278227457\u003e once that’s ready (or in the meantime you could run this PR: https://github.com/sigp/lighthouse/pull/3234)",
+        "created_at": "2022-06-02T08:02:05.066000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cparithoshj\u003e Ef nodes are running an equal split and just represent 9% of the total network(so ~2% lh). So expect just small bumps from us updating our nodes😄",
+        "created_at": "2022-06-02T08:17:50.222000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "ok, back to poking \u003c@449019668296892420\u003e then 😁",
+        "created_at": "2022-06-02T08:19:43.129000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "FYI on the current period graffiti of validators that are voting for the best choice:\n```\n\n f_eth1_deposit_count |        f_graffiti         | f_blocks \n----------------------+---------------------------+----------\n                  321 |                           |       11\n                  321 | prysm-geth                |        1\n                  323 |                           |       10\n                  323 | prysm-geth                |        1\n                  324 |                           |       22\n                  324 | prysm-besu                |        5\n                  324 | prysm-geth                |        1\n                  325 |                           |        3\n                  325 | prysm-geth                |        1\n                  326 |                           |        7\n                  326 | prysm-nethermind          |        3\n                  326 | prysm-geth                |        2\n                  327 |                           |       11\n                  327 | prysm-geth                |        1\n                  354 | Lighthouse/v2.3.0-f0517b7 |      129\n                  354 | \"prysm-k8s\"               |      125\n                  354 | teku/v22.5.2+29-gac34a1f  |       91\n                  354 | Nethermind                |       52\n                  354 |                           |       48\n                  354 | Besu 🐐 Teku               |       19\n                  354 | teku-geth                 |        5\n                  354 | teku-besu                 |        4\n                  354 | teku-nethermind           |        4\n```",
+        "created_at": "2022-06-02T08:20:27.314000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "And those that aren't:\n```\n\n                         f_eth1_block_hash                          | f_eth1_deposit_count |           f_graffiti            | f_blocks \n--------------------------------------------------------------------+----------------------+---------------------------------+----------\n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |                    0 | Nimbus/v22.5.1-ce143a-stateofus |      127\n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |                    0 | lighthouse-erigon-temp          |      105\n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |                    0 | Lodestar-v0.38.0-dev.86b95a731d |       73\n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |                    0 | Lodestar-v0.37.0/86b95a7        |       33\n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |                    0 | Besu 🐐 Lodestar                 |       29\n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |                    0 | Besu 🐐 Nimbus                   |       26\n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |                    0 | nimbus-besu                     |        8\n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |                    0 | lodestar-besu                   |        7\n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |                    0 | teku-erigon                     |        7\n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |                    0 | nimbus-geth                     |        6\n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |                    0 | nimbus-nethermind               |        5\n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |                    0 | lighthouse-erigon               |        4\n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |                    0 | lodestar-geth                   |        4\n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |                    0 | lodestar-nethermind             |        4\n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |                    0 | nimbus-erigon                   |        1\n \\x69b0fba2c1d6c6fce15ff1c64acdc97dfa8e947e0d98f51bf55e0e5d969d0236 |                    0 | prysm-erigon                    |        1\n \\x3f3cdb5955838a16ca9dfaf8833a6201d8d01e4bc14c3959e4320be0142d8d56 |                    0 | prysm-erigon                    |        1\n \\x79592c516020c56cc7c01ec5849bea616edc7935817c648ca62007a8e8f83721 |                    0 | prysm-erigon                    |        1\n \\x97de639a417b76d1fb5372aa832bb9aa9f420d0d0cabd8944a1a362fcc72df02 |                    0 | prysm-nethermind                |        1\n \\x025482f9cfbd0fb2ca939c675f5ffcc3d01a19ef76c2ad7e529bd748c440c23d |                    0 | prysm-nethermind                |        1\n \\x019926e81539c8613e93af0fd4a74dccf7157db765ee10c1a59f0522eb6fa82e |                  351 | Nethermind                      |       57\n \\x019926e81539c8613e93af0fd4a74dccf7157db765ee10c1a59f0522eb6fa82e |                  351 | Besu 🐐 Lighthouse               |       21\n \\x019926e81539c8613e93af0fd4a74dccf7157db765ee10c1a59f0522eb6fa82e |                  351 | lighthouse-besu                 |       11\n \\x019926e81539c8613e93af0fd4a74dccf7157db765ee10c1a59f0522eb6fa82e |                  351 | lighthouse-geth                 |        8\n \\x019926e81539c8613e93af0fd4a74dccf7157db765ee10c1a59f0522eb6fa82e |                  351 | lighthouse-nethermind           |        5\n \\x019926e81539c8613e93af0fd4a74dccf7157db765ee10c1a59f0522eb6fa82e |                  351 | ropsten-validator               |        4\n \\x9f1a44d16196c86ba1e71db3b181370cecaf0d6fd2a996e39b614dd5d85975a4 |                  351 | Besu 🐐 Lighthouse               |        1\n```",
+        "created_at": "2022-06-02T08:21:18.817000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "turns out TTD override was missing from our ropsten EL:s  :/ fixed, should be back up soon (TM)",
+        "created_at": "2022-06-02T09:01:24.843000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "btw, if someone gives me a hash it _should be_ voting for, I can check if it does and start poking other people in turn. I do not make any claims about ever having understood the eth1 voting logic (I don't mind embarking on futile journeys in general, but there are limits to that as well 😛 )",
+        "created_at": "2022-06-02T13:32:42.555000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "```\n$ ethdo chain eth1votes\nVoting period: 10\nSlots through period: 847\nVotes this period: 833\nLeading vote is for block 0xb12db16e819f03f4d605e8d59eb166c50a56cb6f1c2af4ac5fa95825d1597556 with 438 votes\n```",
+        "created_at": "2022-06-02T14:05:54.823000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "heh, so we might just make it on agreement",
+        "created_at": "2022-06-02T14:46:34.560000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "438/847 --\u003e 52%",
+        "created_at": "2022-06-02T14:47:26.855000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "^ erigon team is running lighthouse and updated to the PR \u003c@602753420033785856\u003e linked. That should be another 9%.",
+        "created_at": "2022-06-02T14:54:12.191000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "Now 563/1107, if we don't make it this period we should make it next as execution chains sync, new code is rolled out _etc._",
+        "created_at": "2022-06-02T14:58:31.075000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "good -- there are a number of user deposits (~300)  stuck that want to test the merge on Ropsten (estimated next week) so getting these through in the next couple of periods would be super valuable for them 🙏",
+        "created_at": "2022-06-02T15:00:44.139000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "Validators voting for the best choice block in this period (about 1500 blocks in at this point):\n```\n deposits |         graffiti          | blocks \n----------+---------------------------+--------\n      355 | \"prysm-k8s\"               |    168\n      355 | Lighthouse/v2.3.0-f0517b7 |    156\n      355 |                           |    145\n      355 | teku/v22.5.2+29-gac34a1f  |     92\n      355 | Nethermind                |     72\n      355 | teku/v22.5.2+49-g2d9d5c5  |     59\n      355 | Besu 🐐 Teku               |     29\n      355 | prysm-nethermind          |     13\n      355 | teku-besu                 |     10\n      355 | teku-nethermind           |     10\n      355 | prysm-besu                |      6\n      355 | teku-geth                 |      6\n      355 | prysm-geth                |      4\n```",
+        "created_at": "2022-06-02T23:18:18.051000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "And those voting elsewhere:\n```\n                             block_hash                             | deposits |            graffiti             | blocks                                                     \n--------------------------------------------------------------------+----------+---------------------------------+--------                                                    \n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |        0 | Nimbus/v22.5.1-ce143a-stateofus |    155                                                     \n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |        0 | lighthouse-erigon-temp          |    145                                                     \n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |        0 | Lodestar-v0.38.0-dev.86b95a731d |    105                                                     \n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |        0 | Nethermind                      |     58                                                     \n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |        0 | Lodestar-v0.37.0/86b95a7        |     53                                                     \n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |        0 | Besu 🐐 Nimbus                   |     38                                                    \n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |        0 | Besu 🐐 Lodestar                 |     30                                                    \n \\xeefb1f70bf7bed6394ed7d6f812f422aa37bf7680e1b75fa551d40e849f10a87 |        0 | lodestar-geth                   |      14                                                     \n...\n```",
+        "created_at": "2022-06-02T23:19:23.080000+00:00",
+        "attachments": [
+            {
+                "type": "text/plain; charset=utf-8",
+                "origin_name": "message.txt",
+                "content": "504e0fdbd669a3e9aa7708c720ad75cf1a2a0a83ac68cef25e1e21efe1985379"
+            }
+        ]
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "We don't need much more weight on the best vote; if any of nimbus/lodestar/lighthouse temp (whatever that may be) can get their execution nodes synced and serving up-to-date blocks (or fix their consensus-side algorithm, if that's the issue)  that should do it.",
+        "created_at": "2022-06-02T23:21:53.784000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@\u0026836981603216654336\u003e Could you check your nodes please? I think there's updates for Lighthouse, Lodestar and Prysm to fix voting issues.  Hopefully they can provide some details on the right version. I'm not sure why the Besu Nimbus node is voting wrong - is besu in sync?",
+        "created_at": "2022-06-02T23:24:03.024000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "^ you can use this image of prysm gcr.io/prysmaticlabs/prysm/beacon-chain:useTimestampForDeposits-537833",
+        "created_at": "2022-06-02T23:31:43.545000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "Testing",
+        "parent": "",
+        "content": "Did Bellatrix happen?",
+        "created_at": "2022-06-02T23:33:16.899000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Looks like it.",
+        "created_at": "2022-06-02T23:35:03.151000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "Testing",
+        "parent": "",
+        "content": "But no blocks proposed in the last 15 mins?",
+        "created_at": "2022-06-02T23:35:25.147000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "Testing",
+        "parent": "",
+        "content": "Or is the explorer just lagging?",
+        "created_at": "2022-06-02T23:35:29.923000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Just the explorer - I'm seeing blocks.",
+        "created_at": "2022-06-02T23:35:47.500000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matt.nelson",
+        "category": "Testing",
+        "parent": "",
+        "content": "besu Could you check your nodes please I",
+        "created_at": "2022-06-02T23:40:14.235000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "stevencook",
+        "category": "Testing",
+        "parent": "",
+        "content": "Did Bellatrix happen",
+        "created_at": "2022-06-02T23:40:31.764000+00:00",
+        "attachments": null
+    }
+]

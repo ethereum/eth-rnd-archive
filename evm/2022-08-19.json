@@ -1,0 +1,106 @@
+[
+    {
+        "author": "tonjevic",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yeah; it's been that way since v0.5.0, quoting https://docs.soliditylang.org/en/latest/050-breaking-changes.html: `Pure and view functions are now called using the opcode STATICCALL instead of CALL if the EVM version is Byzantium or later. This disallows state changes on the EVM level.`",
+        "created_at": "2022-08-19T05:51:18.764000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "treyzania",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "oh neat",
+        "created_at": "2022-08-19T13:38:48.127000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "treyzania",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e The continue statement in a do...while loop now jumps to the condition, which is the common behavior in such cases. It used to jump to the loop body.\nwow solidity used to be much weirder",
+        "created_at": "2022-08-19T13:39:31.270000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I don't think parallel EVM opcode execution would ever be a good idea.  Non-determinism that tends to come from parallelism is problematic, and solutions are not simple.  I almost put a parallel execution section in my april fools EIP-4962, but I was afraid people might legitimately explore it.  (use multiple DESTS to split execution, require no resource sharing, but that involves tracking memory and slot usage and then there is no \"join\" operation to return parallell computation)",
+        "created_at": "2022-08-19T19:30:10.018000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "There's been research at dynamically tracking data dependencies at the transaction level to support parallel execution of transactions when their dependencies don't overlap.",
+        "created_at": "2022-08-19T19:34:42.787000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The main benefit to that has been \"beam\" style sync, or execution using remotely fetched state.  The parallelism allow more state requests to be in flight over the relatively slow network, so it reduces the network latency for the execution of a whole block.",
+        "created_at": "2022-08-19T19:35:46.249000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "There's also a benefit in zk-EVM proving to running things in parallel where there are fewer data dependencies.  It reduces the proof time.",
+        "created_at": "2022-08-19T19:36:30.835000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I admit, treating `STATICCALL` as a read-only call declaration to further assist parallelism without needing dynamic read-only dependency detection hadn't crossed my mind.  It's a good idea for the above-mentioned things (remote state exec and zk), where the latency matters the most.",
+        "created_at": "2022-08-19T19:38:20.245000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "you still need to defend against dirty reads.",
+        "created_at": "2022-08-19T19:38:59.774000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ah yes, one more benefit of detecting parallelism is for local database I/O.  It can improve storage throughput, although this is becoming less of an issue with NVMe.",
+        "created_at": "2022-08-19T19:39:06.835000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, but that's not difficult.  Transaction executions queue up the total state change in memory.  They can easily make branches (snapshots) in that in-memory delta.  That solves pure read-only staticcalls.  If you have the machinery to detect data dependencies and conflicts dynamically so as to \"discover\" the latent parallelism even in code that writes state, you'll already have a more general solution that covers dirty reads among other things.",
+        "created_at": "2022-08-19T19:42:06.303000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Right, but I'm missing how knowing you're going down a staticcall changes much.  The protections on read are the same with non-staticcall, and the dependencies on the return value don't change if it was a static call or a dynamic call.  Revert on write for staticcall is an EVM thing not a parallel analysis thing.",
+        "created_at": "2022-08-19T19:46:14.789000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If there's a data dependency on the return value before deciding whether to do the next staticcall, and it can't be profitably predicted, I think you're right. If there's a staticcall, then another staticcall, and only then are their results are used, or if there's some predictable history of the first one returning 0 or something, in principle they could be run in parallel.  If you're trying this to make use of CPU cores I'd expect it's generally better to run separate transactions on CPU cores (even though you have to speculate that they don't interfere, and retry if they do).  But if it's to lower network or data latency, launching a pair of staticcalls together might be worth parallelising even if the second call is speculative.",
+        "created_at": "2022-08-19T19:54:13.071000+00:00",
+        "attachments": null
+    }
+]

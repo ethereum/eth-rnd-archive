@@ -1,0 +1,122 @@
+[
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hey, had a question for all the other consensus clients.  If an execution client responds with SYNCING on engine_newPayload call, does the client go into optimistic mode immediately ? Or does it wait for a SYNCING response in the follow up FCU call. cc \u003c@755590043632140352\u003e",
+        "created_at": "2022-07-30T13:08:47.196000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "Nimbus marks that particular block as having being optimistically imported. Because it's not already been marked as `VALID`, it then calls `fcU` and waits for the reply before updating its DAG head. So, currently, effectively latter.\n\nMy reasoning is that being an optimistic node is so much less useful that the minor latency advantage from setting the DAG head a bit sooner doesn't particularly matter, because it can't do much/anything with it in terms of validation duties.",
+        "created_at": "2022-07-30T16:07:37.329000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'll tag specifically \u003c@361447803194441738\u003e cause the reason \u003c@476250636548308992\u003e is asking this question is that we're having trouble getting lighthouse in optimistic mode. He can explain the experiment better, but the tl;dr. Is that there's a proxy sitting between the CL and the EL, all newpayload calls return immediately SYNCING and they are not sent to geth.  Prysm refuses to propose cause it considers its head as optimistic. LightHouse on the other hand proposes. Prysm's calls to FCU (right after calling newpayload and importing the block optimistically) are forwarded to geth which rightfully returns SYNCING since it doesn't have the payload. We don't know how is it that LightHouse finds itself out of optimistic mode",
+        "created_at": "2022-07-30T18:23:20.374000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "What is DAG? Did I understand that you don't import the block to ForkChoice between the call to newpayload and the return of FCU? What happens if you need to propose a block during this time?",
+        "created_at": "2022-07-30T18:26:01.713000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "We still try to propose if we have an optimistic head. If the EL manages to build a payload when requested then it must have a valid parent payload and therefore we aren’t actually optimistic (we just didn’t know that yet).",
+        "created_at": "2022-07-30T20:12:05.903000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "If the head is truely optimistic then it should be impossible for the EL to build atop it.",
+        "created_at": "2022-07-30T20:13:42.556000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "thanks I think this kinda makes sense. I wonder how this level of trust on the EL plays if the operator is using MEV-Boost for example and sending these requests to a possibly evil Builder.",
+        "created_at": "2022-07-30T22:48:12.856000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "In the usual case we would first check with our local El before sending the request to the relay",
+        "created_at": "2022-07-30T22:49:00.867000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think it should be fine. We verify any blocks from the builder against the local EL. If the local EL doesn't know about the parent we'll import that optimistically even if we produced it.",
+        "created_at": "2022-07-30T22:49:27.041000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah but the point is that according to the specs that block shouldn't even be gossiping in the network",
+        "created_at": "2022-07-30T22:50:30.608000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "We do propagate optimistic blocks on the gossip network.",
+        "created_at": "2022-07-30T22:51:16.057000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah but an optimistic node is not supposed to propose. I think I understand that if your local El is giving you a block then it's safe to assume you're not optimistic. But I'm not so sure about a builder",
+        "created_at": "2022-07-30T22:52:29.617000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "When we are asked to produce a block via the HTTP we simply produce the block and return it. We don't add it to our block tree or remember anything about it. The VC will then sign the block and return it to our HTTP endpoint, at which point we treat it exactly as a block from the gossip network.",
+        "created_at": "2022-07-30T22:52:40.338000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "When I wrote this we didn't have the builder flow, it's interesting to think about it.",
+        "created_at": "2022-07-30T22:53:35.560000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "So the threat here is that the builder network manages to produce a chain of payloads that local ELs will never resolve. The chain with those payloads will never get any votes, however it might include votes from past blocks. Might be a FC poisoning vector. Might think about it and come back to it next week.",
+        "created_at": "2022-07-30T22:58:05.866000+00:00",
+        "attachments": null
+    }
+]

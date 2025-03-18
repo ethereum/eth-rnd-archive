@@ -1,0 +1,202 @@
+[
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Just to be explicit: here's the chunk of code from Intel's assembly adapted to Merkle trees where we load 8 chunks at a time \u003chttps://github.com/potuz/mammon/blob/main/ssz/sha256_avx2.asm#L635-L659\u003e what would happen if you call with one pair of chunks, you'd jump to an SSE implementation that only loads that block",
+        "created_at": "2021-11-21T00:02:43.393000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "general",
+        "parent": "",
+        "content": "Assembly script (for javascript) seems to have support for SIMD. I will try out that approach for chainsafe/as-sha256, I am sure other compilers will also support SIMD instruction set to compile a vectorized computation",
+        "created_at": "2021-11-21T04:35:09.381000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "general",
+        "parent": "",
+        "content": "Assembely scripts claims to provide two ways to do it, via compiler flags, or via assembly script warpper primitives to load mult and add vectors",
+        "created_at": "2021-11-21T04:36:19.075000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "some points about the way we think about it, and why it's an open ticket, and not a feature (yet?):\n* our first avenue of optimisation is to _not hash at all_ - ie a lot of time has been invested into caching and getting that right\n* simplicity: doing 2x32 is easier to compare against specs and to reason about which probably is why everyone is doing it\n* CPU-specific optimisations are nice of course, but they're also limited: you can't rely on everyone running intel with feature X (in fact, one can argue that shouldn't)\n* performance of hashing this is not the biggest performance problem overall, in Nimbus at least: if we improve hashing by 10x, that doesn't make the client 10x faster - that is not to say that a 10x improvement is not valuable - of course it is - it's rather that we have a whole smorgasbord of potential optimisations to pick from\n* awesome research - this is a fruit branch is getting closer and closer within reach - a perfect opportunity to learn some Nim as well 🙂",
+        "created_at": "2021-11-21T08:53:52.432000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@!449019668296892420\u003e \n\u003e * performance of hashing this is not the biggest performance problem overall, in Nimbus at least: if we improve hashing by 10x, that doesn't make the client 10x faster\nYeah, not even hashing will be 10x faster, as you don't hash big lists all the time. But every single time that you need to hash more than 2 contiguous leaves, that's low hanging fruit that we are not picking. And this happens 100% of the time in slot 0, which is precisely the problematic slot for the BN. \nThe way I see this is that using this involves two parts:\n1 - a trivial modification in each client hashing algorithm to pass all contiguous chunks to low level instead of repeated calls\n2 - Have a low level library that exposes this function\n\n1) is trivial. 2) Is not so bad, it consists on two simple modifications to existing libraries :\n2a)  Just write to a buffer the root on each round in their loop, instead of feeding that root to the next round. \n2b) hardcode the padding block. \nThere are already SSE, AVX, AVX2 and Shani Linux versions of this in \u003chttps://github.com/potuz/mammon/tree/main/ssz\u003e.  Rather than posting myself this as a library and be sued in 5 seconds for all the bugs that I'll have, what I think we should be doing is trying to get OpenSSL to expose such a thing, there are bindings of OpenSSL to every language. Does anyone know if dot-asm from supranational is around these channels? I'm thinking on reaching out myself",
+        "created_at": "2021-11-21T09:06:19.037000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e * CPU-specific optimisations are nice of course, but they're also limited: you can't rely on everyone running intel with feature X (in fact, one can argue that shouldn't)\nThe way this works in my library (and in bitcoin core for example) is to check cpuid at launch and pick your hasher once and for all",
+        "created_at": "2021-11-21T09:07:47.889000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "having blst support this is certainly a good option, given that most us are using it already, for hashing included",
+        "created_at": "2021-11-21T09:08:07.235000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I'll open an issue with them and see if there's some traction, but I will be implementing this in prysm in my time anyway, and I'm a bit obsessive so perhaps I'll see this working earlier",
+        "created_at": "2021-11-21T09:11:44.226000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e hash big lists all the time\nI wonder if we can apply this to the generation of light client multiproofs cc \u003c@!881905303011086387\u003e",
+        "created_at": "2021-11-21T09:14:10.173000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Just in terms of slot 0, it’s worth noting that epoch processing is not on the critical path for Teku. It’s simple to do the epoch transition prior to the end of the slot. That’s only invalidated if the block is received in the last few moments of the slot. \nSo optimisations in epoch transition basically don’t buy us anything beyond some energy savings. \nNot to say there isn’t benefit from this, it’s excellent work but it’s probably telling that teku isn’t even using a native implementation of sha256 at the moment and it’s still not turning up as significant in profiling. The JVM is excellent at optimising a lot of stuff to be surprisingly fast but core crypto is typically not one of them so I suspect we’d get a huge boost just from switching to a native implementation.",
+        "created_at": "2021-11-21T09:21:00.155000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "FWIW, here's a version of a document I wrote for prysm, it contains a not well written description of the 2 problems and their solutions. But it has the advantage of being in one place. https://hackmd.io/@potuz/BJyrx9DOF",
+        "created_at": "2021-11-21T09:28:01.566000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "after the merge I suspect we need to hash the bytelist of transactions on evey slot, and there's no caching around this one. again, not a major thing in principle, but I believe these things add up",
+        "created_at": "2021-11-21T09:32:50.025000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "bytelists are already hashed in one call - the difference with balances that _conceptually_, they are independent values that go into independent chunks and the chunks get hashed - that's how the spec is written - you're basically exploiting a property of the encoding",
+        "created_at": "2021-11-21T09:35:33.336000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "no!, bytelists are chunked as well as ssz objects",
+        "created_at": "2021-11-21T09:36:11.267000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "all ssz objects eventually are hashed as a merkle tree of a list of chunks",
+        "created_at": "2021-11-21T09:36:56.138000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "aah, I see what you mean",
+        "created_at": "2021-11-21T09:38:34.532000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Already contacted dot-asm to see if he's willing to take this up",
+        "created_at": "2021-11-21T09:50:56.689000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "https://github.com/status-im/nim-ssz-serialization/blob/master/ssz_serialization/merkleization.nim#L475 - it's such a relief we're little-endian 🙂 turns out our special case applies not only to bytes but also to larger types - that said, we will indeed chunk them before hashing regardless of type - looking at the code, it looks like we're doing it to keep memory consumption down",
+        "created_at": "2021-11-21T10:06:04.377000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "swagosaurus9160",
+        "category": "general",
+        "parent": "",
+        "content": "Is anyone aware of response papers from ethereum research groups regarding the research paper by team rocket that proposes the avalanche family of consensus protocols? If so could you please provide a link?",
+        "created_at": "2021-11-21T10:41:25.076000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "swagosaurus9160",
+        "category": "general",
+        "parent": "",
+        "content": "https://ipfs.io/ipfs/QmUy4jh5mGNZvLkjies1RWM4YuvJh5o2FYopNPVYwrRVGV",
+        "created_at": "2021-11-21T11:29:36.277000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "swagosaurus9160",
+        "category": "general",
+        "parent": "",
+        "content": "Link to the original paper ^",
+        "created_at": "2021-11-21T11:29:52.158000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sacha6557",
+        "category": "general",
+        "parent": "",
+        "content": "not a paper, but justin's thoughts from feb 2020:\n\u003e In Avalanche malicious behavior cannot be held accountable via a mechanism like slashing. The Avalanche assumes 2/3 of validators won't perform malicious actions. This looks much more like a traditional BFT assumption rather than a cryptoeconomic assumption. Many of us building ETH2 believe this is an insufficient assumption and that in PoS protocols, staked assets must be at risk to avoid fundamental \"nothing at stake\" issues.\nhttps://gist.github.com/aliatiia/34dd846950609acae053c770fa42955c#q24",
+        "created_at": "2021-11-21T11:59:45.231000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sacha6557",
+        "category": "general",
+        "parent": "",
+        "content": "ali atiaa also has an interesting thread of threads\nhttps://twitter.com/aliatiia_/status/1462156586131103748",
+        "created_at": "2021-11-21T12:00:07.652000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "swagosaurus9160",
+        "category": "general",
+        "parent": "",
+        "content": "Thank you 🙏",
+        "created_at": "2021-11-21T12:04:17.013000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "swagosaurus9160",
+        "category": "general",
+        "parent": "",
+        "content": "If there are any other resources on this discussion please share as well. The lack of slashing bad actors under avalanche consensus is an interesting point brought up there,  any elaboration would be great",
+        "created_at": "2021-11-21T12:26:11.358000+00:00",
+        "attachments": null
+    }
+]

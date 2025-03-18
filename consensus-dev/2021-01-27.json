@@ -1,0 +1,98 @@
+[
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "I’m implementing a solution very similar to this in Lighthouse. I’ve been calling it “trailing edge slot processing”. You run the mandatory single per_slot_processing call after you’ve verified a block, rather than before it.",
+        "created_at": "2021-01-27T13:13:15.965000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "I think our current plan revolves around moving the finalization processing out of band - ie database pruning, dag cleanup, those sorts of things - slot processing is _so fast_ it doesn't materially make much difference, ie it's like verifying a signature, more or less",
+        "created_at": "2021-01-27T13:17:28.110000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "our largest problem is actually replaying deposit blocks, for two reasons: 1) we don't have a a key-\u003evalidator index map that's up to date for the given block during processing and 2) we don't cache the outcome of the deposit signature check, so we have to re-run the sig check for every deposit",
+        "created_at": "2021-01-27T13:18:31.226000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "1) is not too bad actually, looping through the validators is faster than one would think, but the sig check ends up being expensive, specially because we right now have these long strings of blocks, all with deposits in them",
+        "created_at": "2021-01-27T13:19:59.034000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "I’ve been looking at the delay it takes between a slot start and when we get a block via gossip. I’m seeing multi-second delays around the start of each epoch (this is generally well-known to be the case). \n\nI can see that LH is taking a while to gossip verify blocks under some conditions (new epoch, forked block) and I’m working to improve it.\n\nI’m testing with a new proposer shuffling cache and doing “trailing edge” slot processing (I.e., precomputing the base state for the next block).\n\nI *think* I can get pretty consistent 2ms verification times on Mainnet atm.\n\nI’m interested to hear from other clients who’ve worked on this. For those that haven’t, it’s worth looking at. I think we can improve validator rewards by reducing block propagation delays.",
+        "created_at": "2021-01-27T13:21:01.519000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Individual deposit signature checking is annoying. Given the tiny amount of invalid sigs on mainnet, we could probably reduce times by doing an optimistic group verification of deposit sigs and falling back to individual. I haven’t implemented this, though.",
+        "created_at": "2021-01-27T13:22:51.625000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "right, though if the first block has a different parent than you precomputed for, you have to redo the proposer shuffling cache regardless, right?",
+        "created_at": "2021-01-27T13:25:02.217000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "You can key proposer shuffling by `state.get_block_root(end_slot(previous_epoch(state))` and then have *some* tolerance for reorgs. However, there’s definitely some risk of cache misses.",
+        "created_at": "2021-01-27T13:27:31.107000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "yeah, that's what we do",
+        "created_at": "2021-01-27T13:28:12.643000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "more or less at least 🙂 we key it earlier in the epoch and potentially store multiple caches there, but that's just a convenience thing to be able to prune more easily",
+        "created_at": "2021-01-27T13:30:08.277000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "the thing we're doing right now is moving more processing to the \"between-aggregate-and-new-slot\" gap in processing - that's where we're concentrating things like fsyncing cache databases and similar operations which per logs have been the biggest disruptors so far-  once pruning is moved to that gap, heating caches for the next epoch seems like a worthy next item to do - curious to hear how it goes",
+        "created_at": "2021-01-27T13:34:41.166000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "the only reason I've been hesitating so far is really the risk of doing unnecessary work if there's a gap - ie the unhappy cache-miss case",
+        "created_at": "2021-01-27T13:38:34.350000+00:00",
+        "attachments": null
+    }
+]

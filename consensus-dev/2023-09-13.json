@@ -1,0 +1,378 @@
+[
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "During the last ACDE, there was a discussion regarding the motivation for the churn limit. The argument was that the current limits allow to grow LSDs. But if the protocol slows the validator set growth this may even more promote LSDs because it will be harder to actually stake your eth (validator activation delay and lost revenue will increase). Meanwhile, LSDs are much more accessible. So instead of waiting even longer for validator activation potential stakers would just buy LSDs instantly and enjoy the rewards from day one.",
+        "created_at": "2023-09-13T07:27:36.559000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "What exactly would cause a CL to send an out-of-order newPayload/FCU to EL?\n\nfor example, how what network condition would cause a CL to go from announcing A to announcing E w/o annoucing B,C,D?\n\nA \u003c- [ B \u003c- C \u003c- D ] \u003c- E",
+        "created_at": "2023-09-13T08:47:06.358000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "some CLs (including Lighthouse \u0026 Nimbus) won't send newPayload while syncing the finalized part of the chain, so if the A -\u003e E segment is longer than a few blocks it could happen if the CL falls out of sync (loses all peers) and then breezes over those blocks with finalization sync once it regains peers",
+        "created_at": "2023-09-13T09:24:56.596000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "okay cool, so for non-finalized segments is it fair to say there that a block will not be sent to the EL as head _unless_ every non-finalized has been sent via newPayload?",
+        "created_at": "2023-09-13T09:53:42.109000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "I would not suggest making such an assumption, especially for clients that are heavily parallelized. Syncing in CL is optimistic, generally, it means clients try to sync without relying on lockstep with EL. Just a weird example - CL client gets B, C, D, E at once from the network, so it could really happen that some of those payloads arrive at mixed order to EL, or even some request just fails randomly.",
+        "created_at": "2023-09-13T10:18:25.471000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Isn't this against the spec? You can't sync even optimistically if you don't receive something from the EL, I tend to disagree here with \u003c@777935002263617576\u003e and would say that such syncing is not optimistic syncing",
+        "created_at": "2023-09-13T10:39:57.822000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "Could you tell which part you don't agree with?",
+        "created_at": "2023-09-13T10:41:58.181000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The fact that this happens in optimistic syncing: a client during optimistic syncing **cannot** import to forkchoice block C before importing it's parent B and it cannot import either if it hasn't received either ACCEPTED SYNCING or VALID from the EL",
+        "created_at": "2023-09-13T10:43:31.813000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "So not calling notify_NewPayload on a block you're importing seems against the spec to me",
+        "created_at": "2023-09-13T10:44:53.133000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "To optimistically import a block:\n\n\u003e The verify_and_notify_new_payload function MUST return True if the execution engine returns NOT_VALIDATED or VALID. An INVALIDATED response MUST return False.\n\nWhich implies that this function must be called for any block that is being imported optimistically",
+        "created_at": "2023-09-13T10:48:15.989000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "So coming back to \u003c@543900561460822016\u003e 's question I think EL can assume they came all in order or we need to change the spec",
+        "created_at": "2023-09-13T10:50:53.268000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "ok, cool, so actually we should wait for a response from the EL and this should order the requests to EL. We don't do that.",
+        "created_at": "2023-09-13T11:02:47.019000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "\"Which implies that this function must be called for any block that is being imported optimistically\" - do I understand correctly that the key part here is not the calling the function, but actually receiving the response? I mean calling the function doesn't guarantee that the payloads arriver in order. However, if block can be optimistically imported only when the response from EL is received then this should guarantee the order because the next call can only be done after the response from the previous call is received.",
+        "created_at": "2023-09-13T11:29:30.839000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "yes, CL should wait for the response. When the return status is supposed to be `SYNCING` or `ACCEPTED` the response should be quick",
+        "created_at": "2023-09-13T11:34:16.412000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Correct, if there's an error or no response the CL should halt. Thus not sending the Payload is equivalent to not receiving response and continue syncing under these circumstances is the problem",
+        "created_at": "2023-09-13T11:40:39.192000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "Our justification is that if you're syncing the finalized chain, it should be similar to checkpoint syncing. When you checkpoint sync a CL you _also_ don't send newPayload/fcU for all the prior blocks of the chain\n\nLighthouse and Nimbus both verify the execution block hash internally, which is equivalent to what the EL does when it returns SYNCING.",
+        "created_at": "2023-09-13T11:48:36.380000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "(Lighthouse has a flag to turn off this behaviour `--disable-optimistic-finalized-sync`, but it's on by default)",
+        "created_at": "2023-09-13T11:49:08.555000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "When I say \"similar\" to checkpoint sync, I mean that it's observationally equivalent from the execution node's point-of-view. The EL can't tell the difference between a CL doing optimistic finalized sync, and a CL that syncs normally but just had its DB nuked, followed by a checkpoint sync.",
+        "created_at": "2023-09-13T11:50:28.500000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "So do you wait for response from EL when importing optimisticaly?",
+        "created_at": "2023-09-13T11:52:18.851000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah we do, and we'll never import a block optimistically if the response comes back as INVALID or an error.\n\nOur optimisation only applies to syncing the finalized portion of the chain",
+        "created_at": "2023-09-13T11:53:19.062000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "ok, thanks, I'm just wondering what other (apart from payload ordering) benefits this waiting brings. My intuition is that not waiting for EL response may give a faster (in some sense better) view of the chain to EL, especially if EL is struggling with responses.",
+        "created_at": "2023-09-13T11:57:49.265000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I do believe that syncing already finalized blocks is equivalent to checkpoint sync and that the spec could be relaxed in this specific case (cc \u003c@425572898787426305\u003e ). At any rate no one would complain if checkpoint syncing an already started DB and then back filling up to its known status",
+        "created_at": "2023-09-13T11:58:27.889000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "When you're tracking the head it's dangerous not to wait for the response, because you might get stuck in optimistic sync, if the EL takes a long time to respond or responds with an error. If the whole network did this, it would be a liveness risk, as validators can't attest or propose blocks when optimistically synced",
+        "created_at": "2023-09-13T11:59:56.552000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "Same reasoning applies to optimistically importing a block that the EL responds with an `error` for",
+        "created_at": "2023-09-13T12:00:25.047000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "(AFAIK Nimbus already does import blocks that error. We were considering doing it too, but decided against it)",
+        "created_at": "2023-09-13T12:01:31.653000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "If EL is not responding, it should not matter do I block and wait for the EL response or I keep importing. In neither way safe head (that validator uses for it's duties) moves forward. And I can't do anything about it. Where do I fail to understand it? 🙂",
+        "created_at": "2023-09-13T12:14:57.394000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "So if this error is of a kind that makes EL to not \"see\" the payload, then Nimbus may import the next payload before EL sees the previous payload.",
+        "created_at": "2023-09-13T12:27:40.440000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The problem is wether you are optimistic or not, if there is no response from the EL, then you **don't** import the block but you are also **not** optimistic. Therefore if you need to propose, you will propose a block on top of your last head. This makes the chain advance in case there are multiple nodes that were tricked into this (for example if your particular EL has a bug).  If on the other hand you do import the block and you consider it optimistic (cause you haven't validated it) then you can't propose at all.",
+        "created_at": "2023-09-13T12:46:34.811000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "So any kind of messing with the optimistic sync causes subtle bugs that are not a problem by themselves or if no one uses that particular CL+EL combination, but these bugs exponentiate when someone finds a way of triggering this \"optimistic sync\" on many nodes",
+        "created_at": "2023-09-13T12:47:54.954000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks, but it makes me even more confused 😂 :\n\"The problem is wether you are optimistic or not, if there is no response from the EL, then you **don't** import the block but you are also **not** optimistic\" - if I don't import block when there is no response from the EL I should be syncing optimistically, we just discussed that in order to be optimistic I need to import only the blocks that EL responded.\n\n\"Therefore if you need to propose, you will propose a block on top of your last head\" - I can only propose on a safe head. So I can only propose on the head that my EL confirmed to be valid. So if my EL is struggling what else I can do?\n\n\"This makes the chain advance in case there are multiple nodes that were tricked into this (for example if your particular EL has a bug)\" - the chain can advance with the help of nodes that don't run buggy EL and have up-to-date safe head that they propose on.\n\n\"If on the other hand you do import the block and you consider it optimistic (cause you haven't validated it) then you can't propose at all\" - I can propose only on the safe head. I do not propose on optimistic head. So if I consider not validated block as optimistic head and I don't use it for proposing - what is the problem here? \n\nI start to feel that I missed something related to optimistic/safe head. I don't understand why we are discussing validator duties while we are discussing optimistic sync. Maybe this is also related to implementation specifics but this whole discussion left me even more confused.",
+        "created_at": "2023-09-13T13:24:38.047000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e if I don't import block when there is no response from the EL I should be syncing optimistically, we just discussed that in order to be optimistic I need to import only the blocks that EL responded.\nIf the EL does not respond and you don't import the block, which is what you should do, then your last head is still the previous block, which was not optimistic.",
+        "created_at": "2023-09-13T13:33:23.459000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e  I can only propose on a safe head. So I can only propose on the head that my EL confirmed to be valid. So if my EL is struggling what else I can do?\nThis is correct. If you didn't import the block where the EL didn't respond, this would be your last known head, which is valid and you will be acting correctly. However, if you do import the last block, then you can't trust *any* head, any at all. Obviously you can't trust the block that you just imported when the EL didn't respond or responded with an error, cause that block isn't even validated. But also tracking your previous head is a huge problem cause now you need to disregard any attestations that came from the new blocks for example.",
+        "created_at": "2023-09-13T13:36:08.708000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e the chain can advance with the help of nodes that don't run buggy EL and have up-to-date safe head that they propose on.\nThe point is that if we act as the spec indicates, then the chain can advance even with buggy ELs or with ELs that struggle to sync a very specific maliciously cooked block",
+        "created_at": "2023-09-13T13:37:38.283000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e  I can propose only on the safe head. I do not propose on optimistic head. So if I consider not validated block as optimistic head and I don't use it for proposing - what is the problem here? \nIf you are able to complete restore the forkchoice tree and disregard exactly the status that you had before you imported the block that you shouldn't (therefore reaccounting for all weights that have changed in all nodes, not prunning whatever was prunned, not raising unrealized justification, etc...) then you should be fine. I don't believe anyone can do this in a reasonable manner so I would suspect Grandine can't do this either.",
+        "created_at": "2023-09-13T13:39:24.478000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "thanks, now it 's more clear. As we were discussing optimistic sync I thought you meant optimistic head when reffering to *head*, but it actually meant safe head.",
+        "created_at": "2023-09-13T14:03:50.113000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "When I mean head I mean the return of get_head from forkchoice",
+        "created_at": "2023-09-13T14:20:08.935000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "it's not strictly an equivalent to a checkpoint sync because the checkpoint state is obtained from a secured source by assumption or by certain properties that this source provides while the finalized chunk of the chain can be downloaded from the network leading an invalid blockchain to be accepted by a client not calling to EL. For instance, the majority has finalized an invalid EL chain and syncing minority accepting this chain instead of raising a fatal error and preventing one from reading data from invalid chain",
+        "created_at": "2023-09-13T14:20:24.590000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "But this can't happen in the scenario described above: LH and Nimbus are checking the blockhash so it would be the same as if the EL returned ACCEPTED",
+        "created_at": "2023-09-13T14:22:07.876000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "full block validation includes a response status from EL which I thought is ignored in the case described above, which leads a node to deem a block as valid while it hasn't been fully validated",
+        "created_at": "2023-09-13T14:25:44.654000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "OK, one more - what is the difference in terms of `get_head` complexity between importing the block optimistically when receiving  `NOT_VALIDATED` and (kinda optimistically) importing the block without waiting EL response. In both cases, the block can be invalidated and this triggers `get_head` complexity.",
+        "created_at": "2023-09-13T14:38:56.886000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "I mean I don't see how accepting an optimistic block when EL returns `NOT_VALIDATED` helps to deal with `get_head` complexity. This looks equivalent to not waiting for any EL response because in both cases block can be invalidated with the same consequences.",
+        "created_at": "2023-09-13T16:56:07.230000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Sorry \u003c@777935002263617576\u003e could you expand in your questions cause at least I didn't understand much. Here are some things that I didn't understand\n- `NOT_VALIDATED` is never a return from the EL, I take it that by this you mean as shorthand for both `ACCEPTED/SYNCING` but not `INVALID` nor `VALID`. \n- I do not understand what do you mean by `get_head` complexity here. \nLet me tell you what I think is what you may not be considering:\nWhen you import a block into forkchoice, and you add all attestations in it. You invalidate the previous last messages from some validators and add new last messages from them. All implementations I am aware of have no way of recovering this lost information. Attestations themselves are valid, since you are validating the CL side of the block. Now let me analize several different possible behaviors of a CL client because I think it will exemplify better. Suppose you are in this situation:\n````\nA \u003c- B \n \\______C\n```\nAnd everything is `VALID`. Your current head is `B` . Now you start receiving blocks `D`, `E`, along some attestations and you do not receive anything from the EL for them. Suppose you import them anyway (this is behavior 1, not following the spec)\n```\nA \u003c- B \u003c---D \u003c-- E\n \\ ------C\n````\nA *naive* implementation of `get_head`, that is, disregarding the validity of the payloads of `D`and `E`, returns `E` as head.  Now you consider `D` and `E` as \"optimistic\" since you didn't receive anything, Now it's your turn to propose. Behavior 1a) would be \"I  propose on top of `E`\", this is completely wrong as you're proposing on top of a not validated block, so lets disregard this behavior. Behavior 1b) is \"I propose on top of B which was my last head\" (I am guessing this is what you suggested implicitly up there, I will continue analizing this below). Behavior 1c) is \"I do not propose because my head is optimistic\" (this is what the spec says should happen in the case the EL had returned ACCEPTED/SYNCING. ...",
+        "created_at": "2023-09-13T17:21:26.665000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "On the other hand, suppose you acted like the spec (Behavior 2) and you didn't import `D` and `E` because the EL didn't return anything. In this situation your head is not optimistic, both `B` and `C` are valid blocks. When your turn is to propose you have only one choice: you call `get_head` and here is the thing, the attestations you were including during this whole time point to `C` as head, so in this case you will propose on top of `C`. There is no way you can actually get this from the behavior of 1b). Once you have included the blocks `D` and `E` then you are in trouble, you cannot really go back and rebuild forkchoice: the reason being that you acepted some attestations as valid because they were attesting for block `E`, whose parent you knew. This attestation removed weight from some node and added it to `E`. This attestation would never have been counted in your forkchoice if you hadn't imported `E`. So once you imported `D` and `E` you cannot take **any** head as the valid head, neither `B` nor `C` are valid options here.",
+        "created_at": "2023-09-13T17:26:37.194000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Just to finish, we see that 1a) is obviously bad, 1b) is plain wrong: you are proposing on top of something that may not agree with the head that you would have gotten had you followed the spe and 1c) is bad as well because you don't propose and if many nodes are affected then we lose liveness. Therefore the only reasonable option is to follow the spec and go with 2)",
+        "created_at": "2023-09-13T17:32:42.869000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "Lighthouse never sets the block as valid when we import it ourselves, it's marked as optimistic in fork choice. I think in the case the network has finalized an invalid chain and we've synced it optimistically, we'll either remain optimistic, or invalidate the chain and get stuck (manual intervention). From the CL's perspective it's similar to if the EL is syncing for the entire duration of our finalized chain sync, which should be safe.",
+        "created_at": "2023-09-13T23:20:55.337000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "My interpretation of it is that Lighthouse and Nimbus are effectively sending the newPayload to their \"internal EL\" which does the required blockhash check and so is safe. Of course that \"internal EL\" isn't a full EL - it can only do the blockhash check.  If that blockhash check isn't done then its completely unsafe, but there's no requirement that each block be sent to the same EL - things like checkpoint sync, EL's having their db reset and various other things can already break that requirement anyway.",
+        "created_at": "2023-09-13T23:38:40.144000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The problem with this interpretation is that it also applies to the non finalized part of the forkchoice tree. I wouldn't want to find myself arguing in a year that we need to send the Payload before syncing an unfinalized block. The reason finalized blocks are special is that this ship has already sailed with checkpoint sync anyway",
+        "created_at": "2023-09-13T23:59:46.340000+00:00",
+        "attachments": null
+    }
+]

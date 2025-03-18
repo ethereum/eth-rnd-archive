@@ -1,0 +1,490 @@
+[
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Could you please elaborate on how critical this information is and what it is used for? Is this to understand whether a remote peer has blocks you need as it may also be syncing and may be slower, or may switch to another fork than other remote peers? In this case ETH status message won't be enough to make a conclusion.",
+        "created_at": "2022-04-11T08:24:39.514000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, and I think we also have some time post-Merge where duplication will start to be annoying, like 1 month vs 4 months worth of duplicated data are two different situations in terms of tolerating amplification of disk space increase. I suppose after delivering the Merge it should be easier for us to spend cycles on coming to conclusion on what the deduplication design should look like and solution should be delivered relatively fast. Probably, the discussion can even happen pre-Merge as we will likely have some time after releasing client software and before the Merge will happen, but in this case deduplication solution will be delivered after the Merge",
+        "created_at": "2022-04-11T08:32:32.173000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Right. This doc https://hackmd.io/E9VKRcmRSc2Imo8RBtqxlw?view has `eth_chainId` and it was added to the execution-apis spec according to the doc. Does the convo above refers to `net_version` which returns `networkId`?",
+        "created_at": "2022-04-11T08:38:41.267000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think eth_chainId or net_version would return (for ethereum it's very unusual for the two values to be different - they tend to differ in ETC though).  I'm actually not entirely sure which one Teku winds up using at the moment.  But I'm tempted to remove the check regardless as it only exists to make sure the EL is on the right chain and transition configuration handles that well enough.",
+        "created_at": "2022-04-11T08:40:45.798000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "This does make sense as transition configuration should work pretty well pre-Merge, while EL will be driven by CL post-Merge and won't need this check at all (initially, I was thinking about `eth_chainId` required post-Merge -- but it is redundant)",
+        "created_at": "2022-04-11T08:44:00.041000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "From the responses above, we can conclude that geth, erigon and nethermind are locked while processing a payload. I guess \u003c@\u0026836981603216654336\u003e does it in the same way. So, basically all EL client implementations are coherent and are unable to process multiple payloads simultaneously. My guess (tell me if I am wrong) is that there is no timeout on block processing in EL too. And CL aborting the call by timeout wouldn't mean the payload isn't processing anymore and EL is ready to process another one.\n\nWith this in mind we may have the following scenarios of a long-term attack:\n1) `x \u003c 1/3` is affected -- network finalizes\n2) `x \u003e= 2/3` is affected -- network finalizes if there is enough beacon block capacity\n3) `1/3 \u003c x \u003c 2/3` is affected -- network doesn't finalized\n\nIn all cases EL block capacity is decreased up to `x`.\nActually, this looks pretty similar to consensus break scenarios, but instead execution is delayed.\n\nCL call timeout isn't a safeguard for the case of such attacks, it's more about preventing CL clients from timing out requests too early and causing artificial consensus issues.\n\nAlso, I do think that not cancelling a payload processing is a better strategy for long term attacks where it is important to finish processing at some point and allow chain to make a progress even if it's a little progress. Timeouts on payload processing may help to reach faster recovery after short term attack. I would favour long term attacks resilience over faster recovery after short term attacks, thus, would keep EL's behaviour as it currently is.",
+        "created_at": "2022-04-11T09:33:54.881000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "\"And CL aborting the call by timeout wouldn't mean the payload isn't processing anymore and EL is ready to process another one.\" -- there is a use case for this discrepancy though, that it allows an eventual consistency scenario. If the EL aborts as soon as (or in some synchronized way with) the CL, then any block which, well, blocks processing will do so again and again and etc.",
+        "created_at": "2022-04-11T09:35:45.191000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "If they don't have to stay in sync, either  an optimistic sync-type scenario or a non-optimistic syncing CL just looping in place until the EL catches up handles certain situations otherwise that would hinder liveness.",
+        "created_at": "2022-04-11T09:36:50.450000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "This is what was happening with the EthereumJS timeout example that I think inspired this round of discussions: it wasn't just that it took x seconds to process (newPayload, fcU) the block, it was that the next time around, it didn't remember that it had already done so, and did it all again.",
+        "created_at": "2022-04-11T09:38:26.904000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "You mean that EthereumJS has aborted a payload processing because of CL aborted the call due to the timeout?",
+        "created_at": "2022-04-11T09:40:41.611000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "no, I mean, if it did, that'd have foreclosed one option, and that other clients didn't, and do seem to remember already-processed payloads, is one reason that this hasn't been seen more",
+        "created_at": "2022-04-11T09:44:41.342000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "if that's enforced, then suddenly the timeouts, whatever they are, become a crucial bottleneck, whereas now they aren't",
+        "created_at": "2022-04-11T09:45:04.819000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "Status message is only exchanged on establishing a connection, so this won't give us any information of new blocks... maybe it is not needed, just was asking if this causes any issues in other clients",
+        "created_at": "2022-04-11T10:03:44.862000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "oh, to summarize, I agree with \"I would favour long term attacks resilience over faster recovery after short term attacks, thus, would keep EL's behaviour as it currently is.\"",
+        "created_at": "2022-04-11T10:05:07.900000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, I understand this implication of the status message. Just wanted to learn more on how EL uses the information of aforementioned messages during the sync.",
+        "created_at": "2022-04-11T10:08:03.617000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I agree. If EL is processing a payload disregarding of what CL is doing, the result of processing a payload should be kept. Though, here we hit the case when payload is `INVALID`, and it seems that if EL just drops it, it will start processing it once again when CL would make the same method call some time after. There should be a cache of invalid payloads, otherwise, the sequence `newPayload(INV_P) -- CL timed out -- EL finishes processing and finds its INVALID -- CL repeats: newPayload(INV_P) -- EL starts processing -- CL aborts -- ...` may never end 🤔",
+        "created_at": "2022-04-11T10:11:49.160000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "caching of negative results too?",
+        "created_at": "2022-04-11T10:12:45.605000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "e.g., Linux does this with negative dentries",
+        "created_at": "2022-04-11T10:13:18.706000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, probably we should consider caching a few recent `INVALID` payload hashes",
+        "created_at": "2022-04-11T10:14:05.941000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "at the moment, this is an implementation issue, though, and maybe the spec should say something about it",
+        "created_at": "2022-04-11T10:14:09.762000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I need to think more on it. If it's `INVALID` it must never be voted for which will happen with current implementations if a payload taking a lot of time to process is eventually `INVALID`. What can go wrong is CL always sending the same invalid payload, then aborts the call, and then repeating the same steps while other payloads (potentially valid and taking reasonable amount of time to be executed) are in the queue. In this case one malicious payload may be enough to make a node stuck.",
+        "created_at": "2022-04-11T10:20:39.907000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah, this is why I made that distinction initially about \u003c@291925846556540928\u003e 's PR (which seems broadly unobjectionable -- quibbling about exact timeouts aside) and the EL side of that",
+        "created_at": "2022-04-11T10:21:52.263000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "That PR on its own can't induce that loop",
+        "created_at": "2022-04-11T10:22:08.357000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "On the timeouts topic. I was also thinking about a client which is implemented as a single software unit -- CL and EL are under the same roof. And we may consider the case when a beacon block in general takes more than a slot to be processed, which is a superset of a payload taking too much time to be executed.\n\nWhat is the optimal strategy for a client to deal with blocks taking outstanding time to process in this case? In PoW, which is much less time sensitive, an optimal strategy would be to wait for execution to complete, otherwise, the network may get stuck.\n\nI think in PoS it is pretty much the same with time sensitivity adjustment. Beacon chain may still finalize if only one block per epoch is processed (128 aggregates should be enough to justify the previous epoch). Despite of low execution block space supply, the chain still seems valuable until it reaches finality. Probably, CL clients should wait for indefinite amount of time for EL side to process a block (ofc, if offline EL must be handled in a different way), and queue other blocks before the one that is currently being processed is done. This is how it would possibly look like in a single software box with both layers inside.",
+        "created_at": "2022-04-11T11:36:32.476000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "We just hit ttd on mainnet shadow fork \u003c@\u0026688101493978562687\u003e hows it looking for you? Geth seems to be good, nethermind responds syncing on all fcus, besu too",
+        "created_at": "2022-04-11T11:50:13.458000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Might be that the fcu and ttd execution are in a wrong order",
+        "created_at": "2022-04-11T11:50:50.177000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "still syncing up to the tip",
+        "created_at": "2022-04-11T11:51:53.808000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "we should have result by tonight",
+        "created_at": "2022-04-11T11:52:01.513000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "i started the node a bit too late",
+        "created_at": "2022-04-11T11:52:10.155000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "oopsie",
+        "created_at": "2022-04-11T11:52:14.374000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "We use it to know which peers we want to sync from",
+        "created_at": "2022-04-11T12:41:20.162000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "In theory as long as a peer is having a block that is pointed out by the most recent `fcU` it may be considered as valuable connection. Not sure how practical it is though",
+        "created_at": "2022-04-11T12:46:19.441000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes but how to know what block peer has if we connected to it long ago? Currently it is done by block announcements. Otherwise we need some kind of background refreshing or refresh on demand when peer info looks outdated.",
+        "created_at": "2022-04-11T13:14:33.850000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah, I see. You would have to request an `fcU` block from each peer and see the response which seems suboptimal",
+        "created_at": "2022-04-11T13:15:30.607000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Probably, doing this from time to time with a randomly selected peer may work",
+        "created_at": "2022-04-11T13:16:00.507000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "so what would probably be optimal when we want to sync from someone but can't because peer looks outdated we would schedule a refresh",
+        "created_at": "2022-04-11T13:16:49.746000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "or do a background refresh thread and just cycle through peers",
+        "created_at": "2022-04-11T13:17:12.112000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "both might be suboptimal",
+        "created_at": "2022-04-11T13:17:32.308000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "but this is mostly about near-head of chain sync, so maybe I am overthinking it",
+        "created_at": "2022-04-11T13:17:53.300000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "Erigon is alive and well!!",
+        "created_at": "2022-04-11T14:42:00.669000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "https://beaconchain.mainnetshadowfork1.ethdevops.io/blocks seems to be 2 days behind?",
+        "created_at": "2022-04-11T14:46:55.675000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yea i vastly underestimated the resources needed for an explorer on mainnet 😦\nI've upped the resources, but its taking its sweet time to catch up. A ton of time is spent in processing deposits. I reused the mainnet deposit contract, so it processes every one of the 300k mainnet deposits and marks it as invalid, seems to be a slow process.",
+        "created_at": "2022-04-11T14:47:17.142000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "funny, a known issue discussed recently elsewhere, it's a problem. (ah, might be a different issue than you describe -- some of the CLs have had issues with deposit processing speed, but this seems distinct)",
+        "created_at": "2022-04-11T14:48:14.309000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "is there an inventory.ini somewhere listing node IPs for direct monitoring then?",
+        "created_at": "2022-04-11T14:49:43.136000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yea, usual location 🙂",
+        "created_at": "2022-04-11T14:50:46.668000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "I can also get you access to the grafana dashboards if you like. Still looking how to make it public...",
+        "created_at": "2022-04-11T14:51:23.995000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "oh, definitely useful, yeah",
+        "created_at": "2022-04-11T14:53:39.704000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Very nice! Could you add it to the ethstats? https://ethstats.mainnetshadowfork1.ethdevops.io/",
+        "created_at": "2022-04-11T15:15:29.136000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "do we know why the shadow fork network is ~90 blocks behind the mainnet?",
+        "created_at": "2022-04-11T15:22:39.852000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "probably because of missed slots",
+        "created_at": "2022-04-11T15:23:52.554000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Wouldn't it be because the rate of block production on mainnet and the shadow fork are different?",
+        "created_at": "2022-04-11T15:29:46.890000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Was the consistent drop in Block Gas Limit expected ?",
+        "created_at": "2022-04-11T17:38:57.008000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I would expect shadow fork to progress faster in terms of block numbers, as average interval between blocks is lower on PoS. It's actually speeding up and the diff is ~60 blocks now",
+        "created_at": "2022-04-11T17:42:05.406000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "No, somethings weird wit the the gas target. Haven't had time to look into it yet",
+        "created_at": "2022-04-11T18:03:44.252000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "It's been consistently dropping by (Parent Block Gas Limit // 1024)",
+        "created_at": "2022-04-11T18:04:51.300000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "it seems to have hit bottom of 8,000,000",
+        "created_at": "2022-04-11T18:05:06.793000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah 8.000.000 is the default block gas limit",
+        "created_at": "2022-04-11T18:08:03.384000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ah it might be that pools upped their default manually",
+        "created_at": "2022-04-11T18:08:21.512000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ah, so execution clients use 8M unless manually overwritten by the user? Would it make sense then to change that default to 30M before the merge? If we end up  with a large minority at 8M post merge, that will result in rather annoying gas limit fluctuations, no? Or is the delta per block small enough that it doesn't really matter, as long as a majority sets it to 30M?",
+        "created_at": "2022-04-11T18:38:31.440000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "https://github.com/ethereum/go-ethereum/pull/24680",
+        "created_at": "2022-04-11T18:39:32.702000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Already one step ahead 😉 \u003c@415548822983278593\u003e",
+        "created_at": "2022-04-11T18:39:54.998000+00:00",
+        "attachments": null
+    }
+]

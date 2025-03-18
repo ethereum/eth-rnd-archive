@@ -1,0 +1,290 @@
+[
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@!206016661470314496\u003e I would like to better understand why you believe that changing the ommers hash (currently a 32 byte fixed width field I believe) to a variable width field or 1 byte fixed width field is less likely to cause problems than changing it from an ommers hash to a beacon state root hash.",
+        "created_at": "2022-02-19T07:22:00.077000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "My gut tells me that changing the shape of the block (aside from appending to the end) is the most likely thing to cause future problems/frustration, changing the *meaning* of certain fields is the next most likely thing to cause future problems/frustration, and appending to the end is the least likely to cause future problems/frustation.",
+        "created_at": "2022-02-19T07:23:48.257000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "From an encoding PoV, changing the meaning of a field is the best because the encoding stays the same.",
+        "created_at": "2022-02-19T09:47:16.212000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "However, when it comes to implementation, having one field with two different meanings really sucks.",
+        "created_at": "2022-02-19T09:47:46.158000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "Especially if the intention is to change the meaning of the field at the merge block",
+        "created_at": "2022-02-19T09:48:55.027000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "Let me give an example: in EIP-1559 we changed the block header encoding by appending a new field to the end. In the Go implementation, we added the field so all headers always have a baseFee, it's just null when EIP-1559 is not active yet. This turned out to be extremely useful because we only need to care about setting the field correctly in one or two places, and then all other code can determine if it's 1559 or not by checking  `baseFee == null`.",
+        "created_at": "2022-02-19T09:53:08.220000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "All of these hacks are necessary because headers are not versioned.",
+        "created_at": "2022-02-19T09:55:17.220000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "If there was a version byte at the start of the header encoding, we would be less restricted in changing header fields.",
+        "created_at": "2022-02-19T09:57:02.792000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "So, my answer to this would be: changing the shape of blocks is better because you can then tell which block header 'version' it is from the shape alone.",
+        "created_at": "2022-02-19T12:14:04.788000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I wonder if the *right* answer to this problem long term is versioned block headers.",
+        "created_at": "2022-02-19T12:16:23.062000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "We could do a one-time change that introduces a version byte at the start (which unfortunately would change the layout significantly), similar to how we did for transactions.",
+        "created_at": "2022-02-19T12:16:48.539000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "general",
+        "parent": "",
+        "content": "We just need to do the same step as with transactions, a first byte which is distinguishable 🙂",
+        "created_at": "2022-02-19T12:16:56.789000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I'm not sure the benefit for versioning blocks is as big as it is for transactions though, since at any given height there is only one valid type of block.",
+        "created_at": "2022-02-19T12:17:17.335000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "What are the scenarios in which you are looking at a block without context (without knowing whether it is a pre-London or post-London block)?",
+        "created_at": "2022-02-19T12:17:43.180000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "Hope you got the context before my direct reply.",
+        "created_at": "2022-02-19T12:18:35.738000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, I understand the argument.  I'm trying to understand when that matters.",
+        "created_at": "2022-02-19T12:19:30.615000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Presumably you end up in a situation in your code where you are looking at a block and you don't know whether it is pre or post London, so you look at the block shape to determine that.",
+        "created_at": "2022-02-19T12:20:00.722000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "For 1559, we use this baseFee check a lot in places like RPC implementation, gas oracle, txpool (I think).",
+        "created_at": "2022-02-19T12:20:09.848000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "So the 1559 check is \"does baseFee exist\"",
+        "created_at": "2022-02-19T12:20:46.367000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "A lot of things are conditional on that",
+        "created_at": "2022-02-19T12:21:00.174000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "For changing ommers hash, it's a bit different because that field isn't checked a lot",
+        "created_at": "2022-02-19T12:21:53.079000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "So we could - theoretically - handle it being changed. But it will still create a mess in places where we do check it now. Because in all those places, the information \"did the merge happen yet\" must also be made available.",
+        "created_at": "2022-02-19T12:23:14.875000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "It's just easier to perform this check for merge event in a single place, and then have all other code rely on the header like \"it has beacon root -\u003e the merge has happened\"",
+        "created_at": "2022-02-19T12:26:08.905000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "FWIW, in the CL side we face lots of similar issues when changing/adding fields to structures, but in our case a big part of the complication is because of the choice of using Golang that doesn't have generics (yet), many of these issues would be simpler to handle and avoiding code duplication (triplication now at the merge) when generics are available, so other clients built on different languages have a mitigation for some of these problems",
+        "created_at": "2022-02-19T12:28:22.904000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "Not sure how generics could really solve this. It sure would be nice to have the concept of 'header versioning'",
+        "created_at": "2022-02-19T12:29:16.943000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "But in the end, how to implement that is a different question from how to encode",
+        "created_at": "2022-02-19T12:29:41.378000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "For example, we have gone through many different iterations of the receipt storage format internally. But the receipt type has always stayed the same.",
+        "created_at": "2022-02-19T12:30:29.701000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "I'm really happy that we've been able to use the same couple type definitions pretty much since the very beginning of Ethereum. It just makes it easier to define stable APIs that people can rely upon.",
+        "created_at": "2022-02-19T12:31:54.503000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "If you offer versioned header types as API, all user code needs to be updated with new types every time.",
+        "created_at": "2022-02-19T12:32:30.265000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "Just to be clear, this proposal is for Shanghai and would not be deployed at point of merge. Execution block shape is stable at merge at this point in time",
+        "created_at": "2022-02-19T13:24:33.313000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "OK",
+        "created_at": "2022-02-19T13:25:14.627000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "But I don't personally have a strong opinion on the right way to do this from an engineering perspective. Just grounding the context",
+        "created_at": "2022-02-19T13:47:27.849000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Does this also mean that the beacon block root won't be included prior to shanghai?  (Personally I'm fine with that, and with having a new field in the header for the beacon block root; I really don't like the idea of reusing ommers, although I'm not writing any execution code so my opinion isn't worth much).",
+        "created_at": "2022-02-19T14:54:08.300000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "On the call, reusing ommers was decided as not a good path\n\nEither using ommers *hash* or extending a new field was preferred",
+        "created_at": "2022-02-19T15:01:12.506000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "And no, this is requisite for a subsequent withdrawals eip and would likely go in with that in shanghai",
+        "created_at": "2022-02-19T15:01:36.519000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Fantastic, that's what I was hoping for.",
+        "created_at": "2022-02-19T15:02:24.260000+00:00",
+        "attachments": null
+    }
+]

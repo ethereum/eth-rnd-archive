@@ -5,7 +5,7 @@
         "parent": "",
         "content": "Is there an estimate on the number of consensus messages a validator needs to verify for each slot, or any stats around this? I know this is very dependent on the validator's duty for that slot, and also there is uncertainty of the frequency and quantity for some of the messages such as voluntary exists, attesters slashings and proposer slashings. \n\nIn general is it safe to assume that when the \"uncertain\" messages are excluded, each validator would:\n- as a block proposer the validator will need to verify up to 128 attestation messages (aggregated)\n- as an attester the validator will need to verify up to 1 message (for the block received from the proposer for that slot, if received within the 1/3 of the slot time)\n- an aggregator will need to verify up to 128 attestations\n\nAll of them will need to produce one consensus message per slot (`Aggregation` or `SignedBlockData`)? \nFor context: I am trying to do a feasibility study and analysis on using zk proofs for the consensus messages (i.e making the validator messaging private), and trying to determine how much additional latency each validator would incur based on the input and output messages",
         "created_at": "2021-11-17T00:30:55.691000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "nishant0",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "For purposes of having an easy estimate we can only focus on 4 topics:\n-\u003e beacon_block topic\n-\u003e aggregate topic\n-\u003e attestation_subnet topic\n-\u003e sync aggregate topic\n\n\nIf we look at mainnet today with approximately 250,000 active validators then we can deduce the following figures:\n\n`Committee_Count_Per_Slot` = 61\n`Aggregators_Per_Slot` = 7808\n`Validators_Per_Subnet` = 122\n`Sync_Aggregators_Per_Slot` = 64\n\nSince our `aggregate` is a global topic, every validator will have to verify them. However with close to 8000 aggregates floating around per slot, only a subset of them are able to be propagated and verified by each node on the network.  If we factor this at 10%, then roughly 800 aggregates are processed per node in a slot. \n\nIf a validator is part of a subnet, then it will have to verify all the messages in a subnet. \n\n*block* topic -\u003e Each block has 2 signatures to verify which is the proposer signature and randao signature. \n\n*aggregate* topic -\u003e Since each aggregate has 3 signatures to be verified in them, we can estimate the total amount of signatures to be verified at 2400.\n\n*attestation* subnet -\u003e with 122 validators per subnet, you would be verifying 122 signatures.   \n\n*sync_aggregate* topic -\u003e with 4 sync subnets and each having 16 target aggregators you would have 64\naggregates per slot.  Therefore in total the average validator would have to verify 192 (64 *3) signatures per slot. \n\nIn total, the average validator would be verifying 2716 signatures per slot. Of course all clients employ a lot of batching and optimizations so that we do not actually have to verify this total in every slot. But this would be an estimate of the load that the average validator goes through per slot. For any proposer/attester to produce a consensus message(attestation,aggregate,block) performing the above amount of signature verification would be the prerequisite.",
         "created_at": "2021-11-17T11:38:13.260000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "nishant0",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "If you are looking at the extra 'cost' per validator, then you can solely focus on the attestation subnet topic.",
         "created_at": "2021-11-17T11:38:21.764000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "bd_0",
@@ -29,6 +29,6 @@
         "parent": "",
         "content": "Thanks a lot \u003c@!476250636548308992\u003e , very helpful info. I have underestimated the amount of messages by a bit, but this totally makes sense. Also regarding the signatures and the messages distinctions, it looks like the numbers above are for the signatures inside a message. My idea is to have the whole message packed into a zkProof, so the additional cost would be for the whole message, not for the concrete data inside. If I am solely looking for the average number of incoming messages, then I think the following numbers would make more sense:\n\nblock topic -\u003e 1 message\n\naggregate topic -\u003e ~ 800 messages\n\nattestation subnet -\u003e 122 messages\n\nsync_aggregate topic -\u003e ~ 64 messages\n\nIn total, ~987 messages would need to be verified before producing a consensus message. Also I assume those are the lower boundary numbers, as at some circumstances multiple messages can be received (i.e multiple block proposals, etc).\nRegarding optimisations during verification I assume those computations can be parallelised to some extent, but will research this further and how each client is handling this. \n\nPlease let me know if my logic regarding \"received messages\" makes sense",
         "created_at": "2021-11-17T17:08:33.841000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

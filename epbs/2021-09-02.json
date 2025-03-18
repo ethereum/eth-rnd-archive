@@ -5,7 +5,7 @@
         "parent": "",
         "content": "Builder will likely have to gossip the payload upon receiving a beacon block that has a reference to the body it produced. And here we have a slight chance (if the beacon block is fired too late) that the block won't be accepted by the network (2/3 of attesters haven't seen it in time and voted for an empty slot) and in this case the payload will be revealed without it's eventual inclusion in the canonical chain. But the builder may adopt and if it sees that the block has been released too late decide to withhold the payload and pay a half of a bribe, and then the proposer has an incentive to release its block asap.",
         "created_at": "2021-09-02T04:04:25.072000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "Header must be included into the beacon block likewise the payload in the today's Merge spec. As the entire block including the header will be signed by the proposer and this signature must be verified as a part of a block gossip.\n\nIt is a very good question how the payload should be gossiped. If we use the consensus layer gossip, the DoS protection may work as follows. A payload is rejected if it hasn't been included into any beacon block published before, there is a risk to reject a valid payload if the node hasn't received the beacon block yet. If we use execution gossip we face with the same issue but make the gossip more complicated as the execution layer doesn't know whether the beacon block is received or not and this scheme only adds the complexity because an execution client will have to wait for `engine_consensusValidated` and use this information in its gossip.\n\nThe other approach would be to allow any payload the hash of which has been seen in the headers' mempool up to the topN position to be propagated. It's unlikely that a builder would reveal the payload if it's not sure that it has been included into the block.",
         "created_at": "2021-09-02T04:16:26.174000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "The question is how proposer will propagate its payload if it's also a builder 🤔 Should then the payload be embedded into a beacon block? I think it could easily be achieved with the merklisation scheme that we currently have on the beacon chain.",
         "created_at": "2021-09-02T04:23:06.405000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -29,7 +29,7 @@
         "parent": "",
         "content": "Hmm, we need the proposer to sign the beacon block *before* anyone has the block body.",
         "created_at": "2021-09-02T04:46:55.339000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -37,7 +37,7 @@
         "parent": "",
         "content": "And we need the proposer's beacon block to be gossipped before anyone has the block body as well.",
         "created_at": "2021-09-02T04:47:35.127000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -45,7 +45,7 @@
         "parent": "",
         "content": "Essentially, we need a window of time after the header is circulated but before people attest to whether the body is available or not.",
         "created_at": "2021-09-02T04:48:04.105000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -53,7 +53,7 @@
         "parent": "",
         "content": "The more I am thinking about it the more the following scheme looks viable to me:\n\nProposer and builder are separate actors:\n- Proposer includes the header into the beacon block, signs the block and gossips it. The block gossip should support two structures that are isomorphic wrt the `ExecutionPayload.transactions_root` and should be easily done implementation wise, likely it will be an `ExecutionPayloadHeader` structure\n- Upon receiving `engine_consensusValidated(block_hash)` the builder's execution client of gossips the payload via the *new gossip channel on the execution layer* (this should be more optimal than the consensus layer); it *may not* gossip it depending on the time of the beacon block arrival and some settings that the builder has in its setup\n- Execution clients of other network participants must propagate the payload if it either corresponds to the topN payload proposals in the mempool or  `engine_consensusValidated(block_hash)` has been received from their consensus counterparties\n- Upon receiving a *legit* payload an execution client must verify it and notify the consensus client with the `engine_executePayloadResponse`. This has a requirement for the underlying communication protocol to be *bi-directional*\n- An execution client *may* evict the header of a builder's proposal from the mempool upon receiving the payload as in this case the `engine_consensusValidated(block_hash)` rule will start working during the payload propagation\n- Consensus client waits for the `engine_executePayloadResponse` to make a decision of whether the beacon block is entirely valid or it is valid without the payload being valid or it is invalid at all\n\nProposer and builder is a single actor:\n- The scheme is pretty much the same as the one that we have in the specs as of today",
         "created_at": "2021-09-02T06:22:53.481000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -61,7 +61,7 @@
         "parent": "",
         "content": "Why do we need a new gossip channel for block bodies?  Don't we already have that?",
         "created_at": "2021-09-02T07:14:35.682000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -69,7 +69,7 @@
         "parent": "",
         "content": "We have a gossip channel for beacon blocks, the list of the validations that is applicable to a block body will likely be different than the list we have for beacon blocks. In this case it doesn't make sense to mix these two entities in one channel",
         "created_at": "2021-09-02T07:42:02.741000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -77,7 +77,7 @@
         "parent": "",
         "content": "What I don't like with the propagation of a body that has the same hash as one of the topmost block builder's proposals from the mempool is that the mempool state changes rapidly and legit may get dropped if the mempool state has changed significantly",
         "created_at": "2021-09-02T07:43:59.288000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -85,7 +85,7 @@
         "parent": "",
         "content": "I mean block bodies are already gossipped across the execution gossip network.  Why do we need to change that?",
         "created_at": "2021-09-02T07:50:20.111000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -93,7 +93,7 @@
         "parent": "",
         "content": "I guess in my head I was imagining that the header and the body would both be gossipped over the execution network, separate from any gossip over the beacon block (which contains the execution header in it).",
         "created_at": "2021-09-02T07:51:20.995000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -101,7 +101,7 @@
         "parent": "",
         "content": "Though, I guess that does mean there is some duplicated work since we'll be gossipping the header on both networks.",
         "created_at": "2021-09-02T07:51:37.486000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -109,7 +109,7 @@
         "parent": "",
         "content": "And that duplication isn't ideal.",
         "created_at": "2021-09-02T07:51:42.107000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -117,7 +117,7 @@
         "parent": "",
         "content": "We have to change that because after the Merge this gossip will become unsafe as the execution layer will have to verify the proposer signature in order to safely propagate the block",
         "created_at": "2021-09-02T07:51:53.356000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -125,7 +125,7 @@
         "parent": "",
         "content": "However, for The Merge specifically, it feels like the smallest change would be to make it so block gossip on the execution network remains largely unchanged.",
         "created_at": "2021-09-02T07:52:04.424000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -133,7 +133,7 @@
         "parent": "",
         "content": "Hmm, and I guess there is a risk here that the execution client will receive an execution block via gossip *before* they receive the corresponding block hash from the attached consensus client?",
         "created_at": "2021-09-02T07:52:45.882000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -141,7 +141,7 @@
         "parent": "",
         "content": "Gossiping them separately after the Merge would require the consensus client to firstly receive and verify the beacon block then communicate this information to the execution client and only then it becomes possible to safely propagate bodies if we do it that way. Which causes an additional delay for attesters",
         "created_at": "2021-09-02T07:53:50.039000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -149,7 +149,7 @@
         "parent": "",
         "content": "right, in this case they will have to withhold the block and wait for the consensus client",
         "created_at": "2021-09-02T07:54:01.391000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -157,7 +157,7 @@
         "parent": "",
         "content": "I feel like this is a problem regardless of how we handle builder/proposer separation.",
         "created_at": "2021-09-02T07:54:30.309000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -165,7 +165,7 @@
         "parent": "",
         "content": "And definitely something we need to address.",
         "created_at": "2021-09-02T07:54:37.349000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -173,7 +173,7 @@
         "parent": "",
         "content": "Which problem?",
         "created_at": "2021-09-02T07:54:39.701000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -181,7 +181,7 @@
         "parent": "",
         "content": "The fact that block body gossip goes over the execution network, but the execution client cannot verify whether the payload they are receiving is legitimate or spam until the attached consensus node tells it of the new unsafe head.",
         "created_at": "2021-09-02T07:55:17.913000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -189,7 +189,7 @@
         "parent": "",
         "content": "There is a race there that isn't obvious how to deal with.",
         "created_at": "2021-09-02T07:55:27.412000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -197,7 +197,7 @@
         "parent": "",
         "content": "We could have the execution client request the body from the execution gossip network after it receives the hash from the consensus client, but I don't know if our gossip system has support for that right now, and I don't know how well that will work in terms of network propogation speed (which we need to be fast).",
         "created_at": "2021-09-02T07:56:15.864000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -205,7 +205,7 @@
         "parent": "",
         "content": "We already have a full execution payload embedded into the beacon block structure. And it will be gossiped on the consensus layer within the beacon block. Execution layer gossip will stop working when transition is over, this is currently in the design of the transition process",
         "created_at": "2021-09-02T07:56:44.062000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -213,7 +213,7 @@
         "parent": "",
         "content": "\u003c@194432762315407360\u003e may be a good person to get feedback from, they know the devp2p protocol quite well.",
         "created_at": "2021-09-02T07:57:48.950000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -221,7 +221,7 @@
         "parent": "",
         "content": "Adding this additional delay with the proposer/builder separation makes an implementation of an approach that  verifies the `pre_state_root` instead of `cur_state_root` almost a requirement.",
         "created_at": "2021-09-02T07:58:03.791000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -229,7 +229,7 @@
         "parent": "",
         "content": "The *whole* execution block?  Including the body?",
         "created_at": "2021-09-02T07:58:04.900000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -237,7 +237,7 @@
         "parent": "",
         "content": "yes",
         "created_at": "2021-09-02T07:58:12.541000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -245,7 +245,7 @@
         "parent": "",
         "content": "Why?",
         "created_at": "2021-09-02T07:58:16.829000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -253,7 +253,7 @@
         "parent": "",
         "content": "Feels like it is going to result in a huge amount of unnecessary traffic since the execution client likely already has the majority of the data for an execution block in memory.",
         "created_at": "2021-09-02T07:58:44.393000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -261,7 +261,7 @@
         "parent": "",
         "content": "because it aids for faster dissemination and avoids the complexity of synchronizing two gossip overlays",
         "created_at": "2021-09-02T07:59:09.742000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -269,7 +269,7 @@
         "parent": "",
         "content": "Hmm, I thought in your presentation there was a diagram that showed execution layer still had gossip for some stuff, like transactions.",
         "created_at": "2021-09-02T07:59:22.027000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -277,7 +277,7 @@
         "parent": "",
         "content": "It still gossips transactions but not blocks",
         "created_at": "2021-09-02T07:59:38.619000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -285,7 +285,7 @@
         "parent": "",
         "content": "I'm very much not a fan of this.  I suspect this is going to get close to doubling the bandwidth needed for nodes.",
         "created_at": "2021-09-02T08:00:07.866000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -293,7 +293,7 @@
         "parent": "",
         "content": "The majority of a block (in terms of bytes) is the transactions, and the execution client likely already has the majority of them in memory.",
         "created_at": "2021-09-02T08:00:28.894000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -301,7 +301,7 @@
         "parent": "",
         "content": "what do you mean? you either propagate an entire block or nothing disregarding what transactions are in the mempool, right?",
         "created_at": "2021-09-02T08:00:32.518000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -309,7 +309,7 @@
         "parent": "",
         "content": "So the execution client is already receiving all of the transactions, and then the consensus client is going to be gossiping all of those transactions *again* over a different network.",
         "created_at": "2021-09-02T08:00:53.929000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -317,7 +317,7 @@
         "parent": "",
         "content": "I really don't understand how do transactions in the mempool affects the data gossiped as a part of a block body",
         "created_at": "2021-09-02T08:01:17.632000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -325,7 +325,7 @@
         "parent": "",
         "content": "I *believe* (someone should check my work) that when a new head is gossipped, it just has a list of transaction hashes and then the client will ask its peers for any it doesn't have.  It already has most of them, so in most cases it doesn't need to ask for anything (or at least not much).",
         "created_at": "2021-09-02T08:02:02.771000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -333,7 +333,7 @@
         "parent": "",
         "content": "It will increase bandwidth of the beacon block gossip overlay by the size of the payload. But the same traffic will disappear from the execution layer at the same time",
         "created_at": "2021-09-02T08:02:13.986000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -341,7 +341,7 @@
         "parent": "",
         "content": "The traffic doesn't exist on execution layer right now because of that optimization.",
         "created_at": "2021-09-02T08:02:30.957000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -349,7 +349,7 @@
         "parent": "",
         "content": "I see that, this is what I have missed. As it is relatively new",
         "created_at": "2021-09-02T08:02:41.997000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -357,7 +357,7 @@
         "parent": "",
         "content": "If the transaction already exists in the mempool, all that is gossipped is a 32 byte transaction hash, not the whole transaction (which is much bigger than 32 bytes).",
         "created_at": "2021-09-02T08:02:46.127000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -365,7 +365,7 @@
         "parent": "",
         "content": "Don't trust me on my understanding of the execution gossip protocol!  I may be wrong, and that optimization doesn't exist (but I think it does).",
         "created_at": "2021-09-02T08:03:29.880000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -373,7 +373,7 @@
         "parent": "",
         "content": "I don't see such an optimisation in the ETH protocol, https://github.com/ethereum/devp2p/blob/master/caps/eth.md\n\nThe one that I can see is related to the transaction exchange optimisation when transaction hashes are gossiped instead of full objects",
         "created_at": "2021-09-02T08:05:59.162000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -381,7 +381,7 @@
         "parent": "",
         "content": "Looking at eth/66 specification, it does in fact appear I am wrong here and the transactions are re-broadcast.  This feels like a huge waste...",
         "created_at": "2021-09-02T08:06:01.491000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -389,7 +389,7 @@
         "parent": "",
         "content": "I'm curious why the optimization *doesn't* exist now.  😬",
         "created_at": "2021-09-02T08:06:40.905000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -397,7 +397,7 @@
         "parent": "",
         "content": "If we want this optimisation then gossiping a list of transaction hashes on the consensus layer will only be required and this optimisation is possible.",
         "created_at": "2021-09-02T08:07:03.295000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -405,7 +405,7 @@
         "parent": "",
         "content": "And whether we are hurting ourselves by removing the possibility of adding that optimization with the proposed move of body gossip to the consensus network.",
         "created_at": "2021-09-02T08:07:07.521000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -413,7 +413,7 @@
         "parent": "",
         "content": "Potentially, because it makes a block not self-sufficient and unleashes data availability issues including the fisherman's dilemma.",
         "created_at": "2021-09-02T08:07:53.813000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -421,7 +421,7 @@
         "parent": "",
         "content": "Yeah, that is a reasonable argument I suppose.",
         "created_at": "2021-09-02T08:08:29.237000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -429,7 +429,7 @@
         "parent": "",
         "content": "My *gut* tells me that we should have the execution gossip network do all execution related gossip, and the consensus gossip network focus only on gossipping the header.  However, I recognize the complexity this adds to races between consensus and execution that can get nasty so I'll drop it for now.",
         "created_at": "2021-09-02T08:08:48.396000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -437,7 +437,7 @@
         "parent": "",
         "content": "We can afford that from the consensus standpoint once we have this ternary fork choice",
         "created_at": "2021-09-02T08:09:38.538000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -445,7 +445,7 @@
         "parent": "",
         "content": "Going forward with your model, why have the execution layer gossip the body instead of the consensus layer?",
         "created_at": "2021-09-02T08:09:51.580000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -453,7 +453,7 @@
         "parent": "",
         "content": "+ committing to the `pre_state_root` to give more time to attesters. This is IMHO",
         "created_at": "2021-09-02T08:10:15.908000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -461,7 +461,7 @@
         "parent": "",
         "content": "It only makes sense if this rule with topmost block builder's proposals will work. In this case gossip requires access to the mempool. If there will be another rule to verify that the body is eligible for being propagated and this rule is entirely verifying by the consensus layer then we should gossip bodies on the consensus layer.",
         "created_at": "2021-09-02T08:11:57.498000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -469,7 +469,7 @@
         "parent": "",
         "content": "Oh, you mean if we force proposers to pick best marketplace blocks?",
         "created_at": "2021-09-02T08:13:52.438000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -477,7 +477,7 @@
         "parent": "",
         "content": "What about for The Merge, when we almost certainly won't have such a rule?",
         "created_at": "2021-09-02T08:14:02.963000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -485,7 +485,7 @@
         "parent": "",
         "content": "I thought that it is already enforced by the market. The only issue here is that the mempool state changes rapidly and picked up proposal may disappear from the top and even from the mempool *before* it's been disseminated",
         "created_at": "2021-09-02T08:15:44.366000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -493,7 +493,7 @@
         "parent": "",
         "content": "For The Merge, I think the plan is to allow the proposer to choose whatever block they want.  They can build their own or use one from a market (which doesn't exist yet).",
         "created_at": "2021-09-02T08:16:32.739000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -501,7 +501,7 @@
         "parent": "",
         "content": "With the Merge we simply have the consensus layer gossip. And it will work as is *after* the separation as an option for when the proposer and the builder is the same actor",
         "created_at": "2021-09-02T08:16:36.237000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -509,7 +509,7 @@
         "parent": "",
         "content": "Ah, I guess we aren't introducing the ternary fork choice rule with The Merge?",
         "created_at": "2021-09-02T08:17:23.943000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -517,7 +517,7 @@
         "parent": "",
         "content": "Right, I am referring to the Merge is the PoS network without the market. And it seems that building a block will be proposer's responsibility with no other option here",
         "created_at": "2021-09-02T08:17:27.637000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -525,7 +525,7 @@
         "parent": "",
         "content": "I think that is where my head was messing up.",
         "created_at": "2021-09-02T08:17:30.411000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -533,7 +533,7 @@
         "parent": "",
         "content": "Right, we don't do this within the Merge",
         "created_at": "2021-09-02T08:17:46.406000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -541,7 +541,7 @@
         "parent": "",
         "content": "OK, so as-of The Merge the builder will need to negotiate with the proposer and send them the body *before* they propose the block?",
         "created_at": "2021-09-02T08:18:40.126000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -549,7 +549,7 @@
         "parent": "",
         "content": "I thought that for the Merge Flashbots' bundle market will continue to exist and block builder's market can be introduced later on",
         "created_at": "2021-09-02T08:19:51.068000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -557,7 +557,7 @@
         "parent": "",
         "content": "Post Merge, we'll introduce some new header fields (builder signature, proposer fee, proposer address) and a new ternary fork choice rule.  Along with this, we'll introduce a mechanism for the consensus client to gossip a bodyless block, and a mechanism for the builder to introduce a block body into the consensus gossip network once that bodyless block is proposed?",
         "created_at": "2021-09-02T08:20:07.594000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -565,7 +565,7 @@
         "parent": "",
         "content": "Yeah, this is a rough roadmap that I have in my mind. + We will probably have to introduce the verification of `pre_state_root` instead of `cur_state_root` to mitigate the delay of the new gossip mechanism.",
         "created_at": "2021-09-02T08:21:50.107000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -573,7 +573,7 @@
         "parent": "",
         "content": "Hmm, yes.  The consensus slot from the proposer will need to contain two post state roots.  One which is used if the body is missing, the other which is used if the body is present.",
         "created_at": "2021-09-02T08:23:47.004000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -581,7 +581,7 @@
         "parent": "",
         "content": "The body-missing state root isn't a pre-state root, because it does have a couple state changes compared to its parent (builder =\u003e proposer payment).",
         "created_at": "2021-09-02T08:24:23.652000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -589,7 +589,7 @@
         "parent": "",
         "content": "The block header only contains a hash of the list of transactions not the actual list of transactions. So the only way to know which transactions are in the block is to get the block body. Hence transactions are never retrieved from the mempool to fill in the block body.",
         "created_at": "2021-09-02T08:25:40.985000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -597,7 +597,7 @@
         "parent": "",
         "content": "One can imagine asking for a list of transaction hashes from a peer, then filtering out transactions you already have in memory, then asking the peer for the transactions that you are missing.",
         "created_at": "2021-09-02T08:26:47.490000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -605,7 +605,7 @@
         "parent": "",
         "content": "At that point, you now have everything you need but with less bytes sent over the wire.",
         "created_at": "2021-09-02T08:26:59.034000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -613,7 +613,7 @@
         "parent": "",
         "content": "However, it does require an extra round trip.",
         "created_at": "2021-09-02T08:27:05.184000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -621,7 +621,7 @@
         "parent": "",
         "content": "I think that extra round trip probably makes it not worth it. Especially as MeV becomes more prevalent and the txs are less likely to be in the mempool.",
         "created_at": "2021-09-02T08:28:12.919000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -629,7 +629,7 @@
         "parent": "",
         "content": "You’d also have to request the uncle headers to verify them.",
         "created_at": "2021-09-02T08:28:28.042000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -637,7 +637,7 @@
         "parent": "",
         "content": "It does make more sense if you assume all transactions go over gossip, and less sense as transactions move to secondary channels.",
         "created_at": "2021-09-02T08:28:40.305000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -645,7 +645,7 @@
         "parent": "",
         "content": "Why would you need uncle headers?",
         "created_at": "2021-09-02T08:29:00.119000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -653,7 +653,7 @@
         "parent": "",
         "content": "To verify they are valid.",
         "created_at": "2021-09-02T08:29:25.068000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -661,7 +661,7 @@
         "parent": "",
         "content": "And probably to know who to pay for them as well since that’s from the coin base of the uncle header.",
         "created_at": "2021-09-02T08:30:06.574000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -669,7 +669,7 @@
         "parent": "",
         "content": "I *think* the uncles root is just a merkle trie of uncle hashes, not uncle headers.",
         "created_at": "2021-09-02T08:30:43.616000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -677,7 +677,7 @@
         "parent": "",
         "content": "Hmm, good point.  What I just said can't be right because you wouldn't know who to pay uncle rewards to.",
         "created_at": "2021-09-02T08:31:04.891000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -685,7 +685,7 @@
         "parent": "",
         "content": "Yes in the header it is. But to process the block you need the actual headers which are in the body.",
         "created_at": "2021-09-02T08:31:12.479000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -693,7 +693,7 @@
         "parent": "",
         "content": "And again it’s the root of the merkle trie of uncle roots or something like that",
         "created_at": "2021-09-02T08:31:31.912000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -701,7 +701,7 @@
         "parent": "",
         "content": "```\nblock-body = [transaction_hashes, uncle_hashes]\n```\nAnd then have a gossip request for:\n```\nGetTransactionAndUncleBodies(transaction_hashes, uncle_hashes)\n```",
         "created_at": "2021-09-02T08:32:13.198000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -709,7 +709,7 @@
         "parent": "",
         "content": "So when you get a block-body over the gossip network, you would just have hashes.  You would filter out what you have already and then call `GetTransactionAndUncleBodies`, which would give you the rest of the details you need.",
         "created_at": "2021-09-02T08:32:45.575000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -717,7 +717,7 @@
         "parent": "",
         "content": "AFAIR, it is a hash of a list of uncles that goes to the header. Actually, it doesn't matter much",
         "created_at": "2021-09-02T08:33:05.583000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -725,7 +725,7 @@
         "parent": "",
         "content": "The argument about MEV moving things out of the mem pool, and uncles being very rare with PoS, is mildly convincing to me that it isn't worth the optimization.",
         "created_at": "2021-09-02T08:33:13.288000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -733,7 +733,7 @@
         "parent": "",
         "content": "Now you mention it I’m not sure we’re paying for uncles at all after the merge and shouldn’t need to. So it would just be transactions to get.",
         "created_at": "2021-09-02T08:34:39.937000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -741,6 +741,6 @@
         "parent": "",
         "content": "There will be no uncles after the Merge. `uncles_hash` will be a constant that corresponds to a hash of an empty RLP-list",
         "created_at": "2021-09-02T08:41:31.724000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

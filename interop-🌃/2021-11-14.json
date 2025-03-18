@@ -1,0 +1,226 @@
+[
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@!360491619402776577\u003e \u003c@!758579010027782144\u003e can we safely assume that the payload fetched through get payload will not result into an `INVALID` status on calling execute payload afterwards",
+        "created_at": "2021-11-14T06:33:14.593000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "In general no, since the chain might mive underneath our feet. This should not happen, since you're only supposed to call preparePayload when it's your turn. But in the face of robustness, I would say that cls should be able to handle a case where the recently created payload returns invalid",
+        "created_at": "2021-11-14T08:14:29.984000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003csigpaul\u003e I would expect an EL to return invalid/valid/syncing consistently. At least for the yet-to-be-finalised chain. (Side note, I’m not sure how an EL should respond to a payload that conflicts with finality.)\nAssuming that the chain moving underneath our feet means the canonical head flipping about (*without* reverting finality); I’d expect the EL to maintain all heads and be able to indicate valid/invalid/syncing consistently for all of them. Returning “invalid” for a block that’s viable for the head would make it challenging for the CL to maintain its fork choice algorithm.\nSpecifically, a payload swapping from valid-\u003einvalid-\u003evalid would be rather challenging for a CL to handle; we’d have to poll invalid heads to see if they’ve somehow become valid.",
+        "created_at": "2021-11-14T09:41:59.272000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003csigpaul\u003e To put this in other terms, I don’t think a payload that results in a *valid* state transition should ever return “invalid”.\nThat being said, also I don’t think the EL should be required to actually execute payloads that would conflict with finality (I.e., they should be permitted to prune chains which conflict with finality.)\nTherefore, it seems like it would be nice if the EL could return a status that differentiates between “will not compute, conflicts with finality” and “this is an invalid state transition”.",
+        "created_at": "2021-11-14T09:48:06.470000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "What if the EL receives a payload that is in the future or the past because the EL and CL are on different systems with unsynced clocks. There are so many things that can go wrong that I think it is very important that the CL can handle the case of the EL rejecting a payload that itself created.",
+        "created_at": "2021-11-14T09:52:54.378000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003csigpaul\u003e I don’t think the EL and CL being on different clocks is something we should support. There are quite strong timing assumptions at the core of PoS Ethereum.",
+        "created_at": "2021-11-14T10:03:32.795000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003csigpaul\u003e The protocol will tolerate some drift, but I don’t think the comms between the EL and CL should be expected to tolerate any drift that wouldn’t already be an issue for other Beacon Nodes on the network or between a Beacon Node and Validator Client. The BN\u003c\u003eBN p2p protocol will tolerate 500ms disparity, so that’s a good target.",
+        "created_at": "2021-11-14T10:07:51.155000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003csigpaul\u003e With an EL that can flip between invalid-\u003evalid at any point, a fastidious CL would be required to poll the EL for all invalid heads *at least* each time it runs the fork choice algo.",
+        "created_at": "2021-11-14T10:10:30.487000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Block creation and execution are two different calls, two different parts of the code and robust software should be able to handle the (albeit unlikely) case of things going wrong between the two calls.\nIt's not that we expect valid-\u003einvalid swapping to ever happen. I'm just arguing that it is better for the consensus layer to not view a payload itself created as completely valid until it called executePayload on it (or at least handle the case where executePayload returns invalid gracefully).\nThis is also important if we think about the multiple execution engines \u003c\u003e one consensus node paradigm, where the payload might have been created by a wrong client and the executePayload was verified by the majority.",
+        "created_at": "2021-11-14T10:21:14.244000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm not sure invalid-\u003evalid could ever happen, so CL does not need to care about them, imo",
+        "created_at": "2021-11-14T10:22:43.685000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003csigpaul\u003e There’s a limit to what is considered robust enough, though. At some point more robustness becomes unjustified complexity.\nI think it’s simple enough to handle the scenario where executePayload is the authority on validity (I.e., don’t assume a getPayload response is valid). However, I think executePayload needs to be a consistent authority. \nI think it’s *especially* important to be firm that an “invalid” payload is invalid state transition in the many-to-one EL-\u003eCL scenario. With an ambiguous “invalid” response we’re unable to reliably determine when there is a consensus failure between ELs. A CL can’t scream about a consensus failure if “invalid” isn’t clearly a consensus failure. \nIf invalid-\u003evalid is possible, CLs must cater for that scenario. It’s critical to consensus so we can’t afford to not care.",
+        "created_at": "2021-11-14T10:38:59.375000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003csigpaul\u003e I think my fundamental position is that executePayload should behave like a pure function, with the exception of the “syncing” response.\nIf getPayload can return an invalid payload, then I think we should consider that a liveness failure on behalf of the EL. That’s simple enough for the CL to handle.\nHowever, an arbitrarily variable executePayload response makes it hard for the CL to claim that it’s executing fork choice correctly. (Not to mention it would make fuzzing hard)",
+        "created_at": "2021-11-14T10:46:44.906000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "I find it hard to reconcile that getPayload should result into invalid executePayload because that will harden the timing constraints on produce block, as well as any forkChoice execution payload validations for the optimistic sync",
+        "created_at": "2021-11-14T10:52:08.430000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "once the getPayload returns a payload, it implies the blockHash in the payload as the validHash, the movement of EL chain from valid to invalid will imply a protocol breakdown as EL head is supposed to be  consistent with the CL head",
+        "created_at": "2021-11-14T10:54:03.609000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003csigpaul\u003e I don’t think I was clear about this, but I think an EL that produces an invalid payload via getPayload should be considered faulty.",
+        "created_at": "2021-11-14T10:54:58.778000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "so that should be treated as critical error ? basically trigger executePayload while doing beacon state transition (and not wait) and kill the node if the call completes as invalid",
+        "created_at": "2021-11-14T10:58:30.062000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "[I’m swapping from TG to Discord now]\n\nIndeed, I think it’s a critical error. LH would handle this presently by publishing the block on the P2P network but not including it in its chain (we do full verification on any block from the API). This would result in a partial liveness failure (skipped slot) but no one would import that invalid block so it would never be a correctness fault.\n\nIt would also likely result in the LH node being down-scored by its P2P peers.",
+        "created_at": "2021-11-14T11:02:35.401000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "and then you can't trust EL while importing other blocks as well",
+        "created_at": "2021-11-14T11:03:28.753000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "so either switch to a different EL or shut down the node",
+        "created_at": "2021-11-14T11:03:46.672000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think it’s implementation specific as to how a CL handles a faulty EL. If it has another EL available, using that seems like a great idea. Otherwise, maybe persisting with that node is the best choice since you’re not actually importing invalid blocks and therefore not breaking promises to API consumers about chain validity 🤷",
+        "created_at": "2021-11-14T11:06:04.657000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "but nothing brings to users attention than a stopped node 😛",
+        "created_at": "2021-11-14T11:06:59.249000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "but yes, it could be client specific",
+        "created_at": "2021-11-14T11:07:18.682000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah totally, stopped node is reasonable IMO.",
+        "created_at": "2021-11-14T11:07:48.839000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "I totally agree that stopping a node/switching el providers is the most reasonable way to handle a scenario where `executePayload` returns `Invalid` on a payload created by `getPayload`.\nI was just arguing that this should be handled by the CL node (like stopping the node) not by just expecting that `executePayload` can never return `Invalid` on such a payload.",
+        "created_at": "2021-11-14T11:15:59.600000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes treating as critical error is the most reasonable way to go, and somehow the staking user at that point needs to make a decision to continue with the EL or switch to another or for EL team to debug/inspect what happened",
+        "created_at": "2021-11-14T11:17:57.755000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm struggling to find the definition of a payload ID (e.g., it's a hash of some bytes from a `PayloadAttributes`). Does that still exist?",
+        "created_at": "2021-11-14T23:28:04.397000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "Oh, it seems like it was removed in https://github.com/ethereum/execution-apis/pull/109",
+        "created_at": "2021-11-14T23:29:33.880000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "r.alxz",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@361447803194441738\u003e https://discord.com/channels/595666850260713488/892088344438255616/908529553335525416",
+        "created_at": "2021-11-14T23:30:31.532000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,274 @@
+[
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "https://beacon.tennisbowling.com/eras/ - mainnet era files maintained courtesy of \u003c@!455147839329140756\u003e",
+        "created_at": "2022-03-22T08:35:20.202000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Let's not get started with this weak subjectivity sync discussion again. It's falsely advertised as a more secure way to sync the mainnet. In fact, it's a less secure way to sync the current protocol as it introduces one more unnecessary trusted party to the security model. Not to mention, that a decent infrastructure doesn't exist. This sync method is less secure at least until withdrawals are implemented.\n\nBack to the topic. My point is that state transition participates in the core validator duties. Most of the clients have a slow state transition that is resolved by various pre-caching techniques. This works well in happy cases. However, with every network launch, we see new unexpected unhappy cases raise. My point is that it's a wrong strategy to not focus on the overall state transition performance and instead just patch the new unhappy cases discovered on the network that often are related to slow state transition (for example, slow block proposals and late attestations when state transition pre-caching is missed).",
+        "created_at": "2022-03-22T09:07:48.698000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "It's also overestimated how much multiple blocks signature verification batching influences speed during archival sync vs. post-sync, especially after phase0. In the end, it doesn't matter how fast signatures are verified - sync is not faster than the rest of the state transition. So if the archival speed is really fast, then it means the state transition is fast too. So as state transition participates in the core duties and it's important to focus on the unexpected cases too given the reality we see, I claim that archival sync speed is one of the most important metrics, especially when it's so easy to measure. In other words, it is not a great strategy to optimize a few milliseconds on attestation packing and ignore the fact, that the state transition pre-cache is missed sometimes and it slows the whole proposal to multiple seconds.",
+        "created_at": "2022-03-22T09:08:15.052000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e  cases discovered on the network that often are related to slow state transition\n\nSlow block proposals have (generally) been narrowed down to a number of staking services, as opposed to a number of clients.  It's far more likely to be an operational issue with those services than some gremlin in a codebase that only shows itself for certain users.",
+        "created_at": "2022-03-22T09:14:53.202000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Was it always the same reason immediately after Altair hard fork? Is it the same reason on the chaotic networks (mostly testnets as the mainnet is enjoing the chilly ride)?",
+        "created_at": "2022-03-22T09:17:59.725000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "Optimizing for situations seen on testnets can result in bad mainnet results due to the having wildly different topologies.  I'd rather focus on mainnet and the situations happening there.",
+        "created_at": "2022-03-22T09:19:26.921000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Oh, that's probably the root cause of the disagreement. My point is that it's too risky to launch things on the mainnet and then patch it. I also don't see how fast state transition \"can result in bad mainnet results\".",
+        "created_at": "2022-03-22T09:21:48.387000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "It depends on how it is made fast.  If there are assumptions put in place due to data on one network those assumptions can fail on the other.  Simple example: testnets have a lot more empty slots than mainnet.  It takes _m_ time to process a slot normally, so some \"optimizations\" go in to make processing empty slots take _m/2_ with a trade-off that full slots now take _m+1_.  Big win on the testnet, but a resultant slow-down on mainnet.\n\n\"Free\" opimizations are one thing, but given the relatively similar performance across the main 4 beacon nodes for obtaining beacon proposals it seems unlikely that there is much of a win to be had there unless they are all missing the same tricks.  And, again, given that the majority of late blocks are not correlated with any given client I'm not sure where the basis of the idea that \"slow\" state transition is a problem for the network comes form.",
+        "created_at": "2022-03-22T09:29:42.349000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "I don't think the optimization you mentioned makes much sense during archival sync. During archival sync, it's pretty much the raw processing of blocks without any pre-caching. This is roughly the worst-case state transition.\n\nAnd again, you are focusing on the happy case that the current mainnet is enjoying. I think it's risky to think that this will be forever, especially after upgrades. So I'm focused on the unhappy cases that also improve the happy cases too.",
+        "created_at": "2022-03-22T09:45:02.610000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e So I'm focused on the unhappy cases that also improve the happy cases too.\n\nThat's great, and useful.  Please let us know what you find.",
+        "created_at": "2022-03-22T09:50:36.686000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "fwiw, we regularly measure and optimize our state transition sans-signatures - the main reason for doing so is that this determines replay performance when the network is forking which is important in two cases: computing shuffling for validating attestations which is required for gossip validation of weird attestations (cache misses), and, more obviously, switching head to a new fork which requires replaying all blocks from that fork - the performance profile of replaying state transitions vs performing a state transition for verification purposes differs greatly: the former does not need to hash the state (uses the state root from the block) and doesn't need to do sig vers - for replays, we have the concept of \"trusted blocks\" - our lowest hanging fruit on that front would be to handle deposits better - right now, we do a sig verification on replay as well because we don't cache  the outcome of the deposit validity check for replay purposes",
+        "created_at": "2022-03-22T09:58:56.942000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "for doing this, we have a benchmarking tool - it loads a database and then replays a given set of blocks: https://github.com/status-im/nimbus-eth2/blob/13b264d509d48909bb354f85b879f22641723509/ncli/ncli_db.nim#L198, with timings for each block written to a csv (so if we encounter slower-than-usual blocks, we know where to focus effort)",
+        "created_at": "2022-03-22T10:00:55.551000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "the point about the  state root and signature check in particular plays into sync speeds: if you can reliably tell what the head is, you can forgo hashing of the state entirely and skip most signature checks (just need to verify block signature and hash) - to tell what the head is, you can cheat with checkpoint sync or light-client-sync",
+        "created_at": "2022-03-22T10:08:12.268000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "with regards to weak subjectivity attacks, neither of checkpoint sync or forward sync are safer than the other - I find this point is often presented in a misleading way - _both_ kinds require the user to manually verify the head they ended up with in some shape, either by trusting a node, or simply by comparing a head hash with one or more nodes you trust - the method of verifying the blocks in between is a matter of taste",
+        "created_at": "2022-03-22T10:10:26.067000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e This sync method is less secure at least until withdrawals are implemented\nVerifying the head at the WS checkpoint is a must when withdrawals are implemented, any sync is entirely insecure without this verification.",
+        "created_at": "2022-03-22T10:16:23.705000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "the ux of checkpoint sync in particular commits some sins that remind me of the good old internet days when even passwords were sent in plain: a _http_ url (or https without certificate verification) is typically used so if you use it with an external provider and not a local node, it's kind of silly to call it secure _without_ that manual hash check at the end",
+        "created_at": "2022-03-22T10:17:04.105000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "and if you use with with a local node, well.. that's called a backup and you might as well do it with `rsync` 🙂",
+        "created_at": "2022-03-22T10:23:08.597000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "A checkpoint sync is inherently secure if the checkpoint is in the canonical chain, the client isn't eclipsed and hasn't failed at any point",
+        "created_at": "2022-03-22T10:24:04.770000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "so is a forward sync, arguably (under those conditions)",
+        "created_at": "2022-03-22T10:25:13.585000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Are you talking about the current protocol or after withdrawals?",
+        "created_at": "2022-03-22T10:27:28.672000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "If a forward sync converges at the canonical chain then the same is applicable. But without the checkpoint verification it may end up at a side branch without ability to distinguish it from the canonical one.",
+        "created_at": "2022-03-22T10:27:53.408000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Before withdrawals are implemented, an adversary is disincentivized in creating an alternative history as validators are slashable even after exiting. I am talking about the system when withdrawals are enabled",
+        "created_at": "2022-03-22T10:30:19.023000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "this reminds be btw of the initial weak subjectivity protection feature: you'd supply a hash of a \"recent-enough\" block that is \"on the canonical chain as verified out-of-bands\" - the ws feature then computes the ws horizon based on active validator counts then verifies that the block lies on the synced chain (stopping the node if it doesn't) - I think this nails down the essence of what weak subjectivity protection is about: make sure there's at least one canonical on-chain point within a computed time horizon",
+        "created_at": "2022-03-22T10:35:59.354000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "How about this case that doesn't need any slashing - some service A is serving an alternative chain (provides checkpoints and maintains the network). A new user simply downloads a checkpoint from service A and joins the network maintained by A and enjoys the alternative reality. Correct me if I'm wrong, but the ws sync implementation I saw simply downloads the state and loads it without any additional verification (doesn't ask to confirm some hash at some slot or so).",
+        "created_at": "2022-03-22T10:55:07.958000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "https://ethresear.ch/t/insecura-my-consensus-for-the-pyrmont-network/11833",
+        "created_at": "2022-03-22T11:18:51.620000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I don't agree with your statement about block transition being responsible for late blocks as we have been monitoring this closely since the early days of Pyrmont when indeed epoch transition was reposible for delays in proposing slot 0, but that has changed dramatically since then. However, I do agree with this particular statement: it is dangerous to focus of mainnet's status and risk a liveness issue if our clients explode with a few days without finality.",
+        "created_at": "2022-03-22T11:38:58.316000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "That experiment being run by nimbus is a great idea, and I am a little ashamed that we're all too busy with the merge (or other jobs in some cases) that we're not monitoring that (as far as I know we turned off our pyrmont nodes), I'm hoping that we'll test these scenarios on merge devnets",
+        "created_at": "2022-03-22T11:40:37.496000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Epoch transition is part of the state transition https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#beacon-chain-state-transition-function. I meant state transition.",
+        "created_at": "2022-03-22T11:57:24.349000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Seems I'm not the only one complaining about the current status of ws sync 🙂",
+        "created_at": "2022-03-22T12:00:01.127000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "I prefer to call it due diligence and with room for improvement - it is, following the user reaction, a great _convenience_ feature to have and there's a balance here that needs to be struck - the \"damage\" is limited to freshly joining nodes which so far has not been much of an issue, for reasons related to what \u003c@!425572898787426305\u003e rightly pointed out (the difference in economics pre/post merge+withdrawals for example) - for example, one of the greatest benefits of the feature is that we have a semi-standardised way to switch clients and users are more comfortable with validating in general not having to worry that the node going down will make them lose days of validation work - there's a balance here with pro's and con's",
+        "created_at": "2022-03-22T12:05:47.081000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "\"The \"damage\" is limited for freshly joining nodes\" - that's only in the happy case.  However, in a more fatal case, a large part of the network may need to resync because their state got broken. Very likely ws sync would be advertised as a solution.",
+        "created_at": "2022-03-22T15:43:03.794000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "benjaminion",
+        "category": "Testing",
+        "parent": "",
+        "content": "The problem is not ws sync. The problem is a lack of trustless/low trust infrastructure for validating that your state/ws checkpoint is a good one. When we have that infra then our clients can hook into it to help prevent users making poor decisions.",
+        "created_at": "2022-03-22T16:12:43.456000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "What makes us think that there will be such a great infrastructure soon? Unless somebody figures out how to profit from it, but then there will be another MEV-type thing to deal with.",
+        "created_at": "2022-03-22T16:42:03.572000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "benjaminion",
+        "category": "Testing",
+        "parent": "",
+        "content": "Well, without it sync will be dangerous - either from genesis or ws state. We've always known this was an issue.",
+        "created_at": "2022-03-22T17:05:39.821000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,90 @@
+[
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "does Eip5450 lack a check for is the opcode a terminating opcode ? \n```\nAt the same time the following properties are being verified:\n\n* For each reachable instruction in the section, data stack height is the same for all possible code paths going through this instruction.\n* For each instruction, data stack always has enough items, i.e. stack underflow is invalid.\n* For CALLF instruction, data stack has enough items to use as input arguments to a called function according to its type defined in the type section.\n* For RETF instruction, data stack before executing it has exactly n items to use as output values returned from a function, where n is function’s number of outputs according to its type defined in the type section.\n* max_stack_height does not exceed 1023.\n* The maximum data stack height matches the corresponding code section’s * max_stack_height within the type section body.\nNo unreachable instructions exist in the code section.\n```\nbut how can we determine if an opcode is unreachable if we don't have a condition to stop verification early ? like if we hit `RETURN`, `RETF`,`STOP` we stop conclude verifying that branch ? or am I getting something wrong ?",
+        "created_at": "2022-12-26T20:27:04.935000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I believe they can.",
+        "created_at": "2022-12-26T21:31:00.558000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "EIP-5450 defines this. During control-flow analysis you keep information which instructions have been visited. In the end you check if all have been visited. (Practical implementation can be to count number of processed bytes and compare with the code size in the end).",
+        "created_at": "2022-12-26T21:32:42.652000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Oh, BTW this is better version to take a look on: https://github.com/ethereum/EIPs/pull/5993",
+        "created_at": "2022-12-26T21:34:08.974000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "so if I have this bytecode : \n```\nPUSH1 01\nPUSH1 02\nMUL\nRETF\nPUSH1 01\nPUSH2 02\nADD\nPOP\n```\nshould this fail validation or pass it? I think it should fail",
+        "created_at": "2022-12-26T21:35:25.723000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "oh okey",
+        "created_at": "2022-12-26T21:36:23.688000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It should fail, the second part is not reachable. You start analysis from the first instruction and it will end at `RETF`.",
+        "created_at": "2022-12-26T21:36:53.525000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@425274498732916736\u003e this PR actually clarifies it, thanks",
+        "created_at": "2022-12-26T21:37:47.303000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Leave comment then. I want to merge it soon but need more reviews.",
+        "created_at": "2022-12-26T21:38:18.450000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hi again, according to this new PR, should this code pass or fail verifications ? \n``` \n/*messed up AddMul(1, 2, 3) = (1 + 2) * 3 */\n0 (inputCount = 0, outputCount = 0): \n  PUSH1 03\n  PUSH1 01\n  PUSH1 02\n  CALLF 01\n  CALLF 02\n  POP\n  RETF\n\n1 (inputCount = 2, outputCount = 1):\n  ADD\n  RETF\n\n2 (inputCount = 2, outputCount = 1):\n  MUL\n  RETF\n```\ntechnically this code is \"Valid\" but I think the algorithm in the PR will refuse it because of `rule 1.1.CALLF` that says :  ``for CALLF instruction the required stack height is the number of inputs of the called function according to its type defined in the type section.`` or is that by design ? (I mean I know a small restructuring of the opcode in the example given can solve the problem, but isn't it too restrictive ?)",
+        "created_at": "2022-12-26T22:36:37.547000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I expect it would pass, by my reading. For a function call it needs at least that many stack items, and will mark unused stack items below it via stack height checks.  Otherwise there is no point in tracking stack height as it will always be zero.",
+        "created_at": "2022-12-26T23:34:32.280000+00:00",
+        "attachments": null
+    }
+]

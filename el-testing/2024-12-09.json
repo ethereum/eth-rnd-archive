@@ -5,7 +5,7 @@
         "parent": "",
         "content": "I believe 7623 spec needs an update. Currently it says:\n\n`Any transaction with a gas limit below 21000 + TOTAL_COST_FLOOR_PER_TOKEN * tokens_in_calldata is considered invalid. `\n\nThis is incomplete, it should also include the case for contract creation: \n\n`+ isContractCreation * (32000 + InitCodeWordGas * words(calldata))`\n\nHave opened a PR for it https://github.com/ethereum/EIPs/pull/9121",
         "created_at": "2024-12-09T18:00:25.073000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jochembrouwer",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "Might be a bit too fast for this, but I believe that the \"intrinsic gas cost\" (min gas limit to be considered for inclusion in a block: lower than this an tx cannot be included) formula in the EIP is currently not correct. (Formula might need some edits)",
         "created_at": "2024-12-09T18:27:22.169000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "marioevz",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "I'm finding EELS implementation so much easier to follow: https://github.com/ethereum/execution-specs/pull/966/files",
         "created_at": "2024-12-09T18:59:43.082000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jochembrouwer",
@@ -29,7 +29,7 @@
         "parent": "",
         "content": "Ok right that does make a lot of sense, especially this:\n\n```python\n    intrinsic_gas, tokens_in_calldata = calculate_intrinsic_cost(tx)\n    floor = Uint(tokens_in_calldata * FLOOR_CALLDATA_COST + TX_BASE_COST)\n    if max(intrinsic_gas, floor) \u003e tx.gas:\n       raise InvalidBlock\n```\n\nHowever this is not reflected in the EIP spec and should be added (EIP seems to indicate `if floor \u003e tx.gas:` instead of taking the `max` of the intrinsic gas and this floor cost)",
         "created_at": "2024-12-09T19:07:41.858000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "_shemnon",
@@ -37,7 +37,7 @@
         "parent": "",
         "content": "I concur with Jochem, and feel that PR #9121 should be merged. The intent of that section is \"If we didn't execute the code and presumed it violated the EVM gas cost, could the TX pay for the gas?\"  Since we can tell it's contract creation by the null value in the \"to\" field that should be part of transaction validation.  I should have included that in the comment where I propsoed that addition.",
         "created_at": "2024-12-09T22:44:53.730000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jochembrouwer",
@@ -45,7 +45,7 @@
         "parent": "",
         "content": "I think what is meant is that there is an additional gas limit floor now, besides the \"usual\" floor (see the PR with the discussion). I think this needs to be elaborated because the PR seems to imply that this \"simple\" formula of 21k + TOTAL_COST_FLOOR_PER_TOKEN * tokens_in_calldata is now the new minimum gas limit. \n\nNote that besides contract creation there is also rules regarding this min gas limit (I think we used to call this \"intrinsic gas\"?) for access lists and authority lists.\n\nI also think that confusion here comes from multiple things, such as the discussion in the PR (and magicians) about what is \"evm execution\" and what is not. I would argue that execution is the part where we start to potentially execute opcodes, and upfront costs such as calldata, contract creation fee, access lists, authority lists is not part of the execution. But this is something we should standardize so when we review/read EIPs it is clear what is being meant here. Same goes for \"invalid transaction\", I always have the impression (or have to find out) if this means that the tx can be included in a block but revert/invalid (so all state changes are rolled back except nonce update and gas payment), or that this tx can never be included in block (for instance tx with gas limit below 21k).",
         "created_at": "2024-12-09T22:53:54.775000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jochembrouwer",
@@ -53,7 +53,7 @@
         "parent": "",
         "content": "So upon thinking about this the way EEST has currently implemented it sounds right:\n\n1. Calculate intrinsic gas as before (like 7623 is not even there)\n2. Also take into consideration this new data gas floor (7623 part). If tx is used for data purposes (which it should not do) rather than using data for execution calldata (which it should do), calculate this new gas limit. \nThe intrinsic gas is now the maximum of the above 2 cases. (This thus also takes into account contract creation fee, access lists, authority lists, etc. etc.)\n\nI also think that this is being meant by the EIP, especially since this quote:\n\nQuote from Toni:  https://github.com/ethereum/EIPs/pull/9121#issuecomment-2529444427\n\n\u003e Note that a tx either pays the floor cost, OR it pays the standard price for execution, calldata + contract-related things. So the floor cost already ensures that enough gas is available for the tx to not run out of gas after execution.",
         "created_at": "2024-12-09T22:58:54.216000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jochembrouwer",
@@ -61,7 +61,7 @@
         "parent": "",
         "content": "This \"OR\" in the quote is not clear (by me) in the EIP and is also why I got so confused",
         "created_at": "2024-12-09T22:59:55.851000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "_shemnon",
@@ -69,6 +69,6 @@
         "parent": "",
         "content": "from Toni in the PR\n\u003e Putting the contract-related cost into the pre-execution validation would cause transactions to be marked as invalid that would have actually been possible to execute.\nIt is exactly that in-between area where we need to know the evm cost that we need to get rid of.  We can't have \"schrodinger's validity\" where it has enough gas to cover it if the EVM does enough work.  Needing to know how much EVM gas was spent should not be part of *a priori* validity.  Hence the initcode validation belongs in the *a priori* consideration as it is used in both forks.",
         "created_at": "2024-12-09T23:26:40.269000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

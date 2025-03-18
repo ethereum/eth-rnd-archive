@@ -1,0 +1,402 @@
+[
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "I've been following this from early on indeed - it's indeed a very nice approach! though pragmatically, in our architecture the impact of the hashing is somewhat less than you describe (perhaps due to differences in caching schemes or pre-computations) - in terms of supporting this, probably what we'd be looking at is to add runtime detection ((cpuid etc) and a pure-C fallback (last I looked, there were lots of C fallbacks to choose from as well) - paradoxically, the C fallback is almost the one that is most important: CPU:s with fancy extensions tend to _already_ be quite fast whereas the slow ones also lack dedicated hardware support and therefore represent the trickiest problem - the other annoying thing is that people tend to use docker / binary builds, so runtime selection ends up being necessary in practice",
+        "created_at": "2022-05-23T11:40:57.334000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "btw, there's a repo maintained by \u003c@455147839329140756\u003e hosting the full eth2 mainnet history in ERA format: https://beacon.tennisbowling.com/eras/ - it's now been updated to the latest spec 🙂",
+        "created_at": "2022-05-23T11:46:22.004000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "What we did on the goassembly version is add runtime detection on each call and it doesn't have a penalty, I can trivially add that to the C header if someone requests it",
+        "created_at": "2022-05-23T11:47:13.373000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "But yeah, the gain on big lists was zero on the C assembly for us because of the overhead of calling C, this forced us to port the whole thing to Goassembly",
+        "created_at": "2022-05-23T11:48:18.887000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "yeah, these things tend to be slightly more annoying on the C side, with ... varying cross-platform (aka windows) support due to PE etc .. we don't have any overhead at all calling C (it even gets LTO:d), but we have to deal with 1970:s tooling instead 🙂",
+        "created_at": "2022-05-23T11:49:11.802000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The gain on blocks bodies is much less, we just started implemented it and Radek tells me he's getting 23%, I'll check later on avx512 which is a huge difference",
+        "created_at": "2022-05-23T11:49:14.352000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I tested my library on windows and Mac os and worked fine. On rpi only tested in Linux. I suppose it won't work on arm Windows though",
+        "created_at": "2022-05-23T11:50:40.221000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "But I'm curious since both you and Adrian say that hashing is not a big part, what are your benchmarks? On a regular call to onBlock we get to see 20% of the state transition is just hashing.",
+        "created_at": "2022-05-23T11:52:42.763000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "So we must be doing something wrong or have optimized a lot the rest",
+        "created_at": "2022-05-23T11:53:15.124000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "well .. it depends a bit: if we're replaying blocks (for reorg), we don't hash at all (we use the state root from the block) - for \"normal\" blocks, it happens once every 12s, and we've \"usually\" pre-transitioned the state into the right slot beforehand and run blocks on a hot tree hash cache which doesn't need _that_ much updating",
+        "created_at": "2022-05-23T11:57:06.218000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "We do all that and only hash the dirty leaves of the state to get the htr",
+        "created_at": "2022-05-23T11:58:06.834000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Still getting 20%",
+        "created_at": "2022-05-23T11:58:12.394000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Like at this stage looking at a profile for us, the biggest buck would be in optimizing blst if that's even possible, and the next is Sha256",
+        "created_at": "2022-05-23T11:59:27.984000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I'm lying though, database access is the €¥^¢£\u003c, but I can't do anything about that",
+        "created_at": "2022-05-23T12:00:14.008000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "why database access does matter? state diffs are pretty small so everything fits in the memory unless it's long non-finalisation.",
+        "created_at": "2022-05-23T12:02:37.279000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "I think this may end up being the more significant difference between nimbus and prysm for example - we've done a lot to optimize the DB stuff leaving us more time to do hashing and whatnot without it impacting head vote performance",
+        "created_at": "2022-05-23T12:02:38.241000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "database design is where clients differ quite a bit I think - ie there are design tradeoffs here for supporting historical replay, long non-finalities, code complexity, storage size etc",
+        "created_at": "2022-05-23T12:04:52.937000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Exactly, we've learned in Medalla that not preventing for this will make some clients break. We have most of our data on memory and we perform the transition without the need to write to disk. But we won't update head until it's in the dbase",
+        "created_at": "2022-05-23T12:12:48.200000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "yea, but seems that running in memory and for the happy case (no finalization issues) and touching disk only on longer non-finalization is a pretty good approach.",
+        "created_at": "2022-05-23T12:13:07.493000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "in Nimbus' case, we want to ensure that before a `head` is committed to via attesting, we have persisted blocks and states leading up to it such that in the case of a crash or any other issue, the database is left in a consistent state (likewise, this helps managing memory usage during heavy forking) - but like many other things, there's a design space here",
+        "created_at": "2022-05-23T12:16:43.987000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Ok that sounds exactly as what we do",
+        "created_at": "2022-05-23T12:17:25.596000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Only on very long forks we would need to look up dbase",
+        "created_at": "2022-05-23T12:17:53.800000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Or if a peer is requesting old data",
+        "created_at": "2022-05-23T12:18:07.273000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "But we do write on every transition",
+        "created_at": "2022-05-23T12:18:18.825000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "Interesting, Grandine actually didn't have persistence for very long and we added it only when it became too annoying to resync after restart 🙂 So we still load everything from the latest finalized checkpoint and replay the blocks.",
+        "created_at": "2022-05-23T12:20:18.297000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I think we all do,",
+        "created_at": "2022-05-23T12:21:59.383000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "states as well? we write (partial) states on every epoch transition but separately from block processing (ie state writing for slot N happens slightly before N occurs)",
+        "created_at": "2022-05-23T12:22:49.734000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "no, just the summary, and the block, we write states only every number of epochs specified by the user",
+        "created_at": "2022-05-23T12:24:05.639000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "there's a few optimizations we have here:\n* we write states without the slot 0 block - this way, we can write it \"optimistically\" when we have the last block of the previous epoch\n* we only write a part of the state - the validator set is kept separate - pragmatically, this means state writes are quite cheap",
+        "created_at": "2022-05-23T12:25:38.164000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "We're working on 2, I didn't understand 1 and I'm curious, so in the happy case you write a skeletal state at slot 31 right after you synced a block and advanced its slot and performed epoch transition, is that it?",
+        "created_at": "2022-05-23T12:29:33.732000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "seems so, it's kinda state at slot 0 before block 0 transition, was very usefull when a lot of 0 blocks were missing 😛",
+        "created_at": "2022-05-23T12:31:56.152000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "yes - this is actually easier to reason about because then the state is valid for that whole epoch regardless if there's a block in slot 0 or not - this applies to committee caches etc as well: they are not affected by the *block* at slot 0",
+        "created_at": "2022-05-23T12:32:55.423000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Interesting, and if you don't see a block in 31 you put a timeout before you start precomputing the epoch transition and save that state?",
+        "created_at": "2022-05-23T12:33:35.958000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "or you always save it at second 0 anyway",
+        "created_at": "2022-05-23T12:34:06.550000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "we run it something like a second before slot 0 happens .. if a block comes along with a different parent (ie slot 30, where we stored 31), we store the \"slot 0\" of that other history as well (as a fork)",
+        "created_at": "2022-05-23T12:34:44.503000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "ahh interesting, I like this idea.",
+        "created_at": "2022-05-23T12:35:02.838000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "I'm wondering were there efforts to make a database format that would be optimized for calculating historic data served via standard API? So something like an extended version that would take much more space on disk, but would help to calculate objects fast. IIRC Teku mentioned during some call that they have something like this.",
+        "created_at": "2022-05-23T12:36:37.088000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "teku does something similar afair - it helps move the heavy epoch transition and state writing to a time when the node isn't doing anything anyway",
+        "created_at": "2022-05-23T12:36:41.062000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "indeed, teku has a generic tree format for this - as does nimbus (ie we support historical queries all the way to genesis for any state), though we make a slightly different state/speed tradeoff than teku",
+        "created_at": "2022-05-23T12:38:43.600000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "ok, but that's not ERAs format?",
+        "created_at": "2022-05-23T12:39:31.718000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "no, era is just a dumb linear store without any special indexing or magic - it kind of supports historical queries via replay, but you might have to replay a full day of data which tends towards being a bit slow",
+        "created_at": "2022-05-23T12:41:00.036000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "ie making a tree store has a larger design tradeoff space, so it's harder to \"standardise\"",
+        "created_at": "2022-05-23T12:42:05.842000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "yes, but that's not very far from regular states storing at specified intervals",
+        "created_at": "2022-05-23T12:42:23.294000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "but once standardized it would have a great really great value. But I agree it's not easy",
+        "created_at": "2022-05-23T12:42:48.564000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "it is exactly storing regular states at specificed intervals 🙂",
+        "created_at": "2022-05-23T12:42:50.515000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "the advantage being that you can read era files with a pageful of python code - what you do with the data after that in terms of indexing can be tailored for the use case (compressing, indexing, historical access, pruning etc)",
+        "created_at": "2022-05-23T12:45:18.552000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "yea, but I personally just see much higher value in a standardized tree store that has a well-thought design for fast objects calculation.",
+        "created_at": "2022-05-23T12:47:06.515000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "Era files could be subset of such tree store",
+        "created_at": "2022-05-23T12:50:51.008000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I don't see why we'd standardise storage formats - it just means we get stuck with whatever the best thing we can think of today is.  Era files make sense as a transfer/public archive format (which conveniently can also be used directly, potentially with supplemental indexing or storage). We should be aiming to give clients as much freedom to explore different design spaces as possible so we can innovate.",
+        "created_at": "2022-05-23T21:16:49.407000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "A good example of that is Teku's tree based storage - it takes a ton of disk space but makes some of the most common queries lighting fast and much more memory efficient. Perfect for Infura's use case, but a terrible fit for just running a validator. Which is why we default to prune mode where we don't store finalized states at all and have one of the smallest disk footprints. We also still support a database format that just periodically stores a whole state so you get a medium amount of disk usage with moderately slow query times.\n\nAnd I expect that our approach to storage will change again in the future as we come up with better ideas or have more time to implement things.",
+        "created_at": "2022-05-23T21:20:34.309000+00:00",
+        "attachments": null
+    }
+]

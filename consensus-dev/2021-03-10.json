@@ -1,0 +1,194 @@
+[
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "This suggests that perhaps one of the clients has a bug where they don't correctly vote for a new eth1 block when they are the first in a period, and instead they follow the previous period.",
+        "created_at": "2021-03-10T03:23:44.122000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Do we have any idea which client was the first for one of the periods in question?",
+        "created_at": "2021-03-10T03:23:59.206000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Or perhaps there is disagreement on when exactly the period starts (off by one)?",
+        "created_at": "2021-03-10T03:24:18.318000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "Both are viable possibilities, the former being more likely than the latter, I would have expected an issue with the latter to show up much earlier in previous testnets or mainnet. There is also the possibility that the first proposer in the voting period was connected to an out of sync eth1 node(so it defaults to the eth1data from the previous period) \n\nOn determining which client it is that is hard to know for sure. \nEx: This is the first proposer in the voting period in which we had a repeated eth1 vote\nhttps://beaconcha.in/block/702464",
+        "created_at": "2021-03-10T04:16:28.456000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Quick look at Teku's code and we take all the blocks we know about in the voting period, count up the number of votes already made for those blocks and then pick the highest.  Crucially (and this may be wrong), if we don't find any votes to consider we vote for the current eth1 data in the state.\nThat would suggest that if the eth1 node was out of sync or just not setup we could be voting for the existing state data.  I think we should be voting for a random block in that case.\n\nBut because that existing block is from prior to the current voting period shouldn't other nodes ignore it and vote for a block within the voting period?",
+        "created_at": "2021-03-10T04:21:23.499000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "There is a possibility of voting for a block right at the edge of the period , ex in the spec: \n```py\ndef is_candidate_block(block: Eth1Block, period_start: uint64) -\u003e bool:\n    return (\n        block.timestamp + SECONDS_PER_ETH1_BLOCK * ETH1_FOLLOW_DISTANCE \u003c= period_start\n        and block.timestamp + SECONDS_PER_ETH1_BLOCK * ETH1_FOLLOW_DISTANCE * 2 \u003e= period_start\n    )\n```\nyou have a block which is potentially valid in both period if it is on the edge of the above conditional :\nprevious period -\u003e block.time \u003c= votingStartTime - eth1_follow_distance * seconds_per_eth1block\ncurrent period -\u003e block.time \u003e=  votingStartTime - 2*eth1_follow_distance * seconds_per_eth1block\n\nIn both periods the block is valid",
+        "created_at": "2021-03-10T06:12:19.073000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "So you'd have to have a proposer that doesn't have eth1 sync'd and proposes the first block of the voting period and the eth1 block last voted in has to be from the same second as the end of the previous voting period?",
+        "created_at": "2021-03-10T06:19:32.475000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "yeap that is my guess",
+        "created_at": "2021-03-10T06:32:30.968000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e So you'd have to have a proposer that doesn't have eth1 sync'd\nThis might be more common over the past few days, given that a lot of nodes were updated for the upcoming hard fork",
+        "created_at": "2021-03-10T06:33:22.331000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Updating the eth1 node shouldn't cause any issues though.  The update is pretty seamless and you'd have to be offline for an entire voting period to not have any new blocks.",
+        "created_at": "2021-03-10T06:34:58.461000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@!476250636548308992\u003e To confirm, we should vote for a random block if we can't find a suitable one, not the current eth1 data block right?",
+        "created_at": "2021-03-10T06:36:23.551000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "Just to clarify, lets say you have an up to date eth1 node, with all the current blocks, etc and teku is the first proposer in the voting period, which block would it vote for in that case ?\n \nIn our case we only vote for a random eth1 data if we cant get the candidate eth1 blocks according to the current voting period(out of sync etc)",
+        "created_at": "2021-03-10T06:40:25.972000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "It would vote for the most recent block if it had any.  It only votes for the existing eth1_data if there are no candidate votes at all.  I was surprised by that as I thought it voted for a random vote but apparently not.",
+        "created_at": "2021-03-10T06:43:09.903000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "ah k, that makes sense. In that case being out of sync with eth1 might lead to a vote for the existing eth1_data.",
+        "created_at": "2021-03-10T06:49:42.458000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "yeah could explain it, but it seems like a very small chance of that working out and having everyone follow along with it.  Still something worth fixing though - I'll log a ticket.",
+        "created_at": "2021-03-10T07:07:15.785000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah its hard to be completely certain unless we know which clients were running and what was their status of their eth1 node at the time. Could always be something else",
+        "created_at": "2021-03-10T07:19:54.545000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "IIUC from the previous conversation, everyone will blindly follow along with the first proposer as long as the block is a valid Ethereum block and \u003e= previous period's block.",
+        "created_at": "2021-03-10T07:50:12.486000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "So it only takes the first proposer screwing up to have the entire period be \"wasted\" re-voting for the previous period's ETH1 block.",
+        "created_at": "2021-03-10T07:50:26.554000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "That’s only true if the previous block is in the current voting period otherwise they should ignore that first vote and select the most recent block in the voting period. \nI guess about 1 in 14 voting periods have a block exactly on the voting period boundary which would make it valid in both (based on 14 second block times).",
+        "created_at": "2021-03-10T07:57:22.445000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm, you are saying that the set of blocks that a client *should* interpret as valid/eligible is constrained to a window that *shouldn't* overlap with the previous period (but it currently does due to a boundary condition)?",
+        "created_at": "2021-03-10T08:07:42.226000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dkdkdkdkdkdk",
+        "category": "general",
+        "parent": "",
+        "content": "`is_candidate_block` returns true if the block is between 8 and 16 hours old at `period_start`, and a period is 6.8 hours, so about 18% of eth1 blocks will be valid in two periods if my calculations are correct",
+        "created_at": "2021-03-10T09:50:42.367000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "thanks for bringing that up, the difference between eth1_block_time(14 seconds) and slot_time(12 seconds) , provides a decent overlap for candidate blocks between both periods",
+        "created_at": "2021-03-10T10:13:41.185000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "so this applies to more blocks than simply boundary eth1 blocks",
+        "created_at": "2021-03-10T10:14:33.590000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "So turns out Teku is actually following the spec correctly: https://github.com/ethereum/eth2.0-specs/blob/dev/specs/phase0/validator.md#eth1-data\n```\n    default_vote = votes_to_consider[len(votes_to_consider) - 1] if any(votes_to_consider) else state_eth1_data\n```\nSo if there are no votes to consider use the eth1 data from the state which is what we're doing. \nI'd say the right fix then is that the current eth1 data should be excluded from votes_to_consider so that we always prefer progressing the eth1 chain rather than just voting for the current block.  Nodes that have no new blocks will wind up voting for the current eth1 data but all other nodes will vote for the next most popular option and at least have a chance of voting in something new.",
+        "created_at": "2021-03-10T23:01:45.474000+00:00",
+        "attachments": null
+    }
+]

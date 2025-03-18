@@ -1,0 +1,248 @@
+[
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Why would CL need to make a prepare call if there was no changes to the head block? I.e. a subsequent calls of `forkchoiceUpdated` with non-null `payloadAttributes` should be made when the head block has been updated hence `payloadId` would be new after each call even if `payloadId` was a function of params",
+        "created_at": "2022-02-04T10:03:00.262000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "Just to give everyone more context, what I found in logs on kintsugi. I checked lodestar, nimbus, lighthouse and I observed ELs have 1-100ms between fcu with payloadAttributes and getPayload\n\n2022-02-02 **08:57:12.5209**|INFO|163|Executing JSON RPC call engine_forkchoiceUpdatedV1 with params [{\n  \"headBlockHash\": \"0xcfab5ec45f2c3e4faafd52e186a5e4012fad31a6c6634fd70fc123b95f0203ac\",\n  \"safeBlockHash\": \"0xcfab5ec45f2c3e4faafd52e186a5e4012fad31a6c6634fd70fc123b95f0203ac\",\n  \"finalizedBlockHash\": \"0x2342615a096191c82909f8bb5b6e19820f60bfa90ba0331c5c4fa32e7de03fbb\"\n}] \n2022-02-02 **08:57:24.1136**|INFO|93|Executing JSON RPC call engine_forkchoiceUpdatedV1 with params [{\n  \"headBlockHash\": \"0xcfab5ec45f2c3e4faafd52e186a5e4012fad31a6c6634fd70fc123b95f0203ac\",\n  \"safeBlockHash\": \"0xcfab5ec45f2c3e4faafd52e186a5e4012fad31a6c6634fd70fc123b95f0203ac\",\n  \"finalizedBlockHash\": \"0x2342615a096191c82909f8bb5b6e19820f60bfa90ba0331c5c4fa32e7de03fbb\"\n},{\n  \"timestamp\": \"0x61fa4774\",\n  \"random\": \"0xe8fc2e8cffef4606fcf94dd2ba23896caf8de920c49aa3d07dcc175d69b9bfcb\",\n  \"suggestedFeeRecipient\": \"0x0000000000000000000000000000000000000000\"\n}] \n2022-02-02 **08:57:24.1183**|INFO|106|Executing JSON RPC call engine_getPayloadV1 with params [0x8eaf1defc920cae3]",
+        "created_at": "2022-02-04T10:29:55.533000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "Basically I was thinking of a design where FcU for prepare payload can be independently scheduled (like in the last interval/4s of previous slot) if there is a proposal to be made in the current slot. So the current architecture of produce block calls (which is seemingly what every CL is doing including lodestar) is call FcU for prepare to get payload id, and then subsequently call the fetch of payload.",
+        "created_at": "2022-02-04T10:33:51.812000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "Otherwise the CL would need to track/cache the payloadId against the FcU params and use that subsequently",
+        "created_at": "2022-02-04T10:35:43.281000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "This method separation is done with prepare/get calls separation in mind which requires `payloadId` to be cached between each of this calls in the flow. Note that  CL expects `getPayload` to be responded *instantly*, and prepare call should be made in advance to give EL time to build a payload. 4s into a slot is reasonable if no block in the slot yet arrived, if the block is already received then `fcU` with payload attributes may be called right after processing a block.\n\nIt's basically any `fcU` that is induced in the system during \"previous slot\" should be appended with payload attributes and should result in caching `payloadId` returned in the response.\n\nOnce it's time to produce a block CL calls `getPayload` with the most recent `payloadId` value and gets an immediate response with what EL has at the time of making the call. IIUC, a tricky part is to verify `payloadId` value is from the most recent prepare call?",
+        "created_at": "2022-02-04T10:47:26.673000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "If `fcU` is called from the CL, and then the CL receives a late block, can it call `fcU` again with new parameters?",
+        "created_at": "2022-02-04T10:49:55.510000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "(And does this need the existing payload ID or is it a simple overwrite each time?)",
+        "created_at": "2022-02-04T10:50:26.433000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "well its not tricky as such, but yes subject of figuring out what is the best mechanism for 1:1 correspondence between one (or many) payloadIds called before and the actual block to be fetched using the latest head (which could change between prepare fcU and fetch)",
+        "created_at": "2022-02-04T10:54:06.386000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "also as \u003c@!144468805697929216\u003e pointed out, if one can call fcU multiple times corresponding to different events(and hence head), and expect block to be available corresponding to any of them when the actual fetch is done",
+        "created_at": "2022-02-04T10:54:55.728000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "CL must call `fcU` each time the head is updated, and these calls should have prepare semantics, i.e. has `payloadAttributes`, if CL is about to propose soon. Each update begins a new build process which may be identified by the new `payloadId` value",
+        "created_at": "2022-02-04T10:55:11.179000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "also some concurrency considerations might come in (head updated event + ongoing produce block fetch of a payloadId previously indicated to be prepared)",
+        "created_at": "2022-02-04T10:58:32.023000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "There is no reason for EL to have multiple build process in parallel. EL should be building a payload on top of the head of the chain. There is also a requirement for CL to call `fcU` respecting the order of corresponding events. So, the last returned `payloadId` must be the actual one if this requirement is satisfied",
+        "created_at": "2022-02-04T10:58:48.795000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctersec\u003e how useful is \"soon\" for ELs? Apparently more than 100ms, but, 1 second? 10 seconds? a minute?",
+        "created_at": "2022-02-04T10:59:21.821000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "mainnet block processing times: 2k=2s here, analysis credits: \u003c@!758579010027782144\u003e",
+        "created_at": "2022-02-04T11:00:57.482000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "unknown.png",
+                "content": "503c7e848909c30d913b88a759a9d9d7c929c7982eac39630af58ce21e10e597"
+            }
+        ]
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "The sooner the better. But if CL receives late beacon block, validates it and induces `fcU` with payload attributes 10ms before the end of a slot, EL will have 10ms to create a payload. There is a recommendation for EL to create an empty payload as the first step of building a payload to be able to respond ASAP.",
+        "created_at": "2022-02-04T11:02:02.443000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctersec\u003e So from a CL's timeline, a sufficiently large fraction of 1 slot is usually fine, and in general the best that can be attained",
+        "created_at": "2022-02-04T11:02:14.904000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctersec\u003e CLs of course know their proposing duties before that, but not the head",
+        "created_at": "2022-02-04T11:02:39.842000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "last 4 sec of previous slot makes sense for a scheduled call",
+        "created_at": "2022-02-04T11:02:45.297000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "otherwise whenever head changes post that schedule",
+        "created_at": "2022-02-04T11:03:13.506000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctersec\u003e i.e. after the main wave of aggregated attestations comes in, sure",
+        "created_at": "2022-02-04T11:04:31.797000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Aren't attestations made in the previous slot applied in the current slot and doesn't affect the head CL is building on?",
+        "created_at": "2022-02-04T11:08:19.826000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctersec\u003e current slot attestations apply, ideally, to the current slot block",
+        "created_at": "2022-02-04T11:08:42.226000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I would say that 4s into a slot if no block has been received is a reasonable moment in time to call prepare",
+        "created_at": "2022-02-04T11:08:43.090000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctersec\u003e there's a lot of emphasis on moving blocks \u0026 attestations quickly through gossip end-to-end for this reason",
+        "created_at": "2022-02-04T11:09:10.538000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Teku will send payload attributes the slot prior to it being scheduled to produce a block - either when the block for that prior slot is produced or 4 seconds into the slot. That should give at least 8 seconds between requesting a payload be produced and actually getting the payload. \n\nLate blocks and other details may cause the prepare to come later or even right before the get payload but that should be the exception not the norm.",
+        "created_at": "2022-02-04T11:09:24.809000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "The spec says that proposal should be made on the `parent` which is the head during `slot - 1`, while attestations made in `slot - 1` are applicable to the fork choice starting from `slot`",
+        "created_at": "2022-02-04T11:09:46.661000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "so \"queued\" attests need to be processed before fcU",
+        "created_at": "2022-02-04T11:11:11.006000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes, I can confirm, I've just checked nethermind\u003c\u003eteku logs\n\n2022-02-02 **22:00:00.1514**|INFO|174|Executing JSON RPC call engine_forkchoiceUpdatedV1 with params [{\n  \"headBlockHash\": \"0xb5b2ba59ada0af4f76f329769c3a921a96389fe58a9cd024907b4b2a0011084b\",\n  \"safeBlockHash\": \"0xb5b2ba59ada0af4f76f329769c3a921a96389fe58a9cd024907b4b2a0011084b\",\n  \"finalizedBlockHash\": \"0xb5b2ba59ada0af4f76f329769c3a921a96389fe58a9cd024907b4b2a0011084b\"\n},{\n  \"timestamp\": \"0x61fafeec\",\n  \"random\": \"0xb20d758a29e7faddd5a1b05a8856da83cad0aeb48df429cded42e670465a9384\",\n  \"suggestedFeeRecipient\": \"0xa18fd83a55a9bedb96d66c24b768259eed183be3\"\n}] \n2022-02-02 **22:00:12.0215**|INFO|99|Executing JSON RPC call engine_getPayloadV1 with params [0xafd33e100c1dd83b]",
+        "created_at": "2022-02-04T11:14:46.233000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "is teku also processing the attestations for current slot early to find \"correct\" head which as \u003c@!425572898787426305\u003e pointed out will be applicable on the next slot which is being proposed?",
+        "created_at": "2022-02-04T12:08:33.821000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "No we don’t process attestations early. I think we process them prior to proposing the block so in very rare cases that may cause us to switch to a different fork and thus have to request a new payload at the last minute.",
+        "created_at": "2022-02-04T20:53:48.799000+00:00",
+        "attachments": null
+    }
+]

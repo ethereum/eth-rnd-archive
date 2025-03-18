@@ -5,7 +5,7 @@
         "parent": "",
         "content": "https://x.com/terencechain/status/1884854969922441443\n\nI've advanced the testing a bit and managed to simulate some blocks under the new payload error for not satisfying the inclusion list. The goal is to see them orphaned. I encountered the following cases:\n\n- I don't see how the block can get orphaned unless either 1) the proposer reorgs the block or 2) we implement a (block, slot) fork choice. Currently, we just have attesters vote on the parent block, but I don't think this is enough. The proposer builds on the head at the start of the slot, and when choosing the head, it will end up selecting the heaviest branch and the tip of the branch, so no reorg will occur here. In my testing, I ended up doing 1).\n- If we choose to do 1) or something similar, there's an ugly edge case to consider. The proposer may request a different payload ID to get a payload at the start of the slot, and this payload ID may be different from the one used for the inclusion list. In this case, the EL needs to ensure that inclusion list transactions are assigned to the new payload ID and not forgotten. This may happen in a 0-second slot reorg, which is uncommon but possible.",
         "created_at": "2025-01-30T06:45:26.587000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "nc1234",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "I don’t even think people have been looking into (block, slot) fork choice in the past two years. We probably want to go with proposer reorg. Any reason why proposer is not building his block on get_attester_head() in the current spec?",
         "created_at": "2025-01-30T21:51:57.961000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "terencechain",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "Because `Head` returns the tip of the chain. Even if a parent has a higher weight, its child would be the one returned from the fork choice store. I agree proposer reorg is the way to go, I'll open a PR today",
         "created_at": "2025-01-30T21:54:16.734000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "terencechain",
@@ -29,7 +29,7 @@
         "parent": "",
         "content": "Btw... there’s an annoying bug we should be aware of upfront. It appears in both Prysm and Geth. I'll write it down as an example:  \n\n- **Slot n:**  \n  - At the 0 mark, block `0xA` arrives and becomes the head.  \n  - We call FCU + attribute with `0xA` and catch the payload ID.  \n  - A few seconds later, ILs arrive.  \n  - We call `UpdateBlockWithInclusionList` with ILs and cache the new payload ID.  \n\n- **Slot n+1:**  \n  - The proposer calls `Head`, but the head has changed from `0xA` to `0xB`.  \n  - We call FCU + attribute with `0xB` to prepare a last-minute block.  \n  - However, this last-minute block does not include any ILs(!).  \n\nI'm not sure what to do here. Either the EL needs to remember the ILs and satisfy the last-minute request, or the CL needs to call `UpdateBlockWithInclusionList` after the last-minute request, meaning it should keep the ILs in the cache. I think having the CL call `UpdateBlockWithInclusionList` makes the most sense here...",
         "created_at": "2025-01-30T21:54:39.493000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "nc1234",
@@ -37,7 +37,7 @@
         "parent": "",
         "content": "Right, we just need to give IL-satisfied block a boost like we did on proposer boost?",
         "created_at": "2025-01-30T22:04:20.945000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "terencechain",
@@ -45,7 +45,7 @@
         "parent": "",
         "content": "An IL-satisfied block doesn't get extra boosted, but an IL-not-satisfied block shouldn't receive any weight and should be reorg-able by the next slot proposer",
         "created_at": "2025-01-30T22:10:31.036000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "terencechain",
@@ -53,6 +53,6 @@
         "parent": "",
         "content": "Here is the PR: https://github.com/terencechain/consensus-specs/pull/8 \nThanks to Francesco for talking me through it",
         "created_at": "2025-01-30T23:03:35.555000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

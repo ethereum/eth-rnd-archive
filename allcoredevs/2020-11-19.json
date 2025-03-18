@@ -1,0 +1,490 @@
+[
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "And realistically, only 0xf8, 0xf9, and 0xfa will be seen.  Because of the ECDSA signature it won't go below 55 bytes, so 0xc0-\u003e0xf7 won't be seen, and 3 bytes of size give us transactions up to 16Meg in size (if gas and clients were to allow it).  128KiB TXes exist, so we will need the 3rd byte.  We could get pedantic and define 3 legacy transactions based on those numbers, each with a custom rlp wrap.",
+        "created_at": "2020-11-19T03:32:57.059000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@403707149043105803\u003e There is a bit of ugliness around not being able to just switch on the leading byte and pass the remaining bytes along.",
+        "created_at": "2020-11-19T04:06:16.173000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "```\ntype = tx.slice(0,1)\npayload = tx.slice(1)\nswitch (type) {\n    case 5: return process5(payload)\n    ...\n}\n```",
+        "created_at": "2020-11-19T04:07:41.738000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Not the end of the world if you can't preemptively slice off the payload, but it is one of those little things that kind of crops up in a bunch of places that you now have to deal with.",
+        "created_at": "2020-11-19T04:08:20.449000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Also, at this point I don't think that supporting legacy transactions actually buys us anything.",
+        "created_at": "2020-11-19T04:10:20.116000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "You missed what I'm saying, there are 3 more cases, \n```\ncase 248: // fall through\ncase 249: // fall through\ncase 250: return processFrontier(tx)\n```",
+        "created_at": "2020-11-19T05:13:25.907000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "more complete example:\n```\ntype = tx.slice(0,1)\npayload = tx.slice(1)\nswitch (type) {\n    case 1: return processEip2930(payload)\n    case 2: return processEip1559(payload)\n    case 248: // fall through\n    case 249: // fall through\n    case 250: return processFrontier(tx)\n    default: /* raise exception */\n    ...\n}\n```",
+        "created_at": "2020-11-19T05:15:20.631000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "Supporting legacy transactions buys us not rebooting the entire toolchain in one fells swoop.",
+        "created_at": "2020-11-19T05:16:40.731000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "To phase them out price them out over time: charge a premium that grows in each successive fork.",
+        "created_at": "2020-11-19T05:17:59.751000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "The downstream tooling will need to support tx types anyways, no?",
+        "created_at": "2020-11-19T05:21:38.463000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "If they want to participate in 2930 and 1559 benefits, yes.  Not everyone will turn on a dime in 3 months.",
+        "created_at": "2020-11-19T05:24:19.626000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e Supporting legacy transactions buys us not rebooting the entire toolchain in one fells swoop.\n\u003c@!403707149043105803\u003e I don't believe this is true, sadly.",
+        "created_at": "2020-11-19T05:35:00.282000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Unless you are proposing that we don't have wrapped transactions at all?",
+        "created_at": "2020-11-19T05:35:26.502000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "You are putting words in my mouth.  Clearly my code snippet supports wrapped transactions.",
+        "created_at": "2020-11-19T05:35:48.442000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Then we still have to deal with the hard problem of dual hashing I believe.",
+        "created_at": "2020-11-19T05:36:56+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "It's a slight nuance in that legacy transactions are wrapped transactions of types 248, 249, or 250 depending on their length.",
+        "created_at": "2020-11-19T05:37:11.370000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I *think* that is the one hard problem that we can't get away from if we have wrapped transactions.  Unless perhaps there are others that I'm not thinking of?",
+        "created_at": "2020-11-19T05:37:16.746000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Re: your code snippet.  I think the concern is that the whole `tx` may not necessarily be available depending on how code is structured.  One can imagine a codebase that splits apart the transaction type and the transaction payload early on (e.g., on receipt) and then drops the transaction byte array.",
+        "created_at": "2020-11-19T05:38:21.007000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "In such a case, they would have to rebuild the `tx` from `type` + `payload`.",
+        "created_at": "2020-11-19T05:38:44.327000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "Then the three cases re-prepend the 0xf8, 0xf9, 0xfa as appropriate.  I don't think we should write a spec based on how the rust code looks.",
+        "created_at": "2020-11-19T05:39:17.402000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I believe most of the clients indicated that things were a bit uglier.  That being said, perhaps none of them considered your recommendation of just having 3 transaction types for legacy transactions rather than a range.",
+        "created_at": "2020-11-19T05:43:20.780000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "The range may be 0xf8-\u003e0xff.  But I hope we have deprecated legacy transactions before exabyte transactions are viable.",
+        "created_at": "2020-11-19T05:44:34.368000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "That *does* allow us to not need to store the leading byte separate from the transaction type.  🤔",
+        "created_at": "2020-11-19T05:44:35.447000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "If we support wrapped legacy transactions in blocks, we still have the dual hash problem unfortunately.",
+        "created_at": "2020-11-19T05:45:30.193000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Though, with your suggestion maybe we just don't support wrapped legacy transactions?",
+        "created_at": "2020-11-19T05:45:47.144000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "```\ntype = tx.slice(0,1)\npayload = tx.slice(1)\nswitch (type) {\n    case 1: return processEip2930(payload)\n    case 2: return processEip1559(payload)\n    case 248: return processLegacy(payload, 248)\n    case 249: return processLegacy(payload, 249)\n    case 250: return processLegacy(payload, 250)\n    default: /* raise exception */\n    ...\n}\n```\nI think we can do something like this, using your idea.  That way the original `tx` doesn't need to be passed around, you can just pass around the type and the payload.",
+        "created_at": "2020-11-19T05:59:53.071000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "And if we don't include a wrapped legacy transaction at all, we don't need to worry about the hashing problem for now.",
+        "created_at": "2020-11-19T06:00:19.866000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e Supporting legacy transactions buys us not rebooting the entire toolchain in one fells swoop.\n\u003c@403707149043105803\u003e \n\nI don't get it. We're already saved from that, since a legacy tx simply becomes wrapped for consensus, but is signature compatible...?",
+        "created_at": "2020-11-19T07:22:19.801000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "It isn't hash compatible though.  If we *don't* wrap legacy transactions then we don't have to solve the dual-hash problem around the fork block.",
+        "created_at": "2020-11-19T07:34:57.409000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@!211091239112671234\u003e The question I guess is what the hash of a legacy wrapper transaction is",
+        "created_at": "2020-11-19T07:58:29.581000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "We can wrap it, but if we change the hash to mean the entire thing, that will break tooling",
+        "created_at": "2020-11-19T07:58:47.421000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "My vote would be to have legacy txs hash in the old form indefinitely",
+        "created_at": "2020-11-19T07:59:01.559000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Even if they are wrapped and stored wrapped",
+        "created_at": "2020-11-19T07:59:10.961000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "The alternate is to have LegacyTxs and Wrapped Txs be different, which is a bit murky",
+        "created_at": "2020-11-19T07:59:43.242000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Though cleaner long term",
+        "created_at": "2020-11-19T07:59:47.210000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I think the hope long term is that people use new transaction types almost exclusively, like EIP-1559, or in a stateless future transactions with access lists attached, or sponsored transactions, or AA transactions, etc.",
+        "created_at": "2020-11-19T08:06:14.703000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "Oh my. Feels like we're circling back and forth and rediscovering the same issues and pivoting here and there. I wouldn't be able to formulate what the 'consensus' is right now, but would much appreciate a concise description (and then we can update the EIPs based on that write-up, and then the implementations based on the EIPs). Could someone write a gist or note which summarize it?",
+        "created_at": "2020-11-19T08:06:22.719000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@!301186049323958275\u003e is the 2930-changes you've made ready for review/merge, or will it require more changes?",
+        "created_at": "2020-11-19T08:06:57.528000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, ready for you to merge.  It is just to make it 2718 complaint, nothing else.",
+        "created_at": "2020-11-19T08:07:12.917000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I don't think we have consensus on dropping support for \"transactions signed in 2016\", which means we will forever need to support legacy transactions.",
+        "created_at": "2020-11-19T08:07:40.594000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e I don't think we have consensus on dropping support for \"transactions signed in 2016\", which means we will forever need to support legacy transactions.\n\nHow much opposition is there to this? I've honestly never seen opposition, I've only seen people worrying about opposition",
+        "created_at": "2020-11-19T08:09:02.729000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I do not oppose.",
+        "created_at": "2020-11-19T08:09:19.044000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "And I know Rick doesn't oppose.",
+        "created_at": "2020-11-19T08:09:25.388000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Imho it's mostly just about tooling",
+        "created_at": "2020-11-19T08:09:38.371000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "You aren't worried about someone who signed a transaction in 2016 and threw away the keys?",
+        "created_at": "2020-11-19T08:09:55.384000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "If there's a newer alternate and everyone is told we're gonnadrop support in say 1-2 years",
+        "created_at": "2020-11-19T08:10:04.354000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@!301186049323958275\u003e Nope",
+        "created_at": "2020-11-19T08:10:12.209000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": ":))",
+        "created_at": "2020-11-19T08:10:18.371000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, the tooling argument is fair; also cold wallets etc. But I would say that's an argument for coming to consensus on deprecation soon, so we can get the clock ticking on a very generous timeline (2 years seems fine)",
+        "created_at": "2020-11-19T08:10:25.394000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "🤔 I wonder if we could create a precompile that can handle \"stuff signed in 2016\" so we can get it out of the core protocol while still \"supporting\" it?",
+        "created_at": "2020-11-19T08:10:34.134000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "One thing we could do is deprecate it at network level but add a hack to support it at consensus level, so it would want the tx included you would have to personally go talk to f2pool or whoever",
+        "created_at": "2020-11-19T08:11:16.691000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "eth2 is gonna break a whole lot more than a tx signed 5 yeasr ago 😄",
+        "created_at": "2020-11-19T08:11:24.379000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "(I imagine *some* mining pool would make one of those \"pay with a credit card to include your tx\" things)",
+        "created_at": "2020-11-19T08:11:42.473000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I think what we all want is to minimize the bit rot from any solution we implement.",
+        "created_at": "2020-11-19T08:13:43.353000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "The *impression* I get is that all of the client devs are feeling some amount of technical debt in their clients, and the places where the technical debt is most painful is different for each client.",
+        "created_at": "2020-11-19T08:14:08.533000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "For TurboGeth, the tech debt pain is in a very different place from Geth for example, despite them sharing a lot of code.",
+        "created_at": "2020-11-19T08:14:24.657000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "So is there a way we can continue to support legacy transactions for some period of time that doesn't introduce more technical debt that we have to support for 2 years (or whatever the deprecation policy is)?",
+        "created_at": "2020-11-19T08:15:49.703000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I do agree that we should get the clock ticking ASAP.",
+        "created_at": "2020-11-19T08:15:56.872000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "If we go with the solution proposed by \u003c@!403707149043105803\u003e, where we don't actually wrap legacy transactions, but instead create 3 of them (one for each of the possible RLP list leading bytes), does that give us the least technical debt over the next 2 years while we wait for the deprecation strategy to kick in?\nhttps://discordapp.com/channels/595666850260713488/745077610685661265/778825114044727326",
+        "created_at": "2020-11-19T08:17:02.584000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Or would we end up with less tech debt if we wrap all transactions and deal with the temporary problem of dual-hashes?",
+        "created_at": "2020-11-19T08:17:26.154000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Code that I can add and then delete 3 months later would be my personal preference (which is the wrap-everything and deal with dual-hashes solution).  However, others may disagree and prefer code that is simpler but we have to live with for 2 years.",
+        "created_at": "2020-11-19T08:18:17.822000+00:00",
+        "attachments": null
+    }
+]

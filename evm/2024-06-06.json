@@ -1,0 +1,254 @@
+[
+    {
+        "author": "mariusvanderwijden",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "qq: why should the tests 7 and 8 fail here? https://github.com/ethereum/tests/blob/develop/EOFTests/efValidation/max_stack_height_.json",
+        "created_at": "2024-06-06T06:40:29.470000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@892053833121923094\u003e you are likely seeing \n\n\u003e evmone::validate_header(evmc_revision, bytes_view): Assertion `offset \u003c= std::numeric_limits\u003cuint16_t\u003e::max()' failed\n\nThis is because we assumed the total contailer size will not exceed 64k (as the true limit currently is 48k).",
+        "created_at": "2024-06-06T08:22:46.825000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pdobacz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "☝️ yup, I analyzed this previously, and it seems to be the same case. The assertion was introduced to not let overflows happen in cases like this (not stopped by the MAX_INITCODE_SIZE limit).\n\nWe're considering (discussed on last EOF call) to add a validation rule for the top level container to not exceed this size, in order to set a common point of reference as to what size should EOF validation pipelines be able to handle.",
+        "created_at": "2024-06-06T12:24:49.588000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Another question:\n```\n./eofdump eofdump --hex 0xef0001010004020001001604000000008000045f6000e201000400095fe000085f5fe000035f5f5f00\nHeader\n-----------\nEOFMagic: ef00\nEOFVersion: 01\nKindType: 01\nTypesSize: 0004\nKindCode: 02\nCodeSize: 0001\nCode 0 length: 0016\nKindData: 04\nDataSize: 0000\nTerminator: 00\n-----------\nBody\n-----------\nType 0: 00800004\nCode 0: 5f6000e201000400095fe000085f5fe000035f5f5f00\n```\nshould not fail, but does with my implementation\n```\n0 PUSH0 0 \u0026{0 0}\n[0]\n1 PUSH1 1 \u0026{1 1}\n[2]\n3 RJUMPV 2 \u0026{2 2}\n[8 17]\n9 PUSH0 2 \u0026{1 1}\n[9]\n10 RJUMP 2 \u0026{2 2}\n[20]\nStack bounds not set: PUSH0 at 13 \nerr(24): unreachable code\n```\nAfaics, the push0 at 13 is not referenced by any forward flow. The RJUMP jumps over and its also not jumped to by the previous RJUMPV",
+        "created_at": "2024-06-06T12:54:43.171000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The RJUMPV has indexes of 4 and 9, so three fields get marked, +0 (no match), +4, and +9.  Start adding from the next operation, PC=9, means that 9, 13, and 18 should all be marked with a stack height",
+        "created_at": "2024-06-06T13:44:02.050000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "rodiazet",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "one additional benchmark which everybody who support state tests run can run\nhttps://notes.ethereum.org/@ipsilon/solidity_eof_poc#Benchmarks-for-1000-calls-of-swapExact0For1-as-state-tests",
+        "created_at": "2024-06-06T14:02:31.964000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Weird, I had an off by one error, thanks!",
+        "created_at": "2024-06-06T14:53:15.803000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Most of the errors at this stage will be off-by-one.",
+        "created_at": "2024-06-06T14:53:49.431000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "",
+        "created_at": "2024-06-06T15:03:04.188000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "8t06u2.png",
+                "content": "2121d569b3fca10d6c3653eb2db6657ece720dd626115f28b65d2c339d3bc705"
+            }
+        ]
+    },
+    {
+        "author": "big_tech_sux",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "how acd views EOF 😁",
+        "created_at": "2024-06-06T15:05:53.853000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "Screenshot_from_2024-04-29_11-42-28.png",
+                "content": "bc8af6db13c5d93409951ab7eed22d1392ca85ba0fbbefc671426149cf279fb4"
+            }
+        ]
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "honestly I don't get it.",
+        "created_at": "2024-06-06T15:13:02.824000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "big_tech_sux",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "just a joke :), that ACD always asks for a different sized EOF in every fork",
+        "created_at": "2024-06-06T15:14:01.216000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matt.nelson",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hi folks - i think a big sticking point right now is a lack of testnet.  It seems \u003c@\u0026836981603216654336\u003e and \u003c@\u00261070471163219824730\u003e are far enough along to bootstrap a network in the next week or two before the next ACDE. If we are aggressive we can also provide a brief update / report at the next call. Is \u003c@\u0026652918665943056397\u003e far enough along that we could have 3 clients? Would also want input from \u003c@199561711278227457\u003e and \u003c@412614104222531604\u003e on feasibility... any thoughts here?",
+        "created_at": "2024-06-06T16:27:40.774000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We're happy to help setup testnets. We'd start with local ones as it's easiest to iterate.\n\nHow do you currently activate eof? What el and CL config params do you have?",
+        "created_at": "2024-06-06T16:51:07.083000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "smartprogrammer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Dont think so, but we can make it happen maybe. \u003c@1011612262743679036\u003e",
+        "created_at": "2024-06-06T16:52:06.595000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "New EOF-only execution-spec-tests pre-release:\nhttps://github.com/ethereum/execution-spec-tests/releases/tag/eip7692%40v1.0.1\n\nThis is the new format for releasing feature focused tests, in this case EOF.\n\nIt contains all EOF fixtures in asset `fixtures_eip7692.tar.gz` (https://github.com/ethereum/execution-spec-tests/releases/download/eip7692%40v1.0.1/fixtures_eip7692.tar.gz)\n\nIf you find any issues with these files please let us know!",
+        "created_at": "2024-06-06T16:57:46.212000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We'll probably be iterating faster to make these releases since we now have an automated way to do it",
+        "created_at": "2024-06-06T16:58:26.147000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Don't make sense before passing all tests.",
+        "created_at": "2024-06-06T17:02:36.632000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "let’s have all tests ready, and passing, then let’s spin up kurtosis, and once that’s confirmed to be working then we can spin up devnets",
+        "created_at": "2024-06-06T17:28:19.183000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Makes sense, will see to integrate newest test suite",
+        "created_at": "2024-06-06T17:34:35.917000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "For Besu use either the `mega-eof` branch or wait for https://github.com/hyperledger/besu/pull/7169 to merge.\nThen for a genesis file use the \"PragueEOFTime\" field in the genesis file, like you would another fork.  Ordering wise for Besu PragueEOF follows Prague and has all Prague features. I'm up for making it CancunEOF to match tests, but that would depend on what other clients want.\n\nFor EOF there are no CL dependencies, so whatever Prague needs.",
+        "created_at": "2024-06-06T18:41:10.699000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Sounds good, should be an easy change on our genesis tool then. What do the other clients expect in their genesis files? \u003c@758579010027782144\u003e \u003c@226589605816696832\u003e \u003c@524738020033691659\u003e \u003c@429719902363058177\u003e \u003c@583892532644151312\u003e ?\n\nWe'll probably start with a EOF only testnet, since we don't want to wait on CLs for a working prague specific branch and to reduce complexity a bit.",
+        "created_at": "2024-06-06T18:48:24.420000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Cancun+EOF or Prague+EOF?",
+        "created_at": "2024-06-06T18:49:06.161000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "smartprogrammer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@1011612262743679036\u003e",
+        "created_at": "2024-06-06T18:50:17.729000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Up to you guys tbh, but i guess prague + eof? and we just leave pragueTime set to the future (so no prague) but we activate PragueEOFTime? i.e, for now EOF alone, in the future PragueEOFTime == pragueTime",
+        "created_at": "2024-06-06T18:50:33.979000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "PragueEOF in besu activates prague, in addition to EOF.",
+        "created_at": "2024-06-06T18:50:53.741000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "if we want to keep other prague features out of the testnet it would need to be Cancun+EOF",
+        "created_at": "2024-06-06T18:51:37.248000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Makes sense. If we're taking the same approach as peerdas, then it's gotta be dencun + fork.\n\nSo in total we'll have:\nDencun+Pectra EL\u0026CL\nDencun+PeerDAS\nDencun+Eof",
+        "created_at": "2024-06-06T19:54:35.708000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "this is gonna be interesting to test",
+        "created_at": "2024-06-06T20:03:42.813000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gakonst",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Makes sense. If we're taking the same",
+        "created_at": "2024-06-06T21:32:56.401000+00:00",
+        "attachments": null
+    }
+]

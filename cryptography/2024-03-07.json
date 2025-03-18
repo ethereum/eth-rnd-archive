@@ -1,0 +1,74 @@
+[
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The subgroup check avoids small subgroup attacks which would allow people impersonating a private key.\n\n- https://jonasnick.github.io/blog/2017/05/23/exploiting-low-order-generators-in-one-time-ring-signatures/\n- https://www.getmonero.org/ru/2017/05/17/disclosure-of-a-major-bug-in-cryptonote-based-currencies.html\n- https://loup-vaillant.fr/tutorials/cofactor",
+        "created_at": "2024-03-07T10:15:01.606000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But this is a user concern, isn't it? Or a smart contract actually need to know the inputs are not from a small subgroup or otherwise it cannot trust the proof.",
+        "created_at": "2024-03-07T10:16:24.638000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "User's key are using secp256k1.\nThere are no user keys on BN254 G1 or G2.\n\nBN254 G1 has no cofactor, so the only potential issue is for G2.\nThen the question becomes, can a smart contract use the lack of subgroup checks to break pairings.\n\nI have no cryptographic answer, but I know from debugging that if you're not in the correct subgroup, you get wrong result anytime you use an endomorphism.\nAnd pairings use the \"twist-frobenius endomorphism-twist\" for efficiency.",
+        "created_at": "2024-03-07T10:52:57.020000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Now regarding the question, is it possible to generate D not in the subgroup,\n\nYes.\n\nBut you should not start the random point by multiplying with the generator point.\n\nInstead you should start from a random x coordinate, then compute `x³ + 3/(9+i)` and then take the square root.",
+        "created_at": "2024-03-07T10:57:12.553000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This will give you (x, y) coordinates on the E2 curve (the \"full group\")",
+        "created_at": "2024-03-07T10:57:58.967000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "You can check if that point is in the subgroup with: https://github.com/mratsim/constantine/blob/master/constantine/math/constants/bn254_snarks_subgroups.nim#L191-L217\n\n```Nim\nfunc isInSubgroup*(P: ECP_ShortW_Jac[Fp2[BN254_Snarks], G2] or ECP_ShortW_Prj[Fp2[BN254_Snarks], G2]): SecretBool =\n  ## Returns true if P is in G2 subgroup, i.e. P is a point of order r.\n  ## A point may be on a curve but not on the prime order r subgroup.\n  ## Not checking subgroup exposes a protocol to small subgroup attacks.\n  # Implementation: Scott, https://eprint.iacr.org/2021/1130.pdf\n  #   A note on group membership tests for G1, G2 and GT\n  #   on BLS pairing-friendly curves\n  #\n  #   The condition to apply the optimized endomorphism check on G₂ \n  #   is gcd(h₁, h₂) == 1 with h₁ and h₂ the cofactors on G₁ and G₂.\n  #   In that case [p]Q == [t-1]Q as r = p+1-t and [r]Q = 0\n  #   For BN curves h₁ = 1, hence Scott group membership tests can be used for BN curves\n  #   \n  #   p the prime modulus: 36u⁴ + 36u³ + 24u² + 6u + 1\n  #   r the prime order:   36u⁴ + 36u³ + 18u² + 6u + 1\n  #   t the trace:         6u² + 1\n  var t0{.noInit.}, t1{.noInit.}: typeof(P)\n  \n  t0.pow_bn254_snarks_u(P)  # [u]P\n  t1.pow_bn254_snarks_u(t0) # [u²]P\n  t0.double(t1)             # [2u²]P\n  t0 += t1                  # [3u²]P\n  t0.double()               # [6u²]P\n  \n  t1.frobenius_psi(P)       # ψ(P)\n\n  return t0 == t1\n```",
+        "created_at": "2024-03-07T10:58:42.697000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "In my experience, it's very likely to get a point out of the subgroup.",
+        "created_at": "2024-03-07T10:59:13.801000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "oh actually my comment confirms that you can't use endomorphisms except if in the proper subgroup ^",
+        "created_at": "2024-03-07T11:00:43.508000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Thanks, I already did this.",
+        "created_at": "2024-03-07T11:17:43.877000+00:00",
+        "attachments": null
+    }
+]

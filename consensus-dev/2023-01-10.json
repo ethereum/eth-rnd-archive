@@ -1,0 +1,1242 @@
+[
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "My argument above is premised on the assumption that we want to move to SSZ in the EL everywhere *eventually* because it is better.  If we want to keep SSZ out of the EL forever then my argument doesn't really hold up at all.",
+        "created_at": "2023-01-10T02:29:08.866000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "If you accept that premise, then now feels like a perfect time to introduce it because we are adding a new root for the first time, and it is already SSZ in the CL.  I don't think we will ever see a better opportunity for introducing SSZ into the EL so if we skip now we are *essentially* saying that we have no plans on moving the EL to SSZ ever IMO.",
+        "created_at": "2023-01-10T02:30:11.929000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I like Option A the most as it is the minimal change we need to make EL block header and `ExecutionPayloadHeader` consistent. Though, if we turn `transactionsRoot` to SSZroot then it might not make sense to leave `receiptsRoot` unchanged.\n\nAnother consideration that we have to make is existing smart contracts that has a logic proving transaction or receipt inclusion into a block. Not sure if they can switch from RLP to SSZ schemas.",
+        "created_at": "2023-01-10T07:11:05.836000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "There are no existing smart contracts that verify withdrawals proofs, so nothing to switch from RLP to SSZ schema 🙂",
+        "created_at": "2023-01-10T08:33:42.264000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "And yes, `withdrawalsRoot` is the lowest hanging one because there is no migration needed for existing contracts.\nThen, `transactionsRoot` to get rid of the inconsistency between CL / EL structures\nThen, `receiptsRoot` to optimize other use cases\nThen, `blockHash` / `parentHash` so that `ExecutionPayloadHeader` and EL block header can be made exactly the same (no more `block_hash`)\nThat then leaves only `stateRoot` as a hex root in the EL block header which is probably a different beast on its own.\n\nQuestion is how to schedule. First one would be nice to avoid migrations (if we change anyway eventually no need to first introduce it with a legacy format.)\nIf the migration should be avoided, bundling with Capella is needed (and then the extra question is whether tx roots would be a real effort as well)",
+        "created_at": "2023-01-10T08:38:29.237000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "IMO, `stateRoot` should always stay opaque to CL. There is no smart contracts yet using `withdrawalsRoot` but the problem is that once we introduce the new root there potentially can appear dapp relying on it. If we are not implementing SSZ merklization on EL side as a part of Shanghai (which I believe is going to happen) then we should warn dapp community of `withdrawalsRoot` usage.\n\nOn the last ACD call of 2022 we decided not to include anything into Shanghai that will delay withdrawals. The SSZroot issue has been brought up after that decision was made. According to this, we shouldn't consider sszification for Shanghai unless it's almost free in terms of engineering.",
+        "created_at": "2023-01-10T09:28:41.214000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I think I would weakly prefer just not including the `withdrawRoot` in the EL block header at all if it isn't SSZ.",
+        "created_at": "2023-01-10T10:21:45.505000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I think we should be cautious of allowing ourselves to introduce significant technical debt just so we can keep to a timeline that we never committed to.",
+        "created_at": "2023-01-10T10:22:24.012000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I consider adding RLP `withdrawRoot` to be a notable technical debt addition, and I think we *should* be willing to delay withdraws to avoid introducing that debt.",
+        "created_at": "2023-01-10T10:23:05.639000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Unlike web2, we don't have the luxury of being able to remove all of our technical debt later.",
+        "created_at": "2023-01-10T10:23:50.207000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Probably, we can get a very simple SSZ implementation that would work for withdrawals only as a stopgap. Sounds ugly but probably it could work, idk",
+        "created_at": "2023-01-10T10:53:36.695000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "general",
+        "parent": "",
+        "content": "+1 from Erigon for switching withdrawals root to SSZ in EL so that we don't burden a brand new feature with technical debt. It's relatively easy to do in our code base (\u003c@687974325072035882\u003e has done some work already). It seems that it's trickier in \u003c@\u0026652918665943056397\u003e because there isn't any .NET SSZ library. But is it possible to write something quick tailored to withdrawals only; and extend that to generic SSZ later? We'll need SSZ for EIP-4844 anyway if I'm not mistaken. Also, \u003c@\u0026688090867927482525\u003e, \u003c@\u0026836981603216654336\u003e, what's your position?",
+        "created_at": "2023-01-10T11:01:58.455000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "If we do this withdrawals will be RLP-encoded but SSZ merklized, right?",
+        "created_at": "2023-01-10T11:05:11.702000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "That's the way it is now in the CL I mean",
+        "created_at": "2023-01-10T11:05:42.068000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "general",
+        "parent": "",
+        "content": "I'd switch withdrawals root in EL to exactly the same format as in CL, so no RLP.",
+        "created_at": "2023-01-10T11:06:25.024000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Ah you guys switched from tx root to withrawals",
+        "created_at": "2023-01-10T11:07:06.991000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "But withdrawals will be a part of EL block body, and in this structure they will still be RLP encoded despite of EL block header `withdrawalsRoot` is SSZ root",
+        "created_at": "2023-01-10T11:07:26.008000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah there are more differences: amounts are in gwei instead of wei",
+        "created_at": "2023-01-10T11:07:34.501000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "..???",
+        "created_at": "2023-01-10T11:07:47.753000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The object is really different in the CL than the EL, that's why I'm really opposed to this change",
+        "created_at": "2023-01-10T11:08:27.949000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "general",
+        "parent": "",
+        "content": "There's no reason for this difference in units between CL and EL to my mind. I'd switch EL to the CL format for withdrawals.",
+        "created_at": "2023-01-10T11:08:50.694000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "We even planned the off-site with a timeline in place",
+        "created_at": "2023-01-10T11:09:02.755000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I feel like we can generate a ton of test vectors for SSZ roots considering that they are targeting withdrawals only. It looks quite amenable to parametrised testing",
+        "created_at": "2023-01-10T11:09:03.529000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "Whatever format we use, please, let's use `wei` as the unit of value",
+        "created_at": "2023-01-10T11:09:41.896000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Static testvectors we can reuse the CL spec, I suspect deserialization and applying state transition will be the pain, like switching gwei to wei",
+        "created_at": "2023-01-10T11:10:57.013000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The CL will very unlikely change to uint256",
+        "created_at": "2023-01-10T11:11:27.019000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "We committed to not do any arithmetic",
+        "created_at": "2023-01-10T11:11:40.309000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "But then again I could have sworn we would not be discussing this at this stage and here we are",
+        "created_at": "2023-01-10T11:12:05.499000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "What do you mean by deserialisation? I think we don't need to deal with it. We only need to SSZ-encode `Withdrawal` fields and then compute the root",
+        "created_at": "2023-01-10T11:12:42.573000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Well if we want to get the same object as the CL then we need to switch one of the two to uint256 or uint64",
+        "created_at": "2023-01-10T11:13:39.429000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Either at the deserialization stage or before Merkleizing",
+        "created_at": "2023-01-10T11:14:12.542000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "To get the same root",
+        "created_at": "2023-01-10T11:14:20.699000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Oh, I am not saying that we should switch to `wei`",
+        "created_at": "2023-01-10T11:14:32.705000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "If you choose the latter then hashing becomes much worse",
+        "created_at": "2023-01-10T11:14:43.014000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Then I'm more up in arms",
+        "created_at": "2023-01-10T11:14:53.685000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Because now this change will involve all CLs implementations where withdrawals are everywhere",
+        "created_at": "2023-01-10T11:15:23.486000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "We are not looking to a couple of weeks only",
+        "created_at": "2023-01-10T11:15:41.369000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "What I was saying is that let EL serialize `withdrawals` with whatever way they want. All we need is SSZ root computation for `withdrawals` happening on EL side",
+        "created_at": "2023-01-10T11:15:45.079000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah but then it's not as simple as hashing a list of lists",
+        "created_at": "2023-01-10T11:16:22.650000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "And both Giulio's and Marius' implementations are just plain wrong",
+        "created_at": "2023-01-10T11:16:44.082000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "It looks like something simple but it's not entirely trivial, and we're discussing a design decision when we were set to public testnets, this is full crazy",
+        "created_at": "2023-01-10T11:17:31.694000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "We need a merkle root computation for a `Withdrawal` which seems straightforward.\nThen compute a root of a list of roots and factor the actual length in",
+        "created_at": "2023-01-10T11:18:03.798000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I am really far from estimating the whole complexity of this. Not saying is super easy to do and respecting your opinion. What I think is that we can rigorously test the implementation by generating tests using CL spec.",
+        "created_at": "2023-01-10T11:19:33.023000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah but if you change from wei to gwei to get the same root as the CL, then the implementation is no longer a root of a byte slice, but rather a full ssz container, and no EL team has this",
+        "created_at": "2023-01-10T11:20:30.294000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "And if you change in the CL to use wei in the object then that's pretty invasive",
+        "created_at": "2023-01-10T11:21:04.739000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "I have not paid full attention, but I think that was not the idea. Sounds like they won't get the same root.",
+        "created_at": "2023-01-10T11:22:15.833000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Oh my..., I have entirely forgot that we have different units across layers",
+        "created_at": "2023-01-10T11:22:42.011000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Oh I see so the idea is to have then different roots anyway?",
+        "created_at": "2023-01-10T11:23:01.114000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "This makes it at least easier",
+        "created_at": "2023-01-10T11:23:16.221000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "As the implementation I posted above works",
+        "created_at": "2023-01-10T11:23:29.029000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "I missed the discussion where this was decided, but it apparently seems so 🙂 ... Not sure if it makes any sense ... (?)",
+        "created_at": "2023-01-10T11:23:37.555000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Btw, if `uintN` were big endian...",
+        "created_at": "2023-01-10T11:23:56.500000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "general",
+        "parent": "",
+        "content": "I'd use GWei both in EL \u0026 CL for withdrawals and ensure the same root",
+        "created_at": "2023-01-10T11:24:56.169000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I don't think it is. As we're trying to get rid of inconsistency between `ExecutionPayloadHeader` and EL block header, so, the roots should match. cc \u003c@881905303011086387\u003e",
+        "created_at": "2023-01-10T11:25:07.785000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "But that's not sufficient, is it? We'd also need to do SSZ \"all the way down\"",
+        "created_at": "2023-01-10T11:25:32.982000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "general",
+        "parent": "",
+        "content": "Sounds good to me. We'll need SSZ for EIP-4844 anyway.",
+        "created_at": "2023-01-10T11:26:07.309000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "This was my understanding for light clients",
+        "created_at": "2023-01-10T11:26:17.788000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "But withdrawals-containers will be downloaded over `eth` protocol, as part of block download? And those are rlp-encoded for network transport. So verifying downloaded content means re-encoding from rlp to ssz, and only _then_ verify if it was intact. I don't know about this...",
+        "created_at": "2023-01-10T11:28:01.684000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "general",
+        "parent": "",
+        "content": "Re-encoding from RLP to SSZ should be cheap on CPU, right?",
+        "created_at": "2023-01-10T11:29:42.986000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "general",
+        "parent": "",
+        "content": "It's actually JSON in the Engine API, not RLP.",
+        "created_at": "2023-01-10T11:30:23.401000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "general",
+        "parent": "",
+        "content": "But it's RLP in EL p2p, right.",
+        "created_at": "2023-01-10T11:32:31.292000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "I'm not talking about the engine api, I mean when you sync older block bodies from peers over `eth` protocol. Changing the primitives here (full ssz vs lists of rlp-blobs) is not merely a change in how header fields are calculated, the change has a pretty wide radius of impact",
+        "created_at": "2023-01-10T11:32:34.658000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The option is keeping this part and converting right before Merkleizing",
+        "created_at": "2023-01-10T11:32:59.508000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "general",
+        "parent": "",
+        "content": "We can keep withdrawals as RLP in EL p2p (eth/6x).",
+        "created_at": "2023-01-10T11:33:32.134000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "yes. The `withdrawals_root` should match across both the CL `ExecutionPayloadHeader` and the EL block header.\nThis involves storing `Withdrawal` as an SSZ object in the EL (and also transferring it in SSZ serialized format between peers)",
+        "created_at": "2023-01-10T11:37:12.280000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "Why cant we change withdrawals to be wei in CL?",
+        "created_at": "2023-01-10T11:37:55.416000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "the \"difficult\" arithmethic is using 32 bytes instead of 8 bytes",
+        "created_at": "2023-01-10T11:38:17.712000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "is that difficult?",
+        "created_at": "2023-01-10T11:38:23.504000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Why does this involve SSZ on EL p2p and storage layers?",
+        "created_at": "2023-01-10T11:38:42.149000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "like baseFee is already like that in CL",
+        "created_at": "2023-01-10T11:38:44.201000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "it is not in \"Gwei\"",
+        "created_at": "2023-01-10T11:38:54.796000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "It's opaque and not used for anything",
+        "created_at": "2023-01-10T11:39:18.257000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "But the withdrawal amount is",
+        "created_at": "2023-01-10T11:39:29.092000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "The _correct_ thing would be to have a single encoding for a particular data item, across all layers.",
+        "created_at": "2023-01-10T11:39:31.534000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "and it is difficult to use big int or uint256?",
+        "created_at": "2023-01-10T11:39:51.811000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "The entire CL is using uint64",
+        "created_at": "2023-01-10T11:39:57.483000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Not, it's just a non trivial change, which is why I'm arguing we should not even be considering this right now",
+        "created_at": "2023-01-10T11:40:23.367000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "but i argue it is trivial",
+        "created_at": "2023-01-10T11:40:36.901000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Then this change becomes much more involving",
+        "created_at": "2023-01-10T11:40:51.993000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I will review your PR to prysm then 😂",
+        "created_at": "2023-01-10T11:41:12.880000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "bet",
+        "created_at": "2023-01-10T11:41:39.044000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "We should still discuss where we want to be eventually. Timeline is a separate thing.\nLong term, if we _eventually_ want to have a SSZ world, I think that withdrawals should never be encoded as RLP in that world.\nWhether it is an overall time-save to directly start saving the withdrawals as SSZ, or to initially do them in RLP and convert them later, depends.\nShort-term, not doing anything may get us to withdrawals faster (but at the cost of having to deal with a format change later).",
+        "created_at": "2023-01-10T11:42:57.913000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The one danger I see that would justify a full delay is contracts implementing this. But I think this can be shipped already deprecated",
+        "created_at": "2023-01-10T11:44:43.775000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "Overall, it seems that there is technical agreement that the change should eventually happen. We can still try to implement it regardless of timeline.\nWhether it warrants a delay can still be discussed when we understand better how complex such a change would actually be.\nIf the biggest problem is whether it is a uint256 or a uint64, I think we are doing quite well overall 🙂",
+        "created_at": "2023-01-10T11:48:43.924000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "And, if it doesn't make the cut for Capella, the work would at least be ready for the EIP4844 fork",
+        "created_at": "2023-01-10T11:49:16.017000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "on the topic of withdrawals compatibility: here is the thing (jokes aside): on CL balances are on gwei so I still think that the change would be relatively easy since you can add a converter wei to gwei, before decreasing balance but it has to be rounded to gwei so you cant just withdraw any amount of wei that is impossible. Said that, making it GWEI on EL is okay too since its not like we will every receive a specific wei amount since that will be impossible \u003c@211091239112671234\u003e",
+        "created_at": "2023-01-10T12:03:09.456000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "so it wont change much if we use wei on CL or gwei on EL, gwei will be used at the end of the day",
+        "created_at": "2023-01-10T12:03:40.941000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "you would just use gwei disguised as wei",
+        "created_at": "2023-01-10T12:04:10.815000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "I just think it's ugly to use gwei for denoting value.  We have a canonical unit of value. Sure we can convert, but it reeks of hack.",
+        "created_at": "2023-01-10T12:05:13.248000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "i know but they decided to use it on CL",
+        "created_at": "2023-01-10T12:05:30.698000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "it is what it is",
+        "created_at": "2023-01-10T12:05:45.948000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah",
+        "created_at": "2023-01-10T12:05:50.773000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "and I think we should strive for compatibility",
+        "created_at": "2023-01-10T12:05:55.963000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "it will be gwei at the end of the day",
+        "created_at": "2023-01-10T12:06:04.299000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "just disguised as wei 🙂",
+        "created_at": "2023-01-10T12:06:09.832000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "I think we should think about it because you can argue that using Gwei in CL is a mistake but we need to work with what we have and compatibility of root is probably desired",
+        "created_at": "2023-01-10T12:08:44.838000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "After discussing internally, with \u003c@194432762315407360\u003e and others,I agree that we should use the full ssz envelope and compat with CL",
+        "created_at": "2023-01-10T13:30:55.049000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Unfortunately the CL devs decided that everything in the CL would be nanoeth (gwei) because they didn't want to have to do bigint math anywhere.  So we have already crossed the bridge of the protocol being inconsistent between layers, which means one side has to give if there is data shared across layers (as is the case for withdraws).",
+        "created_at": "2023-01-10T13:45:47.720000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I agree that the withdraw root should match between EL and CL.  Feels like way more pain all over the place if they don't.",
+        "created_at": "2023-01-10T13:46:59.690000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "if we can get uniform buy-in from all of the EL devs (ideally by this Thursday's CL call) then im happy to update the EIP; although we should all understand that _any_ change at this point will lead to some sort of delay in the shipping timeline\n\nspecific changes:\n1. withdrawal data is SSZ-encoded with the schema\n```python\nclass Withdrawal(Container):\n    index: WithdrawalIndex\n    validator_index: ValidatorIndex\n    address: ExecutionAddress\n    amount: Gwei\n```\n2. withdrawals are encoded in the block as a `List[Withdrawal, MAX_WITHDRAWALS_PER_PAYLOAD]`\n3. accumulator in the block header changes from the hash of the MPT to the SSZ hash tree root of a `List[Withdrawals, MAX_WITHDRAWALS_PER_PAYLOAD]`",
+        "created_at": "2023-01-10T15:21:48.653000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "(it is not clear to me if we want the `amount` in `wei` or `gwei`)",
+        "created_at": "2023-01-10T15:24:14.209000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "The impression I got from the conversation above, and my personal opinion, is that the withdraw root should match between EL and CL which means either the CL switches to attoeth (wei) or the EL uses nanoeth (gwei).  It is likely easier to have the EL do nanoeth, so I *suspect* that is how the chips will fall.",
+        "created_at": "2023-01-10T15:25:49.591000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "yeah i agree there is a lot of value in having the roots match",
+        "created_at": "2023-01-10T15:28:06.405000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "sounds like geth and erigon roughly agree to this change -- have i missed input from nethermind or besu?",
+        "created_at": "2023-01-10T15:28:46.028000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I *thought* on the last ACDE call Nethermind indicated they were in favor of this, but I could be mis-remembering who was talking so definitely don't quote me on that.",
+        "created_at": "2023-01-10T15:44:32.016000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Or I could have misinterpreted what they said.  It is very fuzzy, many days ago.",
+        "created_at": "2023-01-10T15:44:49.590000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I don't think Besu has commented.",
+        "created_at": "2023-01-10T15:44:59.217000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "rubo2",
+        "category": "general",
+        "parent": "",
+        "content": "in general, we agree on having cl/el withdrawal roots match. but we think it's too late for this kind of change as it will delay shanghai delivery. not only do we need to implement the required changes for ssz adoption, but the ssz itself. it takes time to implement, test, fix, test, polish... also, withdrawals are a much-anticipated feature, and delaying it will irritate the community more. on the other hand, we understand that implementing it later has its own drawbacks. it's a pity that the idea came up so late.",
+        "created_at": "2023-01-10T16:56:07.779000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I feel you, everything about this will be a hack at this stage. This can, and should, be well designed. At this stage it's not a simple \"implementation detail\"",
+        "created_at": "2023-01-10T18:15:35.909000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I disagree that EL devs have the saying here, this is more a matter of governance and it belongs in the all ACD calls. On top of this, if we move to full ssz envelope (as some were writing above) this also affects CL devs that need to remove the Wei/Gwei conversion in their marshalling code",
+        "created_at": "2023-01-10T18:18:42.817000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "EL devs have to implement it, so they should have a say.  I don't expect a veto or objection (not my section of code, and 4844 will need SSZ) but cramming down specs because the CL wants it is not a practice I want to start today.",
+        "created_at": "2023-01-10T18:25:02.927000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "EL and CL should arrive at a consensus about their interfaces.",
+        "created_at": "2023-01-10T18:25:54.803000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "I think that for withdrawal root you can implement an hash tree root manually",
+        "created_at": "2023-01-10T18:55:17.981000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "And do 3 keccaks",
+        "created_at": "2023-01-10T18:55:31.689000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "And I think you dont need full ssz serialization",
+        "created_at": "2023-01-10T18:55:51.466000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "But I feel what you are saying, it is very unfortunate",
+        "created_at": "2023-01-10T18:56:22.404000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@687974325072035882\u003e have you tried to implement the SSZ format in erigon? if it's really that simple that would be a well-appreciated data point! \nif we eventually want to transition to SSZ anyway, and the other work for capella is done, feel free to explore 🙂\n\nbtw, keccak256 is not the same as sha256, but yes, an individual `Withdrawal` object is easy to hash.\nthe more \"challenging\" objects are the `Transaction`, and the `List[Withdrawal/Transaction, N]`, because there you have the zero-chunk extension and the `mix_in_length` from SSZ.",
+        "created_at": "2023-01-10T19:46:04.812000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "Yes",
+        "created_at": "2023-01-10T19:50:31.029000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "Do you want the reference implementation?",
+        "created_at": "2023-01-10T19:50:40.458000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "It is into Erigon, both for list and individual object",
+        "created_at": "2023-01-10T19:51:10.941000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "Although list is not tested, individually it is",
+        "created_at": "2023-01-10T19:51:22.069000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "That sounds nice. How about the exchange of block data across EL network? How do you exchange the SSZ part there?",
+        "created_at": "2023-01-10T19:51:47.442000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "EL uses RLP",
+        "created_at": "2023-01-10T19:52:12.503000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "The hash is just a 32 byte without the RLP",
+        "created_at": "2023-01-10T19:52:25.285000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "There is no SSZ serialization in EL",
+        "created_at": "2023-01-10T19:52:36.292000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "ah, so you only transitioned the `withdrawals_root`, but the actual withdrawals are still exchanged in RLP / Wei amount format",
+        "created_at": "2023-01-10T19:52:46.380000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "Although I also have that implemented",
+        "created_at": "2023-01-10T19:52:48.971000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "I made 2, one is in RLP and is with uint256, the other in uint64 and in ssz",
+        "created_at": "2023-01-10T19:53:13.020000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "I can make the tree root of ssz in wei too its  easy, just convert and bytes32()",
+        "created_at": "2023-01-10T19:54:23.127000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "fyi: https://github.com/ledgerwatch/erigon/blob/310b8d9e01f648922aeae0b6d54b3c0c6898a5e4/core/types/withdrawal.go#L169",
+        "created_at": "2023-01-10T19:56:09.543000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "It uses gohashtree under the hood but the concept is still quite easy, you construct a merkle tree with the individual withdrawal hashed and mix in withdrawal count",
+        "created_at": "2023-01-10T19:57:40.293000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I did not say ever that EL shouldn't have a say. I explicitly said that it shouldn't have the say. This is a governance issue, not an execution one",
+        "created_at": "2023-01-10T20:20:29.608000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Oops that was in reply to this",
+        "created_at": "2023-01-10T20:22:01.992000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Btw, Marius also was using keccak in his implementation",
+        "created_at": "2023-01-10T20:23:32.869000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "Right, it's cross-layer, so both sides need to agree.  One doesn't get to dictate to the other.",
+        "created_at": "2023-01-10T20:25:13.801000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Exactly, which was my reply to Alex's comment to update the EIP based on EL feedback",
+        "created_at": "2023-01-10T20:26:04.040000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "https://github.com/ethereum/consensus-spec-tests/tree/v1.3.0-rc.0/tests/mainnet/capella/ssz_static/Withdrawal/ssz_random\nbtw, `Withdrawal` SSZ test vectors",
+        "created_at": "2023-01-10T20:31:11.628000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah but the problem is that the EL needs more changes than these static vectors if we go full SSZ, and we also need changes as well to get rid of the wei at the very least and to gossip ssz in the best of worlds",
+        "created_at": "2023-01-10T20:33:43.570000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "It's clear that this issue is much more involved than just \"compute an htr\"",
+        "created_at": "2023-01-10T20:34:24.074000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "I only test case 1 for now I am not there at the point where I will be running EF tests on my CL prototype",
+        "created_at": "2023-01-10T20:34:37.778000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "🙂",
+        "created_at": "2023-01-10T20:34:43.546000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "the wei-vs-gwei seems settled though, no? ie by technical necessity to use gwei, more or less?",
+        "created_at": "2023-01-10T20:35:25.489000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Even if we move to Gwei, CLs  need to change because we translate to Wei before sending it to the engine",
+        "created_at": "2023-01-10T20:37:49.347000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "And the engine will not be able to simply implement hash of byte lists (as in Marius PR) because they'll need to implement a serialization of a full ssz container",
+        "created_at": "2023-01-10T20:38:55.672000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "they need to implement the serialization of a specific container?",
+        "created_at": "2023-01-10T20:39:36.738000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "ie it can be hardcoded for that one \"shape\"?",
+        "created_at": "2023-01-10T20:39:50.858000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "We've had consensus bugs in testnets because of  BE/LE, care to bet about uint64/256?",
+        "created_at": "2023-01-10T20:39:57.677000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Yes it can, it's not hard, but the whole thing it's not trivial and needs to be designed",
+        "created_at": "2023-01-10T20:40:28.869000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "We're not arguing whether this should be done or not. I think everyone agrees that it should be done in SSZ.",
+        "created_at": "2023-01-10T20:41:25.596000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Or at least I haven't seen anyone saying otherwise",
+        "created_at": "2023-01-10T20:41:42.033000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "aw well, those are annoying but thankfully trivial to fix - it amuses me to no end that all these big brains we have on board are so obsessed with the supposed difficulty the ordering of bytes one way or another 🤣",
+        "created_at": "2023-01-10T20:42:38.716000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "I honestly would think it is better to make wei, gwei in EL due to the fact that the opposite would not really change anything other than adding more complexity",
+        "created_at": "2023-01-10T20:43:48.402000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "Gwei also makes it more honest. There is no Wei in CL. \nIf we do a `engine_getPayload`, CL currently gets it in Wei from the EL (in the JSON format). Then CL has to check whether it evenly divides into Gwei before it can continue processing it. Like, it's just another thing that can go wrong",
+        "created_at": "2023-01-10T20:48:52.363000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "That does not even require an hard fork but maybe we should just try to focus on the issue at hand",
+        "created_at": "2023-01-10T20:49:53.242000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Every element in the container is fixed length, so my suspicion is that the easiest is to send over the wire  gwei  ssz encoded. The EL can hash this almost as a list of bytes and convert to Wei on deserialization",
+        "created_at": "2023-01-10T20:51:37.517000+00:00",
+        "attachments": null
+    }
+]

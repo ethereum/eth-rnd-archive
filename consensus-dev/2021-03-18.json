@@ -1,0 +1,202 @@
+[
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "What should a validator do in the following situation re sync committee signatures:\n  - waits for 3 seconds for a block; no block appears\n  - creates and broadcasts a sync committee signature with the current head block\n  - block appears\nShould it create and broadcast a new sync committee signature?",
+        "created_at": "2021-03-18T10:11:45.414000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "And a related question on sync committee signature aggregation: if a validator is chosen to be an aggregator should it aggregate only those signatures that match the beacon block root it signed in its contribution, or should it aggregate all signatures for each beacon block root that others have signed, potentially creating multiple aggregates?  Feels like it should be the latter if we're after the best chance of having a good aggregate.\n\nIn case the above isn't clear, an example: the validator with index 1 has sync committee signatures from indices 1, 2 and 3 for beacon block root 0x01 and from indices 4, 5 and 6 for beacon block root 0x02.  Should it just aggregate the signatures 1, 2 and 3, ignoring the indices whose beacon block root does not match the validator's own contribution, or should it generate one aggregate for 1, 2 and 3 and a second aggregate for 4, 5 and 6 and broadcast them both?  (Or should it pick just the one with the highest number of signatures?  Or the highest block slot?)",
+        "created_at": "2021-03-18T10:22:06.437000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e Should it create and broadcast a new sync committee signature?",
+        "created_at": "2021-03-18T15:53:45.105000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "i think we stick w/ the behavior for attestations today which aiui does _not_ rebroadcast",
+        "created_at": "2021-03-18T15:54:05.340000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "in the worst case, you get the late block w/ no sync committee signatures but if this happens rarely it does not substantially harm the security of the light client construction",
+        "created_at": "2021-03-18T15:55:07.690000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "we can definitely profile mainnet conditions to get some data to put to these claims but i expect even in higher latency situations like this you end up with only partial committee participation, rather than none",
+        "created_at": "2021-03-18T15:55:50.673000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e if a validator is chosen to be an aggregator should it aggregate only those signatures that match the beacon block root it signed in its contribution, or should it aggregate all signatures for each beacon block root that others have signed, potentially creating multiple aggregates?\nan aggregator should only aggregate signatures over the block root matching their own view of the chain",
+        "created_at": "2021-03-18T15:57:55.764000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "and moreover, should aim to build the aggregate with the highest number of (matching) signatures as the light client sync boils down to just following the chain w/ the most signatures",
+        "created_at": "2021-03-18T15:58:35.085000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "broadcasting disparate aggregates in the honest case (e.g. block vs skipped slot ambiguity) just increases load on the p2p net and broadcasting them in the malicious case is a DoS vector",
+        "created_at": "2021-03-18T16:00:43.084000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Given that there are 4 seconds between the sync committee signatures being created and the aggregation starting, in the situation where a new beacon block shows up (for example) 7 seconds in to the slot wouldn't this imply there may be very few suitable signatures available, and contradict your following statement about aiming to build the aggregate with the highest number of matching signatures?",
+        "created_at": "2021-03-18T17:16:57.339000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Sounds like the required path to follow will be to take whatever aggregate has the highest number of signatures regardless of the height of the beacon block root to which it applies.",
+        "created_at": "2021-03-18T17:18:01.974000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "you will still want to make the best aggregate aligning w/ the validator's local view of the chain",
+        "created_at": "2021-03-18T17:36:39.348000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "so highest number subject to the constraint that you are consistent w/ what you believe the state of the world to be",
+        "created_at": "2021-03-18T17:37:50.511000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "i believe we handle attestations the same way today",
+        "created_at": "2021-03-18T17:38:06.385000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "I believe that a validator will only aggregate attestations that have the same attestation data root as the one it created, so possibly different.",
+        "created_at": "2021-03-18T17:44:00.606000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "right, \"local view\" may be misleading here",
+        "created_at": "2021-03-18T17:44:57.146000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "the intent (for now) is to mirror the attestation behavior",
+        "created_at": "2021-03-18T17:45:05.135000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "you ultimately want to do whatever reflects the canonical chain -- but mid-slot blocks imply running fork-choice frequently and possibly tossing work through a slot up until that point",
+        "created_at": "2021-03-18T17:45:44.026000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "So a validator only aggregates the sync committee signatures that match the beacon block root of the signature it created, then.",
+        "created_at": "2021-03-18T17:46:08.376000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "so for the sync committees, the aggregator should select signatures that align w/ the signature they produced",
+        "created_at": "2021-03-18T17:46:17.148000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "right",
+        "created_at": "2021-03-18T17:46:27.689000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Got it, thanks.",
+        "created_at": "2021-03-18T17:47:17.288000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "totally, feel free to ping if things can be more clear",
+        "created_at": "2021-03-18T17:47:30.907000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "this line from the spec covers this behavior: \n\u003e Given all of the (valid) collected sync_committee_signatures: Set[SyncCommitteeSignature] from the sync_committee_{subnet_id} gossip during the selected slot with an equivalent beacon_block_root to that of the aggregator,",
+        "created_at": "2021-03-18T17:47:51.038000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Another shout-out for the client devs here: the last few days without changing anything in my node I've been seeing this:\n```\n$ bad-heads \n   time      pubkey           epoch      slot    source  target  head   inc. dist.   Balance Chg.\n06:26:35   0x96a6110d6751     24049    769585       ✓       ✓      ⨯       1           15919\n03/17/21   0x96a6110d6751     23933    765856       ✓       ⨯      ⨯       1           -1180\n```\nThat's just one bad head vote per day per validator, one in slot zero. This is due to improvements on every front, not only on my own client (prysm) attesting more efficiently but also in every client proposing/broadcasting and aggregating better. Kudos to all.",
+        "created_at": "2021-03-18T18:14:09.167000+00:00",
+        "attachments": null
+    }
+]

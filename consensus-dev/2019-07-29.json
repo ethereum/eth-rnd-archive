@@ -1,0 +1,394 @@
+[
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**n0ble**\n@vbuterin Here is a short report on complexity analysis doc:\n\nMight be incorrect:\n- DepositData size looks incorrect.\n- Does number of hashes consider length mix-in? From what I can see it's not counted for the moment.\n- Number of hashes per Deposit is calculated as `22 * 2`, shouldn't it be `22 + 32`?\n\nMight be missed:\n- Verificaiton of proposer singature and randao reveal.\n- Transfers are missing. Might be intentional due to Phase 0.\n- History lists updates: block roots, state roots, historical roots, etc.\n\nQuestions:\n- How do you evaluate avg number of attestations per block? We were using this formula: `avg_att_block = committees_per_slot * avg_beacon_forks * avg_shard_forks`. It's highly likely that there will be at least `2` forks per beacon and shard chains. Hence, `avg_att_block` turns into `32` for Phase 0 and `64` starting from Phase 1.\n- Attester slashing hashes `= (22 - log(8192, 2)) * 8192`. Where does `log(8192, 2)` come from?",
+        "created_at": "2019-07-29T08:19:58.061000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "We have a line in `process_final_updates`:\n```python\nstate.randao_mixes[next_epoch % EPOCHS_PER_HISTORICAL_VECTOR] = get_randao_mix(state, current_epoch)\n```\nwhich simply looks like `randao_mixes[next_epoch] = randao_mixes[current_epoch]`, where `current_epoch` is the epoch that has just begun. \n\nWhat is the intention behind this assignment?",
+        "created_at": "2019-07-29T08:25:47.684000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**protolambda**\nRandao carries over from epoch to epoch. Process randao changes the value for the last epoch. Also see review comment in recently merged shuffling look ahead PR (mobile, can't dig up link, sorry) for reasoning about seed changes",
+        "created_at": "2019-07-29T10:21:00.008000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**n0ble**\n@protolambda Looks like I messed things up, accidentally thought that we have epoch transition *when* slot has already been incremented. This is not the case and this line now makes sense to me. Thanks!",
+        "created_at": "2019-07-29T10:37:51.983000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "Suppose one day we support `Transfer` in beacon chain, how do we deal with reorg? The situation I'm wondering is at the edge of `ValidatorIndex` -- a validator may see at a time that a certain `ValidatorIndex` A refers to validator X, then several seconds passed, and a reorg happened, `ValidatorIndex` A suddenly refers to validator Y. Do we have any prevention against this?",
+        "created_at": "2019-07-29T11:18:09.068000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "A validator index only changes when a deposit changes. So that would be an eth1 data that is accepted, but then undone using eth2 fork-choice following only valid eth1 data. So a long range, but still tricky. A receiver identified by pubkey may be the better solution.",
+        "created_at": "2019-07-29T11:24:05.066000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "In the case of Transfers, validator index doesnt change. `ValidatorIndex A` will always refer to validator X. Only the balance changes",
+        "created_at": "2019-07-29T11:25:37.368000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "Just wonder whether we can come up with something more elegant. Index is much shorter compared with public key.",
+        "created_at": "2019-07-29T11:27:56.849000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "Block root + index could work.",
+        "created_at": "2019-07-29T11:28:22.842000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "Block root being some known root after the index exists as the target you know as an index from there on",
+        "created_at": "2019-07-29T11:29:04.631000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "But block root changes every block and we cannot know a block root in the future?",
+        "created_at": "2019-07-29T11:29:59.815000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "Pubkey really is just the simple solution. Doesn't have to be in the data, if you sign over it at least",
+        "created_at": "2019-07-29T11:30:02.456000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "A root in the past, but after the initial deposit of the receiver. Hacky though",
+        "created_at": "2019-07-29T11:30:46.878000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "Also I think if we use binary merkle tree, then for phrase 1 or 2 the general accounts will also be addressed by index, right? So this will also be an issue for general users?",
+        "created_at": "2019-07-29T11:32:35.203000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "Say, a 2nd transfers object is created that contains the pubkey of the receiver. Then that could be signed. But then communicated as the receiver index. If those 40 bytes make that much of a difference....",
+        "created_at": "2019-07-29T11:32:39.699000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm interesting. So signed by public key, but communicated as index.",
+        "created_at": "2019-07-29T11:33:46.310000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "There are no general accounts. That's all EE",
+        "created_at": "2019-07-29T11:33:53.350000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "So options for transfers:\n- status quo, with replay attack if you can fork eth1 to invalidate deposits, and insert your own\n- replace receiver index with pubkey. Transfer signature easily checked\n- special transfer object with pubkey of receiver is signed. But communicated with receiver index instead\n- some mechanism to ensure a receiver index is bound to some initial deposit, to avoid replay. E.g. enforce transfer to come after block that has the initial deposit, or a more recent block.",
+        "created_at": "2019-07-29T11:39:35.303000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "If the deposit is assumed to be persistent after a given time, transfers after that would be just fine. Not sure if that's good enough",
+        "created_at": "2019-07-29T11:45:15.053000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "This might be a bit restrictive , but only accept transfers to indexes which reference finalized deposits. if \n`index \u003e=  finalizedState.Eth1Data.depositCount` we reject the transfer",
+        "created_at": "2019-07-29T11:52:54.746000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "I think I prefer a slightly bigger transfer object (this isn't user level anyway, just a bit of system level interaction, no big transfer counts necessary), over introducing more state (finalized eth1 data) or requiring multiple states during processing.",
+        "created_at": "2019-07-29T11:56:47.902000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "fair enough, this bigger transfer object will contain the receiver's pubkey then ?",
+        "created_at": "2019-07-29T12:01:57.684000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "That would be the most straight forward solution, at the cost of 40 bytes, or 48 if you keep the receiver index around.",
+        "created_at": "2019-07-29T12:04:18.698000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "Open for suggestions, if you can think of more ways than those already listed",
+        "created_at": "2019-07-29T12:04:49.294000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "And thanks to \u003c@242032644232183808\u003e for finding it. Rare but significant edge case",
+        "created_at": "2019-07-29T12:06:54.160000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gregthegreek",
+        "category": "general",
+        "parent": "",
+        "content": "whats the edge case specifically?",
+        "created_at": "2019-07-29T12:08:01.715000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "If deposits are ever replaced due to an attack on eth1, and a different validator is onboarded into the same index, a transfer to that index is still valid, and can be replayed",
+        "created_at": "2019-07-29T12:12:27.416000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "thinking out loud here. How about using the current state root in the transfer object ? If the state root exists in our historical set of state roots, the transfer is valid. We would only need to add 32 bytes vs 40",
+        "created_at": "2019-07-29T12:15:18.159000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "That's basically the same as the block root idea",
+        "created_at": "2019-07-29T12:15:49.847000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "And I'm worried you'll need another 8 bytes to identify the root. Otherwise it will be a long lookup in history. And it cannot refer to even older roots than the vectors, while that would make a transfer even more set in stone",
+        "created_at": "2019-07-29T12:17:48.781000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "The \"pubkey signed but referencesdby index instead of included in data\" idea would work for 0 extra bytes, but more verification complexity (although no history lookup)",
+        "created_at": "2019-07-29T12:22:41.082000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah that would work too, at no extra storage cost.",
+        "created_at": "2019-07-29T12:26:39.221000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "increase in verification complexity would be minor too",
+        "created_at": "2019-07-29T12:27:16.861000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "Actually, instead of using the pubkey field, I think it would be better to just use a user-set identifiable 32 byte field to sign. In this way it handles it if the validator willingly changes its public key.",
+        "created_at": "2019-07-29T13:54:33.827000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**protolambda**\nWe open up another can of worms if we also need replay protection for deprecated receiver addresses that are then picked up by new validators.",
+        "created_at": "2019-07-29T14:33:01.703000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_gitter_bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cbenjaminion\u003e A (possibly dumb) question about the BLS test generators. Here, https://github.com/ethereum/eth2.0-specs/blob/dev/test_generators/bls/main.py#L44 , there is the following comment and parameters:\n```\nPRIVKEYS = [\n    # Curve order is 256 so private keys are 32 bytes at most.\n    # Also not all integers is a valid private key, so using pre-generated keys\n    hex_to_int('0x00000000000000000000000000000000263dbd792f5b1be47ed85f8938c0f29586af0d3ac7b977f21c278fe1462040e3'),\n    hex_to_int('0x0000000000000000000000000000000047b8192d77bf871b62e87859d653922725724a5c031afeabc60bcef5ff665138'),\n    hex_to_int('0x00000000000000000000000000000000328388aff0d4a5b7dc9205abd374e7e98f3cd9f3418edb4eafda5fb16473d216'),\n]\n```\nObservations:\n - yes the curve order (for G1 and G2) is 256 bits, but the private keys are still members of FQ, so 381 bits.\n - this is why not all integers are valid private keys\n - so why are we using 32 byte numbers prepended with 16 zero bytes here? What have I missed?\n - when the test vectors are output to YAML, only 32 bytes are present for the secret keys\n - by putting back the 16 bytes of zero padding we are able to pass the signing tests fine - Milagro expects 48 byte secret keys (i.e. members of FQ)\n\nClearly, everything works as-is, but just wanted to verify that we have a common understanding that (deserialised) secret keys are 48 bytes long (not 32), in which case it would be better for the test vectors to reflect that.",
+        "created_at": "2019-07-29T18:30:17.252000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**vbuterin**\n\u003e  but the private keys are still members of FQ, so 381 bits.",
+        "created_at": "2019-07-29T18:30:50.022000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**vbuterin**\nhuh?",
+        "created_at": "2019-07-29T18:30:51.601000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**vbuterin**\nThe private keys should be integers modulo the subgroup order",
+        "created_at": "2019-07-29T18:31:02.724000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**vbuterin**\nSo 256 bits",
+        "created_at": "2019-07-29T18:31:05.855000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "I'm not certain why we are padding the 16 bytes in the generators. Should have no effect on the key integer values",
+        "created_at": "2019-07-29T18:33:18.646000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e when the test vectors are output to YAML, only 32 bytes are present for the secret keys\n\ndepending on the library, they might need 48 byte values, but the curve order dictates the meaningful range on which secret keys can be generated",
+        "created_at": "2019-07-29T18:34:18.475000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_gitter_bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cbenjaminion\u003e OK - got it. Thanks!",
+        "created_at": "2019-07-29T18:43:55.609000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_gitter_bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvtbradle_twitter\u003e Hi guys, quick question. In phase 1, is the assumption we will have 1024 shard data chains available at any given time? Or are they “spun up” based on network conditions? It seems like spinning up as demand increases would yield better resource allocation, rather than sparsely used state and sparsely distributed validators across N shards with varying degrees of activity/use.",
+        "created_at": "2019-07-29T22:08:08.750000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**vbuterin**\nThe number of shards is fixed",
+        "created_at": "2019-07-29T22:08:26.805000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_gitter_bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvtbradle_twitter\u003e Thanks Vitalik!",
+        "created_at": "2019-07-29T22:08:35.606000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**vbuterin**\nThe problem is that we just have no way to measure what the actual level of demand is in real time",
+        "created_at": "2019-07-29T22:08:51.496000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**vbuterin**\nEspecially as markets become efficient and any unused space gets taken up by eg. people using the chain to back up their cat pictures",
+        "created_at": "2019-07-29T22:09:17.030000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_gitter_bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvtbradle_twitter\u003e I guess there’s no good way to measure near real time demand and get that fed back into the protocol somehow",
+        "created_at": "2019-07-29T22:12:17.772000+00:00",
+        "attachments": null
+    }
+]

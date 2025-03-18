@@ -1,0 +1,162 @@
+[
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I've been playing around with dropping/re-syncing a LH database and I'm getting a scenario where Geth responds to an fcU with `VALID`, but a different head hash to the one I provided. I'm providing it an ancestor of a head I set previously. Looking at the execution spec I don't think that's valid behaviour, but I can see why it might seem like a reasonable thing to do. Looping in \u003c@360491619402776577\u003e",
+        "created_at": "2022-05-11T07:27:02.307000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "FYI I'm sending it an ancient block as the head, about a month old.",
+        "created_at": "2022-05-11T07:35:25.613000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hmm does it print something like \"ignoring update to previous head\"?",
+        "created_at": "2022-05-11T07:40:38.904000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "The spec has the following statement related to the case when head is reset to an older block:\n\u003e Client software MAY skip an update of the forkchoice state and MUST NOT begin a payload build process if forkchoiceState.headBlockHash doesn't reference a leaf of the block tree",
+        "created_at": "2022-05-11T07:50:10.019000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "```\nINFO [05-11|17:31:06.968] Ignoring beacon update to old head       number=226,609 hash=bc3164..aaef78 age=1mo1d6h   have=435,272\nWARN [05-11|17:31:08.990] Ignoring already known beacon payload    number=226,610 hash=8ebe4e..1e6aa3 age=1mo1d6h\n```",
+        "created_at": "2022-05-11T07:50:27.533000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think the spec also needs to define a VALID/INVALID/etc for that scenario, since it declares that a VALID response must have `latestValidHash: forkchoiceState.headBlockHash`.",
+        "created_at": "2022-05-11T07:51:58.142000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah, we return the hash of the head of the canonical chain",
+        "created_at": "2022-05-11T07:53:26.771000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Even if we ignore the update",
+        "created_at": "2022-05-11T07:53:42.437000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think its more correct for us, but if the CL is basing their decisions on us not doing that, we can change it",
+        "created_at": "2022-05-11T07:55:18.403000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah, I can see why you'd do this. Lighthouse is just having a whinge about it because we think that the spec declares that a `VALID` response *must* include the block hash that we just provided.",
+        "created_at": "2022-05-11T07:55:24.422000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Basically, spec just says that forkchoice state update may be ignored in this case, it doesn't affect the response at all which should be `status: VALID, lvh: headBlockHash`, but I can understand the source of confusion",
+        "created_at": "2022-05-11T07:59:19.181000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "What is `headBlockHash`, though? What the CL just provided or what the EL has?",
+        "created_at": "2022-05-11T08:00:18.611000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "it's what CL has just provided according to the spec, `forkchoiceState.headBlockHash` -- but it's unclear what `forkchoiceState` does refer to",
+        "created_at": "2022-05-11T08:01:44.486000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e If validation succeeds, the response MUST contain {status: VALID, latestValidHash: payload.blockHash}\nThis statement is from Payload validation routine, having this logic applied to `fcU` results in `headBlockHash` that CL has provided",
+        "created_at": "2022-05-11T08:05:15.716000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "And I think it's correct, because if CL is syncing and is behind EL's head then CL shouldn't receive block hashes that it isn't familiar with yet",
+        "created_at": "2022-05-11T08:08:27.909000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah, will change it",
+        "created_at": "2022-05-11T08:11:22.384000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "Looks like a similar thing is happening with `new_payload` too, btw. Old block is supplied but LVH is a newer block.",
+        "created_at": "2022-05-11T09:20:06.901000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thats weird, that shouldn't happen imo",
+        "created_at": "2022-05-11T09:23:15.274000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "At prysm we ignore this hash in the VALID case. I can see an use for both cases as sanity checks so I won't advocate nor oppose any specification here, just mentioning that it won't affect us either way",
+        "created_at": "2022-05-11T10:04:39.258000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "TTD has been updated for mainnet-shadow-fork-4, new TTD is `48772237537841292247040` and expected to hit ~2PM UTC (4PM CEST) tomorrow. \n\nConfigs found here: https://github.com/eth-clients/merge-testnets/tree/main/mainnet-shadow-fork-4",
+        "created_at": "2022-05-11T16:13:53.332000+00:00",
+        "attachments": null
+    }
+]

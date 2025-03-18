@@ -1,0 +1,266 @@
+[
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e Would be great if someone can confirm that SSZ requires a schema and if the first item is fixed size, then it will be the first bytes of the SSZ encoded byte array.",
+        "created_at": "2020-09-06T08:20:30.882000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "yes",
+        "created_at": "2020-09-06T08:20:31.667000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "BTW on this topic I'm probably going to redesign the signing algorithm in 2930 to be more SSZ-like",
+        "created_at": "2020-09-06T08:21:29.891000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "Basically, instead of having the data structure be `rlp([3, rlp([a, b, c, d, e, f, sig_v, sig_r, sig_s])])` where the signing root is `rlp([3, rlp([a, b, c, d, e, f])])`, the data structure would be `rlp([3, rlp([[a, b, c, d, e, f], [sig_v, sig_r, sig_s]])])` where the signing root is `hash(3, hash(rlp([a, b, c, d, e, f])))`",
+        "created_at": "2020-09-06T08:23:22.298000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "Unless we switch 2718 to SSZ entirely",
+        "created_at": "2020-09-06T08:23:30.474000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "In which case the whole thing would be SSZ'ified",
+        "created_at": "2020-09-06T08:23:37.043000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "BTW I don't think economizing on single bytes is that important; simplicity matters more",
+        "created_at": "2020-09-06T08:23:56.360000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "LEB128 really freaks me out complexity-wise btw; it doesn't map neatly to existing ways of encoding integers to bytes",
+        "created_at": "2020-09-06T08:24:40.018000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e BTW I don't think economizing on single bytes is that important; simplicity matters more\n\nEspecially since there's an outer layer of snappy compression that de-facto makes mandatory zero bytes pretry much go away",
+        "created_at": "2020-09-06T08:25:21.242000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e Unless we switch 2718 to SSZ entirely\n\u003c@!273808422753796097\u003e As of my latest adjustment to 2718, it no longer uses RLP for the outer part.  It uses \"first byte is type, the rest of the bytes are payload\" which is compatible with `ssz(type, a, b, c, d)` or `type || ssz(a, b, c, d)` which are equivalent IIUC.",
+        "created_at": "2020-09-06T08:48:17.894000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I also made it so that we start using SSZ for the receipts (which don't need to be backward compatible in the same way) and LEB128 for the transaction and receipt merkle keys (rather than RLP).  I'm willing to back down on this if people push back, but figured I would see how far I could go without any resistance.",
+        "created_at": "2020-09-06T08:49:21.923000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Actually, you bring up a good point and I think I'll make another change right now.  Currently in the EIP transaction type `0` is `0 || rlp(nonce, gasPrice, gasLimit, to, value, data, v, r, s)`.  I think that should actually be (if we like SSZ) `0 || ssz(v, r, s, rlp(nonce, gasPrice, gasLimit, to, value, data))` (which is equivalent to `ssz(0, v, r, s, rlp(nonce, gasPrice, gasLimit, to, value, data))`).",
+        "created_at": "2020-09-06T08:52:16.735000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "IIRC (been a bit since I have worked directly with RLP), even if we used RLP for the outer layer we would still need to have a *separate* RLP layer run on the signed payload if we wanted to avoid decoding and then re-encoding when doing signature validation and signing.  So having RLP for the outer layer wouldn't buy us much, in which case it sounds like people would prefer \"something else\" and SSZ being part of ETH2 makes it a reasonable choice here.",
+        "created_at": "2020-09-06T08:54:37.911000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e Especially since there's an outer layer of snappy compression that de-facto makes mandatory zero bytes pretry much go away\nHmm, I didn't know about this.  We *appear* to care about `0` bytes for merkle patricia keys, since the transaction index and receipt index are both RLP encoded (which I assume was to reduce the size).",
+        "created_at": "2020-09-06T08:56:33.814000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e where the signing root is `hash(3, hash(rlp([a, b, c, d, e, f])))`\n\u003c@!273808422753796097\u003e I don't recommend RLP here, everyone seems to prefer \"something else\".  Why hash the inner part though rather than just `hash(3, encode([a, b, c, d, e, f])` or even just `hash(encode([3, a, b, c, d, e, f]))`?",
+        "created_at": "2020-09-06T08:58:19.607000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "Because SSZ does hashing at every logical level of the data structure",
+        "created_at": "2020-09-06T12:28:32.829000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "SSZ does, or ETH2 does?",
+        "created_at": "2020-09-06T12:31:03.997000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "the hash tree algorithm that's also called SSZ 😆",
+        "created_at": "2020-09-06T12:31:28.497000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Why do you researchers hate all that is good in the world?",
+        "created_at": "2020-09-06T12:31:47.265000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Does anyone here understand the yParity bit of Ethereum signatures well enough to explain why the parity bit is flipped if the secp256k1 signature `s` value is greater than half of the base point order? (a link to some document somewhere would be fine too)",
+        "created_at": "2020-09-06T12:42:22.980000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "the idea is that for a \"default\" ECDSA signature, you can convert it into another ECDSA signature that's valid for the same message and the same pubkey by flipping the curve point and the s value",
+        "created_at": "2020-09-06T12:54:59.779000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "We wanted to prevent transaction malleability",
+        "created_at": "2020-09-06T12:55:07.751000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "So we block one of the two cases",
+        "created_at": "2020-09-06T12:55:14.082000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Ah, so when we use the \"smaller `s`\", we have to flip the y-parity bit because the `y` value for that smaller `s` would have the opposite parity.",
+        "created_at": "2020-09-06T12:56:47.249000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "https://eips.ethereum.org/EIPS/eip-2",
+        "created_at": "2020-09-06T12:57:18.787000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "Found the EIP that bans high s values",
+        "created_at": "2020-09-06T12:57:23.116000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "that's what forces transaction non-malleability",
+        "created_at": "2020-09-06T12:57:30.318000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "So the basic idea regarding the v value in general",
+        "created_at": "2020-09-06T12:57:37.558000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "Is that the signature contains an elliptic curve point",
+        "created_at": "2020-09-06T12:57:45.150000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "And an EC point can be represented by its x coordinate and just one bit to determine whether the y coordinate is the positive square root or the negative square root",
+        "created_at": "2020-09-06T12:58:05.870000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "that one bit is in the v value",
+        "created_at": "2020-09-06T12:58:09.779000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "It's 27/28 instead of 0/1 because that was a weird holdover borrowed from bitcoin",
+        "created_at": "2020-09-06T12:58:23.198000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "How should EIP-2718 transactions be encoded inside of a block? I assume they should be RLP-encoded bytes?",
+        "created_at": "2020-09-06T23:21:53.325000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,146 @@
+[
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Now that `JUMPF` and `RETF` have automatic stack cleanup specified, I think there are 2 issues with it:\n- \"security\": is it fine to allow possible ~200 stack items copy for so low gas cost?\n- usability: `JUMPF` now depends on the number of outputs of the callee, even if the callee don't have any `RETF` (its number of outputs can be declared to any value). So you may need multiple function with exactly the same code but just different function types.",
+        "created_at": "2022-12-15T11:09:54.718000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I still don't like the automatic cleanup.  And the more I look the less I like it.  I'd much rather introduce an opcode for the purpose.",
+        "created_at": "2022-12-15T16:04:26.966000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And I remain happy enough without such an opcode -- simply requiring explicit clean-up takes care of the gas issues \u003c@425274498732916736\u003eraises and som others.",
+        "created_at": "2022-12-15T16:12:36.449000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It's true that in some languages some sort of bulk copy is available, but in others I fear one-by-one copies will be needed anyway.",
+        "created_at": "2022-12-15T16:15:00.865000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "spec change request: clarify that when RETF pops off the last return stack item it behaves like a STOP",
+        "created_at": "2022-12-15T16:56:10.805000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i.e. RETF in section 0 with no corresponding CALLFs",
+        "created_at": "2022-12-15T16:56:23.894000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The spec is:\n\u003e Pops an item from return stack and sets current_section_index and PC to values from this item.\n\u003e \n\u003e     If return stack is empty after this, execution halts with success.",
+        "created_at": "2022-12-15T16:56:33.962000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Unified or the EIP spec? I'm not sure where to look at times...",
+        "created_at": "2022-12-15T16:56:53.868000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "No, the EIP-4750.",
+        "created_at": "2022-12-15T16:57:09.744000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "container spec (3540, as merged) does not reflect unitied spec, so I've been relying on the unified spec.",
+        "created_at": "2022-12-15T16:58:10.406000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That's fine. I'm just checking if the spec is correct and clear. If any issues let me know.",
+        "created_at": "2022-12-15T16:59:02.584000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "About code inspection: banning it from regular EVM execution seems easy (at least for EOF) - just replace `CODECOPY` with `DATACOPY`. But the solving this for contract creation is much more complicated.",
+        "created_at": "2022-12-15T17:06:24.077000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "For contract creation the ideal case would be the old idea of a proper transaction not abusing the `to`/`data` fields, but having a dedicated `code`: `[nonce, gasprice, startgas, value, code, data]` where `data` is the regular calldata and serves as the constructor arguments. (Today the contract code and constructor arguments are concatenated.)\n\nBut this is way beyond the realms of EOF.",
+        "created_at": "2022-12-15T17:08:30.633000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yeah, but still the init code needs to return a code. So it means it will see it.",
+        "created_at": "2022-12-15T17:16:53.995000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@543900561460822016\u003e The EOF container format from the unified spec is what I had in mind. Do you want to handle shipping the change?",
+        "created_at": "2022-12-15T20:00:55.914000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The function type could be:\n- number of args, `[0,127]` (7 bits)\n- number of outputs `[0,127]` (7 bits)\n- max stack height `[0,1023]` (max value reduced by 1 from 1024 to fit into 9 bits)",
+        "created_at": "2022-12-15T20:03:34.852000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "type section mandatory?",
+        "created_at": "2022-12-15T20:05:44.042000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "7+7+9 = 23 so it should fit into 3 bytes with 1 bit reserved 🙂",
+        "created_at": "2022-12-15T20:06:18.984000+00:00",
+        "attachments": null
+    }
+]

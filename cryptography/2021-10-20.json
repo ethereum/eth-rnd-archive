@@ -1,0 +1,138 @@
+[
+    {
+        "author": "kclowes",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!427491045308235776\u003e Would you mind taking one more look at this PR when you get a chance: https://github.com/ethereum/eth-keys/pull/76 ? There's one outstanding question on whether or not we should be checking for the point at infinity representation as well as the identity points",
+        "created_at": "2021-10-20T17:02:48.615000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I didn't understand the choice you made for those points in that PR. If by \"identity\" you mean the identity element for the group operation in the EC, then that point is the point at infinity. If you choose Jacobian coordinates then this point is  (1,1,0) or any of the other representations (t^2,t^3, 0) for any non-zero t. But (0,0,1) is not that point, and (0,0,0) is not even a point in the plane.",
+        "created_at": "2021-10-20T17:44:10.299000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "By the way, perhaps we are talking about different things so I'll be very explicit, typically one takes an elliptic curve in Weierstrass form \n`y^2 = x^3 + a  x + b` and we complete it by replacing `y -\u003e y / z^3` and `x -\u003e x / z^2 `. Now you clear denominators and that equation is written as",
+        "created_at": "2021-10-20T17:56:07.713000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "`y^2 = x^3 + a x z^4 + b z^6 `",
+        "created_at": "2021-10-20T17:56:31.695000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "so the point (0,0,1) is not even in that curve",
+        "created_at": "2021-10-20T17:56:39.391000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kclowes",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Thanks for taking a look. Did you see the review on the PR here: https://github.com/ethereum/eth-keys/pull/76#issuecomment-938089646 ? Originally, I changed the code to return (1, 1, 0) and then check for that point, but that introduced a few bugs that are outlined in the comment",
+        "created_at": "2021-10-20T17:58:30.040000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yeah I remember \u003c@!427491045308235776\u003e's comment, and admittedly I didn't look at the code, but it is very weird to use a point outside the curve, and a point outside the plane to represent a point in the curve. This can certainly lead to subtle bugs. Mostly cause one of these points is the origin in the original affine xy plane.",
+        "created_at": "2021-10-20T18:00:53.837000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I would have expected that the right approach to check if any given point (x,y,z) is the point at infinity would be to check if z = 0, then that x, y  = t^2, t^3 for some t. Equivalently that y^2 = x^3.",
+        "created_at": "2021-10-20T18:01:42.975000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kclowes",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yeah, I'm not sure why those points were chosen. I think the original code is \u003c@!273808422753796097\u003e 's 🙂",
+        "created_at": "2021-10-20T18:02:40.686000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But also assuming that you are using the representation in Weierstrass form mentioned above, then the point at infinity happens when z=0, not when y=0. The point at infinity is not in the open plane y=0 (again reading your reply to carver)",
+        "created_at": "2021-10-20T18:09:34.657000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yep, it looks good to me. If I'm reading correctly, it now reverts back to returning (0,0,1) or (0,0,0) and to check for the identity point we just check for either of those. \n\nDoes the signature test that was failing before pass (the original issue)?",
+        "created_at": "2021-10-20T19:48:18.181000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I believe we need to choose a distinguished point which acts as the identity point, it's just that we always usually choose the points at infinity.  The points listed were chosen are the distinguished points, but they are not the points at infinity. My guess is that there are two of them, so that when debugging you can determine if the error occurred when doubling or in another operation.\n\nIt's possible to change to the points at infinity, I think it should probably be done in another PR since the issue seems to be orthogonal to the original bug.",
+        "created_at": "2021-10-20T19:57:19.274000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "My complaint is that the points aren't even points on the curve :)",
+        "created_at": "2021-10-20T21:05:32.718000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kclowes",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yep, changed it back to the original points, and that does fix the original issue when I check for those points. Thanks again for looking!",
+        "created_at": "2021-10-20T21:14:55.430000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kclowes",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'll add an issue to change to the points at infinity rather than using the distinguished point. Thanks for the help \u003c@!427491045308235776\u003e and \u003c@!755590043632140352\u003e !",
+        "created_at": "2021-10-20T22:02:26.481000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So my issue is purely mathematical and not about implementation: you can choose any point in the curve to be the identity of the curve. If you choose any point that is not the point at infinity in Jacobian coordinates then good luck implementing the group operation other than 1) change coordinates do that your chosen point goes to infinity 2) perform the operation in the Jacobian coordinates and 3) change back. \nBut even if you go all the way to do this. Your chosen point needs to be a point in the curve, which is not the case here. I understand that this at an implementation level can make sense since  it's just a point to check against, but I'm convinced that this choice is subject to a number of bugs. For example a) what does the program give me for the sum of (0,0,0) and (1,1,0)? Either of those two could be an answer here. And b) people  may start reading the code and assume incorrectly that points are points in the curve, so if they read (0,0,1) as the identity, it's justifiable that they'll assume that coordinates are homogeneous and therefore the group operation is carried in those coordinates.",
+        "created_at": "2021-10-20T22:13:29.796000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "My guess is that the implementation is that points are given by two coordinates only and then it's fine that the identity element is not representable this way (since it's not in the plane) and then we need to choose anything to represent it. And yes (0,0) makes sense. I just wouldn't call that the point (0,0,0) nor (0,0,1) anywhere in the code",
+        "created_at": "2021-10-20T22:21:25.553000+00:00",
+        "attachments": null
+    }
+]

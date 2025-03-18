@@ -5,7 +5,7 @@
         "parent": "",
         "content": "Diving into the geth MPT implementation, I realized they use a trick to get a hidden method of the sha3 library implementation that avoids allocations. (https://github.com/ethereum/go-ethereum/blob/master/crypto/crypto.go#L54-L56)\nLooks like they don't always use this trick in all places where keccak is used in geth in general (e.g: for general message signing, this trick isn't used which is why I didn't notice before); but in MPT is the case.\n\nI updated the benchmark to use this trick too.\n```\nBenchmarkKeccak/size=1-16                        2797274               426.5 ns/op             0 B/op          0 allocs/op\nBenchmarkKeccak/size=2-16                        2897020               415.4 ns/op             0 B/op          0 allocs/op\nBenchmarkKeccak/size=4-16                        2784168               425.6 ns/op             0 B/op          0 allocs/op\nBenchmarkKeccak/size=8-16                        2779054               411.2 ns/op             0 B/op          0 allocs/op\nBenchmarkKeccak/size=16-16                       2798808               421.6 ns/op             0 B/op          0 allocs/op\nBenchmarkKeccak/size=32-16                       2948157               414.1 ns/op             0 B/op          0 allocs/op\nBenchmarkKeccak/size=64-16                       3008820               383.8 ns/op             0 B/op          0 allocs/op\nBenchmarkKeccak/size=128-16                      3251901               363.3 ns/op             0 B/op          0 allocs/op\nBenchmarkKeccak/size=256-16                      1774090               672.0 ns/op             0 B/op          0 allocs/op\nBenchmarkKeccak/size=512-16                       907388              1292 ns/op               0 B/op          0 allocs/op\nBenchmarkKeccak/size=1024-16                      430816              2538 ns/op               0 B/op          0 allocs/op\n```\nSo ~1.3 microseconds for 512 bytes now.",
         "created_at": "2022-10-29T00:21:10.276000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "In the next days I'll do the rest of benchmark changes, and re-summarize again the results.",
         "created_at": "2022-10-29T00:22:51.110000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "bridge-bot",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "\u003cdankrad\u003e The most interesting thing now would be good average depth estimates for MPT",
         "created_at": "2022-10-29T08:25:07.756000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "bridge-bot",
@@ -29,7 +29,7 @@
         "parent": "",
         "content": "\u003cdankrad\u003e that is (1) average accound depth and (2) average depth of storage trees inside accounts",
         "created_at": "2022-10-29T08:25:24.890000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -37,7 +37,7 @@
         "parent": "",
         "content": "Sounds useful. I'll take a note on exploring that too. Thanks!",
         "created_at": "2022-10-29T13:38:09.401000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -45,7 +45,7 @@
         "parent": "",
         "content": "\u003c@353136597522448385\u003e, I was crafting the benchmark for the pedersen hash for storage slots, and I noticed something that might be a bug.\nSee here: https://github.com/ethereum/go-ethereum/blob/f0e4ab07b54a9796bc82b99b0bfd950a8d8da5a5/trie/utils/verkle.go#L148-L157\nIn L156, that looks to me it's getting the most significant byte, not the least significant byte.\n\nTo double check, I created this snippet https://go.dev/play/p/L6nCTNz9wzr, you can click \"Run\".\nLMK if makes sense to you.\n\nThe funny part is that since `NodeWidth` is `256`, doing that `.Mod(pos, NodeWidth)`  means it's a number between [0, 255] which is 1 byte... so in this particular case you won't see this bug causing a noticeable difference since `Mod` is a single byte. 😄",
         "created_at": "2022-10-29T20:40:02.381000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -53,7 +53,7 @@
         "parent": "",
         "content": "As a \"bonus\", if we can assume `NodeWidth` is 256, we don't actually have to pay the cost of that bigint `Mod` and simply take the LSB of `pos` directly... that might be cheating a bit (it'd work for powers of two) and I think you targeted a generic implementation.\n~~After I finish the benchmark, I can take a look if exploiting this assumption makes a significant difference.~~ (edit: done, it can save an allocation, but not much CPU since dominated by `Mod` and `Inv`, sharing results later)",
         "created_at": "2022-10-29T20:40:59.378000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "gballet",
@@ -61,7 +61,7 @@
         "parent": "",
         "content": "That's true there's a bug, but not at line 156. It's when I call `Bytes()` above. It should be the uint256, not its bytes.",
         "created_at": "2022-10-29T21:48:06.980000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -69,7 +69,7 @@
         "parent": "",
         "content": "Yep. `.And(...)` should also work 👍",
         "created_at": "2022-10-29T21:56:35.303000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "gballet",
@@ -77,7 +77,7 @@
         "parent": "",
         "content": "We already know it's mostly inv and mul, the question is: how much does it compare to blst?",
         "created_at": "2022-10-29T21:56:43.103000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -85,7 +85,7 @@
         "parent": "",
         "content": "Yeah, I created a benchmark to compare it with the Go bindings of blst.",
         "created_at": "2022-10-29T21:57:24.316000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "gballet",
@@ -93,7 +93,7 @@
         "parent": "",
         "content": "Hmmm ok but that will be off because of the go to c boundary. What we'd really like to figure out is if there is still room for optimization in the go code",
         "created_at": "2022-10-29T21:58:26.819000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -101,7 +101,7 @@
         "parent": "",
         "content": "yes, the cgo boundary adds ~33ns (i did some test to check that) so not entirely perfect but the difference can hint if the difference is about that overhead or more.",
         "created_at": "2022-10-29T21:59:56.307000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -109,7 +109,7 @@
         "parent": "",
         "content": "\u003c@353136597522448385\u003e, have you ever calculated Mul or Inv directly creating a benchmark using blst directly? (I'd guess that's in C or assembly)",
         "created_at": "2022-10-29T22:01:08.383000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -117,7 +117,7 @@
         "parent": "",
         "content": "I'll try to do some benchmark directly in C... used C back in university some years ago but sounds fun :)",
         "created_at": "2022-10-29T22:18:00.045000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "gballet",
@@ -125,7 +125,7 @@
         "parent": "",
         "content": "No, I was hoping you would 😇 I seem to remember Dankrad saying that he did and that he could share some stuff, do I remember that correctly \u003c@555483069038198827\u003e",
         "created_at": "2022-10-29T22:41:05.826000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "gballet",
@@ -133,7 +133,7 @@
         "parent": "",
         "content": "btw something doesn't make sense here, because if there was indeed a bug, I would have found it a long time ago just looking at the testnet witnesses like in this block here https://explorer.condrieu.ethdevops.io/blocks/0x8826ebc98fe111ff86829bb838044b3cbbb61cd75559ed97939ae48ac2847caa I remember that the endianness is swapped somewhere, and that's probably why getting the MSB is actually getting the LSB.  It's quite late here, so I won't dig tonight, but I,m pretty sure things are correct. Now, they are probably inefficient.",
         "created_at": "2022-10-29T22:45:50.933000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -141,7 +141,7 @@
         "parent": "",
         "content": "Note what I mentioned here:\n\u003e The funny part is that since NodeWidth is 256, doing that .Mod(pos, NodeWidth)  means it's a number between [0, 255] which is 1 byte... so in this particular case you won't see this bug causing a noticeable difference since Mod is a single byte.",
         "created_at": "2022-10-29T22:46:19.095000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -149,7 +149,7 @@
         "parent": "",
         "content": "Since NodeWith is 256, LSB and MSB are the same",
         "created_at": "2022-10-29T22:46:30.301000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -157,7 +157,7 @@
         "parent": "",
         "content": "that's why you didn't notice probably",
         "created_at": "2022-10-29T22:46:35.540000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -165,7 +165,7 @@
         "parent": "",
         "content": "That `.Mod(..)` is a single byte. So LSB=MSB",
         "created_at": "2022-10-29T22:47:02.411000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "gballet",
@@ -173,7 +173,7 @@
         "parent": "",
         "content": "yeah ok that makes sense",
         "created_at": "2022-10-29T22:47:15.887000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -181,6 +181,6 @@
         "parent": "",
         "content": "Let me give it a shot!",
         "created_at": "2022-10-29T22:47:45.887000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

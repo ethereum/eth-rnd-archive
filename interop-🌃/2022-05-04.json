@@ -1,0 +1,282 @@
+[
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'll be doing the TTD override later today (with announcement of new ttd). Is there some bug fix, update, change in branch any client team wants to apply at the same time?",
+        "created_at": "2022-05-04T06:26:27.737000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "You have to walk back, as if the parent is known it doesn't mean that all other ancestors are known too. Or EL would have to store information alongside each block that all its ancestors are known. It either computation or data storage complexity that IMO doesn't worth it.\n\n`VALID \u003c- ACCEPTED \u003c- ACCEPTED`, `VALID \u003c- MISSING_PAYLOAD \u003c- ACCEPTED`, `VALID \u003c- MISSING_PAYLOAD \u003c- SYNCING` may all return `SYNCING` on `fcU` which makes no difference between these EL states for CL\n\nIMO, we should resolve ambiguity by removing `SYNCING` from `newPayload` and saying that `ACCEPTED` means that payload's `block_hash` is valid but the payload hasn't been fully verified disregarding whether it's missing parent block and/or parent state, or doesn't want to execute a payload because it's from a side chain. EL should be free to start syncing process on `newPayload` if it has enough data for bootstrapping it\n\nI think `SYNCING` in response to `fcU` case is semantically sound as EL must catch up with canonical chain and there is always certainty, and `fcU` spec should remain the same",
+        "created_at": "2022-05-04T09:01:52.045000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "IIUC, `ACCEPTED` may also be returned in the case when parent block is known but parent state has been pruned. Is this correct and what EL would do in case of re-org to a chain which requires pruned data to execute blocks? cc \u003c@360491619402776577\u003e",
+        "created_at": "2022-05-04T09:13:06.813000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes exactly, if we have the state pruned, we will return accepted, if someone then fcu's us to the block, we will try to rebuild the parent state (which might take a looong time)",
+        "created_at": "2022-05-04T09:15:22.367000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "What is the rebuild mechanism in this case? I assume that you can't simply pull required state from the network, are there any snapshots that geth is storing to resolve from such cases?",
+        "created_at": "2022-05-04T09:16:37.833000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "We store the old trie nodes for the last 90.000 blocks in order to rebuild the trie",
+        "created_at": "2022-05-04T09:17:19.309000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Can this process rebuilt a post-state of an arbitrary block in this range or it rebuilds a post-state of exact `HEAD-90,000` block and re-executes blocks on top of this state to obtain a desired state?",
+        "created_at": "2022-05-04T09:21:24.139000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "It can rebuilt the state of an arbitrary block in this range",
+        "created_at": "2022-05-04T09:23:55.548000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I am curious if additional check that `safeBlockHash` does belong to the same branch as `headBlockHash` would add more computational complexity to EL side? Or is this something that could easily be implemented?\n\nI was previously thinking that this check would require traversing a block tree before applying the new fork choice state. But probably EL clients already traverse the tree on every `fcU` and it would be cheap to have this consistency check?\n\nThere is a related discussion here in the PR https://github.com/ethereum/execution-apis/pull/213#discussion_r862153230",
+        "created_at": "2022-05-04T09:58:27.321000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "For us its super easy and we already do it",
+        "created_at": "2022-05-04T09:59:44.133000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Sorry for the off-topic but now that you mention this, what's the rationale to currently have justified instead of finalized for `safeBlockHash`?",
+        "created_at": "2022-05-04T10:00:12.423000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Justified is safe enough to be used by services and is at least an epoch closer to the head than finalized, safe block algorithm starts at justified block. We also suppose safe block will be improved in the future, i.e. become closer to the head in a normal case",
+        "created_at": "2022-05-04T10:05:31.116000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "If I remember correctly the safe head algorithm started from a justified block with additional assumptions that would make it not forkable. Since neither the algorithm was fixed nor do we have any assurances that the justified block is really safe. Unless we have a clear indication that after the merge we will not see highly forked scenarios, I don't see why would we send justified instead of finalized as safe.",
+        "created_at": "2022-05-04T10:12:22.502000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I don't think there were any doubts about justified block to be a safe one. IIUC, the problem of existing algorithm is that in general case it's not that easy to get enough information to prove impossibility of block re-orgs under assumptions that have been amde",
+        "created_at": "2022-05-04T10:21:30.604000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Well that has to be false since a justified block can be reorged. By returning it as safe, if by safe we mean: under some assumptions this will not be reorged, then we should be validating those assumptions",
+        "created_at": "2022-05-04T10:26:25.654000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, justified can be re-orged in some circumstances. But under SECONDS_PER_EPOCH synchrony and honest majority assumptions it shouldn't happen, right?",
+        "created_at": "2022-05-04T10:29:02.965000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Right, reorging requires a long time without seeing blocks. I'm fine if we are saying that we will assume this as given and that was the rationale above. But I always took this parameter as a placeholder until we have a more reasonable safe head, in which case I would err for finalized instead",
+        "created_at": "2022-05-04T10:32:35.434000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Justified as a safe block assumptions are weaker than ones that we have for original safe algorithm we were supposed to use, this is why we should be perfectly fine with it",
+        "created_at": "2022-05-04T10:33:53.008000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ok that's fair",
+        "created_at": "2022-05-04T10:34:08.117000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "On this topic. Do existing EL implementations check that there is a well-formed chain of ancestors when they respond `ACCEPTED` to `newPayload`? May `ACCEPTED` in response to `newPayload` be returned when the parent is unknown?",
+        "created_at": "2022-05-04T11:49:47.631000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "In Erigon we respond with ACCEPTED only if all ancestors are known. Otherwise we respond with SYNCING.",
+        "created_at": "2022-05-04T12:27:54.564000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "TTD override configs are up now:\nhttps://github.com/eth-clients/merge-testnets/tree/main/mainnet-shadow-fork-3\n\nnew TTD: `48144711970238236721152`\n\nYou can either use the TTD override flag OR just replace the config and restart the node (for geth you will need to run geth init again). We should be on schedule for hitting TTD around noon tomorrow.",
+        "created_at": "2022-05-04T12:49:09.018000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "This is the intended case",
+        "created_at": "2022-05-04T14:02:34.426000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "The unintended case was in the event that a non-canonical block is added, has missing ancestors but sync is not induced due to sync already being in progress (which geth returns ACCEPTED currently)",
+        "created_at": "2022-05-04T14:03:26.579000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'd argue that SYNCING is mroe correct in such a case even if a sync process ins't kicked off as it signals that not all requisite data to execute is available",
+        "created_at": "2022-05-04T14:03:56.400000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "and fcu (certainly) or insertion of children (maybe) will trigger a sync process. instead of triggering execution (because not all data is there, i.e. not ACCEPTED)",
+        "created_at": "2022-05-04T14:04:42.368000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "nonetheless, this distinction is not relevant to how CLs operate today. so maybe not a hill worth dying on.\nI do think that it would be better to have the semantics clear in case a future system leverages ACCEPTED vs SYNCING differently. but it won't break the merge. it seem.s",
+        "created_at": "2022-05-04T14:05:47.298000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "when writing the spec, this was the intention",
+        "created_at": "2022-05-04T14:06:09.838000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "hmmm I confused a bit. As I understood SYNCING means that:\n1. We're downloading data from network\n2. We're processing blocks to get the state\nhttps://github.com/ethereum/execution-apis/blob/v1.0.0-alpha.7/src/engine/specification.md#sync\n\nSo if we receive block without parent we will cache it and return ACCEPTED (because we're not starting any syncing action) and after we receive fcU we will start SYNCING. Of course, if this approach is incorrect we can change it.  So all other ELs will start syncing after receiving any newPayload when they don't have parent, right?",
+        "created_at": "2022-05-04T14:09:27.386000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "This is what actually we're discussing now, there is a suggestion to return SYNCING whenever parent data is missing. Like it was before the semantics change in the spec.",
+        "created_at": "2022-05-04T14:13:53.301000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "the spec wasn't clear here. \n\nACCEPTED was supposed to mean \"I have all the data requisite to execute this, but am not because it's not canonical but I'll do it later if you say fcu\"",
+        "created_at": "2022-05-04T14:19:36.162000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "but now we just need to decide what these things mean.",
+        "created_at": "2022-05-04T14:19:50.464000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "In general case, ACCEPTED may guarantee that all ancestors of a payload are known, not that the pre-state of ACCEPTED chain is available on EL side -- the state may be unavailable in the case when ACCEPTED chain is very long, a very rare edge case though, but in this case EL won't be able to validate this chain upon receiving `fcU`",
+        "created_at": "2022-05-04T14:37:48.532000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Also, do we want to make ACCEPTED semantics required to be supported by every EL? If not then CL won't probably leverage it",
+        "created_at": "2022-05-04T14:43:38.911000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "I like this idea 🙂 I didn't know that the ACCEPTED was supposed to mean \"I have all the data requisite to execute this, but am not because it's not canonical but I'll do it later if you say fcu\" I will think how we can change it in Nethermind",
+        "created_at": "2022-05-04T19:13:51.828000+00:00",
+        "attachments": null
+    }
+]

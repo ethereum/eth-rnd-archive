@@ -1,0 +1,834 @@
+[
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "There's some interesting non-determinism in `get_pow_block_at_terminal_total_difficulty` if we don't assume an increasing `total_difficulty`.\n\nI don't think it's *practically* an issue, but it's interesting nonetheless. It's being discussed here with \u003c@!554799849288105986\u003e here: https://github.com/sigp/lighthouse/pull/2835#issuecomment-982174705",
+        "created_at": "2021-11-30T00:51:37.780000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah `Dict[Hash32, PowBlock]` is really not a good representation of a PoWChain. I would have thought this should be a case of getting the EL chain head and if it is \u003e= TTD, use it as the terminal block.  The EL should consider any blocks with a parent \u003e= TTD invalid so there shouldn't be any need to iterate back through the chain at all.  And we should always use whichever block the EL sees as it's chain head as the terminal block so its existing code is used to resolve any potential ties in total difficulty.",
+        "created_at": "2021-11-30T00:58:43.967000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "I guess the key question is whether `pow_chain` actually represents *all* blocks or all canonical blocks.  Given it's a chain not a tree, I'd say it means canonical in which case to get it you'd have to use the chain head from the EL as I'd expect and there can't be any ties for total difficulty.",
+        "created_at": "2021-11-30T01:01:17.268000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Can't have ties in a single chain because total difficulty is the sum of the difficulty header from all ancestor blocks and the difficulty header must be \u003e 0 so TTD winds up being strictly increasing for a single chain (you can only get ties when forks are included).",
+        "created_at": "2021-11-30T01:02:08.339000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think the most natural, but more verbose, method would involve a “get_head_block” function and then a “get_block_by_hash” for parent lookups.\n\nThat is very clear about the structure of the chain (canonical, unbroken hash-chain) and also makes explicit our assumptions about “total_difficulty”.",
+        "created_at": "2021-11-30T01:11:26.253000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "It’s more likely to be used in an implementation too, I’d imagine.",
+        "created_at": "2021-11-30T01:12:02.112000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yep, which then strongly suggests those methods really should be added to the execution engine API rather than trying to work around the fact they don't exist and CL has to find out about the EL chain head and get blocks out of band somehow.  I suspect that's why we've wound up with this somewhat weird abstraction of pow_chain.",
+        "created_at": "2021-11-30T01:14:47.699000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I agree, adding those methods would be neat.",
+        "created_at": "2021-11-30T01:23:20.332000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e The pow_chain abstraction is just to demonstrate the notion of a *single* chain \nAgreed dict is weird. It used to be a list but was changed for some reason. I think because walking backward is more nature with hashes? Both constructions if just a single chain should be equivalent jsut different walking mechanisms. Afk but the blame would show us the pr where it was changed\nWe can also open up a PR to expose requisite eth methods in engine api but the choice of data structures in the CL specs was independent of the eth methods available\nI wouldnt suggest adding getter methods (I dont think this is what your are suggesting) but rather expose existing api calls in engine\nThis has been brought up a few times with very weakly held opinions on each side. You can likely tip the scales if that helps you",
+        "created_at": "2021-11-30T01:55:54.048000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah I'm pretty strongly opinionated that we need at least some of the `eth_` namespace available on the execution engine endpoint to allow us to get the current chain head and get a block by hash.",
+        "created_at": "2021-11-30T02:07:57.899000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'd back down from that if the EL teams said it was hard for some reason but it should be really straight forward.",
+        "created_at": "2021-11-30T02:09:03.822000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Interestingly I did not get a message at all. Direct off the wire I got:\n```\n{\"jsonrpc\":\"2.0\",\"id\":0,\"result\":{\"status\":\"INVALID\",\"latestValidHash\":\"0x0000000000000000000000000000000000000000000000000000000000000000\"}}\n```",
+        "created_at": "2021-11-30T03:21:16.630000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "But I can confirm that after a bit it did start working. That's very cool but very odd.",
+        "created_at": "2021-11-30T03:24:56.595000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Re: `pow_chain`. Yes, it's the canonical chain. It evolved to dict because this way it's easier to specify the parent lookup, i.e. `parent = pow_chain[parent_hash]` is easier to read than `parent = [for block in blocks if block.hash == parent_hash][0]`, and avoid the usage of `get_pow_block`.\n\nA long time ago there was a `get_pow_chain_head()` function. And terminal block was picked by juggling with `get_pow_chain_head()` and `get_pow_block()`. Then it was replaced with the `pow_chain` because EL didn't know about TTD and the head might be far beyond the terminal block making this pair of method inefficient in terms of retrieving the right head to build upon. Now I am thinking that `get_pow_chain_head()` and `get_pow_block()` might be clearer in terms of the spec, we may rely on assumption that EL doesn't process blocks beyond a terminal block and within two calls to EL make a resolution on a terminal block.\n\nI can submit a PR to see how it could simplify the spec. thoughts?",
+        "created_at": "2021-11-30T07:32:19.544000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "This is already a requirement in Engine API:\n\n\u003e To facilitate an Engine API consumer to access state and logs (e.g. proof-of-stake deposits) through the same connection, the client **MUST** also expose the `eth` namespace.",
+        "created_at": "2021-11-30T07:33:11.152000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Cool that works for me. Last time it came up there was a bunch of argument over whether it would be too hard to do.",
+        "created_at": "2021-11-30T08:33:25.064000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctersec\u003e https://github.com/ethereum/execution-apis/blob/v1.0.0-alpha.4/src/engine/specification.md#specification states that\n3. Client software **MUST** return {status: SYNCING, lastestValidHash: null} if the sync process is already in progress or if requisite data for payload validation is missing. In the event that requisite data to validate the payload is missing (e.g. does not have payload identified by `parentHash), the client software SHOULD initiate the sync process.`\nThere seem to be two almost opposite cases here though, between the EL syncing on its own (what it **SHOULD** do, according to the spec) and not syncing. If the latter, then the CL to avoid a kind of deadlock has to backfill the EL, but if the former, that's mostly unhelpful. How should a CL distinguish these cases?",
+        "created_at": "2021-11-30T14:16:13.581000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "CL has to keep sending `executePayload` and `forkchoiceUpdated` optimistically if EL is `SYNCING`, EL is to decide what to do with this data disregarding the case",
+        "created_at": "2021-11-30T14:23:27.329000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctersec\u003e but backfilling isn't intended to be necessary? Because that's certainly more consistent with the idea of optimistic sync, but I've encountered a situation where if I don't backfill the EL, the EL just doesn't sync at all",
+        "created_at": "2021-11-30T14:25:35.725000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think that right now the EL needs the CL to backfill if it is in fullsync mode",
+        "created_at": "2021-11-30T14:27:00.573000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "(Just a limitation of the current implementation, shouldn't be the case in the future)",
+        "created_at": "2021-11-30T14:27:26.370000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e backfill from CL to EL is not specified anywhere nor expected",
+        "created_at": "2021-11-30T14:28:02.693000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e EL in fullsync mode would do a reverse header sync and then fill their chain in on their own",
+        "created_at": "2021-11-30T14:28:17.996000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctersec\u003e I guess my overall point, from a spec perspective, is that \"if the sync process is already in progress or if requisite data for payload validation is missing\" are almost opposite cases from a CL perspective if it's ever meant to backfill",
+        "created_at": "2021-11-30T14:28:26.219000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctersec\u003e but the spec only says the EL \"should\" (not \"must\") sync on its own",
+        "created_at": "2021-11-30T14:28:56.143000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctersec\u003e so it seems ambiguous",
+        "created_at": "2021-11-30T14:29:00.852000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctersec\u003e Good to have clarity on (re @dannyryan: backfill from CL to EL is not specified anywhere nor expected)",
+        "created_at": "2021-11-30T14:29:34.035000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e They are not opposite\nIf EL syncing, it can’t tell you if valid/invalid but is trying to fill in the gaps and might use your recent data to help\nIf EL is not syncing but doesn’t have requisit data (ancestors), it SHOULD (yeah, mayb this should be a MUST) initiate some sync process to fill in the gaps (e.g. reverse hader sync for short ranges or a more indepth sync process)",
+        "created_at": "2021-11-30T14:30:07.440000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e There is no way to recover without EL filling in the gaps so SHOULD might be a poorly written directive.",
+        "created_at": "2021-11-30T14:30:34.640000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctersec\u003e It doesn't specify whether it's syncing at all. A compliant-by-that-spec EL can just sit there barring backfill",
+        "created_at": "2021-11-30T14:30:46.835000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e if it doesn’t have the data to validate the paylaod, it will respond with SYNCING",
+        "created_at": "2021-11-30T14:31:30.988000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctersec\u003e Sure. The question is what action to take at that point",
+        "created_at": "2021-11-30T14:31:44.833000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e and any implementation peopel are working on will initiate the sync because the SHOULD (but mayb should be a MUST)",
+        "created_at": "2021-11-30T14:31:58.769000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e and CL should continue to give new heads in an “optimistic” fashion to continually give data to EL",
+        "created_at": "2021-11-30T14:32:25.088000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e evenutally EL will respond with VALID or INVALID (once it synced)",
+        "created_at": "2021-11-30T14:32:39.113000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e which will ither validate the unknown span or invalid some chunk of it",
+        "created_at": "2021-11-30T14:32:52.067000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e hopping on a call. I suggest looking at paul’s “optimistic sync” doc",
+        "created_at": "2021-11-30T14:33:13.342000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "NVM just checked, full sync should be working autonomously (and I remember it did with Teku)",
+        "created_at": "2021-11-30T14:33:46.985000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think EL should be free to decide whether it starts syncing on `forkchoiceUpdated` or `executePayload`, or any other combination of these two. **MUST** would be too strict in this case. Retrieving missing execution data is definitely EL's responsibility, not a CL's one, thus, EL must not expect backfilling and act on its own",
+        "created_at": "2021-11-30T14:42:58.590000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Just saw kintsugi spec v1.0.0-alpha.5 was released.\n\u003c@!291925846556540928\u003e Should we target the next devnet to be on this version?\n(so not the one started today, but the one next week)",
+        "created_at": "2021-11-30T14:57:44.821000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "We're about to release Kintsugi v3 today, this is gonna be the target for the next devnet",
+        "created_at": "2021-11-30T14:58:58.654000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "ah, right",
+        "created_at": "2021-11-30T14:59:14.463000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "So there are two different numbering systems? 🙈 Can you put the release in chat once finished?",
+        "created_at": "2021-11-30T15:00:00.752000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "sure! we will do the announcement. v1.0.0-alpha.5 is the new version of execution-apis that includes the new Engine API spec, it's not a Kintsugi spec version",
+        "created_at": "2021-11-30T15:01:23.317000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "I see, thanks!",
+        "created_at": "2021-11-30T15:01:54.654000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "👋 I have a question, do we gossip an optimistic block to other p2p peers? For serving blocks to p2p peers, I know `RPC` and `status` are restricted to only verified ancestors. What about gossip?",
+        "created_at": "2021-11-30T15:40:04.233000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctersec\u003e https://hackmd.io/xsk9_feiQ3SIYz2yRa1z7Q suggests verified ancestors for gossip too",
+        "created_at": "2021-11-30T15:42:22.839000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Kintsugi v3 implementation in geth: https://github.com/MariusVanDerWijden/go-ethereum/pull/33",
+        "created_at": "2021-11-30T15:43:45.563000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "wtf \u003c@!360491619402776577\u003e",
+        "created_at": "2021-11-30T15:44:18.900000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "lol, why it's called v5?",
+        "created_at": "2021-11-30T15:44:22.845000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Engine spec v5",
+        "created_at": "2021-11-30T15:44:39.995000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I feel like we have a leak somewhere",
+        "created_at": "2021-11-30T15:45:10.404000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "at any given point, we expect the majority of the network to be synced and able to disseminate valid/good data. If your node is not fully synced, it is not a detriment to the network to not forward the unknown/questionable messages\n\nAlthough EL verification of the received block is not a gossip condition, *parent* verification is. And if you are optimistically synced on a branch, the parent is not fully verified. This means that if the parent (or any depth of ancestor) turns out to be invalid, you could be forwarding bad blocks wrt gossip verifiations and thus downscored or disconnected from",
+        "created_at": "2021-11-30T15:48:16.326000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I am arguing currently about the same, not gossiping unverified blocks will make attestations for correct head practically impossible except 0 hops",
+        "created_at": "2021-11-30T15:49:40.991000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Parent verification sounds reasonable, but it's not in the spec currently. Do we want to incorporate this check into the spec?",
+        "created_at": "2021-11-30T15:53:03.008000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "it is\n```\n[REJECT] The block's parent (defined by block.parent_root) passes validation.\n```",
+        "created_at": "2021-11-30T15:53:33.238000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "inherited from phase 0 validations",
+        "created_at": "2021-11-30T15:53:45.417000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Curious what is the right behaviour when the validation is in progress?",
+        "created_at": "2021-11-30T15:57:00.711000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "```\n[IGNORE] The block's parent (defined by block.parent_root) has been seen (via both gossip and non-gossip sources) (a client MAY queue blocks for processing once the parent block is retrieved).\n```\n\nyou would ignore from the prior condition",
+        "created_at": "2021-11-30T15:58:26.182000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "\"seen\" should probably be clarified as either incorporated locally or rejected. That is the intention to avoid the race condition",
+        "created_at": "2021-11-30T15:58:44.210000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "if you don't yet know about the validity of a parent -- IGNORE (and may queue)",
+        "created_at": "2021-11-30T15:59:12.950000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "if you know the parent is invalid -- REJECT",
+        "created_at": "2021-11-30T15:59:20.301000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I am thinking about the case when payload's execution time takes an entire slot, when, say, resource exhaustion attack is happening in the network. Gossip of children of a block that takes a slot to be executed will be put on hold, right? Though, it's anyway gonna be pretty messy in the network and this hold shouldn't amplify the attack",
+        "created_at": "2021-11-30T16:03:28.155000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "in this case the first slot after will surely be orphaned, and the next slot will be a direct decendant of the large block one.",
+        "created_at": "2021-11-30T16:05:26.334000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "well, actually probably the very large block will be orphaned since it can't receive attestations.",
+        "created_at": "2021-11-30T16:06:31.075000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes, it seems the gossip is unlikely to become a bottleneck in this case",
+        "created_at": "2021-11-30T16:06:42.007000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "right -- if all honest nodes are still processing the first block, the honest proposer would not build on it (becuase it was not incorporated in their block tree)",
+        "created_at": "2021-11-30T16:07:06.955000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "and then likely orphan it when their honest proposal makes it around the network and gets attestations",
+        "created_at": "2021-11-30T16:07:11.693000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "this could play out a few different wants depending on the actors and various processing times",
+        "created_at": "2021-11-30T16:08:25.375000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "but it wouldn't brick anything",
+        "created_at": "2021-11-30T16:08:31.734000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "It probably worth noting in the merge p2p spec that the block validation is extended with payload execution extending the semantics of rules based on block validation",
+        "created_at": "2021-11-30T16:16:32.229000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "agreed, a note is warrnated",
+        "created_at": "2021-11-30T16:54:58.981000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hi \u003c@!360491619402776577\u003e, I tried to use `--override.terminaltotaldifficulty` flag and got a panic in the following line:\n\ngoroutine 1 [running]:\nmain.makeFullNode(0xc0002ae160, 0x5387bcf, 0x1, 0xc000010020)\n    github.com/ethereum/go-ethereum/cmd/geth/config.go:162 +0x3e6\nmain.geth(0xc0002ae160, 0x0, 0x0)\n    github.com/ethereum/go-ethereum/cmd/geth/main.go:320 +0xf4\n\n\ncommit: 1f12acee7ebd72e392f1d49810b5bb601dfdd492",
+        "created_at": "2021-11-30T18:39:54.335000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yep, I screwed up the flag",
+        "created_at": "2021-11-30T18:40:56.674000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Fixed (on all branches)",
+        "created_at": "2021-11-30T18:49:43.784000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "Works now. Thank you",
+        "created_at": "2021-11-30T19:14:25.010000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "Updated Prysm. Prysm \u003c\u003e Geth looks good on M2 (100000 ttd) on spec v3. The changes are reflected in the latest commit: https://github.com/prysmaticlabs/prysm/pull/9853\n\nI will also provide docker images to Pari for devnet2",
+        "created_at": "2021-11-30T19:17:04.884000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Is anyone already syncing devnet-2? I ask cause I am having regularly trouble to sync, but this time I don't even know if the bootnode is up",
+        "created_at": "2021-11-30T21:16:19.543000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Marius was able to sync devnet-2 so far, I haven't heard of any other attempts - are you just not able to find peers?",
+        "created_at": "2021-11-30T21:19:57.505000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "not at all, ever, I think the only time I manage to sync a devnet here was by hardcoding \u003c@!363800010518822915\u003e's bootnode to mine",
+        "created_at": "2021-11-30T21:25:03.488000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I know that P2P problems are hard to diagnose and even subtle to find out that there are any. But I find it striking that I would be making mistakes on every single testnet to find anyone to sync.",
+        "created_at": "2021-11-30T21:26:14.258000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Do you have the networkid set?",
+        "created_at": "2021-11-30T21:26:51.162000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "could you also share some info on the setup? looks like tim was able to sync a node too, so things *should* be working",
+        "created_at": "2021-11-30T21:30:56.142000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Sure, running current kintsugi branch from prysm and kintsugi-spec branch from geth",
+        "created_at": "2021-11-30T21:32:24.343000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "taking genesis.json/ssz from your github repo",
+        "created_at": "2021-11-30T21:32:34.561000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm behind a nat",
+        "created_at": "2021-11-30T21:32:47.273000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm on `beacon-ontopof-4399` branch for geth and prysm should be fine. I'd guess the ports aren't accessible from outside in your case?",
+        "created_at": "2021-11-30T21:35:58.495000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes they aren't but this shouldn't be an issue if I'm dialing out",
+        "created_at": "2021-11-30T21:37:59.280000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm on the same nat of my staking setup which is connected",
+        "created_at": "2021-11-30T21:38:27.059000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "And no ports open",
+        "created_at": "2021-11-30T21:38:35.397000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Kintsugi spec branch does not have eip4399 and no reverse header sync. You need the beacon-ontopof-4399 branch",
+        "created_at": "2021-11-30T21:40:06.161000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "You should be able to find peers though...",
+        "created_at": "2021-11-30T21:41:03.809000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Will try in this iteration, but already tried that one a couple of days ago in devnet1 without success",
+        "created_at": "2021-11-30T21:41:07.107000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "running now from clean dbases on `beacon-ontopof-4399` + `kintsugi`  will report in an hour but it looks I am not finding peers either",
+        "created_at": "2021-11-30T21:42:59.126000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "For completeness, the commands I'm running are \n```\nbazel run //beacon-chain -- --force-clear-db --genesis-state /path/genesis.ssz --datadir path/ --http-web3provider=http://localhost:8545 --min-sync-peers=1 --merge-testnet --bootstrap-node \"enr:-Iq4QKuNB_wHmWon7hv5HntHiSsyE1a6cUTK1aT7xDSU_hNTLW3R4mowUboCsqYoh1kN9v3ZoSu_WuvW9Aw0tQ0Dxv6GAXxQ7Nv5gmlkgnY0gmlwhLKAlv6Jc2VjcDI1NmsxoQK6S-Cii_KmfFdUJL2TANL3ksaKUnNXvTCv1tLwXs0QgIN1ZHCCIyk\"\n\n./build/bin/geth --catalyst --datadir ../testing/ --networkid=1337502 --http --http.api \"engine,net,eth\" --ws --ws.api \"net,eth,engine\" --bootnodes   \"enode://d2da684e8dd9746a520d4e37eb43a94c18756b3b17c251b0fa172ad253a07b26d6bf4b0ec09025ea2d4f6e607df7a2e7f96b57d03bed3dcca38198eb53981a0e@137.184.104.103:30303\"\n```",
+        "created_at": "2021-11-30T21:44:18.572000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cparithoshj\u003e Does the merge-testnet flag on prysm ships with the devnet-1 config or devnet-2? In my prysm deploy I'm explicitly passing it a config file + genesis ssz",
+        "created_at": "2021-11-30T21:53:26.079000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I just added a commit with the devnet2 config, you can check it here:",
+        "created_at": "2021-11-30T21:54:25.604000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003chttps://github.com/prysmaticlabs/prysm/pull/9954\u003e",
+        "created_at": "2021-11-30T21:54:44.005000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Didn't change the bootnode yet cause I can't prove it works 😆",
+        "created_at": "2021-11-30T21:55:13.214000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Have you tried adding the bootnode as a static peer in the geth console?\n`admin.addPeer(\"enode...\")`",
+        "created_at": "2021-11-30T21:57:58.626000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "That works way better than adding it as a bootnode",
+        "created_at": "2021-11-30T21:58:24.090000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Oh indeed when I synced I had added it in the console. But I'm not finding peers in the CL",
+        "created_at": "2021-11-30T22:09:23.403000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Looks suspiciously like devnet-2 has had a chain split. Prysm and Teku nodes don't seem to be showing up on the explorer. Either they've crashed or they've gone off on their own chain.  I'm assuming the explorer is lighthouse backed - lighthouse and nimbus are showing up there.",
+        "created_at": "2021-11-30T22:32:56.585000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "My local teku sync'd fine and wound up on the same chain as the beacon explorer is showing.  I'd need to look at the logs on the validating teku instances to see what's going wrong but I can't find \u003c@!199561711278227457\u003e 's list of node IPs again. (so so many links...)",
+        "created_at": "2021-11-30T23:22:41.034000+00:00",
+        "attachments": null
+    }
+]

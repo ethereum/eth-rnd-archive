@@ -1,0 +1,666 @@
+[
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Sorry a little late to the conversation.  Providing the `coinbase` via the consensus API would be much preferred as it allows a single execution client to be used by multiple consensus clients (or a single consensus client with multiple validators).  Doesn't seem to be a major change, unless I'm missing anything, and it fits more closely with the existing idea that a single consensus client can run multiple validators without significantly higher overhead.",
+        "created_at": "2021-07-22T07:15:10.318000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "It would require additional config interface for consensus client to manage the `coinbase` address(es) it uses for its validators. And here we have options, like set the `coinbase` as consensus client parameter or per each validator, or even use withdrawal credentials if they are an ethereum account address. I don't see a problem of sending in over communication channel. This is more a decision on how this parameter should be passed to the consensus client itself. And a discussion on what to do in a conflict situation when execution client receives the `coinbase` from the consensus client but also has been launched with `--etherbase` CLI param.",
+        "created_at": "2021-07-22T07:21:07.007000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Okay, so it seems to make sense to me to send the coinbase along with the block request call from the consensus client to the execution client.  As for the mechanics, the simplest solution would be to ignore `etherbase` and require the block request call to supply a `coinbase`.\n\nRationale is that it is the job of the validator as block producer to supply all required information to the consensus client (which, for `coinbase`, would in turn pass this to the execution client).  We already do this with the standard API, so it seems that extending that would be the cleanest way to approach things.\n\nThat said, I haven't dug in to the timings.  Would the consensus client receive a request for a new block from the execution client and then create it, or would it be trying to create the block in advance to reduce the response time when the block is requested?  Given the nature of PoS the former seems more sensible (perhaps with some sort of ability to be flagged in advance that a block will be requested if performance is an issue), but it may be that current clients do the latter so it would require a bit more thought.",
+        "created_at": "2021-07-22T07:40:13.230000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I see the ~~former~~ latter as preferred option here. This is what seem client software does when it produces blocks for mining, it is constantly trying to build a more fresh block to send it to miners.\n\nI think that `etherbase` option may also be viable for some setups. But this is open for discussion.",
+        "created_at": "2021-07-22T07:49:29.568000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I think you meant \"latter\" instead of former \u003c@425572898787426305\u003e ? As Jim is pointing, perhaps there's a difference between what clients do now and what clients may do once PoS is alive. Having the information up to an epoch in advance that a block will be requested is useful and may be exploited to reduce resource consumption",
+        "created_at": "2021-07-22T07:58:35.749000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Continually generating blocks would be a waste of resources, which would be a shame considering that PoS is meant to bring down the hardware spec for being a validator.  But if, for the initial merge, we go that route because it's easier (being what happens today) and then look to change it in the future that would seem to be a sensible path.",
+        "created_at": "2021-07-22T08:00:43.012000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "What is not clear to me is why this mechanism should be in the specs. Nothing prevents clients to develop one way or another and if producing blocks only a few slots before it's needed and gives the ability to validators to send coinbase on the request is useful, we may see this option sooner than later",
+        "created_at": "2021-07-22T08:04:40.680000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "As \u003c@!755590043632140352\u003e points out, it should be possible to let the execution client know in advance when it will need to generate a block and so it can do so once at the appropriate time, rather than continually just in case a block is required (for the degenerate case of a single validator it is currently around one block every few months, so a lot of burned cycles)",
+        "created_at": "2021-07-22T08:06:21.817000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "These options are definitely implementation specific. But some of them may require changes in validator API for example, if the option of `coinbase` passed by the VC is under consideration",
+        "created_at": "2021-07-22T08:06:42.392000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "But again the validator API in the specs is the minimum required, doesn't need to be all that clients implement.",
+        "created_at": "2021-07-22T08:07:47.493000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Agree, but I think it's necessary as part of the minimal merge.",
+        "created_at": "2021-07-22T08:07:53.005000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I see it in a slightly different way. Execution client knows that in advance and is constantly trying to build the most fresh block that is picked by the consensus client on demand. Then the execution client stops producing blocks until the next round",
+        "created_at": "2021-07-22T08:08:08.832000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "How does the execution client know in advance? Without the vc letting it know?",
+        "created_at": "2021-07-22T08:09:08.324000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "That's a good question. It should be a part of communication protocol I guess. Though, I am speculating and this hasn't been discussed with client implementers yet",
+        "created_at": "2021-07-22T08:10:05.597000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "At current the execution client is geared for PoW, so every potential block can be mined and may result in a valid block.  Because of that it makes sense to regenerate the optimal block each time new transactions show up.\n\nBecause PoS is more orderly you could either go on-demand, or in advance but only for a short span of time.  If the execution client is told that the VC needs a block for slot 12345 (informed at the beginning of the epoch, for example), and after a while we're at slot 12346, then the execution client can stop trying to make new blocks because they aren't going to be used.",
+        "created_at": "2021-07-22T08:10:51.147000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "To be frank I've always assumed it would be like Jim is proposing, never crossed my mind that we would have a box trying to produce blocks continuously to be broadcasted only once in a while. From the consensus side, implementation is simple",
+        "created_at": "2021-07-22T08:12:50.011000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "The worst case would be that the execution client has no advance notice (startup of VC on the slot it is proposing, reorg) but these are going to be pretty rare and having every execution client running flat out to make the best block all the time will also have an impact on the normal operations of the consensus chain with CPU resources for e.g. signing being allocated to useless block production.",
+        "created_at": "2021-07-22T08:13:13.563000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Well, that situation happens every epoch in slot zero",
+        "created_at": "2021-07-22T08:14:42.979000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Some execution client will have to produce a block immediately",
+        "created_at": "2021-07-22T08:15:08.270000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "So if this is unfeasible then perhaps the whole proposal can't be carried out",
+        "created_at": "2021-07-22T08:15:43.614000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "The block could be produced in advance only once a slot. Then the question, what if there are new transaction and MEV opportunities appeared in the network after this block has been produced and before it will be picked by the consensus client at the beginning of the next slot? There is an incentive in constantly trying to produce a more optimal block as the time required to produce yet another sample of a block is an uncertainty.",
+        "created_at": "2021-07-22T08:18:17.003000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "This comment does not apply to this scenario since the proposal is to produce the block the latest possible: there won't be more transactions or MEV opportunities",
+        "created_at": "2021-07-22T08:20:10.777000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Notice however that with this proposal, the execution client will not have one slot time to produce a block on epoch boundary, but rather it will have to be produced immediately",
+        "created_at": "2021-07-22T08:21:15.236000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "It could be produced in advance to each epoch boundary cross",
+        "created_at": "2021-07-22T08:22:45.469000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah that's one option that still I think it's better than continuous work",
+        "created_at": "2021-07-22T08:23:21.226000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah that would work.  There's also the question of quite how long it takes for a block to be produced.  If quick then the entire thing could be carried out ad-hoc rather than in advance, and remove all of the problems.  But I don't know the numbers for execution client block creation.\n\nPerhaps it is best to start from this premise, and add in pre-calculation if it proves to be an issue?  It could be done without altering the API, and would be more of an implementation detail*.\n\n*Unless coinbase is actively used in the transactions included in the block.  In which case perhaps the solution is to add some sort of `eth_setCoinbase` call to the execution client API?",
+        "created_at": "2021-07-22T08:34:08.340000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "(And apologies for being so in-and-out of the general conversation on the merge.  Once altair is out of the way I want to spend more time on it, and should be able to provide more informed responses.)",
+        "created_at": "2021-07-22T08:37:20.840000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mrabino1",
+        "category": "general",
+        "parent": "",
+        "content": "Timing on block creation i believe should bifurcated.... from a consensus perspective, it should be no different in timing than today... (what whatever payload from above).... once the execution client knows this now we have a different challenge. we now start to insert willful delays due to MEV . (unless i am missing something)",
+        "created_at": "2021-07-22T08:54:55.975000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pieterastra",
+        "category": "general",
+        "parent": "",
+        "content": "isn't 'the latest possible' somewhat subjective? the later you propose the block, the more transactions / MEV you can include, but trying to delay it as long as you can runs the risk of the network not getting your block in time, and getting orphaned. So it's a risk / reward tradeoff",
+        "created_at": "2021-07-22T08:58:52.287000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The latest in that sentence refers to right at the time the validator needs it, as opposed to continuously having one ready which means the \"earliest\"",
+        "created_at": "2021-07-22T09:01:31.932000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "(And note that the timing would be under the control of the validator client; if it wants to wait before requesting a block  it can, but that shouldn't have any impact on the API or operation of the execution client)",
+        "created_at": "2021-07-22T09:03:20.060000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pieterastra",
+        "category": "general",
+        "parent": "",
+        "content": "You could also do a hybrid form: validator starts asking for block production once it knows it's up for proposal in a few slots (and perhaps before each epoch transaction.) The you wouldn't need continous block production *all* the time",
+        "created_at": "2021-07-22T09:04:33.101000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Note that current eth1 nodes keep a pending block built even when they know they aren’t mining and will never actually publish it. It’s used as the basis for responding to json rpc requests that specify the pending block and to prime caches so that the next received block can be imported faster.",
+        "created_at": "2021-07-22T09:07:27.983000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "That's the discussion above",
+        "created_at": "2021-07-22T09:09:14.217000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "But it's impossible before epoch transition",
+        "created_at": "2021-07-22T09:09:39.440000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Probably explains why they are so CPU-hungry :/\n\nSeems like that is becoming an increasingly misleading estimate of the future chain state, given that there are very different ways of building a block nowadays other than directly from the mempool.  Are there any measurements on the cache effectiveness available (I'm thinking that's probably the best proxy for overall effectiveness of creating a pending block from the mempool)?",
+        "created_at": "2021-07-22T09:10:34.920000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pieterastra",
+        "category": "general",
+        "parent": "",
+        "content": "Not quite, I meant like a two phase approach - 1. validator requests continous block production to start sometime in advance, 2. validator requests latest currently produced block once it's ready to propose.\nBut if the execution client is always calculating blocks like Adrian said, this is moot anyway",
+        "created_at": "2021-07-22T09:12:23.720000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I’m told it works very well but I don’t have any figures or know whether that’s still the case. \nIt’s not what consumes most of the cpu though - that’s just keeping up with verifying the devp2p traffic. \n\nThe key point though is that there’s a lot of speculation going on about optimising away the pending block but that may not actually be an optimisation and it does break parts of the json rpc api.",
+        "created_at": "2021-07-22T09:13:12.335000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Before going too far down the rabbit hole it would be worth finding out if getting rid of the pending block is actually helpful for performance and whether that’s too big an impact on the api.",
+        "created_at": "2021-07-22T09:14:13.283000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Agreed.  Big question, though...",
+        "created_at": "2021-07-22T09:14:52.432000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "But it being and optimization or not is something secondary here, it was just supporting argument to the request to have validators sending coinbase to the execution layer",
+        "created_at": "2021-07-22T09:15:24.119000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "And coming back to the coin base discussion, the pending block doesn’t generally use the coin base set - it applies transactions but doesn’t finish off the block as far as I’m aware. It definitely isn’t too expensive to apply the final block reward just as the block is actually requested.",
+        "created_at": "2021-07-22T09:15:52.773000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Would it need to recalculate all of the transactions, though, or can it track those that have reference to coinbase and only recalculate those?",
+        "created_at": "2021-07-22T09:16:31.974000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "(And with the whole MEV shenanigans I wonder if it would be possible to create malicious txs that appear to work until a given coinbase is applied, at which point they use up more gas and result in the block being invalid or similar?)",
+        "created_at": "2021-07-22T09:17:13.475000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah I just realised that the coin base was accessible. That would be a problem then - just doesn’t apply to pending particularly since it’s not a “real” block anyway.",
+        "created_at": "2021-07-22T09:17:13.766000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "This would be particularly relevant in PoS since presumably there would be plenty of validators that keep a stable coinbase and one can bet it advance what it will be",
+        "created_at": "2021-07-22T09:18:59.549000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Right, this is what I have missed for some reason at the beginning of discussion. This scheme should be better as consensus client manages the block building in advance without extra resources consumed by the execution client and requirement on additional methods in consensus API",
+        "created_at": "2021-07-22T09:19:22.576000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pieterastra",
+        "category": "general",
+        "parent": "",
+        "content": "In agreement with the above, coinbase on request would definitely be nice for these use cases (think e.g. a solo validator and a Rocket Pool validator sharing a single execution client - a static CLI coinbase would prevent this from working, and you'd need to run two execution clients, pretty expensive resource-wise)",
+        "created_at": "2021-07-22T09:20:26.118000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "IIUIC, there is a new transaction type with optional access list which potentially could be used as an optimisation mechanism alternative to the pending block. But the feature of having transactions in a pending block might be critical for UX because it gives an advance information on whether transaction is acceptable by the network and results in desirable outcome.",
+        "created_at": "2021-07-22T09:30:54.454000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "That's more for the submitter than the block producer, though.  I would assume that tx validation occurs prior to it being broadcast, anyway.\n\nThinking about this a bit more, a solution could be as follows:\n\n  - add an `eth_generatePendingBlocks`  or similar to the execution client that controls generation of pending blocks.  Options are:\n    - `generate` either `true` (generate pending blocks) or `false` (don't)\n    - `coinbase` the coinbase to use for the generated blocks\n  - require `coinbase` to be supplied as part of the `eth_newBlock` (or whatever it is called) execution client endpoint.  This way, if pending blocks are being generated and the `coinbase` is the same it can return a block immediately.  If either of these are false it would generate a block as a one-off and return that\n\nThis seems to give everyone the flexibility they need (generate pending blocks or not, update coinbase if desired) without breaking existing functionality (initial state would be to generate pending blocks with the coinbase supplied by the execution client's startup parameters or whatever).\n\nOpen question as to what to do if an API request for pending comes in and pending is turned off; either error or return head seems reasonable, but haven't thought it through.",
+        "created_at": "2021-07-22T10:12:46.078000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm, I don't think all clients do this?",
+        "created_at": "2021-07-22T10:23:14.511000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I didn't know *any* client did it until you mentioned it just now.",
+        "created_at": "2021-07-22T10:23:28.623000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I always assumed that they built on demand, which I *think* is what Nethermind does?",
+        "created_at": "2021-07-22T10:23:38.262000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Like if you ask it for details about the pending block, it will build a pending block for you then, not preemptively (especially since such requests are pretty rare, and their result changes *frequently*.",
+        "created_at": "2021-07-22T10:24:06.155000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "True it’s not all clients but definitely geth. Nethermind doesn’t support mining and besu has been trying to avoid supporting pending fully. But I’m pretty sure geth does keep it constantly up to date and I’ve definitely received pushback on getting rid of the pending block concept because of the cache warming benefits.",
+        "created_at": "2021-07-22T10:24:59.685000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Mostly I think we should check with some geth devs though because there were a lot of assumptions flying around (and my conjecture wasn’t much more reliable)",
+        "created_at": "2021-07-22T10:26:12.924000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lattechad",
+        "category": "general",
+        "parent": "",
+        "content": "Hi all. Is there any update on an expected timeframe/window for the merge to take place?",
+        "created_at": "2021-07-22T10:26:20.079000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "There is a TODO list here https://github.com/ethereum/pm/blob/master/Merge/mainnet-readiness.md which has an information on what's left to release the Merge. My personal expectation is releasing in Q1 2022.",
+        "created_at": "2021-07-22T10:31:39.842000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pieterastra",
+        "category": "general",
+        "parent": "",
+        "content": "This would leave out the optimisation aspect of turning on and off generation of pending blocks on demand, wouldn't it? You'd need something like a subscription model for that too work for multiple validators on 1 execution client. Might be too much hassle for what it's worth though, depending on how worthwile / doable it is to leave out pending block calculation for Geth",
+        "created_at": "2021-07-22T10:31:47.639000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lattechad",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks for replying.",
+        "created_at": "2021-07-22T10:34:17.337000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "The `eth_generatePendingBlocks` would be the API call that allowed turning generation of pending blocks on and off on demand.\n\nIn the situation you had multiple competing validators using the same execution client the execution client provider may want to put in additional restrictions (e.g. only allowed to change coinbase 6 seconds in advance of the slot) but that wouldn't change the proposed functionality.",
+        "created_at": "2021-07-22T10:35:02.996000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pieterastra",
+        "category": "general",
+        "parent": "",
+        "content": "But what if validator A turns off pending blocks (because it just proposed) while validator B is still interested in them?",
+        "created_at": "2021-07-22T10:36:39.919000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "That would be down to timing.  For example:\n  - 4 seconds before slot 12345 validator A turns on pending generation with its coinbase\n  - at the start of slot 12345 validator A requests a block and then turns off pending generation\n  - 4 seconds before slot 12346 validator B turns on pending generation with its coinbase\n  - ...",
+        "created_at": "2021-07-22T10:38:23.622000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I am not sure that pending block is used by `eth_getWork` in geth. \u003c@!206016661470314496\u003e has been saying something about it on one of the calls. The logic of these two may not depend on each other. I would raise this topic for discussion on ACD or a call devoted for consensus API and block production after the Merge.",
+        "created_at": "2021-07-22T10:40:50.866000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pieterastra",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah that would work as long as the windows don't overlap. Generally they won't, of course, and I can't think of a good reason to start pre-calculating multiple slots in advance",
+        "created_at": "2021-07-22T10:41:04.967000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Happy to join such a call, although may make sense for it to give people a week or so to investigate how it works now and what the impact may be.",
+        "created_at": "2021-07-22T10:42:01.446000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I think we will have calls to discuss specific topics around the Merge in the close future. They will be announced in this channel as usual.",
+        "created_at": "2021-07-22T11:01:47.953000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Honestly I fail to see why any of this has to be speced",
+        "created_at": "2021-07-22T11:03:23.667000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "This is the way to have interoperable components that we want to have across implementations. Like, if one execution client doesn't support a method with the `coinbase` address but others do it would break interoperability of this execution client if consensus clients depends on this method.",
+        "created_at": "2021-07-22T11:22:12.924000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Specially cause the network will not enforce any behavior, as long as produced blocks are valid, why would the protocol care about the coinbase origin?",
+        "created_at": "2021-07-22T11:24:55.487000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "It's not a consensus protocol that matters. It's a communication protocol between consensus and execution clients",
+        "created_at": "2021-07-22T11:26:32.540000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "schone_wizard",
+        "category": "general",
+        "parent": "",
+        "content": "Excuse the late question to the whole thread. But why is it more beneficial to even credit fees/tips to the coinbase instead of crediting them to the validator’s balance in the consensus layer?",
+        "created_at": "2021-07-22T13:56:23.937000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "schone_wizard",
+        "category": "general",
+        "parent": "",
+        "content": "There’s something that feels clunky about all of this. As if we have two separate systems to do accounting when really we’re trying to bring everything under one umbrella",
+        "created_at": "2021-07-22T13:57:02.586000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "schone_wizard",
+        "category": "general",
+        "parent": "",
+        "content": "Another question that comes to mind is that about slashing. In the consensus world I thought we put a delay on the withdrawal of funds to give someone time to prove a validator had committed a slashable offense. But here a validator is able to take the fees/tips and “enjoy” them right away. So again we have this split brain two systems architecture",
+        "created_at": "2021-07-22T14:00:04.772000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I understand, but still I don't think the specs should be saying anything in this regard and let the clients figure this out. If anything, just some standardization of the API in case they decide to implement it, marked as optional, I'd understand, but requiring clients to implement this one way or another is useless if they can do (and should do) whatever they want",
+        "created_at": "2021-07-22T14:32:00.117000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Going to the validator balance would require synchronization between the beacon chain and the execution layer, something that the minimal merge doesn't do",
+        "created_at": "2021-07-22T14:33:02.312000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "schone_wizard",
+        "category": "general",
+        "parent": "",
+        "content": "Can you elaborate how so?",
+        "created_at": "2021-07-22T14:42:37.344000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "A transaction would have a debit in Eth1 and a credit in eth2,  both the execution layer and the beacon chain would have to keep track of this. In the current proposal, all eth1 traffic is controlled only by the execution client",
+        "created_at": "2021-07-22T14:45:06.477000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "schone_wizard",
+        "category": "general",
+        "parent": "",
+        "content": "How much extra work does unifying those two add? I mean at some point we’re going to have to deal with the back and forth just for the sake of withdrawals. Could an opportunity not be presenting itself here to come up with a cleaner all encompassing solution",
+        "created_at": "2021-07-22T14:52:15.001000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Withdrawals per-se do not require a strong sync. Having arbitrary transactions involving the beacon chain is complicated and is a complication that we do not need to take at the merge time. A simpler merge is what allows it to happen in the foreseeable future as opposed to perhaps years from now.",
+        "created_at": "2021-07-22T15:06:56.692000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I agree, deferring a decision on that to client developers is what should be done. Definitely not something to be forced by the specs in the first place.",
+        "created_at": "2021-07-22T16:36:32.035000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Do you mean that the responsibility of producing and verifying execution payload opens new ways to slashable offences?",
+        "created_at": "2021-07-22T16:47:09.723000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "This is more about the forward compatibility of the system. If we introduce a synchronous processing of consensus and execution and rely on it then we will have to support it in the future which is a big obstacle to the design where the execution is handled by a separate executable shard.",
+        "created_at": "2021-07-22T16:56:03.403000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,416 @@
+[
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "From \u003c@211091239112671234\u003e on EIP-5450 - if we leave the storage of `max_stack_height` implementation defined, clients can just do the initial validation and then run into the stack overflow naturally and abort exceptionally. It's the same outcome as aborting early (me thinking now, maybe that leads to a different trace tho?). \n\nAnyways, may be another argument in favor of not expanding the type section",
+        "created_at": "2022-11-11T13:25:49.863000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This is the \"light\" variant of EIP-5450: we continue doing stack overflow checks as we do currently (i.e. the EIP only eliminates stack underflow checks).\n\nHowever, this has different behavior than using `max_stack_height` for stack overflow check at `CALLF` only. This variant is more restrictive: we report stack overflow no matter what control-flow path is taken in the called function.",
+        "created_at": "2022-11-11T13:30:08.762000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "does this not yield the exact same consensus results (aborting at `CALLF`-site vs. later in the function)?",
+        "created_at": "2022-11-11T13:31:21.833000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "My view is that stack height validation isn't for current tooling, it's for future tooling. I expect the clients running the first \"big eof\" to not really care.  But the stack height validation causes a subset of otherwise valid programs to become invalid, that subset includes \"compiler bombs\" that make JIT translations always risky. (and by JIT translations I think that includes making some potential zk translations possible)",
+        "created_at": "2022-11-11T13:35:16.122000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "No. If you have a conditional jump in the function (`RJUMPI`) and stack overflow happens only in one of the branches. The `max_stack_height` will be the max of both branches and `CALLF` will error all the time. While the runtime check depends on what branch is taken during execution.",
+        "created_at": "2022-11-11T13:35:42.872000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "ah good point",
+        "created_at": "2022-11-11T13:36:23.245000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This is static-dynamic tradeoff (as \u003c@403707149043105803\u003e mentioned). We reject some programs during static analysis which would run fine \"dynamically\". Similarly, valid static type programs is subset of valid dynamic type programs.",
+        "created_at": "2022-11-11T13:38:46.596000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So clients would need to somewhere stash away the maxPushes for each function??",
+        "created_at": "2022-11-11T13:42:02.137000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm already leaning towards \"stack validation enforcement seems pretty useless for my purposes (fast interpreted evm execution)\" ... don't really like the extra complexity around that eip..",
+        "created_at": "2022-11-11T13:44:28.402000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "What do you mean by \"maxPushes\"? The `max_stack_height`? Yes, you need this number stored somewhere for each function.",
+        "created_at": "2022-11-11T13:44:31.875000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "one alternative to forcing clients to make a fancy way of storing the data would be to expand the type section to have `(inputs, outpus, max_stack_height)` for each function",
+        "created_at": "2022-11-11T14:11:02.091000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But that would change the eof-header? (edit: I need to go back and read the eip properly)",
+        "created_at": "2022-11-11T14:19:51.048000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "it would (see 4750 for the definition of the type section)",
+        "created_at": "2022-11-11T14:21:25.205000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the way im thinking about the eof eips right now is that they are inseparable so we don't need to be able to support 4750-style type section (just i/o) and 5450-style (i/o + max_stack_height)",
+        "created_at": "2022-11-11T14:22:15.939000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Reading it now. https://eips.ethereum.org/EIPS/eip-5450:\n\u003e Given new deploy-time guarantees, EVM implementation is not required anymore to have run-time stack underflow check for each executed instruction. However implementations can keep it if they choose to do so.\n\nThis seems to not be true then?",
+        "created_at": "2022-11-11T14:22:29.338000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, we would need to modify the \"function type\" section. But we aim to deploy all in the same time, so not big deal.",
+        "created_at": "2022-11-11T14:24:56.837000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think we mean that you can keep the stack underflow checks but they will never be triggered. The stack underflow cannot happen after EIP-5450. The stack _overflow_ still can.",
+        "created_at": "2022-11-11T14:26:09.625000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Benchmarks of geth EVM with/without stack checks.",
+        "created_at": "2022-11-11T14:27:25.029000+00:00",
+        "attachments": [
+            {
+                "type": "text/plain; charset=utf-8",
+                "origin_name": "message.txt",
+                "content": "e1aa9f63db44ac7d08e1c1e0477f1f69be52f2ebff69140b820bd9a5e5eb8358"
+            }
+        ]
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ha, that's a very ambiguous statement! I mean, sure, we can keep anything that won't ever happen.... But it _sounds_ like \"EVM implementations can keep (the existing check) if they choose (not to store the data\"",
+        "created_at": "2022-11-11T14:27:33.745000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That's why we need you to review it 🙂",
+        "created_at": "2022-11-11T14:28:36.218000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Well, IMO that's just like removing the antenna to lessen the drag on your volvo. Sure it's theoretically a tiny bit faster, but for all practical purposes there's no real change in speed (because state accesses dominates all)...",
+        "created_at": "2022-11-11T14:29:16.990000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Right, sorry, I don't mean to sound aggressive, but I realize I might be coming across as that. Yeah I will review it!",
+        "created_at": "2022-11-11T14:30:24.132000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But you can have nice EVM JIT \u003c:crazycry:932693133546889216\u003e",
+        "created_at": "2022-11-11T14:30:34.931000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I will work on this next week so you may want to wait until updated.",
+        "created_at": "2022-11-11T14:31:15.498000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, I kind of get the feeling that for other (non-interpreted VMs) this is much more \"Awesome\" than it is for us. But I still don't 100% get it",
+        "created_at": "2022-11-11T14:31:52.713000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sambacha",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Wen 63/64 rule removal ????",
+        "created_at": "2022-11-11T14:33:22.560000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Any concrete proposals what to do about it?",
+        "created_at": "2022-11-11T14:35:58.231000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "eof v2?",
+        "created_at": "2022-11-11T14:50:28.278000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "https://ethereum-magicians.org/t/proposals-to-adjust-memory-gas-costs/10036",
+        "created_at": "2022-11-11T14:58:59.649000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I don't know how to express more strongly how important it is to validate stack use at initialization time.",
+        "created_at": "2022-11-11T15:02:03.163000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Maybe just point me to the best explainer you have written about it?",
+        "created_at": "2022-11-11T15:10:57.164000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "What i got when removing analysis i 2x factor of execution speed: https://github.com/bluealloy/revm/issues/121#issuecomment-1200187226\nLittle bit bias as all of it are in memory but either way significant boost.",
+        "created_at": "2022-11-11T15:26:45.463000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Having more stricter bytecode (as in stack underflow checks) mostly helps with future transpilers or bytecode static analysis, it is not that benefitial for perf.",
+        "created_at": "2022-11-11T15:29:10.953000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes.  Static analysis.  Transpilers.  Compilers.  The future should be here by now.",
+        "created_at": "2022-11-11T15:32:54.585000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e Maybe just point me to the best explainer you have written about it?\n\nEIP-615 and EIP-2315 both tried.  Transpilers, compilers, and other static analysis and transformation tools can go quadratic on invalid code.  And there are fewer conditions to check and therefor fewer ways to unexpectedly halt when running valid code.  That's two good reasons that Java and Wasm have always required validation before code is loaded.   Going quadratic means denial of service, so we cannot use such tools at all if code is not valid.  And unexpected halts are potential security exploits.  So those two reasons are even stronger for us.  And it won't do to say, \"That's for the future.\"  For VM design that future was a long time ago.",
+        "created_at": "2022-11-11T16:14:03.953000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Why does it matter to a compiler whether the evm enforces stack validity or not? What different choice is it at liberty to do?",
+        "created_at": "2022-11-11T16:37:35.505000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm trying for something concrete here, to understand better.",
+        "created_at": "2022-11-11T16:39:23.489000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Little bias? Isn't that a pretty significant humongous bias? At least from my perspective, where the main problem is executing mainnet blocks, with a lot of state access",
+        "created_at": "2022-11-11T16:46:54.076000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "What I am talking about is not 'why eof', but specifically and only, I am wondering about enforcing stack validity (underflow/underflow), and what it gains us",
+        "created_at": "2022-11-11T16:49:23.720000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Quick example -- unvalidated code can grow stack when it loops, and the loop bytecode can access more of the growing stack.  So a compiler has to keep generating code for every trip around the loop.  The validation algorithm prevents this -- any block of code needs to be compiled only once.",
+        "created_at": "2022-11-11T16:52:03.060000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "What? Are you talking about when a compiler unrolls a loop? \nSorry, I still don't get it. There's no feedback! Compilation happens once. It goes on-chain. The evm either enforces s v or does not. How does the latter inform the former? \n\nSorry, I still don't get it - I'm not just being devils advocate.",
+        "created_at": "2022-11-11T16:57:07.233000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm talking about one-pass compilation (or the like).  That generally involves traversing the control-flow graph -- the graph where basic blocks are code and jumps are edges.  To do it in one pass you need to traverse each block only once.  The way you do that is to be sure that the stack height is the same at the entry to each block, so you don't need to traverse it again.  (For Java and Wasm you have to check that each item on the stack has a compatible type, but we only have one type.)\n\nI'm sorry, I'm trying to be clear.  The validation algorithm itself might be the easiest demonstration of what I'm saying -- it tries to traverse the CFG in one pass, and fails if it can't.",
+        "created_at": "2022-11-11T17:04:25.484000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sambacha",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yeah just take it out we good",
+        "created_at": "2022-11-11T17:07:26.154000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yeah. Nope. Bye.",
+        "created_at": "2022-11-11T17:12:36.130000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Compilers don't like when you have a loop and the stack is unbalanced (e.g. in every loop iteration the stack height grows by 1). What the Stack Validation gives you is that for every PC (function code offset) the stack is guaranteed to have the constant height no matter what was the path this PC was reached from.",
+        "created_at": "2022-11-11T17:28:28.993000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Right, that makes sense. But... That is something that the compiler must ensure during the compilation phase, right? It cannot defer it to deploy-time, at which point the evm enforcer steps in.",
+        "created_at": "2022-11-11T17:53:48.733000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Remember, we are talking about compiling deployed bytecode to machine code, not source code to bytecode.  So yeah, source code compilers can enforce validity going _to_ bytecode, but bytecode compilers can't assume validity coming _from_ bytecode.  That is, unless we validate the code when we deploy it.",
+        "created_at": "2022-11-11T17:57:23.526000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Structured source languages going back to Algol can be designed so that they will only generate valid code.  (Pretty much just don't allow *goto* into the middle of a block.)  Solidity easily could, were it not for dynamic jumps.",
+        "created_at": "2022-11-11T18:01:03.688000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Aha. Well, that's certainly something I didn't know. You said compiler. I asked about compiler. Not sure exactly what the thing is you are describing there, sounds like a transpiler? Or a jitter?",
+        "created_at": "2022-11-11T18:05:31.049000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm sorry, I've tried to be clear on that ever since we started discussing Wasm when I arrived here years ago.  JITs can't work because they are DoS surfaces (make some code hot to force JIT, then never call it again.) We need one-pass compilers (e.g. EVM to x86) and transpilers (e.g EVM to Wasm).",
+        "created_at": "2022-11-11T18:09:41.437000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yeah, it does not take into account bigger bytecode and unpacking of those extra fields, it just show overhead that jumpdest analysis introduces, state access will always be a problem with or without EOF. I think I diverged with this as this is more about benefits of EOF not exactly for stack validity.",
+        "created_at": "2022-11-11T18:55:45.579000+00:00",
+        "attachments": null
+    }
+]

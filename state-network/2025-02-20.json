@@ -5,7 +5,7 @@
         "parent": "",
         "content": "Has anyone spent time looking into the performance of `eth_call` and considered ideas of how it might be improved? I'm working on the `eth_call` implementation in Fluffy and I've got an initial version working. I tested the performance and compared to the Trin version using the same example which is documented in the Trin docs and the response for both Fluffy and Trin from my network would take somewhere between 12-20 seconds. Of course this slowness is due to the fact that the EVM needs to lookup each piece of state sequentially and there are no concurrent lookups occurring.\n\nI've been looking at the Helios code which is a light client implementation that also implements `eth_call` and there are some similarities to the portal `eth_call` implementation. They run an EVM and lookup the state from a downstream RPC provider. They also use a performance optimization where before executing the call transaction in the EVM they build a transaction access list using `eth_createAccessList` sent to the RPC provider. This access list is then used to prefetch all the expected state lookups concurrently before executing the transaction. Now in order to implement `eth_createAccessList` it requires executing the transaction in the EVM to find the addresses and storage slots touched by the transaction. Unfortunately it doesn't really help for the portal implementation of `eth_call` because we don't rely on a downstream RPC provider which can provide the access list. But I wonder if there is a way to do something similar in our portal clients where we can somehow get the expected addresses and slots so they can be pre-fetched concurrently before and while the call transaction is executing. Does anyone have any ideas on how this could be done?",
         "created_at": "2025-02-20T12:34:37.053000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "There are probably a handful of educated guesses you can make about what a call is likely to touch, but I don't think there is any way to get the full set up front.",
         "created_at": "2025-02-20T12:40:57.098000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "My guess is that you can guess correctly for 80% of cases, but the other 20% are going to be incredibly hard to get right.",
         "created_at": "2025-02-20T12:41:34.479000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -29,7 +29,7 @@
         "parent": "",
         "content": "For example, ERC20 transfers are incredibly common and you can probably estimate what reads will be done if you detect a .transfer Calle.",
         "created_at": "2025-02-20T12:42:05.262000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -37,7 +37,7 @@
         "parent": "",
         "content": "To echo what Micah already said.\n\n- There's a number of things that can be pre-warmed and fetched concurrently.  `sender`, `to`, the code for `to`.\n- In some research that someone did a while back, someone in one of the first cohorts of apprenticeship program which is now EPF, it was found that at least 50% of state access during EVM execution could be predicted ahead of time.\n\nI expect this to be a heavy R\u0026D focus as soon as HEAD (or near HEAD) state is live on the network.",
         "created_at": "2025-02-20T14:30:56.292000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -45,7 +45,7 @@
         "parent": "",
         "content": "Yeah, common transaction formats like this are gonna be easy to special case since the lookup pattern is predictable",
         "created_at": "2025-02-20T14:32:15.365000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -53,7 +53,7 @@
         "parent": "",
         "content": "The biggest trouble with ERC20 and similar is that they don't all have the same memory layout.  I'm not sure how to deal with that, but I think you may need at least 2 round trips (one to get the code, second to use that to figure out where to do the various lookups that are likely necessary).",
         "created_at": "2025-02-20T14:33:11.177000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -61,7 +61,7 @@
         "parent": "",
         "content": "That is still likely better than having to do every single lookup sequentially though.",
         "created_at": "2025-02-20T14:33:19.992000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -69,6 +69,6 @@
         "parent": "",
         "content": "Oh, reminder that current state network is full trie, and the subsequent planned upgrade for state is to add the flat state so that we don't have to do trie traversal which will have it's own inherent speed increase.",
         "created_at": "2025-02-20T14:34:38.370000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

@@ -1,0 +1,266 @@
+[
+    {
+        "author": "ryanleeschneider",
+        "category": "general",
+        "parent": "",
+        "content": "How does one work forward from a finalized epoch at the CL to which eth1 block numbers have been finalized (manually if need be)?  Are the CLs already filling in finalizedBlockHash on the fCU messages (I know safeBlockHash is still WIP)?\n\nAm I correct that under \"normal\" circumstances the most unfinalized blocks we should see is one Epoch (32 slots) so assuming each slot has a block finalization should happen roughly every 32 blocks?  Obviously some slots will be missed (I see a fair number of epochs on mainnet right now w/ 1 or 2 missed slots) but that actually means that _less_ EL blocks are unfinalized not more, right?  Is there a scenario where a CL epoch can last more than 32 slots?",
+        "created_at": "2022-03-29T21:07:36.800000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "The CL REST API actually makes it kind of difficult to work with execution layer blocks - it may be something we should think about improving.  But for now you'd have to:\n1. Get the current finalized root (`/eth/v1/beacon/states/head/finality_checkpoints`)\n2. Extract the execution payload from that block via `/eth/v2/beacon/blocks/{root}`   That content will have both the execution block hash and block number which is the most recent finalized block.\n\nThe finalized checkpoint is always (at least) two full epochs behind so there are always at least 64 non-finalized slots and then the current epoch as well, so basically up to 3 epochs is non-finalized even when finalizing optimally.\n\nThere are always 32 slots per CL epoch but not every slot will have a block which would mean fewer EL blocks yes.",
+        "created_at": "2022-03-29T22:05:35.885000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "Note, there is a keyword so it can be one request\n\n/beacon/blocks/finalized should work",
+        "created_at": "2022-03-29T23:10:38.427000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "{block_id} for many endpoints is defined as\n\n\u003e Block identifier. Can be one of: \"head\" (canonical head in node's view), \"genesis\", \"finalized\", \u003cslot\u003e, \u003chex encoded blockRoot with 0x prefix\u003e.",
+        "created_at": "2022-03-29T23:11:39.546000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "ah yes of course - not sure why I forgot that. That works pretty well smoothly then.",
+        "created_at": "2022-03-29T23:15:51.639000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Hello, I got again a variation of something I've already discussed with \u003c@425572898787426305\u003e and I still don't get. CL is synced, EL returns SYNCING for the last block (or two, or three). I claim that an honest validator can and should attest for it's head in the previous block (or two or three) as long as it is the right head that satisfies the following conditions\n1) it is a fully validated node\n2) it was head at the time, without any optimistic blocks weights applied to it. \nThe situation becomes slightly more clear if instead of the El returning SYNCING, it times out and doesn't return at all. \nThe rationale is that the target vote of these validators is useful for finalization and we put pressure on liveliness with the rule of not attesting if the head is optimistic without any security benefit (as far as I can see)",
+        "created_at": "2022-03-29T23:21:12.212000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I think that would be fine, but guaranteeing (2) adds a fair bit of complexity to the implementation for a situation that should be extremely rare (there's no reason for the EL to suddenly switch back to syncing while appending to the canonical chain - that should only happen if the EL has had it's db reset).  If the BN is applying fork choice normally to select the optimistic head then it isn't safe to attest to the valid descendant because that may have been affected by votes for the optimistic blocks, so you'd have to either remember the last fully validated head or track the valid head separately.",
+        "created_at": "2022-03-29T23:27:12.093000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The most common situation would be simply a timeout after the block has been added to forkchoice. And yes, I am proposing tracking the last valid head. In fact after seeing the timeouts that pawan is setting in lighthouse for FCU and the ones we currently have in newpayload, our current implementation would have all prysm nodes not attesting on blocks for which newpayload and fcu timesout.",
+        "created_at": "2022-03-29T23:30:18.479000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I'm leaning towards sending the attestation at 4 seconds to my previous head in this case (assuming it passes the above checks)",
+        "created_at": "2022-03-29T23:31:30.375000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Getting a timeout would mean you can't import the block at all, so your head would remain unchanged and you wouldn't enter into optimistic sync mode.  You can only optimistically sync a block after receiving SYNCING/ACCEPTED from the EL - otherwise the block hash will never be verified and you may incorrectly mark an invalid block as valid.",
+        "created_at": "2022-03-29T23:32:47.005000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Thus a timeout means you would naturally attest to the existing VALID head.",
+        "created_at": "2022-03-29T23:33:25.338000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Yes I understand that in the timeout situation we aren't technically optimistic that's why I explicitly mentioned the SYNCING situation in my claim above. It just so happens that both cases are treated the same in prysm: the block is in forkchoice and it's treated as optimistic until the El comes back",
+        "created_at": "2022-03-29T23:34:19.604000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "That sounds like a significant bug. You must not import the block until you receive SYNCING.  We've seen consensus failures because of this previously (and had to change the spec as a result).",
+        "created_at": "2022-03-29T23:35:19.429000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "This also seems like reasonable behaviour to me. I think the only reason that this isn't in the specification is due to the complexities of implementing it.\n\nSomething to consider is that the head is not only determined by the weights of nodes in the tree, it's also determined by the one-way-latches of finalization and justification. So, dropping the weights from optimistic blocks and recomputing the head is going to return null if the optimistic blocks cross an epoch boundary with justification/finalization. You need to figure out how to \"rewind\" the finality/justification latches in fork choice. Not impossible, but certainly complexity.",
+        "created_at": "2022-03-29T23:36:21.258000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Rather than rewinding I'm thinking on keeping both computations in parallel. For the tree implementation is kind of trivial cause each node has the weight that voted for itself, so it's easy to compute one that takes into account optimistic children and one that doesn't.",
+        "created_at": "2022-03-29T23:38:18.409000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "It wouldn't even cost cycles",
+        "created_at": "2022-03-29T23:38:42.098000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Regarding timeouts, I'd say that if the EE can't respond in enough time to allow the CL to perform its duties then the system is fundamentally broken. I think the timeouts we're seeing now are because implements are still nascent, the comment below from Marius illustrates this:\n\nhttps://discord.com/channels/595666850260713488/910910348922589184/958018010839408690",
+        "created_at": "2022-03-29T23:41:35.558000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "I'm also going to add weight to this, I don't think it's safe to mark a block as optimistic whilst you're waiting for a response.\n\nIf you recall the \"fork choice poisoning\" attack from the optimistic spec, it's easy to think \"that's only dangerous during the transition\", but that's not the case. It's dangerous whenever we can make a significant portion of the network optimistic all at once. Marking a block as optimistic whilst we wait for a response would be a good opportunity for an attacker to create a \"bomb\" block for EEs that takes a long time to execute, then apply another block atop it which causes fork choice poisoning.",
+        "created_at": "2022-03-29T23:46:56.436000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I understand several risks of importing a block without a reply. But we error out if there's no reply in the timeout",
+        "created_at": "2022-03-29T23:48:40.734000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "A simple example when it can cause a liveliness situation is if you have a fork imported this way and a validated one with less weight.",
+        "created_at": "2022-03-29T23:49:49.488000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "My interest is in the SYNCING situation",
+        "created_at": "2022-03-29T23:50:22.032000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Which is what I asked",
+        "created_at": "2022-03-29T23:50:28.565000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I gather from both of you that this would be acceptable but useless to do",
+        "created_at": "2022-03-29T23:50:45.895000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Because of the complexity.",
+        "created_at": "2022-03-29T23:50:59.326000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "I wouldn't say \"useless\", I would say that the risk/reward isn't appealing to me considering how Lighthouse works. I certainly wouldn't discourage you from doing what makes sense to you and is safe for the network.",
+        "created_at": "2022-03-29T23:52:01.639000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "I would also say that it's not in the opt sync specification because it's quite difficult to specify.",
+        "created_at": "2022-03-29T23:53:00.411000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I think in the tree implementation is trivial, but then I also think that exploring sending attestations at 6 seconds may be safe",
+        "created_at": "2022-03-29T23:53:22.239000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I'm not sure that it's particularly good for the network to attest to a different fork when we know we should switch. I guess it can help finalization but it feels wrong to me for a validator to attest to a block it knows isn't the canonical chain.",
+        "created_at": "2022-03-29T23:53:32.071000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "And if it's on the canonical fork then there's no reason for the EL to return SYNCING.",
+        "created_at": "2022-03-29T23:53:50.299000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The head vote cannot count in this situation anyway",
+        "created_at": "2022-03-29T23:54:27.370000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "But I get the issue of the weights",
+        "created_at": "2022-03-29T23:55:04.361000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Is that true? If enough validators attested to it then it could become the heaviest chain and cause a reorg even though those validators believed there was a better chain they should be following.  I don't think it's clear cut wrong as such but it feels very grey.",
+        "created_at": "2022-03-29T23:58:24.726000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Do you error-out before making any changes to fork choice? Applying the block to fork choice (specifically updating the just/fin latches) before getting a response from the EE is where the risk lies.",
+        "created_at": "2022-03-29T23:59:44.650000+00:00",
+        "attachments": null
+    }
+]

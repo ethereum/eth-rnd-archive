@@ -1,0 +1,410 @@
+[
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "What's the source? `beacon_block_root` is the hash tree root of a Merkle tree built out of a serialization of the beacon block. `state_root` is the same for a serialization of the beacon post state after applying this block. `block_root` I don't know. Could be the same as `beacon_block_root` or could refer to the block hash of the execution payload included in the beacon block.",
+        "created_at": "2022-09-14T01:14:55.182000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "There is no block roots in EL, they are block hashes because it's a hash of RLP encoded block data. State root may be ambiguous though, as EL and CL both have state roots, algorithms to compute these roots are different though",
+        "created_at": "2022-09-14T05:17:11.849000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "So, the desirable output of late block handling is orphaning a block if it is late but staying on canonical chain? And this property is broken by your counter example. I think this is an edge case as attacker will have to be a proposer in the previous slot, and probably other slots so it can create a competing branch and somehow get attestations to it (a powerful attacker or slight network partitioning)",
+        "created_at": "2022-09-14T05:20:47.941000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "I don't think this case poses a serious problem, my vision for the re-org strategy is that it only tries to re-org the late block _if it is the canonical head_. In case of a self-orphaning block the head will re-org to the block it re-inforces via included attestations, so we won't see a weak head with \u003c10% vote, we'll see the other block that was reinforced as head.",
+        "created_at": "2022-09-14T05:38:18.185000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "I think \u003c@425572898787426305\u003e was getting at the same thing?",
+        "created_at": "2022-09-14T05:39:57.868000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I am more thinking about how practical this attack is to make it a special case. IIUC, we don't want to process blocks coming after e.g. 11s into a slot. And a self-orphaning block is coming late then a node won't be able to switch to canonical chain because processing of this block (and attestations in it) is delayed.",
+        "created_at": "2022-09-14T05:46:32.272000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Do you plan to process attestations of a block if it's running late but do not apply a block to the fork choice?",
+        "created_at": "2022-09-14T05:51:05.518000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "I don't have any plan like that currently, it seems a bit too targeted to this specific situation. If the chain is already split and we get a late block building on A that reinforces B then I think it's kind of arbitrary which fork the honest proposer of the next slot chooses. If they can broadcast their block on time and receive the proposer boost it should mitigate any attempt at balancing (which is what this sort of late bock represents IMO) and resolve the conflict between A and B.",
+        "created_at": "2022-09-14T05:58:04.299000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I would say it depends on transaction's value. `justified` becomes orphaned if network delay is above an epoch worth of seconds or if 2/3 of stake is malicious, so `justified` does give pretty strong guarantees already. What I like about `finalized` in particular is that 1/3 of a stake is going to be *slashed* to make it orphaned (it still requires 2/3 to be malicious). \n\nThe equilibrium between orphaning and not orphaning finalized block is `min(sacrificed_stake, outcome_from_reorg)`, the outcome is a sum of potential value gained from reverting all transactions of every orphaned block, and censoring or applying them in different order. Currently the outcome should be at least $7.3 billion which is somewhat incredible.\n\nIMHO, `justified` is pretty much enough to confirm an average transaction, `finalized` is useful when transaction has high value and/or requires to assess the risk of a reorg.",
+        "created_at": "2022-09-14T06:16:29.275000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The problem is that no matter how far fetched this is, it's triggerable with only two blocks and clever packing of attestations. Attacker's holding two consecutive blocks happen very often on mainnet and even though this looks naive we all know how forkchoice shenanigans exponentiate.",
+        "created_at": "2022-09-14T08:39:23.840000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Ok so you are computing and updating actual head even if the late block has \u003c10. In my design I wanted to avoid this. I wanted to avoid updating forkchoice head if the block has \u003c 10. The reason being that I would rather have the proposer build on top of Head (pointing to the previous one) than effectively propose on top of a block it doesn't see as head. This is because I don't want to have forkchoice and Blockchain having contradictory statuses",
+        "created_at": "2022-09-14T08:41:51.614000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e I think it's kind of arbitrary which fork the honest proposer of the next slot chooses\nI think there's a problem here if the algorithm is known, the attacker can leverage this, and extending a chain while inducing the honest proposer to extend a contending branch is calling for a bug to be found. I don't have a practical attack yet",
+        "created_at": "2022-09-14T08:46:52.657000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Usually, nodes are seeing all attestations in the network unless there is asynchrony. I don't understand how clever packing of attestations may help with this attack unless a portion of attestations are withheld which can be assumed if a portion of malicious stake is large enough",
+        "created_at": "2022-09-14T09:17:48.230000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, the attacker has to have relatively large stake and withhold his attestations to include in his own blocks. But the numbers for this are much smaller than other attacks we're analyzing.",
+        "created_at": "2022-09-14T09:19:44.088000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "And the result of this attack is the block produced on top of the parent of self-orphaning block will be orphaned?",
+        "created_at": "2022-09-14T09:22:46.322000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "No, the issue for me is that in my design we would continue building the old canonical chain which is \"wrong\". Lighthouse seems to be switching to the new chain",
+        "created_at": "2022-09-14T09:27:45.141000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I see that these are edge cases, but since they are triggerable I want to understand them",
+        "created_at": "2022-09-14T09:28:32.262000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "That's right. We only apply the attestations and update fork choice 500ms before the next slot, but we _do_ allow the \"true\" head to differ from the head we propose on. In our code there's a new function in fork choice called `get_proposer_head`, and that's how I was thinking of specifying it upstream as well",
+        "created_at": "2022-09-14T09:29:24.809000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I am not convinced that it is wrong by itself, but if a produced block is immediately orphaned by the network then it becomes wrong",
+        "created_at": "2022-09-14T09:30:14.574000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah this is the design that we thought first but I don't like this, it scares me having head and proposer_head being different",
+        "created_at": "2022-09-14T09:30:29.263000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Wait, I thought your design was to follow the spec and process attestations also at second zero as well",
+        "created_at": "2022-09-14T09:32:22.470000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "yeah sorry, we also do that. But the first time we weigh the attestations of slot `n` and check for the re-org threshold is 11.5s into slot `n`",
+        "created_at": "2022-09-14T09:33:18.355000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Most of the problems I have now is in this processing not that much at the threshold `y` (your 500ms) but more the second time at 0",
+        "created_at": "2022-09-14T09:33:45.862000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "so it's possible we mispredict (suppress fcU), but then have to propose on the late block without much notice at the start of `n + 1`",
+        "created_at": "2022-09-14T09:34:12.990000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Right, we're on the same page here. The main difference is that I want to process attestations and update balances but not the head",
+        "created_at": "2022-09-14T09:34:55.054000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@602753420033785856\u003e do you have a write up describing the whole algorithm?",
+        "created_at": "2022-09-14T09:35:37.568000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "unfortunately not really, just the scribblings here: https://github.com/sigp/lighthouse/pull/2860",
+        "created_at": "2022-09-14T09:37:20.615000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Btw, at the first glance the mechanism that we're discussing is similar to https://ethresear.ch/t/change-fork-choice-rule-to-mitigate-balancing-and-reorging-attacks/11127. The article proposes to hold off on attestation processing near the slot boundary",
+        "created_at": "2022-09-14T09:37:29.747000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "We have a design doc that I'm not sure how consistent is which our current thinking. This was our original discord post",
+        "created_at": "2022-09-14T09:42:00.415000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "```\n1) You notice that you are a proposer next block. \n2) `x` seconds arrive, no block has come. We call FCU with the previous head.  (I think `x ~ 4`)\n3) `y` seconds arrive (I think `y` is between `10 ~ 11.5`) we have several options:\n    3.a) There was a late block between `x` and `y`, we call process attestations and we check if the block received 10%  the committee. If it did we call FCU on the new block, we will not fork it. We have now between `y` and the next slot to produce the block, we lost our bet. What did we lose? well, if we weren't committed to forking, we would have called FCU as soon as the block arrived, instead of now at second `y`. \n    3.b) No block has come, we do nothing. \n4) Slot starts, our last call to FCU was either \n     4a) right when importing an early block, \n     4b) At second `y` if the block was late and got more than 10% of the vote\n     4c) At second `x` if the block never came or came after second `y`. \nIn all cases we call anyway to process attestations again in second 0. If there was a new block, with more than 10% of the vote, and we were as in 4c) (so the block came after `y`) then we call FCU here, we lost our bet, we have only right now to produce a block.  If the late block did not get 10% of the vote  or never arrived, we don't call FCU and simply call `getPayload`, we had at least 8 seconds to build the block, and we won our bet. \n\nWhat we need to do (although as \u003c@363800010518822915\u003e remarked this could be a cool project for me to advice a protocol-fellow) Adjust `x` and `y` with real runtime data. What are the tradeoffs. \n\n`x`: If `x` is too low, we may lose more bets simply because we got the block late and the rest of the network didn't. If `x` is too high we lose time to prepare the block and we allow later blocks to succed. \n`y`: If `y` is too low, we may not count late attestations and then lose the bet in second `0` which is worse\n```",
+        "created_at": "2022-09-14T09:42:27.739000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "Something that would make our lives _a lot_ easier is if the EL could handle multiple concurrent build requests. So we could ask it to prepare payloads on both `n - 1` and `n`, and then choose between them at the start of the slot.\n\nUsing builders might allow us to do this, assuming builders are willing to devote resources to building on both blocks (which it seems they are based on this: https://discord.com/channels/595666850260713488/874767108809031740/1019497563063336970)",
+        "created_at": "2022-09-14T09:47:47.585000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "Maybe post-merge we can set up a little working group and decide on a common spec which we can write-up for the `consensus-specs` repo",
+        "created_at": "2022-09-14T09:48:27.579000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "And we can twist \u003c@755590043632140352\u003e's arm that the idea of `get_proposer_head` is OK 😉",
+        "created_at": "2022-09-14T09:48:50.162000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I think there are two goals with designing this mechanism\n1) Re-org and balancing attack mitigation\n2) Giving enough time to EL to create valuable block\n\n(1) looks like the main goal and (2) is a side goal to me. I guess a solution to (1) does also resolve (2)",
+        "created_at": "2022-09-14T09:53:03.156000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I'm happy to think again about `get_proposer_head`. This is something that \u003c@363800010518822915\u003e implicitly assumed was going to be available when he started the implementation of this. One good thing about it is that it's contained to forkchoice. The bad thing for our particular design is that it'll force us to keep two states/blocks pairs ready at all times. And interestingly enough even when we cause it our own node will log a reorg",
+        "created_at": "2022-09-14T10:45:40.049000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "general",
+        "parent": "",
+        "content": "should we start a telegram working group for this? I'm talking today in person with Caspar about this, it might be useful to have all the relevant parties and convos in one place",
+        "created_at": "2022-09-14T11:14:43.252000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Why not just a channel here?  Presumably all of the interested parties are already here, and it would allow people to more easily casually follow along.",
+        "created_at": "2022-09-14T12:15:57.947000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "general",
+        "parent": "",
+        "content": "I'm indifferent, not an admin, so I don't think I will be able to create one 🙂",
+        "created_at": "2022-09-14T12:25:01.428000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I have one question. Don't CL client queries a block from a remote peer when they see attestations to a block that is missed locally? If they do then I don't get why do we need to consider any attestations voting for a late block upon its arrival because 1) it can only contain votes for its parent and 2) if such attestation exists and are received near to 8s boundary then the block should have been requested already while if it was not we can conclude that so far there were no attestations for this block observed by a node",
+        "created_at": "2022-09-14T17:04:54.085000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "sorry Mikhail I have been trying for the last 5 minutes to understand what you are trying to say here and I can't at all :). But yes, we do request blocks when we see attestations for a root that we do not know. What that has to do with the issue here?",
+        "created_at": "2022-09-14T17:09:45.867000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "So just to be explicit, the reason we process attestations late is to find out what is the expected weight of this late block. We do not want to try to orphan a block that we received late but that we see a bunch of attestations coming in at 8s",
+        "created_at": "2022-09-14T17:11:02.050000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "So we are going off-spec, and updating the weight of a node by counting attestations for the current slot",
+        "created_at": "2022-09-14T17:11:32.779000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I think that if block wasn't late for the network you will see attestations and pull it from a remote peer. But if you can only observe a block at 11s into a slot it likely means that the network haven't seen it before (signified by no attestations made to that block). What's the purpose of counting attestations made to this block? It's likely an act of malicious attestation withholding",
+        "created_at": "2022-09-14T17:12:08.734000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Let's say you receive a block at 7 seconds. There's  no way you could have received an attestation for this block yet.",
+        "created_at": "2022-09-14T17:13:00.905000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "you can't just orphan it cause you do not know if it will be head or not. So what you do, is you process all attestations at 11 seconds and you count how much this block received",
+        "created_at": "2022-09-14T17:13:28.928000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "is the preprocessing here because the spec requires to delay attestation consideration until the next slot?",
+        "created_at": "2022-09-14T17:14:21.604000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "but we'd like to know in advance what this processing will result into",
+        "created_at": "2022-09-14T17:14:53.088000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "we are preprocessing to get some time to prepare the payload in case we loose the bet. In the scenario above, if we see a block at second 7 and we process attestations and we see that this block has more than a threshold and we are not comfortable forking it, we will call FCU, it's better to do it at 10/11 seconds than doing it at 0",
+        "created_at": "2022-09-14T17:15:28.815000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "That's why if we can force the engine to prepare on a few tips as \u003c@602753420033785856\u003e is suggesting, all of our problems are gone.",
+        "created_at": "2022-09-14T17:17:21.871000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Engines (at least Geth and Nethermind) do have a timeout for the case when getPayload is about to return a payload with no transactions in it. In this case they run the build process for 500ms and then respond with what they have managed to build. It's a deviation from the spec but it helps to preclude when the payload is empty because of a late reorg on CL's side",
+        "created_at": "2022-09-14T17:26:22.689000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Why don't we simply trigger fork choice at 11s into a slot to `get_head_for_proposal`, then call updated FCU if the head returned by the call has been updated since the previous time (we expect the head to be updated considering new block and attestation messages from *current* slot if any)?\n\nIf a block hasn't been observed when we're at this boundary then it is likely the network hasn't seen the block at all (no attestations to this block were observed either, otherwise, the block would be requested upon receiving those attestations).\n\nIf the block and attestations to it are maliciously released after 11s then to orphan the next proposal these attestations should be from a portion of stake greater than proposer boost value which would mean that we're dealing with quite big portion of malicious stake.\n\nEven if a block is released near to 4s boundary splitting the view of the network, all attestations voting for it should make their path into aggregates and be observed at 11s into a slot.\n\nWhat am I missing?",
+        "created_at": "2022-09-14T17:48:37.998000+00:00",
+        "attachments": null
+    }
+]

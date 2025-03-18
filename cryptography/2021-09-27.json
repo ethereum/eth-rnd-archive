@@ -1,0 +1,42 @@
+[
+    {
+        "author": "kclowes",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hey everyone - there is an issue with the py-evm codebase with (we think) points at infinity for ecrecover. Here is the issue to add a test case in ethereum/tests: https://github.com/ethereum/tests/issues/941. If you follow along to the bottom of that issue, you can see that those inputs correctly fail Geth’s validation here: https://github.com/ethereum/go-ethereum/blob/master/crypto/secp256k1/libsecp256k1/src/modules/recovery/main_impl.h#L120 . For py-evm, the underlying function that recovers the address can be found here: https://github.com/ethereum/eth-keys/blob/dd4f00a5d2f2b394665ccecc9817f753e58cc7bc/eth_keys/backends/native/ecdsa.py#L140. The `r` and `s` values from the test case generate a point of `(0, 0, 1)` for `Q` on line 161 in that same function: https://github.com/ethereum/eth-keys/blob/dd4f00a5d2f2b394665ccecc9817f753e58cc7bc/eth_keys/backends/native/ecdsa.py#L161 . In my searching, I’ve only found points at infinity represented by either `(1, 1, 0)` or `(1, -1, 0)` (For example: https://crypto.stackexchange.com/questions/41468/point-at-infinity-for-jacobian-coordinates). So I guess my questions are: \n1) what does the Jacobian point  `(0,  0, 1)`  represent if not a point at infinity?\n2) Should we also be validating that `Q` does not equal the Jacobian points at infinity `(1, 1, 0)` and `(1, -1, 0)`?\n/cc \u003c@!343424945914904577\u003e  - Piper said you have a good grasp on the underlying math and might be able to help 🙂",
+        "created_at": "2021-09-27T19:08:23.220000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Not cc, but maybe this will help:\n\n1) (0,0,1) in Jacobian coordinates would not be a point on secp256k1. \n\nSince you cannot represent the point at infinity in affine coordinates, one way to do this is to use a point that is not on the curve in the code, I think typically this would be (0,0) along with a flag to say “is infinity”.\nThis is not needed for jacobian coordinates however, since you can state a representation of the point at infinity. Typically this is (1,1,0). My guess is that it’s done this way for some optimisation purposes and as long as you’re careful to check the “is infinity” flag, it should be fine. I have only skimmed the Bitcoin code, so please take my guess with a grain of salt.\n\n2) I believe so, also I think you want to be checking that r and s are not zero, r being zero is not a point on the curve, since that implies y^2 =7 but 7 is not a quadratic residue for secp256k1’s base field. s should not be zero, because this cancels out the R point in the equation to derive Q\n\nTo check for infinity, if you don’t have an “is infinity” flag, you may be able to get away with checking for (0,0,1) and (0,0,0), given that the rest of the code returns those points where it should. The latter point (0,0,0) occurs in jacobian_double",
+        "created_at": "2021-09-27T21:32:51.592000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The go-ethereum code linked also checks for r and s to be non-zero. Although the check for “is infinity” is different since there is a “is infinity” flag",
+        "created_at": "2021-09-27T21:36:06.489000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kclowes",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Thank you, that helps a lot! I'll have to dig into the `is_infinity` flag, I don't think py-evm/eth-keys has that 🤔",
+        "created_at": "2021-09-27T22:14:38.839000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It doesn’t, but you can probably check for the two internal representations (0,0,1) and (0,0,0). On mobile right now, but I checked the jacobian file and it seems to be those two points that are hard coded to represent ♾",
+        "created_at": "2021-09-27T22:29:03.061000+00:00",
+        "attachments": null
+    }
+]

@@ -5,7 +5,7 @@
         "parent": "",
         "content": "Hey all, I'm working on Web3signer, specifically around the implemenation of the interchange import/export, and had a few questions around corner cases, and how other clients are handling them. \nThe first question is around the concept of \"Genesis Validator Root\" (GVR) -  atm there is a test case titled `wrong_genesis_validator_root` - which implies there is a \"right\" GVR... and that a signer/slasher knows which network its signing for.\nWe're considering making Web3signer \"GVR agnostic\" - and it is able to sign/slash for any network (maybe not a useful use case, but removes arbitrary constraints) - but that means, when exporting, web3signer needs to either:\n1. Export a file per GVR\n2. Accept a cmdline arg indicating which GVR to export (not great, as GVR isn't an end-user concept)\n3. Have a \"multi-GVR\" export format; whereby an interchange file contains many networks worth of information - i.e. \"GVR\" moves out of metadata, and instead is used as an extra dimension under the data object\nThoughts or comments?",
         "created_at": "2020-11-02T01:39:54.193000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "trentmohay2268",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "Second question - how are error cases being handled? For example:\n* Multiple entries at a given slot/epoch with different signing roots? (assumption = reject file)\n* Partial import - should a failure in entry #5 roll-back entries 1-4?  (assumption = reject file)\n* Conflict with existing entries (or does import assuming the importee has no signing/slashing state recorded? (assumption = ignore entry and continue)",
         "created_at": "2020-11-02T01:42:49.810000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "trentmohay2268",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "Third question:\n* If importing into an existing signing/slashing dataset - should \"gaps\" in the dataset be able to be signed? Eg. a block record exists at slot 50, then we import slots 1--\u003e40, can slot 41 be signed in the future? (I suspect not, but I think it's probably valid when considering the rules defined on the interchange hackmd page.)",
         "created_at": "2020-11-02T01:45:47.201000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sproul",
@@ -29,7 +29,7 @@
         "parent": "",
         "content": "Hi \u003c@!681273808841474198\u003e, these are all good questions and I'm glad you raised them.\n\nRe: the GVR and the network, our intent was that a signer knows which network it is signing for, and is capable of mapping between a network name like `\"medalla\"` and its GVR. For your usecase, I think exporting a few files like `mainnet_history.json`, `medalla_history.json`, etc seems reasonable, although I do agree it would be cleaner to change the spec to a \"multi-GVR\" friendly format, it's just whether or not the coordination cost of doing so is worth it right now (it could be?)\n\nRe: errors, the spec intentionally leaves some error behaviour up to the implementation, because in a sense there are many reasonable things that one could do. At the moment Lighthouse treats all of the cases you raised the same way, and will atomically refuse to import the whole file if any entry clashes with any other, or one from the existing DB. This should be sufficient for importing good data into a fresh DB, and alerts the user that they've done something odd (although of course it's problematic if they ignore the error). On the other hand, Teku only cares about the _greatest_ blocks and attestations from an import file, and I think it will successfully import files with conflicts (or which duplicate its existing view of the world). I think that's also a reasonable behaviour, and I don't really want to mandate that Teku has to reject files it is currently capable of safely accepting. Unfortunately I think the fact that the spec allows incomplete information (missing signing roots)  means that any export -\u003e import -\u003e re-export -\u003e re-import chain that loses information has to be considered unsafe (e.g. export Lighthouse to Teku, export Teku back to Lighthouse). I'll have to think more about whether making the signing root mandatory would fix this satisfactorily 🤔",
         "created_at": "2020-11-02T03:02:57.544000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sproul",
@@ -37,7 +37,7 @@
         "parent": "",
         "content": "\u003e Third question:\n\u003e * If importing into an existing signing/slashing dataset - should \"gaps\" in the dataset be able to be signed? Eg. a block record exists at slot 50, then we import slots 1--\u003e40, can slot 41 be signed in the future? (I suspect not, but I think it's probably valid when considering the rules defined on the interchange hackmd page.)\n\u003c@!681273808841474198\u003e This is the question I'm most confident in answering. It's _allowable_ for implementations to sign messages with slots/epochs lower than the recorded maximum, because that's exactly the mitigation that would have been required to provide safe liveness during the Medalla clock sync bug (where Prysm nodes signed messages a few days in the future). That said, it isn't _required_ that implementations do this, and in most cases it is OK to not sign anything greater than your max (and again, this is how Teku works)",
         "created_at": "2020-11-02T03:05:34.877000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -45,7 +45,7 @@
         "parent": "",
         "content": "On the third question it seems very dangerous that you could import one file that starts at 50 and a second with range 1-40 and then sign any non-conflicting requests. You have no record of what was signed between 40-50.  My understanding was that the minimum values in an imported file should form a low water mark and nothing be signed below that (because you don't have any record of what was signed). \nAgreed that if you import one file from 40-50 you should be able to sign anything from 40 up. But I'd default to never lowering the low-water mark when importing records, but providing some kind of user control to allow it makes sense.",
         "created_at": "2020-11-02T03:21:13.405000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sproul",
@@ -53,6 +53,6 @@
         "parent": "",
         "content": "Yeah that's a good point, only in the case where the interchange itself contains a gap should it be considered safe.\n\nYou just helped me realise that there's a flaw in Lighthouse's current impl -- we're OK in the case where the 50+ file is imported first, but if we import 1-40 and then 50+ we allow signing in the middle (because we read the watermark from our DB's whole collection of attestations). Looks like I should re-add explicit watermarks",
         "created_at": "2020-11-02T03:36:26.526000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

@@ -1,0 +1,410 @@
+[
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "It sounds like there may be value in a more complete writeup/description of the problem found by Nethermind (than the one liner in the call notes)?",
+        "created_at": "2022-06-08T05:49:45.136000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "Is there a link to what the actual issue is ? Which part are CLs not handling correctly",
+        "created_at": "2022-06-08T05:52:41.868000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "A related question. Are all CL clients behaving the same or it's an issue with a subset or a specific CL client?",
+        "created_at": "2022-06-08T08:08:31.149000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "cc \u003c@\u0026652918665943056397\u003e ^^",
+        "created_at": "2022-06-08T08:08:50.434000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "general",
+        "parent": "",
+        "content": "CL sends FCU with payloadAttributes, and immediately after (1-50ms), CL sends getPayload. EL doesn't have enough time to produce a full block. It is not an issue with geth, because geth is waiting 500ms in case of an empty block on getPayload. We changed our block production in a similar way to geth.\n \nI noticed this problem in prysm, lighthouse, lodestar, nimbus. Now, most of CLs fixed this issue. On MSF6, we've observed empty proposals only with nimbus. So after the fix, we could run the version of Nethermind without extra waiting on mainnet shadowfork. It is not a problem for us to prepare docker with this version. In this way, we will be sure that everything is fixed.",
+        "created_at": "2022-06-08T10:03:18.491000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "This should only happen in extreme cases where the head changed at the beginning of the slot, for example if a block arrived very late, or if attestations made the head switch branches in a fork. Are you seeing this on every block?",
+        "created_at": "2022-06-08T10:21:50.312000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "This is incorrect behavior by geth based on my understanding of previous conversations on this topic.",
+        "created_at": "2022-06-08T10:22:48.474000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "When you receive the getPayload method, you send whatever you have (empty block if you have nothing).",
+        "created_at": "2022-06-08T10:23:07.068000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "The CL shouldn't be sending a request for a block until it really needs it, and once you get that method it means there is no time left and you must send immediately.",
+        "created_at": "2022-06-08T10:23:46.138000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "That is why we have a separate method (at least last I checked) for \"prepare\", so the client can build a block before the last moment.",
+        "created_at": "2022-06-08T10:24:16.648000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "IMO, the correct behavior from Nethermind here (and Geth) is to send an empty block if you don't have time to build an actual block.",
+        "created_at": "2022-06-08T10:25:08.281000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I really thought we went over all of this a while back and nailed down that getPayload meant *right now*?",
+        "created_at": "2022-06-08T10:25:35.267000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, this behaviour deviates from the spec:\n\u003e Given the `payloadId` client software **MUST** return the most recent version of the payload that is available in the corresponding build process at the time of receiving the call.",
+        "created_at": "2022-06-08T10:58:54.149000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I would like clarification in my question above. Because if CL is doing this normally then that's a bug on the CL. If the CL is doing this only in the situation that I describe above, then while I agree that Nethermind's behavior is the right one, CL probably will wait 500ms to request one",
+        "created_at": "2022-06-08T10:59:38.619000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "CL client may wait for an extra time before calling `getPayload` if `fcU` has been called too late, but EL must *instantly* respond upon receiving `getPayload`, otherwise, CL wouldn't have the build process under its control given that the control needs to go beyond it's area of responsibility",
+        "created_at": "2022-06-08T11:02:53.232000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "general",
+        "parent": "",
+        "content": "cc: \u003c@360491619402776577\u003e \u003c@628018527470616606\u003e",
+        "created_at": "2022-06-08T11:19:39.386000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "general",
+        "parent": "",
+        "content": "I observed the constant pattern - every block 🙂",
+        "created_at": "2022-06-08T11:21:06.388000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kelrlu",
+        "category": "general",
+        "parent": "",
+        "content": "Question about `geth --syncmode=snap` sync. At the end of snap sync, will it be possible to fetch `getTransactionReceipt` of a transaction? I've noticed that I currently cannot do this for blocks as they are syncing.",
+        "created_at": "2022-06-08T11:27:11.113000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kelrlu",
+        "category": "general",
+        "parent": "",
+        "content": "I've noticed I am able to do this for nodes started with `geth syncmode=full` while the node is still syncing",
+        "created_at": "2022-06-08T11:27:37.003000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "that's certainly a bug, I don't recall prysm ever calling `GetPayload` except right before proposing. And in this situation we should have called FCU **only** if head changed right before, which almost never happens. Are you sure this was seen with prysm? Perhaps I can bug you on the devops channel. cc \u003c@363800010518822915\u003e",
+        "created_at": "2022-06-08T11:27:40.185000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "general",
+        "parent": "",
+        "content": "Hi \u003c@758579010027782144\u003e, do you see this on prysm today?",
+        "created_at": "2022-06-08T11:33:32.568000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "general",
+        "parent": "",
+        "content": "I believe prysm fixed this issue a long time ago 🙂\n\"I noticed this problem in prysm, lighthouse, lodestar, nimbus. Now, most of CLs fixed this issue. On MSF6, we've observed empty proposals only with nimbus\"",
+        "created_at": "2022-06-08T11:33:41.478000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "general",
+        "parent": "",
+        "content": "Timeout is defined as 1s though",
+        "created_at": "2022-06-08T11:34:28.525000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Right, but timeout is a minimal time CL must wait for response. EL has nothing to do with these timeout values",
+        "created_at": "2022-06-08T11:37:13.410000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "general",
+        "parent": "",
+        "content": "ok currently we followed geth and introduced short wait if we don't have the block yet and we have high chance of getting it soon. We can remove it but that will bring back empty blocks on some CL's",
+        "created_at": "2022-06-08T12:03:43.845000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "CL clients should resolve this problem on their side. And if we see late blocks causing a child block to be empty is too often the case it may be a signal for CL to optimise `getPayload` call for this case",
+        "created_at": "2022-06-08T12:15:38.481000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@301186049323958275\u003e requested a discussion around this issue on the ACD this week (https://github.com/ethereum/pm/issues/538#issuecomment-1149743683)",
+        "created_at": "2022-06-08T12:18:22.151000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "There is no way for the CL to give time other than forking the late block, which I think we will do. Lighthouse is planning on doing this and I'm hoping an issue will be raised in the specs soon (cc \u003c@602753420033785856\u003e ) from Adrian's reply in that thread I think Teku is onboard and an initial discussion in prysm seemed to agree.",
+        "created_at": "2022-06-08T12:20:09.467000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Good point! IIRC, LH is going to run fork choice 500ms in advance to the next slot, which would already give EL at least 500ms. This optimisation seems valuable from the standpoint of local and remote payload build process",
+        "created_at": "2022-06-08T12:28:47.223000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I'm referring to something more radical: if the previous block is late and it can be safely forked, that would give the EL several seconds of preparation",
+        "created_at": "2022-06-08T12:31:31.478000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "Relevant Lighthouse PR: https://github.com/sigp/lighthouse/pull/2860\n\nI need to update it for the latest fork choice changes, test it some more and open an issue on the spec to standardise it",
+        "created_at": "2022-06-08T12:35:01.155000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "What does \"safely forked\" mean in this context?",
+        "created_at": "2022-06-08T12:36:33.148000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Proposer boost and processing attestations should give a good measure that we can safely fork a block",
+        "created_at": "2022-06-08T12:38:06.453000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "Although you don’t necessarily know how many attestations there are for the late block until right at the end of the slot",
+        "created_at": "2022-06-08T12:40:53.352000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "yeah, but that's the thing: suppose even without the optimization of running forkchoice at 11.5 (which I think we should all do anyway). we get a block at 11 seconds, we run forkchoice at second 12 (0 of the next slot) our head changes even if that incoming block has **zero** votes. And we lose the proposal cause we call FCU right there and getPayload immediately after. There's nothing we can do about it. However, if we had called fcu at 6 seconds, assuming this block would not be there. We sync the block at second 11 (and not call FCU) run forkchoice at second 12 and see that the last synced block has zero attestations, then we do not update head, call `getPayload` and the engine had 6 seconds to prepare. If we see a lot of attestations for the incoming block, well, we are just as bad as we were before",
+        "created_at": "2022-06-08T12:49:22.859000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Can the CL not issue a `prepare` to the EL for multiple blocks in the same slot?",
+        "created_at": "2022-06-08T14:23:19.995000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "\"Please build off of block 0xabcd\" and \"please build off of block 0x1234\".  If both are prepared, then when the CL is ready for the block they can request one or the other, depending on which they want to actually build off of.",
+        "created_at": "2022-06-08T14:24:06.507000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "general",
+        "parent": "",
+        "content": "happy to discuss on ACD, but not sure that the CL folks will show up so it might be worth trying to resolve async before?",
+        "created_at": "2022-06-08T14:24:38.587000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "There is an issue with concurrent building, some EL clients doesn't support block building on the chain that isn't canonical one. That was a reason to equip `fcU` with the building semantics",
+        "created_at": "2022-06-08T14:26:23.398000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm, I feel like this is a design that we should work on rectifying.  Being able to build a block against two different heads is valuable for this exact reason it seems like.",
+        "created_at": "2022-06-08T14:28:09.782000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "It allows us to be indecisive about the fork choice rule right up until we actually make the fork choice, which is valuable.",
+        "created_at": "2022-06-08T14:28:28.907000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Does that mean that proposers' fork choice rule should be slightly different? Or we have this new behaviour applied to all nodes?",
+        "created_at": "2022-06-08T14:28:49.559000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I do think that the honest validator spec needs to be changed to respect this behavior. But this does not need changes in the fork choice spec, just that honest validators are allowed to propose on top of blocks that are not their current head. Forkchoice stays the same and even the proposing node will sync it's own block and fork to it",
+        "created_at": "2022-06-08T14:31:06.223000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "i'll also chime in and say that it lowers the barrier to entry for external block builders (in a mev-boost world) if they can leverage more off-the-shelf software to make blocks and this is the kind of thing builders will be doing anyway to have juicy execution blocks ready to go",
+        "created_at": "2022-06-08T14:42:49.502000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "general",
+        "parent": "",
+        "content": "any ropsten transition community call?",
+        "created_at": "2022-06-08T14:46:48.799000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "peter.davies",
+        "category": "general",
+        "parent": "",
+        "content": "https://www.youtube.com/watch?v=2OfRuKSPjjw",
+        "created_at": "2022-06-08T14:47:04.527000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "general",
+        "parent": "",
+        "content": "why ropsten has so many compeating blocks? And why it  says they are from same miner? Is one miner on multiple machines?",
+        "created_at": "2022-06-08T15:55:10.498000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "peter.davies",
+        "category": "general",
+        "parent": "",
+        "content": "They overloaded a geth node (on two cores) and it's struggling to follow the chain and keeps making siblings of itself.",
+        "created_at": "2022-06-08T15:55:53.170000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "peter.davies",
+        "category": "general",
+        "parent": "",
+        "content": "Apparently you need more than two cores if you want to point 66 GH/s at it.",
+        "created_at": "2022-06-08T15:57:00.661000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "wallawallawallawalla",
+        "category": "general",
+        "parent": "",
+        "content": "Should a query like `{\"jsonrpc\":\"2.0\", \"id\": 1, \"method\": \"eth_getBlockByNumber\", \"params\": [ \"safe\", false  ] }` work against ropsten at the moment?",
+        "created_at": "2022-06-08T16:32:09.507000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "general",
+        "parent": "",
+        "content": "I haven't implemented \"safe\" yet, only \"finalized\"",
+        "created_at": "2022-06-08T16:34:16.180000+00:00",
+        "attachments": null
+    }
+]

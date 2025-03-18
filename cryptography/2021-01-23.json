@@ -1,0 +1,202 @@
+[
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!425279588009246720\u003e Regarding benchmarking, you don't need to port BLST yourself to Go math.bits, you can use either Consensys Gnark/Goff (https://github.com/ConsenSys/gnark) or Kilic's BLS (https://github.com/kilic/bls12-381) They also have an additional 15% perf improvement over raw mulmont384 by using the fact that BLS12-381 is actually 381-bit and so no carry can happen in some operation.",
+        "created_at": "2021-01-23T11:53:48.979000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Also you need to deactivate ADCX, ADOX in BLST or not compile with march=native.",
+        "created_at": "2021-01-23T11:54:12.648000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "if you have Nim installed you can also\n\n```bash\ngit clone https://github.com/mratsim/constantine\nnimble bench_fp\nnimble bench_ec_g1\nnimble bench_pairing_bls12_381\n```\n\nTo get additional benchmarks, it should be state-of-the-art and slightly faster than BLST except for pairing (I'm missing Miller Loop addition chains)",
+        "created_at": "2021-01-23T11:56:29.684000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Regarding square root and inversion addition chains, I'm using 2% less instructions than BLST btw, currently the SQRT addchain are in a PR: https://github.com/mratsim/constantine/pull/132",
+        "created_at": "2021-01-23T11:57:35.678000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It's constant-time so it should give you an upper-bound on the number of instructions (BLST as well)",
+        "created_at": "2021-01-23T11:59:13.503000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Regarding inversion, there are 2 new techniques that should reduce inversion cost 2x~4x even compared to addition chains.",
+        "created_at": "2021-01-23T12:02:00.462000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "One by Thomas Pornin: https://eprint.iacr.org/2020/972 that BLST implemented recently\nOne by Bernstein-Yang: https://eprint.iacr.org/2019/266 that libsecp256k1 is implementing https://github.com/bitcoin-core/secp256k1/pull/831\n\nBoth are discussed and compared here (very long thread): https://github.com/bitcoin-core/secp256k1/pull/767\n\nThe Bernstein-Yang technique is very complex and the main gist is being able to iterate on just uint32 and uint64 instead of the full uint256 or uint384.\nThis is great for native but cannot be applied to the EVM.",
+        "created_at": "2021-01-23T12:05:12.605000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If needed I can do quick reviews of optimizations that are implemented/missed as I did here:\n- https://github.com/vacp2p/research/issues/7#issuecomment-690083000\n- https://github.com/vacp2p/research/issues/7#issuecomment-704146460",
+        "created_at": "2021-01-23T12:11:01.269000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I've listed all optimizations relevant to BLS12-381 and pairings I'm aware of (though some may have slipped my mind): https://github.com/mratsim/constantine/blob/master/docs/optimizations.md",
+        "created_at": "2021-01-23T14:48:51.744000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pauld.9606",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Agreed. `MULMODMONT383` (read: 383, not 384) would give a slight speedup. So would adding `SQRMODMONT384`. For now, we accept a slight slowdown with `MULMODMONT384` to remain simple and generic. Our goal is not only performance, but also a minimal and maintainable system which allows users to innovate. More performance will come from users innovating to do fewer field operations than doing field operations faster. That said, `MULMODMONT383` and `SQRMODMONT384` remain options if a strong case is made.",
+        "created_at": "2021-01-23T17:01:51.951000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pauld.9606",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Please explain. Our benchmarks just assemble some BLST asm field operations.",
+        "created_at": "2021-01-23T17:02:32.090000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "You don't have ADCX/ADOX in the EVM so you need to measure the mul ASM version not the mulx (I didn't check what implementation you used)",
+        "created_at": "2021-01-23T17:03:21.192000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the difference in perf is about 15% as well.",
+        "created_at": "2021-01-23T17:03:35.412000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pauld.9606",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We will look into it. Whatever it is, 15% is not critical.",
+        "created_at": "2021-01-23T17:04:24.259000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pauld.9606",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Agreed, our addition chain was chosen without much investigation. Notable is that there are tradeoffs with addition chain length, memory used, and bytecode size (since repeated memory offsets can use `DUP` instead of `PUSH16`). So the shortest chain need not be the best. Users will innovate in these areas.",
+        "created_at": "2021-01-23T17:08:21.891000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pauld.9606",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Thank you for the references. I was aware of some of these. I am evaluating options for inverses and square roots in EVM.",
+        "created_at": "2021-01-23T17:10:11.733000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pauld.9606",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Thank you for your generous offer. I suspect that an analysis of EVMcurves will yield similar results as an analysis of BLST, since we use mostly the same algorithms. This would be interesting for both us and BLST, but please feel no obligation.",
+        "created_at": "2021-01-23T17:12:41.813000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pauld.9606",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Wow, it must have taken a long time to collect such a comprehensive list of optimizations. I am most interested in innovations like miller loop lines precomputation, which would give a major speedup -- a quick look shows that both PLONK and BLS signatures allow this optimization. I will study your list.",
+        "created_at": "2021-01-23T17:15:50.840000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "BLST and Constantine have the same optimization except that BLST use jacobian coordinates and I use projective. It also has dedicated squaring and double-width towering. The main difference in Pairing is that it uses Ghamman, Fouotsa algorithm instead of Hayashida, Hayasaka, Teruya from July 2020 (6% perf diff and reduced temporaries)",
+        "created_at": "2021-01-23T17:16:01.569000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "only 2 hours 😉",
+        "created_at": "2021-01-23T17:16:12.566000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "BLST has the state of the art miller loop precomputation.",
+        "created_at": "2021-01-23T17:16:36.496000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Double width towering might increase gas cost on the EVM since you use a 764 field element instead of 384. (on native it's about 15% perf)",
+        "created_at": "2021-01-23T17:17:37.085000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pauld.9606",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes,we are aware of this. If EVM768 is proposed, we can revisit this optimization.",
+        "created_at": "2021-01-23T17:18:37.971000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The paper for Miller loop precomputation is: https://eprint.iacr.org/2019/077.pdf",
+        "created_at": "2021-01-23T17:18:39.343000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "and the corresponding code, instantiated for BLS12-381: https://github.com/status-im/nim-blscurve/blob/master/blscurve/miracl/csources/64/pair_BLS12381.c#L339-L410",
+        "created_at": "2021-01-23T17:21:05.014000+00:00",
+        "attachments": null
+    }
+]

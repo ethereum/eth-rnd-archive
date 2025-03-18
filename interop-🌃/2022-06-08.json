@@ -1,0 +1,122 @@
+[
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "I remember there was some discussion around whether it's permissible to fCU to an earlier block in the same history - ie a reorg that doesn't reorg, just moves back in time - was there a decision / how do EL:s behave in this case?",
+        "created_at": "2022-06-08T09:24:20.661000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "This can happen if you drop the CL DB and then resync. I think we agreed that the EL should send you a VALID with the block hash you gave it. Effectively pretending that you just set the head to an old block, but actually changing nothing on the EL. I’d defer to \u003c@425572898787426305\u003e to confirm.",
+        "created_at": "2022-06-08T09:27:00.929000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, this is exactly what we came up to. We have the following statement in the Engine API spec that covers this case:\n\u003e Client software **MAY** skip an update of the forkchoice state and **MUST NOT** begin a payload build process if `forkchoiceState.headBlockHash` doesn't reference a leaf of the block tree. That is, the block referenced by `forkchoiceState.headBlockHash` is neither the head of the canonical chain nor a block at the tip of any other chain. In the case of such an event, client software **MUST** return `{payloadStatus: {status: VALID, latestValidHash: forkchoiceState.headBlockHash, validationError: null}, payloadId: null}`.",
+        "created_at": "2022-06-08T09:32:14.024000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think this situation will effectively happen for us whenever we receive an INVALID block whose LVH has no best descendant but itself",
+        "created_at": "2022-06-08T10:24:27.247000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "In this case an `fcU` call should designate a leaf as a head which isn't the same",
+        "created_at": "2022-06-08T10:44:05.795000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "the situation I describe is without any leaf. This shouldn't happen on a healthy network, but anyway.",
+        "created_at": "2022-06-08T10:51:21.624000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Oh, I misread. I thought the ancestor pointed by LVH is the parent block. How could LVH point to INVALID block? (this is what I read from you message -- LVH points to the block itself)",
+        "created_at": "2022-06-08T10:53:32.828000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "hsiaowei",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hey teams! Staking Launchpad will add a \"**Merge readiness checklist**\" page for the stakers. (Credits to \u003c@397809066115727383\u003e ✨)\n- PR: https://github.com/ethereum/staking-launchpad/pull/493\n- Preview: https://deploy-preview-493--serene-carson-3331d5.netlify.app/en/merge-readiness\nWe'd appreciate client teams' reviews. If you think of any other tasks or tips that we should add, please leave a comment in the PR. 🙏",
+        "created_at": "2022-06-08T10:54:32.537000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samcm",
+        "category": "Testing",
+        "parent": "",
+        "content": "If anyone with write permissions in this channel would like access to the EF Devops Grafana instance feel free to PM me 👍",
+        "created_at": "2022-06-08T16:22:09.143000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes, I mean precisely that, if the LVH has no valid descendants, then LVH becomes head, therefore it will receive an FCU to an ancestor of the last FCU that was being called, which is the situation described in the original question.",
+        "created_at": "2022-06-08T18:09:43.294000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "If LVH that has no valid descendants became the head it would mean that LVH is a leaf of a block tree. But there could be the case when LVH has another branch of valid descendants (i.e. it's not a leaf), and in this case I believe this branch should take over invalid one and became the canonical one which would meant that LVH won't become a head",
+        "created_at": "2022-06-08T21:00:12.596000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "This is not the case I'm saying: there haven't been any valid block since the last valid hash. Every block we've seen is invalid",
+        "created_at": "2022-06-08T21:01:28.679000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "In this case lvh gets an fcu",
+        "created_at": "2022-06-08T21:01:46.277000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "right, but in this case fcU points to a leaf as LVH is a leaf of a block tree, right?",
+        "created_at": "2022-06-08T21:03:32.675000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "right, but from the point of view of the CL the chain went `A \u003c- LVH \u003c- B \u003c- C `  --\u003e `A \u003c- LVH` and the EL got an FCU for `C` and right after that an FCU to `LVH`.",
+        "created_at": "2022-06-08T21:57:02.848000+00:00",
+        "attachments": null
+    }
+]

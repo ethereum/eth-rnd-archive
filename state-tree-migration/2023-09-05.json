@@ -5,7 +5,7 @@
         "parent": "",
         "content": "With regard to https://notes.ethereum.org/@rudolf/migration about Verkle migration.  The note talks of point 1 below (I/O cost) but not points 2 (disk space saving), 3 (implementation freedom) and 4 (sync time) below.  I hadn't appreciated 2 myself until a few days ago, when thinking where state expiry may fit in.\n\nMotivation, _pros_ for proposal #2 \"writable MPT\"  (these are _cons_ for proposal #1 \"read-only MPT [a snapshot in time]\"):\n\n1.  No abrupt increase (double-ish?) in **_random access I/O load_** for account/storage reads. This is a significant contributor to performance \u0026 factored into gas cost model.  An abrupt increase in I/O might push some currently ok ELs over the edge.\n2. No potentially very **_large increase in disk storage required_**, as an entire _stale_ MPT snapshot is kept around for a long time during the Verkle transition.  Very hand-waving, if the transition takes a long time then keeping the entire MPT representing a point in time as well as all new state added to the VT might roughly _double_ the disk space required for account and account-storage states.  That's a lot and of course might push some currently ok ELs over the edge.  And personally, I think continuing to reduce storage requirements for ELs that hold full _current_ state is more elegant than suddenly requiring potentially a lot more space, mandated by the protocol so implementors wouldn't be able to optimise it away.\n3. EL implementors choose whether to keep the static part of the MPT around on disk, or **_free the MPT space while the VT grows_**, ideally at the same rate it is then consumed by VT storage.  In other words, keeping the whole MPT is not a requirement set by the protocol, it's made into an a implementation choice instead.\n4. Correspondingly **_lower sync time_** for the MPT during the transition, because only the dynamic part of the MPT is subject to Snap Sync, and that part shrinks as the VT grows (independent of whether an implementation frees disk space).",
         "created_at": "2023-09-05T13:03:33.638000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jlokier",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "I finally had a chance to think about how to implement proposal #2 efficiently, as in how to transfer the account and account-storage states from the MPT to the VT locally (no network data transfer at all), incrementally with a deterministic partition.\n\n- Someone brought this up in the last call (Aug 9th).  Some accounts have very large storage, gigabytes even.  This causes a huge \"lumpiness\" in the transition if the MPT/VT partition point is swept from low to high in a simple deterministic way in the accounts trie.  I think I have a nice solution to this which leverages the existing Snap Sync code.\n- Also how to give implementors the choice to delete parts of the MPT efficiently to release disk space (which the VT will gradually consume), or not if it's simpler not to.  But allowed in the protocol.\n- Also how to avoid unnecessary MPT interior node updates for the unused part of the MPT.\n- Also how to sync efficiently, with a small modification to the Snap Sync protocol.",
         "created_at": "2023-09-05T13:17:02.167000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "rudolf6",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "For those joining Verkle Implementers Call in 5 min: https://meet.google.com/odf-tghm-ttu",
         "created_at": "2023-09-05T13:27:16.236000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jlokier",
@@ -29,7 +29,7 @@
         "parent": "",
         "content": "Algorithm summary:\n\na. The partition point is a 256-bit integer representing trie-paths in the MPT account trie (i.e. using the account hash for the MPT), concatenated with another 256-bit integer trie-path in the MPT account-storage trie.\nb. Periodically during the Verkle transition, probably every block, the partition value is incremented by a deterministic amount all ELs agree on.  This is part of the protocol, and must be deterministic as this is how the random access I/O of account/storage reads is kept down.\nc. The \"lumpiness\" of some accounts having much larger account-storage than others is dealt with as follows: The deterministic partition increment is done by using almost the same DB query as already used for Snap Sync in Geth et al. (probably the same code).  A query is made to the DB to read \"the next N storages or accounts, starting from the current partition\".  This determines the change to the 512-bit partition value, and is a deterministic function of the state of the MPT at that time.  The query data is also useful: It is exactly the account leaves and storage slot leaves which are inserted into the VT to transfer the data.\nd. The DB query and data transfer can only be done efficiently if the partition function uses the path-hash used by the MPT, not the path-hash used by the VT.  Conveniently this matches what Snap Sync already does.  This means the transfer reads will be contiguous and efficient, and the writes will be random-access writes into the VT.",
         "created_at": "2023-09-05T13:27:56.979000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jlokier",
@@ -37,6 +37,6 @@
         "parent": "",
         "content": "e. Implementations are given the option to delete all leaves in the MPT which are no longer required.  It's good for saving disk space and avoiding double-storage, however they don't _have_ to do this, or they can implement it later as an optimisation.  We define the MPT as _logically_ permanently fixed on the static side, so the hash values remain as if the data is still present. But because there will be no queries to the static side of the partition again (when reorg window has passed), the actual leaf nodes, as well as many interior trie nodes are no longer required.\nf. In accordance with the above, the Snap Sync which keeps the active side of the MPT going is modified as follows: The Snap range is only from the partition up to the maximum path value.  Leaves below the partition are simply not requested or transferred, while the side above the partition are Snap Synced as usual, with normal healing etc.  I expect this is a simple change to all Snap Sync implementations.  (The boundary proofs work without modification, despite potentially deleted data on the static side, due to the \"as if\" rule in point e).\ng. Above allows nodes which delete the unused part of the MPT to satisfy Snap Sync during the Verkle transition, and of course it makes sync faster, by not transferring unnecessary account states that nobody needs over the network either.",
         "created_at": "2023-09-05T13:28:21.382000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

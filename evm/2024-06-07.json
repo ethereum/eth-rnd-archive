@@ -1,0 +1,186 @@
+[
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If all the clients are pushing for devnet-1 perhaps we should make it Prague-devnet-1 + EOF.  That way EOF won't \"hold back\" on devnet 1 as it's table stakes.",
+        "created_at": "2024-06-07T05:44:35.106000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Is there the final spec for devnet-1?",
+        "created_at": "2024-06-07T06:41:08.371000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@403707149043105803\u003e \u003c@892053833121923094\u003e we have landed this in evmone: https://github.com/ethereum/evmone/pull/921\n\ni.e. no truncated data section in the top-level container. this actually doesn't require spec change but affects EOF validation testing. If you are fine I can roll out the tests updates.",
+        "created_at": "2024-06-07T06:44:34.627000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This would be easiest option from reth side",
+        "created_at": "2024-06-07T07:08:46.200000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We normally use these notes to co-ordinate on specs, e.g for pectra-devnet-0: https://notes.ethereum.org/@ethpandaops/pectra-devnet-0\n\nThere's a placeholder for: https://notes.ethereum.org/@ethpandaops/pectra-devnet-1\n\nBut the question of if its pectra + eof just an eof devnet is what would be the main question. I would prefer keeping them separate for now and combine in the future, but up to you guys if you want everything. Note that pectra + eof would block on not just ELs having pectra+eof brances, but also on CLs having a pectra branch to use. You can't launch today unless there atleast a few ready parties, whereas with dencun + eof you theoretically could.",
+        "created_at": "2024-06-07T08:27:58.345000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This looks relatively good. The compatible version of evmone is passing all EOF tests and all except one state tests (`shanghai/eip3855_push0/push0.push0_fill_stack`). Not sure what's wrong with this one, wasn't this one filled with evmone?",
+        "created_at": "2024-06-07T09:11:02.308000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Another question:\n```\n./eofdump eof --hex 0xef0001010004020001000404000000008000015fe0fffc\n0 PUSH0 0 \u0026{0 0}\n[0]\n1 RJUMP 1 \u0026{1 1}\n[-1]\nok.\n``` \nThe test expects to error with conflictingMaxStack, which I get, however I don't see in the spec where the checks for MaxStack are specified for RJUMP, looking at https://github.com/ipsilon/eof/blob/main/spec/eof.md",
+        "created_at": "2024-06-07T10:24:23.279000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "For `RJUMP` there is nothing special about the stack height. This instruction actually don't use the stack at all (0 required operands, pushes nothing).",
+        "created_at": "2024-06-07T13:34:52.938000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Sorry I meant conflictingStackHeight",
+        "created_at": "2024-06-07T13:37:54.111000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I fixed it in my code, I just mean theres no documentation about it",
+        "created_at": "2024-06-07T13:38:22.551000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "However, it looks this test is `PUSH0 + RJUMP[-4]` which will loop back to the `PUSH0` instruction. This breaks the stack height validation rules.",
+        "created_at": "2024-06-07T13:38:27.403000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "(checking...)",
+        "created_at": "2024-06-07T13:40:39.136000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, this is indeed missing: \"Stack Validation\" point 3 should say the target of `RJUMP` is also the successor instruction.",
+        "created_at": "2024-06-07T13:44:44.730000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "To explain the failure: before `PUSH0` we have min/max stack height 0, after `RJUMP` min/max stack height 1, 0 != 1.",
+        "created_at": "2024-06-07T13:46:03.043000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Is the EIP good enough?\n\n\u003e 3. Determine the list of successor instructions that can follow the current instructions:\n\u003e    1. The next instruction for all instructions other than terminating instructions and unconditional jump.\n\u003e    2. All targets of a conditional or unconditional jump.",
+        "created_at": "2024-06-07T13:48:34.406000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "(to be fair the \"unconditional jump\" is never explained. This means `RJUMP` but this not defined in EIP-5450 nor EIP-4200).",
+        "created_at": "2024-06-07T13:51:27.617000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Anyway, reported here: https://github.com/ipsilon/eof/issues/127\nLeave comments there if you have any.",
+        "created_at": "2024-06-07T14:06:45.569000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Have run `./state_test` (53 files) and `./eof_tests` (999 tests) folders in revm and passing them.",
+        "created_at": "2024-06-07T15:23:59.959000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "There should be no Shanghai tests in the `fixtures_eip7692.tar.gz` file, so you might be using a different one?",
+        "created_at": "2024-06-07T15:27:47.806000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "sgtm",
+        "created_at": "2024-06-07T15:28:20.427000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Good point, it looks I merged some older directory because this is archived under \".\" name...",
+        "created_at": "2024-06-07T15:31:09.352000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think `latest` still points to the latest general release, because the EOF is marked as pre-release, it's the downside of having these new feature releases",
+        "created_at": "2024-06-07T15:32:27.763000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I mean the tar.gz has the top folder named \".\"",
+        "created_at": "2024-06-07T15:33:28.964000+00:00",
+        "attachments": null
+    }
+]

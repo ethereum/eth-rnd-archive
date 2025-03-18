@@ -1,0 +1,1008 @@
+[
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "We are currently validating the LVH and all ancestors.",
+        "created_at": "2022-07-06T04:13:47.102000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "It's concerning that we can't rely on values labelled as \"valid\" to actually be \"valid\".",
+        "created_at": "2022-07-06T04:17:44.569000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I agree with this definition. The LVH must be VALID or the zero-hash.",
+        "created_at": "2022-07-06T04:24:56.484000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "By validating you mean that they are *not* turned VALID when lvh returned but expecting separate validity status from EL?",
+        "created_at": "2022-07-06T05:22:48.334000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I mean that when we get the LVH value we update our internal state to say that the LVH and all ancestors are VALID.",
+        "created_at": "2022-07-06T05:23:22.739000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "got it",
+        "created_at": "2022-07-06T05:23:50.449000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "If zero-hash it can be treated as `transitionBlock.parentHash`. It should be anything else, probably `0x00..01` or `0xff..ff` or `0x(random(2**256))`",
+        "created_at": "2022-07-06T05:45:34.227000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "~~Wouldn't treating the zero-hash as the transition block result in the entire chain being invalidated by the CL?~~\n\n~~I would be tempted to keep it simple and say \"if it's the zero-hash, pretend it doesn't exist\"~~",
+        "created_at": "2022-07-06T05:46:45.614000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "Oh, I get you sorry.",
+        "created_at": "2022-07-06T05:46:58.630000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "`0xff..ff` is appealing to me.",
+        "created_at": "2022-07-06T05:47:42.536000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "LH will treat anything that it can't find inside the non-finalized block tree the same; it will just be ignored. So I think all of the above would be equivalent to us.",
+        "created_at": "2022-07-06T05:48:33.872000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "So, the definition would look as follows:\n\nIf validation fails, the response **MUST** contain `{status: INVALID, latestValidHash: validHash}` where `validHash` is the block hash of the ancestor of the invalid payload satisfying the following conditions:\n* It is fully validated and deemed `VALID`\n* Any other ancestor of the invalid payload with a higher `blockNumber` is `INVALID`\n\nIf any of the above conditions isn't satisfied then `validHash` **MUST** be set to `0xff..ff`",
+        "created_at": "2022-07-06T06:09:27.648000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Frankly, I don't like it.\n1) We can't test it in Hive because of different EL semantics. To test this we'd need to be sure that all ELs are running block header validations separately from blocks execution which is implementation specific\n2) It's tricky to parse, potentially requires additional codepath in EL client, thus, bug prone plus can't be tested in Hive increasing the chance of EL client not following the spec\n3) I believe original intention of LVH was to inform CL if `INVALID` block is deep into the chain; there was no intention to implicitly signify LVH as a valid branch -- at least this is how I was reading it before `ACCEPTED` was introduced\n\nIMO, a better alternative is:\nIf validation fails, the response **MUST** contain `{status: INVALID, invalidBlockHash: invalidHash}` where `invalidHash` is set to one of the following values:\n* `payload.blockHash` if the payload itself is `INVALID`\n* `invalidAncestor.blockHash` where `invalidAncestor` is `INVALID` ancestor of the `payload`\n\nAnd CL doesn't do anything beyond invalidating blocks starting from `invalidBlockHash`, ending up with the payload which status was requested.\n\nBut it requires:\n1) Reverting the CLs logic of marking as `VALID` on LVH (at least in LH)\n2) Renaming `latestValidHash` as leaving this name with changing semantics would be misleading. This requires coordinated upgrade on Kiln, Ropsten and Sepolia (or playing with JSON parsers to make it backward compatible)",
+        "created_at": "2022-07-06T06:34:11.106000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Considering the point where we're currently at, I am open to either of these options",
+        "created_at": "2022-07-06T06:36:35.921000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "This is the same for Prysm, we had the same logic here, just that we remove the last setting of LVH to VALID because of lack of conformance from the EE",
+        "created_at": "2022-07-06T10:41:32.493000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I really disagree with this. It may be a very minor change, but it's a change in the API when there's only one major testnet left to test before merging. We should have an API freeze by now. The semantics of LVH as stated in the current API clearly state that it should be VALID. What they are not clearly stating is that its child, in the branch of the invalid payload is INVALID. However, every CL already implements it this way, so I think the right approach here is to a) add the explicit statement that the child is INVALID (my PR or your sentence up from this thread does this) and b) requests that EE that do not conform to this explicitly send a bogus LVH (be it decided, random hex, whatever its decided). Then we can argue about how realistic it is to have a hard requirement on that implementation of LVH.",
+        "created_at": "2022-07-06T10:54:55.783000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Preventing backwards incompatible change is a strong argument in favour of accepting your proposal. I would only make it explicit that if any of the conditions can't be satisfied LVH must be set to a certain value, probably `0xff..ff` as `0x00..00` is already used for another purpose",
+        "created_at": "2022-07-06T11:00:20.183000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I would agree with this, this won't require changes on either CL I suspect",
+        "created_at": "2022-07-06T11:04:37.183000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@291925846556540928\u003e is worried about being relaxed about implementing LVH and may want to chime in, but I would rather be pragmatic here if some EE can't make it",
+        "created_at": "2022-07-06T11:05:11.348000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "For the record, I do think that having double semantics of LVH (valid + invalid) wasn't the original intention. Having double semantics may turn into yet unknown complexity later on. Also, I am not sure if we can check ELs conformance to this requirement in a way other than implementation tests.",
+        "created_at": "2022-07-06T11:05:37.661000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "We have tests checking that EL clients conforming to LVH requirements when client runs payload execution. These update shouldn't relax them",
+        "created_at": "2022-07-06T11:07:36.144000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I am thinking that LH should stop using the “valid” part of LVH. It seems like it’s in no state to be relied upon.",
+        "created_at": "2022-07-06T11:10:50.393000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "we have stopped using it as it is a minor optimization in the vast majority of cases, but I think changing the API in this regard is a no go at this stage",
+        "created_at": "2022-07-06T11:12:48.504000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "in the sense that is way less entropy for us on the CL side to not use it, it doesn't cause any trouble and it does not go against any spec, while it is an issue if an EE returns an INVALID LVH.",
+        "created_at": "2022-07-06T11:13:46.606000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I agree, I think calling it the “latest valid hash” has cemented that value as being valid. If the “latest valid hash” is not valid then the word “valid” can no longer can be relied upon in the spec.\n\nI also agree that going and changing it to be “miscellaneous invalid ancestor” or similar is a risky change right now. We’d have to coordinate it between all CLs and ELs to avoid breaking existing testnets.",
+        "created_at": "2022-07-06T11:22:04.973000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dapplion",
+        "category": "Testing",
+        "parent": "",
+        "content": "```\nJul-06 13:59:26.129[CHAIN]           error: Block error slot=115197, errCode=BLOCK_ERROR_EXECUTION_ERROR code=BLOCK_ERROR_EXECUTION_ERROR, execStatus=INVALID_BLOCK_HASH, errorMessage=Malformed block\nError: BLOCK_ERROR_EXECUTION_ERROR\n    at verifyBlockStateTransition (file:///usr/app/node_modules/@chainsafe/lodestar/src/chain/blocks/verifyBlock.ts:281:15)\n    at runMicrotasks (\u003canonymous\u003e)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)\n    at verifyBlock (file:///usr/app/node_modules/@chainsafe/lodestar/src/chain/blocks/verifyBlock.ts:53:40)\n    at processBlock (file:///usr/app/node_modules/@chainsafe/lodestar/src/chain/blocks/index.ts:63:32)\n    at Timeout.JobItemQueue.runJob [as _onTimeout] (file:///usr/app/node_modules/@chainsafe/lodestar/src/util/queue/itemQueue.ts:92:22)\n```",
+        "created_at": "2022-07-06T14:02:47.707000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dapplion",
+        "category": "Testing",
+        "parent": "",
+        "content": "Sepolia block 115197",
+        "created_at": "2022-07-06T14:03:16.121000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tbenr",
+        "category": "Testing",
+        "parent": "",
+        "content": "Rejecting invalid block at slot 115197 with root 0x6bab3d2bcdef4dfdb091ffbc7fc9677f8aa62234cb91c830aa5959938d40902f because FAILED_STATE_TRANSITION.",
+        "created_at": "2022-07-06T14:03:40.635000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tbenr",
+        "category": "Testing",
+        "parent": "",
+        "content": "Invalid ExecutionPayload: No reason provided",
+        "created_at": "2022-07-06T14:04:11.245000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "same on our end\n\u003e {\"message\":\"Could not process block from slot 115197: could not process block: could not verify new payload: could not validate block hash: : received an undefined ee error\",\"prefix\":\"sync\",\"severity\":\"DEBUG\"}",
+        "created_at": "2022-07-06T14:04:53.605000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dapplion",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@97774605351010304\u003e issue in date render of execution payload https://sepolia.beaconcha.in/block/d285ca1517cf149c8325c15a28ee06bc1aa221ca84778544f3ac8dd7afaa4ec6",
+        "created_at": "2022-07-06T14:14:14.573000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "Screenshot_from_2022-07-06_16-14-04.png",
+                "content": "9842f034243c7a469ee37e4e8a8c593a341773440c2b141703eb0f2ee8a70212"
+            }
+        ]
+    },
+    {
+        "author": "tbenr",
+        "category": "Testing",
+        "parent": "",
+        "content": "```\nRejecting invalid block at slot 115266 with root 0x95ecce3ca0ffe80fb564d6f677951e1b14d36291b339d2909ed40f6b10a7d1b6 because FAILED_STATE_TRANSITION. ..... Batch signature verification failed\n```",
+        "created_at": "2022-07-06T14:16:45.309000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "so seems issues primarily related to configuration issues? not having TTD set correctly for ~25% of the network?",
+        "created_at": "2022-07-06T15:42:48.342000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah looks like it",
+        "created_at": "2022-07-06T15:45:10.556000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "So the UX of setting TTD to artifically high and then unsetting it is problematic",
+        "created_at": "2022-07-06T16:02:29.736000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "but that is also not a UX that would happen on mainnet. it's a defensive tactic on these low difficultly testnets",
+        "created_at": "2022-07-06T16:02:47.180000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "no bogus LVH on invalid responses please, because if we don't find LVH in our forkchoice (in invalid response scenarios), we consider it a consensus failure and invalidate our entire forkchoice (and sort of error from there on)",
+        "created_at": "2022-07-06T16:05:33.137000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "We should consider having the Bellatrix fork relatively soon then, to avoid having users update once for bellatrix with a placeholder TTD and then shortly update again with the real TTD(which we decide only after bellatrix is done). And I guess we should avoid using the terminal difficulty flag in any communication relating to the mainnet merge to avoid misconfigs.",
+        "created_at": "2022-07-06T16:06:58.523000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Oh that is not good, you are depending strongly here in your EE to not flake out by say an error on the wire and flip a bit",
+        "created_at": "2022-07-06T16:06:59.919000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "because if we asked for a block to be added to the tip, and its invalid, we expect LVH to be atleast justified",
+        "created_at": "2022-07-06T16:07:29.095000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes because if EE is faulty, then anyway client can't proceed",
+        "created_at": "2022-07-06T16:07:47.306000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "it is a strong and tight coupling",
+        "created_at": "2022-07-06T16:08:19.004000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctimbeiko\u003e \u003e \u003ctimbeiko\u003e  Is it the setting + unsetting, or is it the TTD override vs. client releases? (re @amphora_interop_bot: \u003cdjrtwo\u003e So the UX of setting TTD to artifically high and then unsetting it is problematic)",
+        "created_at": "2022-07-06T16:08:38.468000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctimbeiko\u003e Because if it’s the latter, then we could still do something like “Bellatrix with a high TTD, which goes live well before Paris, and an updated TTD for the CL”",
+        "created_at": "2022-07-06T16:09:16.366000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I am not opposing requesting the LVH to be well behaved or a fixed number meaning \"I cannot compute the real thing\", but still I think it's on your own benefit to have a more robust design and handle a bogus LVH. What we do in this case is just remove the invalid root",
+        "created_at": "2022-07-06T16:10:45.849000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "Testing",
+        "parent": "",
+        "content": "right, the alternative to that though is we aim for Bellatrix to go live with the real TTD from the get go",
+        "created_at": "2022-07-06T16:10:48.907000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "but what about invalidation of the branch from LVH to the root/",
+        "created_at": "2022-07-06T16:11:45.864000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "and how do we know if its a consensus failure vs bogus",
+        "created_at": "2022-07-06T16:12:05.001000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "but why would EE give a bogus LVH (sorry i think i missed the discussion prior)",
+        "created_at": "2022-07-06T16:12:34.680000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "it's fine, if the EE cannot give you a good LVH you anyway will remove only the invalid payload, the point is that you still will not be able to build on the INVALID chain, so that's the main thing to do, removing the whole branch is just an optimization.",
+        "created_at": "2022-07-06T16:12:57.107000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Something similar should happen if the EE sends you a valid LVH, that do do find in your forkchoice, but it is not an ancestor of the invalid payload",
+        "created_at": "2022-07-06T16:13:20.892000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "what do you do in this case?",
+        "created_at": "2022-07-06T16:13:24.449000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e \u003e \u003cdannyryan\u003e  it's the setting and then unsetting. They used releases  that had TTD baked in but did not remove the artificially high TTD CLI param iiuc (re @timbeiko: Is it the setting + unsetting, or is it the TTD override vs. client releases?)",
+        "created_at": "2022-07-06T16:13:44.930000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "this case we ignore, because we could have been way past LVH in our forkchoice",
+        "created_at": "2022-07-06T16:13:45.324000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "what do you mean ignore? I mean the LVH is in a different fork",
+        "created_at": "2022-07-06T16:14:18.488000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e setting and unsetting is dangerous UX because the final value gets baked in but if you still have CLI set to the high value, it \"fails\" silently to the overridden value",
+        "created_at": "2022-07-06T16:14:19.070000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "in invalid case we fail hard",
+        "created_at": "2022-07-06T16:14:20.175000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e override should be only used in the event that the value is expected to be *the value*",
+        "created_at": "2022-07-06T16:14:43.442000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e or a subsequent override from there. it's too easy to forget a flag is flipped",
+        "created_at": "2022-07-06T16:14:57.632000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctimbeiko\u003e \u003e \u003ctimbeiko\u003e  ok, that’s actually a bit more reassuring, because it’s incredibly unlikely we’d first override to a crazy high TTD on mainnet (re @dannyryan: setting and unsetting is dangerous UX because the final value gets baked in but if you still have CLI set to the high value, it \"fails\" silently to the overridden value)",
+        "created_at": "2022-07-06T16:15:06.452000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "ohh for valids? (i thought syncing with LVH which is not in forkchoice) for valids, also LVH needs to be in the forkchoice",
+        "created_at": "2022-07-06T16:15:07.442000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e rather than using it as a defensive tactic",
+        "created_at": "2022-07-06T16:15:09.232000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e right",
+        "created_at": "2022-07-06T16:15:10.670000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e the poor UX arose from us using it defensively in a weird way",
+        "created_at": "2022-07-06T16:15:23.918000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e * use defensively\n* update node that has TTD baked in\n* forget to remove defensive CLI flag",
+        "created_at": "2022-07-06T16:15:59.233000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, I am saying the follownig, you are syncing a side chain optimistically, like this\n```\nA \u003c- B \u003c- C\n     \\\n       -------D \u003c--- E \u003c----F\n```\nWhen you sync F you receive `INVALID` and `LVH=C`",
+        "created_at": "2022-07-06T16:16:14.464000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "what do you do then?",
+        "created_at": "2022-07-06T16:16:22.185000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "we fail hard again, LVH has to be strictly parent of F in invalid scenario ( as per my understanding)",
+        "created_at": "2022-07-06T16:16:54.162000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "else how do we know what all to invalidate",
+        "created_at": "2022-07-06T16:17:23.259000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I found that hard failures when you can easily make a mistake and continue working fine, are better avoided. This example above happened a lot in early testing, and I would not be surprised if it happens anyway in production and the node could easily continue safely by  just removing `F` and cutting that branch off immediately. There is no need to fail dramatically here. A similar error we had in our clusters is to consider a hard failure when the node's weight becomes negative, something that can't happen in runtime, but it does because of some subtle bug probably in caching... it's fine to put the weight to zero and continue",
+        "created_at": "2022-07-06T16:19:23.019000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "ummm, may be, but the bugs won't be apparent that way ... robustness is good, but likely to result into a wrong chain being followed, may be this could be a CL specific philosophy",
+        "created_at": "2022-07-06T16:21:37.440000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "you **only** need to invalidate F to stop that chain, invalidating the rest of the branch has its consequences in computing the total weight of  a branch, so it's not without consequences to not remove the remaining invalid blocks that may be there. But the biggest threat: building an invalid chain, is removed by removing F and nothing else",
+        "created_at": "2022-07-06T16:22:46.212000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes, because as per specs, the invalids should be treated as they are not there, may be having them could lead to wrong head? (a fork down from E lets say, tbh haven't given much thought on keeping a supposedly invalid chain upto E here for e.g.)",
+        "created_at": "2022-07-06T16:25:24.188000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "but even this consideration is secondary, imho, a faulty EL means we can't rely on it for status responses",
+        "created_at": "2022-07-06T16:26:31.763000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "and should be escalated immediately to the user",
+        "created_at": "2022-07-06T16:26:52.964000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "because we have seen ELs having their fair share of bugs, like everyone else here",
+        "created_at": "2022-07-06T16:27:32.020000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "do you know if any EL implements LVH this way? may be we can understand their reasoning for it",
+        "created_at": "2022-07-06T16:29:00.703000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Not now that I know, but geth used to return the previous head, so if you did an FCU to F that happened to be INVALID, it would have returned `C` in the initial kiln testing",
+        "created_at": "2022-07-06T16:30:28.341000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "ohh ok, can we have a spec clarity on this? if this is still possible",
+        "created_at": "2022-07-06T16:32:21.579000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Our difference in behaviours here emanates from our different understanding of what's the right thing to do in case of certain bugs, we do agree that there's a bug in the EL if it returns a bogus hash or a contending block. But we disagree on what's the right behavior we should be having. FWIW, certainly LightHouse and Prysm do exactly the same thing here. And I think so does Teku cause they did the same pruning mechanism as LightHouse.",
+        "created_at": "2022-07-06T16:33:34.109000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "there's certainly spec clarity here: the spec requires the LVH to be an ancestor of the invalid payload. That doesn't mean that the EE out there all necessarily adhere to the spec",
+        "created_at": "2022-07-06T16:34:15.544000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "hmmm ok, will check with team if we would like to be forgiving as well",
+        "created_at": "2022-07-06T16:35:47.497000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "FWIW, we also started being a little bit more strict, in one of the two implementations of forkchoice we now require it to be a tree instead of a forest. This goes to say how much we're willing to accept failures in order to continue. The default forkchoice in production does not even check that every node inserted is a descendant of the finalized checkpoint.",
+        "created_at": "2022-07-06T16:41:52.625000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "By the way \u003c@792822129019584562\u003e and \u003c@425572898787426305\u003e an interesting case that popped out in one of our tests, is when the INVALID payload is the merge block itself. This one is funny because you cannot possibly have the LVH in forkchoice.",
+        "created_at": "2022-07-06T17:09:47.079000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "for this case we have lvh=0x00..00",
+        "created_at": "2022-07-06T17:10:23.998000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "yep, the fuzzing test was giving us something bogus",
+        "created_at": "2022-07-06T17:10:39.358000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "By the way, I haven't replied to your comments in my PR cause I do not know what will come from these discussions, I completely agree with both of your last two comments. I think Danny is not so keen with relaxing the conditions on LVH though.",
+        "created_at": "2022-07-06T17:11:57.558000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e will review pr now",
+        "created_at": "2022-07-06T17:18:14.680000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e 253 and 254?",
+        "created_at": "2022-07-06T17:18:37.108000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I don't see it is relaxing conditions anyhow. What we'd like to say is that if there is INVALID block and any of its ancestors is NOT_VALIDATED then return dummy LVH. But if INVALID block has a fully validated and VALID parent then LVH must point to this parent. The latter can be checked on Hive",
+        "created_at": "2022-07-06T17:18:38.233000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "We don't do that anymore, the LVH is (except for programming errors) VALID",
+        "created_at": "2022-07-06T17:19:12.968000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "both 😀 but start with #254",
+        "created_at": "2022-07-06T17:19:17.884000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e well 253 done. now to 254",
+        "created_at": "2022-07-06T17:20:37.524000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "okay so 254 is currently just a clarification\nand then the question is what to do in the event that the precise latest valid hash is unknown\n\nand in what scenario might this not be known?",
+        "created_at": "2022-07-06T17:26:07.814000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "It might be not known when EL client runs header validation separately from execution, e.g. the parent block is `ACCEPTED` and `gasLimit` is invalid",
+        "created_at": "2022-07-06T17:28:03.931000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "it turns out that it wasn't! that's what scares me",
+        "created_at": "2022-07-06T17:29:19.561000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "If this is something that EL client checks instantly on `newPayload` and responds immediately then fine, dummy LVH would work well as the block in question is always the one that is passed in `newPayload`, CL would just invalidate this exact block",
+        "created_at": "2022-07-06T17:30:26.697000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "also notice that all *known* examples of EE failing to adhere to the spec they would fail to the existing spec, and not with my added clarification.",
+        "created_at": "2022-07-06T17:31:01.538000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm confused. I read the old spec and your clarification as exactly the same",
+        "created_at": "2022-07-06T17:34:20.355000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes, that what I thought, so I decided to make explicit that the child is INVALID instead of SYNCING",
+        "created_at": "2022-07-06T17:35:00.269000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "for example",
+        "created_at": "2022-07-06T17:35:02.831000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "I see",
+        "created_at": "2022-07-06T17:35:08.878000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "and that lead up to this discussion here",
+        "created_at": "2022-07-06T17:35:12.204000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "okay so SYNCING, SYNCING, SYNCING, INVALID (due to simple check)",
+        "created_at": "2022-07-06T17:36:03.837000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "The issue is that full validation isn't always necessary to invalidate a block. Thus, not always the parent of invalid block is fully validated and may be deemed `VALID`",
+        "created_at": "2022-07-06T17:36:21.675000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "right",
+        "created_at": "2022-07-06T17:36:27.051000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "I see.",
+        "created_at": "2022-07-06T17:36:29.247000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "So the abstract problem here is that pruning invalid nodes consists of two parts:\n1) Find the LVH\n2) Find the invalid payload\n3) Obtain a chain [LVH.child, LVH.child.child, ....., invalid_payload]\n4) Obtain a chain [Last_known_valid_node,  ...., LVH]\n\nPart 1) remove the chain in 3)\nPart 2) mark the chain in 4) as VALID\n\nCL clients will use a good LVH as per spec, this way. One can argue that Part 2 is not strictly necessary nor is very useful as the LVH will not be head ever anyway. Part 1) is more useful to have.",
+        "created_at": "2022-07-06T17:38:35.666000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "yea this scenario will necessitate us forgiving in LVH detection (and follow \u003c@755590043632140352\u003e 's invalidation approach of invalidating only the refereed root) , even if it would not be bogus it could be way up out from whats in forkchoice",
+        "created_at": "2022-07-06T17:39:30.377000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "So in prysm we gave up on 4) cause EE cannot guarantee that LVH is VALID, that's not soooo bad (except for a name change in the parameter as Paul complained), but the fact that the entire chain in the middle has to be INVALID is an obvious must for me. The problem of relaxing the condition that LVH = VALID is that dubious EE can always return `invalid_payload.parent` as `LVH` and they will be adhering to spec!",
+        "created_at": "2022-07-06T17:40:29.332000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "So I would rather keep the spec as it is now, add the explicit condition that every block involved here is either VALID or INVALID, so that  SYNCING is out of the question, and then give a way for clients to signal that they do not adhere to the spec",
+        "created_at": "2022-07-06T17:42:04.528000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I wish the spec would allow for 1) only but, as we have discussed previously, we're pretty far into the Merge to allow us fixing it this way.",
+        "created_at": "2022-07-06T17:53:00.086000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think the biggest problem of  1) only is what I describe above: a bad client can always return LVH = parent and it will be giving you 1) and adhering to spec. I don't see a way around this",
+        "created_at": "2022-07-06T17:54:22.422000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "So I only see a meaningful 1), in a way that we can all argue that this EE is actually returning correct replies, if 2) is applied as well.",
+        "created_at": "2022-07-06T17:55:03.051000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I don't like 1) + 2) because it requires invalidity and validity information to be represented by the same data. We can't enforce EL client to always run full validation to be able to return meaningful LVH. Sometimes, it's really only about invalidation and this is where we getting into a conflict with the validity information part of this response",
+        "created_at": "2022-07-06T18:00:33.445000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I am not against returning some predefined LVH to indicate : the last block you passed me is INVALID, I know nothing more. Which is the most valuable information anyway since we can cut off that branch immediately",
+        "created_at": "2022-07-06T18:02:46.511000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "But we're going in circles, this very same discussion happened months ago 😂",
+        "created_at": "2022-07-06T18:03:18.890000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "i agree with this, because if we find LVH, then downwards LVH to invalid payload is also invalid for us, only way out will be a bogus LVH",
+        "created_at": "2022-07-06T18:05:09.111000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "(though again easy to change for us but we will really be diluting the LVH use, with EE signaling parent ~~last valid evaluated ancestor~~ as LVH as easy way out)",
+        "created_at": "2022-07-06T18:06:20.694000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "Just confirming: we are discussing about deducing 2)  paired with 1)?",
+        "created_at": "2022-07-06T18:11:58.746000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "I have to go through our code again, but I believe that we already only return lvh for the 'latest'",
+        "created_at": "2022-07-06T18:21:57.971000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "I am confused: is the invalid segment `3) Obtain a chain [LVH.child, LVH.child.child, ....., invalid_payload]` not guaranteed; or the valid segment `4) Obtain a chain [Last_known_valid_node,  ...., LVH]` not guaranteed, we take both guaranteed for now (in a wip PR, production just only validates/invalidates the payload only)",
+        "created_at": "2022-07-06T18:26:10.466000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "the last one 4) is currently not guaranteed by some EE. The first one 3) I am **not sure** but my understanding is that all EE do guarantee this, what it is not guaranteed is that the given chain is the **longest** chain of invalid blocks leading to the invalid payload",
+        "created_at": "2022-07-06T19:46:16.779000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "That is, under the situation SYNCING -\u003e SYNCING ---\u003eSYNCING -\u003e INVALID, and you get LVH = INVALID.parent., then 3) is guaranteed, the chain consists of only one block and it's guaranteed to be INVALID, but all those SYNCING nodes that you are leaving there could be in fact INVALID and you will still consider them for head",
+        "created_at": "2022-07-06T19:47:59.121000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "why set LVH at all and just not skip/null it then?",
+        "created_at": "2022-07-06T23:04:31.288000+00:00",
+        "attachments": null
+    }
+]

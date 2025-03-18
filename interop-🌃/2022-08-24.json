@@ -1,0 +1,190 @@
+[
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I've just raised a PR on Lighthouse (#3498) which achieves:\n\n- If there are *any* invalid payloads known to LH at reboot, then LH will reset *all* payloads to optimistic.\n    - This allows for simple \"just reboot it\" recovery when a CL falsely declares a block `INVALID`.\n- If the `--reset-payload-statuses` flag is present at startup then LH will *always* reset *all* payloads to optimistic.\n    - This allows for \"add this flag and reboot it\" recovery when a CL falsely declares a block `VALID`.\n\nWe're requiring  `--reset-payload-statuses` to recover in the `VALID \u003e INVALID` scenario for two reasons:\n\n1. Always forgetting payload statuses means that we might have some lag after reboot before we start attesting/producing again.\n    - I would expect this lag to be minimal or outright insignificant.\n2. It's a more conservative approach for the LH code-base, which I think is prudent for these times.\n\nIt also seems kinda nice to have some client diversity around reboots causing CLs to go fully optimistic. I don't think that CLs *always* forgetting payload statuses are doing the \"wrong\" thing, or that we're doing the \"right\" thing. It just makes sense for LH and adds some diversity into the mix.",
+        "created_at": "2022-08-24T01:25:41.226000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@755590043632140352\u003e and other CL teams, you might want to consider how you recover from a payload that was once `VALID` becoming `INVALID`. I'm not inferring that you're doing anything wrong, it's just something I was forced to think about in this PR ☺️",
+        "created_at": "2022-08-24T01:26:40.006000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Indeed I'll give a thought about the security implications of this. In the INVALID -\u003e VALID scenario we thought that we were being strict by actively going back to DB and removing those blocks, but that ended up being for all purposes equivalent to just forgetting those blocks on restart and would have prevented this lockup. In the VALID -\u003e INVALID scenario though we are in the opposite end of the spectrum and we will refuse to badly to declare INVALID a VALID block. We will just error out loudly in this case. However I am not sure what's so bad about this? The only way that I can think one would get into a situation that a previously VALID block is now INVALID, during regular sync, will be if we are importing a block, the EL returns INVALID and the LVH is an ancestor of a previously VALID block. We will error out and refuse to change the status of the VALID block, but we will still mark the incoming block as INVALID, thus preventing anyway from syncing that branch.",
+        "created_at": "2022-08-24T01:39:27.222000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm mainly thinking about disaster recovery here. With `VALID \u003e INVALID` it could be the scenario where the majority EL falsely declares a block `INVALID` and then we all decide that block should be in the chain.\n\nI don't think it's something CL clients *must* think about. I'm mainly just trying to save myself some pain if we did get into such a worst-case mess on mainnet. Telling everyone to \"add this flag\" might be a bit quicker and easier than co-coordinating a release.",
+        "created_at": "2022-08-24T01:43:31.046000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "FYI, we won't swap either way between `VALID` and `INVALID` without a reboot and/or additional flags. IIUC that's the case for all clients.",
+        "created_at": "2022-08-24T01:45:05.747000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ah I now see what you mean. Indeed this seems like a very useful feature to have. I reacted too fast cause my immediate reaction was \"Paul is crazy making these changes two weeks from Bellatrix\". But it's a one liner in prysm: we track the last validated finalized checkpoint to decide what is optimistic or not. So it's just a flag that sets that checkpoint to genesis or Bellatrix fork and that's it. I agree this is useful and I'll have this ready tomorrow morning. Thanks for the ping",
+        "created_at": "2022-08-24T01:48:45.030000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "No worries! Now we're either both correct or both crazy, either way we have company 😄",
+        "created_at": "2022-08-24T01:49:50.524000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "I wonder if this is something useful to exist in the opt sync spec. Make it optional there. It reminds me of `SAFE_SLOTS_TO_IMPORT_OPTIMISTICALLY` being user-configurable...",
+        "created_at": "2022-08-24T01:52:55.554000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "So long as the CLs' settings preserve existing, specified opt sync invariants, which are... not much, because it explicitly defines this as some combination of UB, adding more required settings seems less than ideal.\n\nJust as a general approach, because this is of course motivated by concrete concerns Nimbus has often avoided adding new configuration knobs until there's a specific, compelling use for them, rather than add them pre-emptively and then have to support them indefinitely even if they turn out not to be that useful.\n\nOf course, sure, optional.\n\nBut technically, opt sync is optional too, except that it's not, so I'm quite wary of that angle.",
+        "created_at": "2022-08-24T02:48:31.871000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "If VALID/INVALID transitions are UB, then they're UB, not quasi-sort-of-semi-UB.",
+        "created_at": "2022-08-24T02:50:48.858000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "we do have a debug option for dumping invalid blocks to disk in SSZ for forensics, but that's about it - while running the insecura fork of prater, it was valuable to not store \"invalid\" blocks simply because from the point of view of insecura, the official prater blocks were \"invalid\", but also in majority size-wise - this led us down the reasoning that if someone is producing a lot of invalid blocks, we don't want those filling up the db of the user - put another way, we didn't want anything \"invalid\" to leave a permanent scar, reasoning that re-rejecting it once after reboot _should_ be cheap enough - it does, as \u003c@361447803194441738\u003e points out, lead to some inefficiencies / slowdowns as sorting out the invalid forks and getting rid of the non-canonical peers is work",
+        "created_at": "2022-08-24T07:21:21.996000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Testing",
+        "parent": "",
+        "content": "Seems like a simple size limited list would be fine for this?  In the case where there is a single invalid block that needs to be dealt with, it would be available for debugging.  If there was a spam of invalid blocks, it would hit the size limit and FIFO from there so there is no permanent \"scar\".",
+        "created_at": "2022-08-24T07:44:07.533000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "that's more or less what the in-memory invalid cache does - we just don't put it on disk by default, to avoid the complexity (and performance hit) of having to manage on-disk state that way",
+        "created_at": "2022-08-24T07:47:59.840000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "`mainnet-shadow-fork-12` configs are out: https://github.com/eth-clients/merge-testnets/tree/main/mainnet-shadow-fork-12\n\nThe CL will launch on Monday and TTD should hit next wednesday ~2PM CEST. \n\nhttps://ethstats.mainnetshadowfork12.ethdevops.io\nother tooling links will come out later",
+        "created_at": "2022-08-24T10:57:28.808000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "Seeing some `INVALID` from Besu 22.7.1 on Goerli/Prater:\n```\nDBG 2022-08-23 19:27:47.981+00:00 Message sent to RPC server                 topics=\"JSONRPC-HTTP-CLIENT\" address=\"ok((id: \\\"127.0.0.1:8551\\\", scheme: NonSecure, hostname: \\\"127.0.0.1\\\", port: 8551, path: \\\"\\\", query: \\\"\\\", anchor: \\\"\\\", username: \\\"\\\", password: \\\"\\\", addresses: @[127.0.0.1:8551]))\" msg_len=76359\nDBG 2022-08-23 19:27:47.981+00:00 newPayload: succeeded                      parentHash=d46aecea blockHash=31f43deb blockNumber=7459474 payloadStatus=INVALID\nDBG 2022-08-23 19:27:47.981+00:00 runQueueProcessingLoop: execution payload invalid executionPayloadStatus=INVALID blck=\"(blck: (slot: 3731238, proposer_index: 376083, parent_root: \\\"af84df61\\\", state_root: \\\"5a386e2c\\\", eth1data: (deposit_root: d9acfccf0a9529cf001e3818091989a42c7d600043eed875290b3c2d411019dc, deposit_count: 173330, block_hash: 79006f22109e6a23d791ea3be7a06490b28560fcb636a90efde4772d03041aad), graffiti: \\\"\\\", proposer_slashings_len: 0, attester_slashings_len: 0, attestations_len: 128, deposits_len: 0, voluntary_exits_len: 0, sync_committee_participants: 382), signature: \\\"b90edf6f\\\")\"\n```\non apparently valid https://goerli.etherscan.io/block/7459474",
+        "created_at": "2022-08-24T12:31:09.027000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "it's meant my attached CL has gotten quite confused (see discussion re Geth issue yesterday for why and how this interacts with spec)",
+        "created_at": "2022-08-24T12:32:15.882000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "It's part of also-apparently-valid CL block https://prater.beaconcha.in/block/3731238",
+        "created_at": "2022-08-24T12:39:25.367000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "Another one, and this time from Besu logs:\n```\n2022-08-24 01:44:28.912+00:00 | nioEventLoopGroup-3-3 | INFO  | BackwardSyncStep | Saved headers 7460333 -\u003e 7460134 (head: 7459500)\n2022-08-24 01:44:28.924+00:00 | ForkJoinPool.commonPool-worker-163 | INFO  | BackwardsSyncAlgorithm | Backward sync reached ancestor h\neader, starting Forward sync\n2022-08-24 01:44:29.910+00:00 | vert.x-worker-thread-0 | INFO  | AbstractBlockProcessor | Block processing error: transaction invalid\n'UPFRONT_COST_EXCEEDS_BALANCE'. Block 0xd117255a3e75f8a2ce6f42a3d67944dd56fc586300943c58b54a0fdd9b41f6e3 Transaction 0x7267c94d8780b44\ncdd59c8e7aa4cf9b19d31b03588f112c3d91ba6d720a39020\n2022-08-24 01:44:29.910+00:00 | vert.x-worker-thread-0 | ERROR | MainnetBlockValidator | Error processing block. Block 7460308 (0xd117\n255a3e75f8a2ce6f42a3d67944dd56fc586300943c58b54a0fdd9b41f6e3)\n2022-08-24 01:44:29.910+00:00 | vert.x-worker-thread-0 | WARN  | EngineNewPayload | Invalid new payload: number: 7460308, hash: 0xd117\n255a3e75f8a2ce6f42a3d67944dd56fc586300943c58b54a0fdd9b41f6e3, parentHash: 0x118b9a70d80def1bcc80e745a8fc68855b8ff7f28271294deb3f7c2057\nec5f24, latestValidHash: 0x118b9a70d80def1bcc80e745a8fc68855b8ff7f28271294deb3f7c2057ec5f24, status: INVALID, validationError: Error p\nrocessing block\n```\nBut 0xd117255a3e75f8a2ce6f42a3d67944dd56fc586300943c58b54a0fdd9b41f6e3 is https://goerli.etherscan.io/block/7460308 which is apparently valid and contained in https://prater.beaconcha.in/block/3732291",
+        "created_at": "2022-08-24T13:08:02.806000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "Similar issue with https://goerli.etherscan.io/block/7460789 -- it shows up in the block explorer as valid, but gets marked (Besu logs there) as `INVALID`.  Corresponding apparently-valid CL block is https://prater.beaconcha.in/block/3732849",
+        "created_at": "2022-08-24T13:17:17.716000+00:00",
+        "attachments": [
+            {
+                "type": "",
+                "origin_name": "maybe_spurious_invalid_0xe1ae486a.xt",
+                "content": "8654f69ec44c72f5042153a55e9d4325a35cb3e8141ba27f40338cc225f3b061"
+            }
+        ]
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "Using Bonsai.",
+        "created_at": "2022-08-24T13:17:35.311000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "Testing",
+        "parent": "",
+        "content": "thank you \u003c@654267572107083777\u003e 👀 on it",
+        "created_at": "2022-08-24T15:21:38.306000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "I don't know if you're interested in more, but just caught a slightly different one, this time a combination (maybe related to each other maybe not, but one followed very shortly after the other): first, it gets \"failed persisting block\" number 7465940 (`0x39390cad15c78ef766cba43219aa307a3fd9e9d8b996ce2283d0afb2fa82d0dc`), then returns it as `INVALID` in `newPayload`. Not sure if there's some other intervening cause, but I don't see one in the just default level logs. Blocks are https://goerli.etherscan.io/block/7465940 / https://prater.beaconcha.in/block/3739039\n\nThe, 12 blocks later, 7465952 (`0xc274212935ae83f4d682ecd274b5fcbd9931e4e62ae17b633c04a77e0a199108`) it says one of the transactions had an issue with `NONCE_TOO_LOW`, which is a different issue than it found in a previous transaction, and said that one was invalid too. Blocks are https://goerli.etherscan.io/block/7465952 / https://prater.beaconcha.in/block/3739056",
+        "created_at": "2022-08-24T22:50:47.860000+00:00",
+        "attachments": [
+            {
+                "type": "text/plain; charset=utf-8",
+                "origin_name": "besu_error_persisting_block_nonce_too_low.txt",
+                "content": "ffe4b305b401b7baee082df65af1886ce56d20a8c9b37acc7ff2dbec81151fbe"
+            }
+        ]
+    }
+]

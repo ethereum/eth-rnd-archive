@@ -1,0 +1,378 @@
+[
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Update on `mainnet-shadow-fork-8`:\n- We hit TTD ~1h ago, the chain is finalising as expected and we are seeing a healthy block production. \n- We seem to have a regression with Besu nodes proposing blocks with 0 transactions in them, yet to triage why that's happening. But Besu nodes are still proposing, which is good from a consensus perspective. \n- Erigon nodes had a sync issue late last week, the team helped fix it. But the Erigon nodes are still syncing to head and are currently ~900k blocks behind head. This means that Erigon nodes are not attesting/proposing right now but we cannot say anything about their behaviour once they are synced. We'll wait for them to sync and update their status. \n\nErigon accounts for ~15% of the network, them not attesting explains the entire missing attestation % on the chain. This means all other client combinations are attesting and proposing as expected! \n\nHuuuuuuge congrats to all clients teams! 😄",
+        "created_at": "2022-07-05T09:06:45.697000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Getting back to this. It seems like I have misinterpreted the issue you're pointing at. Let's break the statement down into two things for simplicity\n1) `validHash` definition\n2) the fact that all ancestors between `validHash` payload and the payload in question are `INVALID`\n\nI was thinking that your PR is about the 1st but it now seems to me that it's about the 2nd. Could you confirm before we move on with this?",
+        "created_at": "2022-07-05T13:21:13.850000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes it's more about the second. But that involves the validhash definition",
+        "created_at": "2022-07-05T13:28:29.735000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I see. If we re-phrase the original statement we get to its equivalent: \"`validHash` is the parent hash of the earliest *invalid* payload in the chain\". All ancestors of earliest invalid payload are inherently invalid according to the blockchain semantics. Do we really need to explicitly mention the latter?",
+        "created_at": "2022-07-05T13:40:56.741000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "That would also not be specific enough cause it doesn't specify that it is itself VALID. But I'd agree if that is added",
+        "created_at": "2022-07-05T13:44:40.784000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Earliest INVALID does mean that its parent must be VALID by the same semantics. Otherwise, it wouldn't be earliest INVALID",
+        "created_at": "2022-07-05T13:45:54.916000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Or you mean the parent could be NOT_VALIDATED yet?",
+        "created_at": "2022-07-05T13:46:20.030000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "That's is the same assumption that we are implicitly using now: that to return INVALID the ancestors have been fully validated. In principle that could read:  validhash is the parent of an invalid chain. I can prune all blocks from the child to the invalid payload. But I don't know if the validhash itself is optimistic",
+        "created_at": "2022-07-05T13:47:49.350000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I understand that the assumption is true anyway. But I think it's better if it's explicitly stated",
+        "created_at": "2022-07-05T13:48:26.039000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "The way I phrased it it's completely and unequivocally explicit. But you sentence above also works if you add that validhash is VALID",
+        "created_at": "2022-07-05T13:49:05.921000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e that to return INVALID the ancestors have been fully validated\nI don't think it's always true. Erigon may invalidate a block if e.g. gasLimit is invalid wrt parent block without executing the chain of blocks thus fully validating them. And in this case it may return `status: INVALID, lvh: parentHash` but it won't mean that `lvh` references fully validated block",
+        "created_at": "2022-07-05T13:51:24.090000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Even more to the case then, that it's better to have explicit that the caller can a) remove the full invalid chain and b) mark the lvh and all its ancestors as VALID",
+        "created_at": "2022-07-05T13:53:49.345000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "b) they can't be marked as VALID as they are not necessarily fully validated",
+        "created_at": "2022-07-05T13:57:00.736000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "`lvh` says that the chain segment `(lvh; payload_in_question]` consists of `INVALID` payloads and nothing beyond that\n\nIt doesn't implicitly mean that `lvh` is `VALID` it may still be `ACCEPTED`, for instance:\n```\nnewPayload(side_fork_P1) ~\u003e status: ACCEPTED\nnewPayload(side_fork_P2) ~\u003e status: INVALID, lvh: side_fork_P1.block_hash\n```",
+        "created_at": "2022-07-05T14:03:08.746000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@583892532644151312\u003e could you please confirm the above behaviour in Erigon?",
+        "created_at": "2022-07-05T14:07:52.307000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "We  found an issue on Nethermind side, edge case that for NewPayload we could respond Valid when we should respond syncing. Already have a fix.",
+        "created_at": "2022-07-05T14:10:39.955000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "ohh no this is in dissagreement with the name and the current description then! cc \u003c@361447803194441738\u003e \u003c@340345049063882753\u003e \u003c@688748669268132001\u003e \u003c@449019668296892420\u003e I'm pretty sure we all mark the LVH as VALID and therefore all of its ancestors, as well as we remove the descendants in that chain leading to the invalid payload",
+        "created_at": "2022-07-05T14:11:28.855000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@425572898787426305\u003e we have edge-case scenario: we can spot an invalid block during syncing but we don't have enough data to know lastValidHash, as we haven't synced yet. What should we do?",
+        "created_at": "2022-07-05T14:12:30.398000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "This is probably related to what we're discussing with \u003c@755590043632140352\u003e now",
+        "created_at": "2022-07-05T14:13:19.784000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "When we were discussing about these scenarios and whether LVH support should be mandatory for EE at least LightHouse and Prysm were acting the same way: if the LVH is not known then we would simply remove the INVALID block and not do anything else. We still have this behavior, so I'd say if you are in this situation, even if you can' t follow the spec, you should return emtpy or bogus LVH",
+        "created_at": "2022-07-05T14:14:30.027000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Which validation has failed in this particular case?",
+        "created_at": "2022-07-05T14:15:21.347000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "But returning anything in the chain from the invalid block to the finalized block is dangerous cause at least prysm (and I think all clients) removes the full chain from the LVH and validates the remainder",
+        "created_at": "2022-07-05T14:15:37.289000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "can be something like baseFee for example, anything that is dependent on parent header",
+        "created_at": "2022-07-05T14:15:38.535000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "In Erigon we verify blocks (besides INVALID_BLOCK_HASH) only after we've downloaded all ancestors.",
+        "created_at": "2022-07-05T14:15:38.613000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, this can happen in Erigon.",
+        "created_at": "2022-07-05T14:15:51.039000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I still mantain that we should change the description of LVH as in my PR, and if clients do not conform to the spec, then make sure they return a bogus or emtpy LVH",
+        "created_at": "2022-07-05T14:16:40.637000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e Yeah, masking as just the parent is bad (is that what some are doing?)",
+        "created_at": "2022-07-05T14:16:59.307000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "oh that sums it up, no question then",
+        "created_at": "2022-07-05T14:21:03.001000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "`0xff..ff` may work. Why do CL need to mark `lvh` and its ancestors as `VALID` in this case? I understand that we have just found a discrepancy between the spec and implementations. Trying to understand details",
+        "created_at": "2022-07-05T14:21:31.423000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "LastValidHash should be renamed to LastAcceptedHash then? To avoid confusion?",
+        "created_at": "2022-07-05T14:22:03.627000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "because it may even be that head is LVH itself, in which case there' s no need for the node to be optimistic",
+        "created_at": "2022-07-05T14:22:13.567000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "It could probably be replaced it with `earliestInvalidHash`",
+        "created_at": "2022-07-05T14:23:10.470000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "but we don't know if its the earliest",
+        "created_at": "2022-07-05T14:23:29.666000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "right",
+        "created_at": "2022-07-05T14:23:41.171000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "I know that I have invalid block, but not sure if one of its ancestors can be invalid",
+        "created_at": "2022-07-05T14:23:45.073000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I don't understand why not put it as we have already implemented it in the CL side, and if people can't conform to it just not serve it. Giving us a useless LVH does not help. If there is a situation that the EE can actually know for a fact that the child is the **first invalid** and doesn' t know the validation status of the LVH I may be tempted to agree, but it doesn' t seem to be the case here",
+        "created_at": "2022-07-05T14:25:28.487000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e Right so saying just the parent or saying some random block on the canonical chain are both bad for CL\n\nIf just the parent, it makes it seem all the other blocks in that branch are valid (which we don't know)\n\nIf some block on canonical chain, it says all blocks in the branch are invalid (which we don't know)",
+        "created_at": "2022-07-05T14:25:55.986000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "exactly, I think EE should return LVH **only** when they both know it's VALID and that the chain descending from it is INVALID. In **any other scenario** they should return zero hash",
+        "created_at": "2022-07-05T14:26:57.664000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "zero hash is used when blocks starting from the transition one should be invalidated",
+        "created_at": "2022-07-05T14:28:17.440000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e Hmm I just don't want this to turn into an allowance to be lazy on the invalid cache \n\nSome flag though makes sense",
+        "created_at": "2022-07-05T14:28:41.944000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "by the way, I forgot about this but for safety after the last discussion and not knowing if EE clients actually conformed to the spec we removed the assigment of VALID to the LVH and left the node as optimistic",
+        "created_at": "2022-07-05T14:29:27.867000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I am sorry, gotta go now. I am not saying that we need to change CLs behaviour, this issue definitely worth inputs from other teams. Thanks \u003c@755590043632140352\u003e for bringing this up",
+        "created_at": "2022-07-05T14:31:12.410000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "cc \u003c@654267572107083777\u003e",
+        "created_at": "2022-07-05T14:34:43.544000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "saw disagreement about importance/exact-semantics of LVH a couple of weeks ago and deliberately didn't rely on it",
+        "created_at": "2022-07-05T14:36:43.259000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "(also that some ELs don't implement it/didn't at the time). viewed it/still view it as a useful optimization that can't be reliably used yet, akin to distinguishing between ACCEPTED and SYNCING or similar",
+        "created_at": "2022-07-05T14:37:33.127000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah I forgot we had removed this for the same reason, but certainly we are marking all descendents as INVALID, so if the EE doesn' t know for a fact that would be a crazy dangerous bug to return anything here",
+        "created_at": "2022-07-05T14:38:40.971000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cn0ble\u003e \u003e \u003cn0ble\u003e  this may actually work for all checks except execution as if no meaningful lvh is returned the block itself would still be invalidated by CL (re @amphora_interop_bot: \u003cpotuz\u003e exactly, I think EE should return LVH **only** when they both know it's VALID and that the chain descending from it is INVALID. In **any other scenario** they should return zero hash)",
+        "created_at": "2022-07-05T15:14:41.392000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,306 @@
+[
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm working on deleting `ExecutionPayload`s from Lighthouse's database on finalization so that they can just be stored in the EL database (i.e. no duplication). I've run into a slight inelegance:\n\nConsensus clients need to be able to fetch pruned `ExecutionPayload`s from the EL in order to serve them on the P2P network, for which I'm trying to use `eth_getBlockByHash`. The problem is that this returns transactions as rich JSON data rather than EIP-2718 bytes, which means the CL needs to be able to handle EIP-2718 serialization itself. In Lighthouse we _could_ defer to a library like `ethers-rs` for this, but it does seem to go slightly against the separation-of-concerns in the rest of the engine API. We could get that separation back with a dedicated JSON-RPC method like `engine_getPayloadByHash`, although I realise we're late in the game to be speccing new API endpoints.\n\nOr maybe the mixing of concerns is fine (and inevitable) and we should just _Do The Work_ on the CL side. Thoughts?",
+        "created_at": "2022-04-08T08:30:14.537000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "There is a proposal for `engine_getPayloadBodies`, https://github.com/ethereum/execution-apis/issues/137\nAnd a related PR https://github.com/ethereum/execution-apis/pull/146\nThe most recent discussion on this topic is here: https://discord.com/channels/595666850260713488/892088344438255616/954362244861423666\n\nNote that we may introduce this kind of method without a hard fork. So, we may consider it to be done alongside the Merge or a little be post-Merge",
+        "created_at": "2022-04-08T08:45:06.913000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "By deferring to the execution layer for the payloads, do you have an idea of the performance cost and additional latency to any `blocks_by_range/root` request ?",
+        "created_at": "2022-04-08T08:46:00.950000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "We implemented it in Nethermind: engine_getPayloadBodiesV1 🙂 But I think CLs haven't used it yet 🙂",
+        "created_at": "2022-04-08T08:49:35.302000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "wow, cool! But unless it's into the standard and implemented by all ELs CL can non rely on it. Was it difficult to implement? Do you have a link to PR with this feature, I'd add it to the PR into Engine API spec",
+        "created_at": "2022-04-08T08:53:30.686000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah, we made the prototype a long time ago when you opened the PR (so not sure if something changed and should be retested 🙂 ). I thought that this method was forgotten. Unfortunately, I don't have separate PR. I can send a link to the code: https://github.com/NethermindEth/nethermind/blob/kiln/src/Nethermind/Nethermind.Merge.Plugin/Handlers/V1/GetPayloadBodiesV1Handler.cs#L40 It was easy to implement cc: \u003c@441067871519637504\u003e",
+        "created_at": "2022-04-08T09:02:17.065000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Cool, thanks for the information!",
+        "created_at": "2022-04-08T09:02:56.781000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Echoing \u003c@!755590043632140352\u003e, and adding a couple of my own question to the list:\n4) Is this true that EC is unable to process multiple payloads and fork choice updates simultaneously? Are `newPayload`s and `fcU`s processed sequentially?\n5) What if one payload takes 100s to be processed, and message queue may grow up to a 1000 items in the meantime, will EC evict some old messages from memory or do any other resource management?\n\ncc \u003c@\u0026836981603216654336\u003e \u003c@\u0026688101493978562687\u003e \u003c@\u0026688090867927482525\u003e \u003c@\u0026652918665943056397\u003e",
+        "created_at": "2022-04-08T10:40:57.867000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Erigon processes payloads and fcUs sequentially. Currently there's no bound on the message queue, but in the future we might introduce some limits and be more aggressive on evicting old stuff from the queue.",
+        "created_at": "2022-04-08T10:45:06.571000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@!360491619402776577\u003e and other EL devs \u0026 \u003c@!425572898787426305\u003e , question from me :\n\nDuring sync we need information about peers - what is their current block ect. We use this information to decide which messages send to which peers. For now in eth protocol we use NewBlockMessage and NewBlockHashesMessage to trigger refreshing of this data (when we get hashes we can DL the BlockHeader if needed).\n\nSo now those messages won't be broadcasted, so I wonder how other clients handle it, is that a problem for them?",
+        "created_at": "2022-04-08T11:04:17.813000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "Nethermind processes payloads and fcUs sequentially too. It looks like we have a similar implementation to the Erigon team.",
+        "created_at": "2022-04-08T11:11:32.287000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "in my backlog, I have a work item to add by-range requests as well to this PR - it's currently waiting for https://github.com/ethereum/consensus-specs/pull/2856 (such that the byrange request can omit `step`)",
+        "created_at": "2022-04-08T11:20:50.705000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "cc \u003c@!602753420033785856\u003e ^ the idea would be to mirror both byroot and byrange in the execution api so that both clients can implement this in a reasonably efficient way (fetching thousands of blocks one-by-one is insane - it's even worse when done by hash because of poor cache performance)",
+        "created_at": "2022-04-08T11:22:28.732000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Should serialized JWT secret be prefixed with 0x or not? I see that geth serializes it with 0x, while mergemock expects it not to have 0x.",
+        "created_at": "2022-04-08T12:15:14.576000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "As another reference point, Kiln launchpad instructions omit 0x",
+        "created_at": "2022-04-08T12:19:24.794000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Geth allows for both",
+        "created_at": "2022-04-08T12:28:23.998000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "Awesome, glad to see that there’s some work along these lines already!\n\nI think having two requests byHash and byBlockNumber makes sense, and it nicely mirrors the eth_getBlock methods. On the CL side we will usually have the payload header and can use that to get the block number, so AFAICT no need for the EL to consider slots (or beacon block roots).\n\n\u003c@!425572898787426305\u003e, I see your point about timing. If we can’t spec and implement one or both methods in time for the merge then the CL will either have to accept the data duplication for now and prune it in a post-merge DB migration or use the re-serialization workaround",
+        "created_at": "2022-04-08T13:34:46.899000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "I haven’t yet been able to get a prototype working, but will try the re-serialisation approach next week and see how it performs",
+        "created_at": "2022-04-08T13:35:22.684000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, but when generating JWT secret, geth prepends 0x: https://github.com/ethereum/go-ethereum/blob/master/node/node.go#L372 . Erigon does the same at the moment, but perhaps we should change to no 0x prefix.",
+        "created_at": "2022-04-08T13:55:06.066000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Another question. Per the spec, only engine \u0026 eth methods should be exposed on the Engine API port. But Prysm also uses some method from the net namespace. Why is that? \u003c@\u0026595683609080365088\u003e",
+        "created_at": "2022-04-08T14:02:59.452000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "We perform some config checks on the EL so that we know that the network id is what we expect. Ideally we want to only have to access one port from the EL. I think we can remove  the calls to the net namespace as that isnt used for anything important",
+        "created_at": "2022-04-08T14:13:03.194000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, please remove it if it's not necessary. Otherwise I'd prefer to add the used net methods to the Engine API spec.",
+        "created_at": "2022-04-08T14:15:07.220000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "If we are the only client doing this, we will just remove the call. There is limited benefit in adding it in to the engine api spec.",
+        "created_at": "2022-04-08T14:16:56.057000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulj",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hey guys, what is the rationale for having the engine methods on a different port if we have authentication?",
+        "created_at": "2022-04-08T14:19:05.272000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulj",
+        "category": "Testing",
+        "parent": "",
+        "content": "For Prysm users, it would be more pain to have yet another flag used to add an execution provider. It would be ideal if we can use the same flag we have today",
+        "created_at": "2022-04-08T14:19:38.657000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulj",
+        "category": "Testing",
+        "parent": "",
+        "content": "most people dont want to have to deal with multiple endpoints and ports, especially the less technical folks",
+        "created_at": "2022-04-08T14:19:53.831000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "cc \u003c@291925846556540928\u003e perhaps you know the answer to my questions and Misha's? it seems like it would be crazy to drive an execution client not capable of switching branches while evaluating one if the timeout is 10minutes. Essentially any long block would knock those clients out for a while.",
+        "created_at": "2022-04-08T18:21:48.518000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I understand the idea of the timeout, but on the other hand it seems that users of certain clients would probably want to configure them to a lower value",
+        "created_at": "2022-04-08T18:23:07.370000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "One thing worth separating here is the timeout, per se, of the engine API calls (what \u003c@291925846556540928\u003e 's PR covers) and the timeouts of the EL processing explicitly.",
+        "created_at": "2022-04-08T18:27:12.634000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Sure but the whole point of the PR is to deal with longer-than-slot blocks. And if during the next slot a block comes and some execution clients can handle it and some others can't. Either the EC is using a timeout shorter than what the pull request specified, or the EC will simply not let the CL advance in this situation.",
+        "created_at": "2022-04-08T18:39:49.859000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "Since the engine API is *only* available via the auth endpoint and the auth endpoint also serves the eth_ namespace, LH is planning to have users only use the auth endpoint. So all the exisiting Eth1 voting stuff will happen via the auth endpoint too.",
+        "created_at": "2022-04-08T19:54:20.226000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "We also use the net call to check that the EE is on the right chain.",
+        "created_at": "2022-04-08T20:16:47.823000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think the chain id got lost in the shuffle but originally I was hoping `engine_getTransitionConfigurationV1` would include all this sort of information: https://discord.com/channels/595666850260713488/692062809701482577/934203165052637275",
+        "created_at": "2022-04-08T21:31:15.755000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Teku is planning the same thing and we'll remove our usage of the net call to check that the EE is on the right chain as part of that.  It doesn't make much sense post merge anyway and the transition configuration check would be enough.",
+        "created_at": "2022-04-08T21:45:15.843000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm not sure it's needed to actually add chain ID. If you have the same terminal total difficulty it's almost certainly the same chain anyway.  Adding it wouldn't be a bad idea but probably not worth making changes for now.",
+        "created_at": "2022-04-08T21:46:04.668000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "Oh yeah the transition config seems to be suitable enough. Good point. I guess we can just drop the net chain ID call whenever we’re using auth.",
+        "created_at": "2022-04-08T21:47:55.811000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cralxz\u003e I think kiln v2 added requirement that eth_chainId method be available (https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md#underlying-protocol)",
+        "created_at": "2022-04-08T21:50:52.244000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cralxz\u003e Just checked, it was kiln v2.1 spec actually https://github.com/https://github.com/ethereum/execution-apis/tree/main/src/ethereum/execution-apis/pull/183\n\u003e Note eth_chainId isn't specified in eth but is supported by all EL clients. Considering wide support of this method and state of Ethereum JSON-RPC Specification which is still in active development stage, including eth_chainId into this list seems to be fine.",
+        "created_at": "2022-04-08T22:00:40.272000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,346 @@
+[
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "I dont think handling all the edge cases are worth it for full redundancy of EEs. I expect that over time the 'backup' ee's internal state will catch up but i dont think the complexity is worth it when we switch initially and try to update the backup's initial state to what is 'expected'. In my head, over time it should be synced but doesnt have to be immediate.",
+        "created_at": "2022-03-24T02:47:04.534000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "My thinking is less a fail over case and more, one CL drives multiple ELs.  I haven't actually tried it but I think that case is relatively straight forward in that you just send every request to all nodes and then take the \"best\" answer (ie if one returns VALID and the other SYNCING, the block is VALID).  It's a little more fun when one is VALID and the other INVALID so maybe there could be a config option to decide what to do in that case but the policy options are relatively limited and you ultimately just need to pick one.",
+        "created_at": "2022-03-24T03:58:51.131000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "That said, I don't expect all that many people to use this.  Home stakers are unlikely to have the hardware to run it. Staking providers might use it but it's quite a lot of cost and would probably be better handled by migrating the validator keys to a different node until the original is ready again.\n\nBut I suspect it will be very useful for Infura since most of their traffic queries the EL and those JSON-RPC requests can require a decent amount of processing. Being able to run multiple ELs to a single CL is likely to reduce costs there.  All still very theoretical though - I haven't even had a chance to talk to Infura about it yet.",
+        "created_at": "2022-03-24T04:01:00.020000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think when we arrive at the hybrid MEV land, CL driving more than one version of EE will become normalized a bit more. I can see CL would want to drive an MEV optimized version of EE and a regular EE as a backup in case MEV optimized EE fails to respond",
+        "created_at": "2022-03-24T04:18:28.550000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thanks for the feedback! 🙏 \n\nRegarding one CL driving multiple ELs like \u003c@!340345049063882753\u003e mentioned, that's what we've arrived at now. We have two types of requests:\n\n- \"first success\": used for `getPayload`, just take the first non-error result.\n- \"broadcast\": used for most (all?) other things, contact all nodes and then pick the best result. this also involves detecting conflicts between responses, useful for detecting consensus faults in EEs.\n\nRegarding MEV, for `mev-boost` at least we're treating them as a special case: we use them to produce payloads but never to verify payloads (the non-MEV EEs are used for this). This prevents MEV nodes from providing invalid payloads. We also fall-back to a non-MEV EE if the MEV ones don't return anything, like you said \u003c@!363800010518822915\u003e.\n\nHaving multiple EEs *and* the special-case MEV nodes seems to be getting a little complex. I'm not sure if we'll stick with multiple EEs at this stage, it's still up in the air atm. It might turn out useful for testing, we can run all 4(?) EE impls and then try to detect variance.",
+        "created_at": "2022-03-24T06:27:08.615000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "It would be a good start if CL's could issue more than one fcu, so that they can keep multiple EL nodes in sync. That should be pretty easy and won't require complex logic for comparing payloads etc",
+        "created_at": "2022-03-24T06:29:50.554000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Well I guess you could write a small proxy for that",
+        "created_at": "2022-03-24T06:30:13.091000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "But yeah we should have something there",
+        "created_at": "2022-03-24T06:30:26.448000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "We compare the `PayloadStatus` for fcU, but that's fairly straight-forward. We don't do any comparison of `ExecutionPayload`, we just pick whichever is returned earliest.",
+        "created_at": "2022-03-24T06:32:20.305000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes I’d be very tempted to use first to respond for most things. Otherwise if one el has a problem and is very slow to respond you’d wind up waiting on it all the time. So you effectively reduce your resiliency instead of increasing it. \nBut it depends a lot on what you’re trying to do. For testing waiting for all responses and checking they’re the same makes sense.",
+        "created_at": "2022-03-24T06:34:11.196000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I've been considering switching to a model where we wait for all in the background but don't block the consensus thread once the first returns. That gives the best of both worlds.\n\nFiguring out exactly *why* we support multiple EEs is something I'm trying to figure out too 😅",
+        "created_at": "2022-03-24T06:36:17.984000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "Picking the first to return has some odd behaviour when there's a consensus fault, you might end up swapping between faulty/non-faulty nodes and get the CL into a weird state. I guess faulty EEs isn't really something we're supposed to handle gracefully, though.",
+        "created_at": "2022-03-24T06:38:13.407000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hmm it’s an interesting situation which may or may not matter depending on the why. I could see maybe people want to avoid following an invalid chain because of a client bug so require confirmation from two ELs. But I can’t see that being very common to be honest. You’d be better off just using a minority client.",
+        "created_at": "2022-03-24T06:40:14.536000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "Presently, we'll fail any EE operation completely if we get conflicting responses (e.g., a VALID and an INVALID). I'm not convinced this is the right behaviour, though.\n\nIt brings me back to the age-old question of *\"what am i actually trying to achieve, and why?\"*",
+        "created_at": "2022-03-24T06:42:04.793000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "For redundancy purpose CL may have a primary EL which it always communicates with and follows the responses from. At the same time CL may propagate all the info to other ELs in the list, except for requests to build a block. If primary EL fails to response after some time the switch happens to the next EL in the round robin fashion. With this strategy EL responses must be consistent with respect to chain validity unless the failover switch happens.",
+        "created_at": "2022-03-24T08:27:51.537000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I don't think CL should have a complex decision making logic on the responses it gets from multiple ELs, it should rather be a separate proxy/load-balancing software sitting in between CL and ELs",
+        "created_at": "2022-03-24T08:29:14.573000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "What if EL responses aren’t consistent with respect to chain validity?",
+        "created_at": "2022-03-24T08:32:33.031000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Do you mean two ELs are inconsistent with each other?",
+        "created_at": "2022-03-24T08:33:07.982000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "In the strategy with primary EL it won't matter until the switch is happening -- CL may notify user about inconsistency between ELs it drives, but even this small feature increases complexity as CL will have to wait for each response and compare it with response from at least primary EL. If the switch happens to EL that is inconsistent with the previous one then a node may not operate anymore, but this hopefully should be a rare case. IMHO, CL shouldn't take the complexity of a fully featured cross-client proxy.",
+        "created_at": "2022-03-24T08:39:37.028000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "So the default redundancy recommendation should be that users can have a second pair of EL-CL on a different location and manually point the VC to the redundant pair during updates/pruning/downtime? \n\nWould users pointing to a remote source(infura et all who just expose the JSON RPC port) still be able to attest blocks but just fail at proposing?",
+        "created_at": "2022-03-24T08:48:37.155000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "I guess we should also add some test where the eth1 endpoint is pointing to node A and execution to node B, just to see if there are any corner cases there. I'd assume despite recommendations, users would do this.",
+        "created_at": "2022-03-24T08:49:21.329000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e Would users pointing to a remote source(infura et all who just expose the JSON RPC port) still be able to attest blocks but just fail at proposing?\nIt would be possible only if Engine API alongside with JSON RPC is also exposed",
+        "created_at": "2022-03-24T08:51:25.996000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I’d be tempted to leave EL redundancy up to implementations. Supporting multiple EEs can be done safely in several different ways and how it’s done depends on use case.",
+        "created_at": "2022-03-24T08:51:30.941000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I would disallow configuring different endpoints for Eth1Data poll and EL communication. This may lead to inconsistency between the two in some edge cases. IMHO, CL should have only one configurable endpoint (probably with redundancy option) and have both communication channels using the same source",
+        "created_at": "2022-03-24T08:53:27.278000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I am also leaning this way in LH. In the long term I would like LH to check that the block hash is in the chain before voting for an eth1 data. I don’t think this is critical for day 1, though. Ensuring Eth1+EE comms are the same node should be sufficient for the meantime.",
+        "created_at": "2022-03-24T08:55:05.090000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "Checking to see if the block hash is in the chain has edge-cases around the transition. The complexity of that could hurt us if we made it a necessity.",
+        "created_at": "2022-03-24T08:56:38.394000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "With the current spec, I don’t think you can still attest in practice with an EE that’s down but an Eth1 that’s up. Without any EE you can’t import blocks, so you can’t really follow the head. You could produce attestations but they’d be significantly impaired.",
+        "created_at": "2022-03-24T09:02:21.973000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "On the related topic. I am thinking about entirely removing all the logic of the poll as it is today. It would be great to read deposits directly from the execution state, though, it requires merkle proofs to the execution state root both, building and verification. Building probably requires additional EL interface that CL will use, verification should be comparatively easy.\n\nI would say that if we were designing deposits processing from scratch then the complexity of the merkle proofs approach could be compared with the complexity of the voting mechanism we currently have. But now we have a thing that works and getting rid of it plus adding something complicated on top might be unreasonable.\n\nWe also can't reduce the follow distance too much as the poll would become insecure. What we could probably do is to \"ask\" attesters to verify that Eth1Data of a block does belong to the post state of the parent block - this allows for reducing the follow distance, probably even to 1 block.",
+        "created_at": "2022-03-24T09:08:44.055000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "+1 to removing the current Eth1 voting scheme. It was pretty ugly when first designed (although I can’t suggest anything better) and it’s borderline unacceptable after the merge IMO.",
+        "created_at": "2022-03-24T09:11:57.083000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "One nice thing about it is that it’s really simple in the state transition. All the complexity is in the real-time voting. This means that if we replaced it we could support legacy blocks very easily, whilst dropping all the complexity for producing new blocks.",
+        "created_at": "2022-03-24T09:14:28.907000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Testing",
+        "parent": "",
+        "content": "New hive machine is up, with the merge-tests and engine-tests: https://hivetests2.ethdevops.io/",
+        "created_at": "2022-03-24T14:16:44.063000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hi I have few edge cases/disaster recovery questions about the spec and potential assumptions EL can make:\n\nQuestion: Can CL send to EL payloads with gaps. For example using block numbers:\n\nsimple:\nX -\u003e  X + 2 \ngap being X + 1\n\nreorg:\nX -\u003e X + 1 -\u003e X + 2\n|\u003e                                   (X+2)'\n\ngap being (X + 1)', we got (X+2)' because there was a reorg to another branch\n\nWhere could gaps occur:\na) reorgs\nb) EL is down and CL jumps to head of the chain\nc) CL is down and after recovery jumps to head of the chain",
+        "created_at": "2022-03-24T14:21:49.860000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "form EL perspective, do we need to potentially sync those gaps after (or even  during) initial sync",
+        "created_at": "2022-03-24T14:25:43.532000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Both situation may occur, and it depends on the implementation how EL should behave. If `(X+2)'` is coming along and isn't from canonical chain then EL may respond with `ACCEPTED` if it misses `(X+1)'` but then when CL sets  `(X+2)'` as the head the EL must respond `SYNCING` and go pull missing block from the wire and execute it",
+        "created_at": "2022-03-24T14:27:32.565000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "thx, so generally EL must be defensive and handle any scenarios",
+        "created_at": "2022-03-24T14:28:45.922000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e X -\u003e  X + 2 \nThis may happen if EL has been restarted and lost the last block for example. If this is canonical chain then EL will be quickly turned into `SYNCING` state as `X+2` will be sent and designated as the head of canonical chain.",
+        "created_at": "2022-03-24T14:31:39.490000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "for those interested in light clients, we're planning to let the nimbus nodes on kiln run with this protocol enabled: https://github.com/ethereum/consensus-specs/pull/2802",
+        "created_at": "2022-03-24T14:44:11.999000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "in terms of protocol id:s, we'll be using slightly modified ones, ie `/eth2/beacon_chain/req/best_light_client_updates_by_range/1/` becomes `/eth2/beacon_chain/req/best_light_client_updates_by_range/0/` and the gossip topics get an extra `_v0` suffix like so: https://github.com/status-im/nimbus-eth2/blob/unstable/beacon_chain/spec/network.nim#L104",
+        "created_at": "2022-03-24T14:49:35.519000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "Can't we just make the mechanism a voting period of 1 and make it a validity condition that the eth1data is correct (an engine API call or a value returned by new/fcu)",
+        "created_at": "2022-03-24T15:01:18.936000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "(rather than \"remove\")",
+        "created_at": "2022-03-24T15:01:26.119000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think you can radically simplify the existing mechanism but still leverage the root/deposit mechanics in the same way",
+        "created_at": "2022-03-24T15:01:44.760000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I was thinking of it as well, but it may be ugly for EL to have an endpoint for this narrow purpose - it will have an app state read as a part of the protocol. Definitely worth considering and discussing though.",
+        "created_at": "2022-03-24T15:14:23.990000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes!  We really want something like this, but not for the merge itself, for that we want our infra to be as \"same as everyone else\" as possible to avoid us having issues that no one else has.  In addition to cost savings the main benefit I see of this is consistency across multiple EE nodes: if they are all being fed the same engine APIs then in theory they should all have more or less the same view of the chain at the same time (barring any variance in processing individual blocks based on RPC load).  Plus if this proxy that does the fan out was itself queryable it could also acts as a nice source of truth for which EEs are fully in sync and healthy.",
+        "created_at": "2022-03-24T21:16:22.513000+00:00",
+        "attachments": null
+    }
+]

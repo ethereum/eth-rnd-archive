@@ -1,0 +1,280 @@
+[
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "hey guys, regarding EIP-4750 (EOF-Functions : https://eips.ethereum.org/EIPS/eip-4750,), I was wondering why code-section header requires the prefix of Section-Kind before each entry, we already have Type-Section length known we can deduce the number of code-sections from it, and require the sectionKind for code-section header only once (see image), in the worst case scenario where we have 1024 code section that's almost 1KiB extra data, so was there any reason for that design ?",
+        "created_at": "2022-11-14T10:23:24.330000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "unknown.png",
+                "content": "f7f515f0de6ec8e6c996ff7c8942ea0916802d06c60f8f5c0a4123279dd2e401"
+            }
+        ]
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think the reason is mostly this is built on top of EIP-3540 where the code section is already defined. But considering your comment it probably make sense to define all section contents as array (they way type section is defined) and only mandate the array size to be 1 if needed (e.g. for data section). This automatically mean the code cannot be interleaved with data. WebAssembly is doing this way.",
+        "created_at": "2022-11-14T10:40:12.925000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@1011612262743679036\u003e \u003c@543900561460822016\u003e I think I confused myself here. We want EOF header to be simple: `kind || size`. So to have *single* code section with multiple partitions either you go though another level of indirection (code_header -\u003e code_sizes -\u003e codes) or complicates the content of the code section as `(code_size || code)+`. None of it looks great.",
+        "created_at": "2022-11-14T15:25:52.979000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I don’t feel strongly either way. I think it would be very straightforward to implement `kind || code_size+ || 0` in the header though. Currently is it possible to interleave code and data sections after the first code section appears? Or must code still be contiguous?",
+        "created_at": "2022-11-14T15:52:53.109000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "exactly what we went with, ``kind || code_size+ || 0`` and since typesection comes before codesection we can deduce how many sizes we are gonna consume",
+        "created_at": "2022-11-14T16:19:55.886000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "makes the container in general look like this  `` 0xef00 || 01 || [03 || type-section-size]? || [02 || code-section-size+] || [01 || data-section-size]? || 0 || type-section? || code-sections+ || data-section?``",
+        "created_at": "2022-11-14T16:23:38.302000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e This idea that EVM implementations must analyse and reject CFGs with non-constant stack per instruction in order to obtain good performance on well-formed CFGs seems wrong to me.\nNonetheless, it's not wrong.",
+        "created_at": "2022-11-14T16:30:19.345000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We loose elegance/abstraction this way (no common \"abstract\" definition how a EOF header entry is defined). But if you want to go this way then you can combine type and code sections: `01 || [code-section-size || type]+ || 0`.",
+        "created_at": "2022-11-14T17:48:23.943000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think any format can work as long as we don't read redundant data, the format I suggested tried to keep changes minimal from the original EIP suggestion",
+        "created_at": "2022-11-14T18:16:58.422000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e I think an implementation optimised for performant x86/Wasm code generation would run linear time analysis (or quasilinear time, O(n log n)) on every contract including older deployed contracts, isolate fixed stack CFG subgraphs relative to an entry instruction and emit code for those, with stack overflow checks occurring at subgraph boundaries.  Boundary checks are necessary if there is any kind of function recursion, and they are a general solution that works with all CFGs including the hypothetical loop that adjusts the stack on each iteration.  The above only covers overflow, but underflow checks are detectable and eliminable when the CFG has matching entry and exit points (i.e. proper nested function structure, even allowing recursion), and are cheap when they are not.\n\nI doubt we will ever have AOT compilation EVM→x86/Wasm for Mainnet. This has not been deployed anywhere although EVM is almost decade old. EOF makes it substantially easier yet I'm still betting against such solution being deployed.\n\n\u003e So the new analysis prevents some types of generated code from being deployed in future, but I don't see how it can be used to improve EVM performance.\n\nFor sure it increases EVM theoretical efficiency.",
+        "created_at": "2022-11-14T19:06:23.943000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e The Geth benchmarks above show a speedup to be expected from eliminating stack checks, but that optimisation is available regardless, even on contracts which are deployed already, by using the same analysis for opportunistic optimisation.\n\nSomehow none of the EVMs uses the opportunity. 90% why is probably because people don't care about EVM performance so much (except the moment when new precompiles are proposed). But also simplicity is king. \n- First you need to find time to run the analysis. Do you do it during deploy time and store results in DB? Or on DB load time? Or you do it before execution hoping nobody will DOS you?\n- I think you can at most do check batching (as evmone/Advanced and EVMJIT do). Analyzing control-flow or proving anything seems too complex (EVM only has dynamic jumps)\n- Then you need to consider what to do with contracts which don't fit into the model. If this works for 99% cases, the 1% can kill you.",
+        "created_at": "2022-11-14T19:06:56.495000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e That optimisation implies two instances of the EVM interpreter core, with and without stack checks, but that's required anyway under the current proposal because old contracts still need to be run.\n\nNo changes are needed to execute EOF code section in the current EVM (except disabling/enabling instructions).\nI later plan to implement this as two separate interpreter loops (or use a template/macro to generate both but the effect is kinda the same). The instruction implementations can be shared easily.\n\n\u003e If it can't improve EVM performance, can it make it worse?  I think in some cases yes, just by removing some code generation opportunities.  Does that matter?  I'm not sure if they are really used anyway except in hand-rolled code.  \n\nI prefer boring EVM bytecode than a fancy one (as we have nowadays).\n\n\u003e The other cost is requiring analysis to run each new deployment, instead of as a heuristic when the EVM deems it worth it on balance.\n\nMy mindset is to always optimize for the worst-case. So any kind of heuristic is usually non-starter.\n\nI'm not sure I convinced anyone (I'm not really trying). We can keep the EVM weird as it is. The proposed EOF package tries to apply some VM Best Practices™. Maybe this is not what EVM needs but the cost of it is pretty low (all complexity is in the EOF validation which we need to introduce anyway).",
+        "created_at": "2022-11-14T19:07:26.605000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e I doubt we will ever have AOT compilation EVM→x86/Wasm for Mainnet. This has not been deployed anywhere although EVM is almost decade old. EOF makes it substantially easier yet I'm still betting against such solution being deployed.\nHmm.  I've been hoping that once EOF makes it easy you would do it 😉",
+        "created_at": "2022-11-14T20:04:59.396000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That would be just for fun.",
+        "created_at": "2022-11-14T20:49:31.222000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Is there no true NOOP in EVM?  How am I just now noticing this? (JUMPDEST has a side effect of allowing a jump, so I don't consider it a NOOP).",
+        "created_at": "2022-11-14T20:56:49.544000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I actually was considering adding NOOP (maybe even in place of JUMPDEST). But my only use case is benchmarks",
+        "created_at": "2022-11-14T21:04:41.363000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That's exactly why I wanted it, for automating code validaion checks.",
+        "created_at": "2022-11-14T21:05:08.276000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c preamble\u003e \u003cop tested\u003e (NOOPx32) STOP exhaustively, and the same for terminal instructions.",
+        "created_at": "2022-11-14T21:06:00.931000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We can add it. But maybe `NOT` can be a replacement?",
+        "created_at": "2022-11-14T21:18:49.368000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I've ported JVM bytecode verification (old algo \"Type Inference\") to EVM.\nThis works the same as EOF \"full package\" with these exceptions:\n1. Stack does not need to be empty at function exit. In EOF this is currently required. This makes `RETF` implementation trivial but this may require artificial `POP` instructions to be injected.\n2. In JVM unreachable code is fine, but individual instructions there must be valid. EOF does the same but we considered detecting unreachable code in EOF.\n3. In JVM code may end with non-terminating instruction provided this instruction is unreachable (dataflow check will never check it). EOF currently requires the last instruction in a code section to be terminating. This comes from EIP-3670. EIP-5450 obsoletes this requirement but it stayed.",
+        "created_at": "2022-11-14T21:18:57.189000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Because of the stack possibly having items I can't code a straight through verifier. (unless there was a rule that any location receiving a backwards jump must also have a forwards jump targeting that address). that would make dead code start with stack == 0.  So I'm still seeing two trips through the code.",
+        "created_at": "2022-11-14T21:39:04.119000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "but if we had the rule that all code must be reachable by a forward jump then we could do opcode validation and stack validation in the same pass, and possibly dead code validation too.",
+        "created_at": "2022-11-14T21:40:30.341000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Is there any design reason why we may want a section of code only accessible by backwards jumps?",
+        "created_at": "2022-11-14T21:41:35.969000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Code templates maybe?",
+        "created_at": "2022-11-14T21:41:54.298000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Not sure. You need unconditional jump to break it so this seems exotic on its own. Maybe some code deduplication?",
+        "created_at": "2022-11-14T21:50:20.558000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But you can move the deduplicated code to after the first jump, so there is at least one forward jump into the code segment.  Build a dag of code segments, do a partial topological sort (discarding potential back links), and the write.  That way no backlink only sections show up.",
+        "created_at": "2022-11-14T21:52:37.134000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Should be how most compilers remove dead code anyway.",
+        "created_at": "2022-11-14T21:52:57.811000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So other than malicious code, how would a backlink only section show up?",
+        "created_at": "2022-11-14T21:53:21.406000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Maybe if compilers know it they can work with it.",
+        "created_at": "2022-11-14T21:54:58.497000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Is this some kind of graph property we want to enforce?",
+        "created_at": "2022-11-14T21:55:18.913000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Also, is there any algorithm property that describes this \"streaming\" feature?",
+        "created_at": "2022-11-14T21:59:16.220000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "My thought was that it could reduce needed memory, but I'm not so convinved anymore.  Here's the algorithm:\n\n(the following is not in spec language)\n* Set up an array as long as the code, with each byte set to \"not code\", but zero to \"code\"\n* also a stack hight array\nLoop over each byte as follows:\n* Visit byte starting from zero\n* If the byte is \"not code\" stop and report the code as invalid. (dead code check)\n* also do an opcode lookup, failing on non-operations.\n* if the instruction is non-terminal, mark the next code byte as \"code\" (based on immediate args length) and set the iterator so we skip over the immediate arguments, making sure no immediate bytes are marked as \"code\" from forward jumps.\n* do the stack math and record it in the array\n* If we have a stack height from an RJUMPI validate it matches up\n* If it's a RJUMPI that is forward init that code location to be \"code\" and set the stack height there.\n* If it's a RJUMPI that is backwards validate the stack height and that we are jumping into code.\n\nIf we terminate the loop at the end of the code section and the last code was \"terminal\" it's valid.\n\nSo we don't save that much memory by dispensing with the \"working set\" stack. So requiring \"forward referenced code\" may be too much.",
+        "created_at": "2022-11-14T22:41:01.603000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Bringing it down to one loop to make it blatantly O(n) is the only real gain.",
+        "created_at": "2022-11-14T22:41:28.270000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I thought the same way. \nYou can combine both arrays into single one (e.g. marking \"no code\" with -1).\nBut you need the array of the same of the code as in previous algorithm.\n\nOne benefit though is the fact you never has to look ahead the code or loop over the code second time. So you can do the analysis in fragments e.g. while data being loaded from DB or transferred over the network. Not expert here, but benefits of this may not be so great considering the code length is ~64k max.",
+        "created_at": "2022-11-14T23:13:16.996000+00:00",
+        "attachments": null
+    }
+]

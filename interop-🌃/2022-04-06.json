@@ -1,0 +1,162 @@
+[
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "The configs for `mainnet-shadow-fork-1` are now out and can be found here: https://github.com/eth-clients/merge-testnets/tree/main/mainnet-shadow-fork-1\n\nCL beaconchain genesis will happen on Friday 2PM. TTD should be hit on Monday ~4PM. It's the first time we're trying to guesstimate mainnet difficulty, so leave some margin for error.\n\nSince this is a mainnet shadow fork, you will have to download the mainnet state (could take some time), so setup nodes earlier rather than later. \n\n Tooling links (The EF nodes area also syncing, so tooling has nowhere to get data from right now):\nhttps://explorer.mainnetshadowfork1.ethdevops.io/\nhttps://beaconchain.mainnetshadowfork1.ethdevops.io/\nhttps://ethstats.mainnetshadowfork1.ethdevops.io/\nhttps://rpc.mainnetshadowfork1.ethdevops.io/",
+        "created_at": "2022-04-06T10:53:49.165000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "What should be the response to engine_forkchoiceUpdatedV1 if either safeBlockHash or finalizedBlockHash isn't an ancestor of headBlockHash? The Engine API is unclear on this matter.",
+        "created_at": "2022-04-06T11:14:24.461000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "We return INVALID + error",
+        "created_at": "2022-04-06T11:16:56.400000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "\"final/safe block is not canonical/available\" depending on the case",
+        "created_at": "2022-04-06T11:17:30.132000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "INVALID might be a bit risky here, the CL will permanently mark the head block as invalid and prevent it from following the chain until a full resync. I can see why you’d do it, but it could turn a small transient error into a show-stopping permanent one.\n\nI would advocate for an “error” variant response.",
+        "created_at": "2022-04-06T11:23:09.260000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "For example, Nimbus will relay that error back to the peer pool/sync manager, and repeatedly downscore peers providing such invalid blocks until it runs out of peers.",
+        "created_at": "2022-04-06T11:25:24.428000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "So, would be good to know what the best response on the CL side is to this",
+        "created_at": "2022-04-06T11:25:58.793000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "FYI the p2p spec declares:\n\n\u003e To prevent network segregation between optimistic and non-optimistic nodes, transmission of an INVALID execution payload via the Req/Resp domain SHOULD NOT cause a node to be down-scored or disconnected.\n\nhttps://github.com/ethereum/consensus-specs/blob/dev/specs/bellatrix/p2p-interface.md#the-reqresp-domain",
+        "created_at": "2022-04-06T11:27:42.774000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "hm, alright",
+        "created_at": "2022-04-06T11:28:31.055000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm going to loop in \u003c@!425572898787426305\u003e regarding the case where safe/finalized aren't ancestors. I suggest the spec explicitly states that an \"error\" should be returned.",
+        "created_at": "2022-04-06T11:28:53.046000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "I haven't made a secret of my skepticism of the whole opt sync-über-alles- thing and this is sort of one reason why, but alright",
+        "created_at": "2022-04-06T11:29:12.691000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "I had to google \"über-alles\" and it seems it means \"above all else\". AFAIK, this P2P rule is the only thing that non-optimistic-sync nodes need to implement to allow optimistic nodes to exist.",
+        "created_at": "2022-04-06T11:30:30.126000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "sure, it's a mostly small modification, and doesn't reduce safety much",
+        "created_at": "2022-04-06T11:33:06.322000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "FWIW, I also don't like optimistic sync and I wrote the initial spec 😅",
+        "created_at": "2022-04-06T11:33:45.613000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "In this case error must be returned. There is no explicit error message in the spec and it isn't required that EL client is verifying the consistency of received `ForkchoiceState` data. This error case currently falls under the following statement:\n\u003e 8. If any of the above fails due to errors unrelated to the normal processing flow of the method, client software **MUST** respond with an error object.\n\nIf all EL clients do this check anyway it makes sense to include an explicit error and a statement about this check to the `engine_forkchoiceUpdatedV1` method spec",
+        "created_at": "2022-04-06T11:49:14.462000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "We're checking if the block is in blockTree and if not -\u003e we're returning HTTP error (but not INVALID). In other cases we relay on CL. Thanks to that we don't need to traverse blocks. \u003c@360491619402776577\u003e I think you're doing the same, right? Or you traverse to check if the block is ancestor?",
+        "created_at": "2022-04-06T13:57:34.572000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes same for us, if we return an http error we are not returning INVALID btw, so yeah just an error",
+        "created_at": "2022-04-06T13:59:03.883000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "To confirm, you return error if `headBlockHash` is known but either `safeBlockHash` or `finalizedBlockHash` is unknown?",
+        "created_at": "2022-04-06T14:00:04.284000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes",
+        "created_at": "2022-04-06T14:00:23.832000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Makes sense, definitely no need for checking the consistency as it requires traversal that actually may never end (if two block hashes are from another chain) and should be restricted somehow",
+        "created_at": "2022-04-06T14:01:39.921000+00:00",
+        "attachments": null
+    }
+]

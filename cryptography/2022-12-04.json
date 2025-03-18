@@ -1,0 +1,130 @@
+[
+    {
+        "author": "arxis75",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Is it even possible to retry with a new nonce? According to RFC6979, another user attempt with the same transaction would end up with the same invalid signature (same k), and unless the user tries out another transaction (he might have no clue of such a possibility), the user would basically be stuck.",
+        "created_at": "2022-12-04T09:16:37.077000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes.  The curve point that `x` is drawn from is just `basePoint * nonce`.  `nonce` here is just a random number.",
+        "created_at": "2022-12-04T09:35:01.643000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This is not the same as the transaction's `nonce`.  The signing stuff just signs over arbitrary bytes.  It doesn't have any understanding of the transaction parameters.",
+        "created_at": "2022-12-04T09:35:28.690000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arxis75",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I understand that. But still, this random nonce is generated according to RFC6979, so it is only pseudo-random. If you try to generate a new k from the same message hash and the same private key, don't you end up with the same k, and thus the same invalid r?",
+        "created_at": "2022-12-04T09:39:12.994000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "You can deterministically iterate through nonces until you find a working one.",
+        "created_at": "2022-12-04T09:46:34.438000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I *think* that RFC even describes how somewhere...",
+        "created_at": "2022-12-04T09:46:46.790000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e The DSA and ECDSA standards mandate that, if r is zero, then a new k should be selected.  In that situation, this document specifies that the value k is \"unsuitable\", and the generation process shall keep on looping.",
+        "created_at": "2022-12-04T09:48:22.332000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "See https://github.com/Zoltu/ethereum-crypto/blob/master/library/source/secp256k1.ts#L183-L204 for an example of how to generate a nonce.  First call to that function gets `0` as the last parameter, if that results in an invalid nonce then it gets called again with `1`, etc. until it finds one.",
+        "created_at": "2022-12-04T09:52:12.419000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The probability of hitting an invalid nonce is pragmatically 0 though, so you could just crash the app with a message that says \"if you see this, please email me @ xxx and I'll pay you to release your private key and message to the public\".",
+        "created_at": "2022-12-04T09:53:07.022000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The world desperately needs a test case for this particular code path (in all libraries).  Right now everyone writes it but no one can test it because it is unreachable in reality.",
+        "created_at": "2022-12-04T09:53:35.820000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "(which is a hint that you shouldn't trust any single implementation of that code path, since no one can test it)",
+        "created_at": "2022-12-04T09:54:15.766000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arxis75",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Using p=211 and n=199 for example as field/curve orders for the y^2=x^3+7  would allow you to test such an event. But I agree with you that the probability of such an event is very low.",
+        "created_at": "2022-12-04T09:57:46.513000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "True, if your library is generalized for any arbitrary ECDSA curve.",
+        "created_at": "2022-12-04T09:58:16.827000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Many are specific to one or a few curves though.",
+        "created_at": "2022-12-04T09:58:34.361000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I don't *think* it is worth it to generalize the library (which adds complexity/risk) just to be able to test a code path that likely won't ever be hit.  Though, I could be wrong on this particular trade.",
+        "created_at": "2022-12-04T10:00:01.707000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arxis75",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, I understand the inherent risks of updating critical pieces of code just for handling this low-probability edge case. I was just being a bit pedantic, being myself in a process of re-coding the ethereum signing/verifying functions...\nAnyway, thank you for the insight. 🙂",
+        "created_at": "2022-12-04T10:02:54.361000+00:00",
+        "attachments": null
+    }
+]

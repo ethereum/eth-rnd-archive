@@ -1,0 +1,194 @@
+[
+    {
+        "author": "monkeyontheloose.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Q: say i have a txn with a gaslimit bigger then the amount left in the block, could a miner still theoreticly try to get it in?",
+        "created_at": "2022-01-16T10:00:52.342000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, because gas limit != gas used.  But it depends on the particular block building algorithm as to if it tries.",
+        "created_at": "2022-01-16T10:02:32.891000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "monkeyontheloose.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "example scenario: \n\ni have a txn that spends 1M gas, I send it with a 1M gas limit\n\nthe current miner has only 0.5M left in a block, he doesn't care about my limit, tries to put me in as a failed txn that's out of gas and succeeds\n\nseems like unwanted behaviour",
+        "created_at": "2022-01-16T10:05:09.798000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "No, it would see that the transaction used more gas than available in the block and reject it, moving on to the next transaction for inclusion.  A block that attempts to use more gas than the limit would be invalid, and rejected by peers.",
+        "created_at": "2022-01-16T10:10:59.706000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "monkeyontheloose.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "so whats the EVM's rule?\n\ndont allow txns with gas limit bigger then remaining gas in the block\n\nor allow txns if the gas limit is bigger then remaining gas but only if it succeeds?",
+        "created_at": "2022-01-16T10:13:13.492000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The total gas used by all transactions in a block cannot exceed the block gas limit.  Success or failure of the transactions in the block is not relevant.",
+        "created_at": "2022-01-16T10:14:38.744000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "monkeyontheloose.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "ur not getting my question ser",
+        "created_at": "2022-01-16T10:17:25.712000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Neither or your rules are correct.\n\nYou can allow txns with gas limit bigger than remaining gas in the block, _if the used gas is less than the remaining gas in the block_.\n\nYou may or may not allow txns if the gas limit is bigger than remaining gas as per the previous statement, _regardless of if the transaction succeeds or not_.",
+        "created_at": "2022-01-16T10:28:45.938000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "monkeyontheloose.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i think i get\n\nso if a miner has 0.5M gas left in a block, tries to put in a txn with 1M gas limit and it succeeds cuz it only spent 0.1M gas then we good, but if the txn tries to spend more then 0.5M the miner can't fail it cuz it exceded the gas limt, meaning the block would be invaild.",
+        "created_at": "2022-01-16T10:49:57.580000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "monkeyontheloose.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "---------\nfollowup Q:\n\nsay there is 0.5M gas left in the block the first thing a txn with 1M gas limit calls the function gasleft(), would it return a number close to 0.5M or close to 1M?",
+        "created_at": "2022-01-16T10:50:45.444000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Correct.",
+        "created_at": "2022-01-16T10:52:54.878000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "1M.",
+        "created_at": "2022-01-16T10:54:23.774000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "(`gasleft()` was historically `msg.gas`, which would have made this obvious.)",
+        "created_at": "2022-01-16T10:55:08.576000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "monkeyontheloose.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "great, thanks for the help!",
+        "created_at": "2022-01-16T10:56:07.488000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I don't think this is quite right.  Prior to execution the remaining gas for the block must be greater than the tx gas *limit*.  It's a surprising little corner case in the transaction inclusion rules.  Once the tx is included the block remaining gas is only reduced by the gas *used*.  So if I have two transactions with a gas limit of 100 that both actually use only 50 gas, with a block gas limit of 100:\n - remaining gas 100, tx gas limit 100 so first tx can be included\n - remaining gas now 50, tx gas limit 100 so second tx can not be included.\n\nI'd need a block gas limit of 150 to be able to include both transactions (and would then have a block remaining gas of 50).",
+        "created_at": "2022-01-16T20:38:42.648000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It's defined in yellow paper equation 60. Helpful note being:  Note the final condition; the sum of the transaction’s gas limit, Tg, and the gas utilised in this block prior, given by l(BR)u, must be no greater than the block’s gasLimit, BHl",
+        "created_at": "2022-01-16T20:41:38.253000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Really?  That's... odd.  And throws up some weird ordering.  Is that rules for the validity of the block?  I don't remember that from when I was playing with geth's block packing, but then it was a while ago",
+        "created_at": "2022-01-16T20:52:22.391000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Not sure exactly what you'd categorise it as. It's one of the transaction validity constraints but the yellow paper only considers transactions in a block, I don't think it has any concept of the mempool.  The mempool would accept any tx with a gas limit equal to or less than the block gas limit but when actually packing the block you need to follow this rule from the yellow paper.",
+        "created_at": "2022-01-16T21:04:08.537000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Trying to think of why that condition is there.  Only thing I can think of is to protect against some sort of refund attack, but not sure of the specifics.",
+        "created_at": "2022-01-16T21:09:33.216000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'd say its on the basis that miners shouldn't need to execute the transaction to know that they can be paid for it.",
+        "created_at": "2022-01-16T21:18:04.374000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Miners would likely just add that rule themselves if it wasn't there so it doesn't really need to be part of consensus but it somehow wound up in there.  Basically miners don't want to execute the tx on the assumption that it will fit into the block, if they spend time and resources on executing it they want to be guaranteed it is included which this rule provides for.",
+        "created_at": "2022-01-16T21:19:10.392000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That would seem to be incredibly inefficient: if the txs weren't executed then there would be no information on gas used, so the block would be considered full by the miner when sigma(tx_gas_limit) hit the block limit.",
+        "created_at": "2022-01-16T21:23:55.656000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It's more inefficient to execute the tx hoping that it will fit in the block and then having to throw away that work if it doesn't.  Just means that the last transaction you include in a block is going to be one with a small gas limit.",
+        "created_at": "2022-01-16T21:26:06.260000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So it's more of an optimization to fill in the last of the space, than a general approach to packing the block.  It does seem to be more of a client algorithm choice than a protocol rule, though.",
+        "created_at": "2022-01-16T21:28:15.720000+00:00",
+        "attachments": null
+    }
+]

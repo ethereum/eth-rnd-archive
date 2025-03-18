@@ -1,0 +1,130 @@
+[
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "I don't mind having separate messages for newPayload \u0026 fcU. IMO it's quite flexible as it allows ELs to use either strategy (setting as head immediately after newPayload _or_ waiting for fcU). In Lighthouse I don't think the fcU call imposes significant cost, why are you trying to optimise it out?\n\nI do agree in general it's nice for fcU to be near-instant, but I'm happy to leave this to the EL implementations to optimise. I've noticed that my Reth node sometimes ends up in optimistic sync because it returns SYNCING on newPayload and then takes 500ms+ to set head (and return VALID) when fcU is called. I'm going to chat to them about this once I'm back from holidays, as a VALID reply on newPayload would sort this out",
+        "created_at": "2023-12-29T00:47:45.712000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e why are you trying to optimise it out?\n\nThe main reason is about code complexity around importing slot 31 and the honest reorg property: we may want to send or not an FCU on a block and we would act differently if we are proposing next block or not. The trick is that you don't know if you're proposing until you've performed epoch transition. The way we avoid this computation now is by precomputing proposers an epoch in advance and bail out if this fails (hasn't happened on mainnet ever afaik). But I am in the project of removing caches from prysm, or at least make them strongly reorg resistant",
+        "created_at": "2023-12-29T00:52:51.128000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "An option is to send fcu without attributes, then compute and send another with them if needed. But then it hit me that we shouldn't even need to send the first one to start with",
+        "created_at": "2023-12-29T00:54:00.339000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "As for Reth: if the block you're sending follows the canonical chain, I believe syncing is almost never allowed as a reply",
+        "created_at": "2023-12-29T00:55:30.109000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "_I think_ Reth returns SYNCING for 1-slot reorgs (i.e. N building on N - 2 and reorging N - 1) but I'm having trouble proving this from the logs. The timing is definitely right",
+        "created_at": "2023-12-29T00:56:19.379000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "the other way to help the reorg strategy is for the EL to allow the CL to reorg back to an ancestor of the head: \u003chttps://github.com/ethereum/execution-apis/issues/313\u003e",
+        "created_at": "2023-12-29T00:57:35.100000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "this is what Lighthouse does atm",
+        "created_at": "2023-12-29T00:57:43.817000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "(sends 2 fcUs)",
+        "created_at": "2023-12-29T00:57:54.215000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "rjected",
+        "category": "Testing",
+        "parent": "",
+        "content": "we _should_ only return `SYNCING` on newPayload if the parent is unknown / not in any known sidechain. happy to help confirm what's happening \u0026 help optimize fcU once you're back 🙂",
+        "created_at": "2023-12-29T01:35:34.958000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ah yeah, you're right. It was `ACCEPTED` not `SYNCING`. I sent you a message on TG, we can sort it out in the NY",
+        "created_at": "2023-12-29T01:44:30.615000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah I imagined this from some of your comments, but the first one is unnecessary, both CL and EL know this is a valid block extending the canonical chain, both should know that block is the canonical head unless the CL sends another FCU changing it",
+        "created_at": "2023-12-29T05:54:41.943000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Fcu for us is a pretty complicated reentrant piece of code (dealing with multiple branches recursively that could become invalid at once in the optimistic case) so it would definitely be a good source of simplification if we could simply avoid completely the call in the happy case. Also this makes for a better streamlined block processing in most cases, it should rarely be the case that you need to send FCU, only when you actually get a reorg or if you need to trigger block production",
+        "created_at": "2023-12-29T06:00:33.149000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Do you claim that under any circumstances a child of the canonical head becomes the new canonical head on CL? We have not overloaded the semantics of newPayload with set head because only CL has the answer to the what is the head at any point it time question. Leaking any FC logic, even of a simple one, into EL doesn't make sense to me from the API standpoint. It might be good for optimisation but might turn bad in some edge cases as it would break the separation of concerns between the layers",
+        "created_at": "2023-12-29T06:55:24.770000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "What prevents you from streamlining the FCU on the Prysm side in the happy case by e.g. using a different piece of code for that?",
+        "created_at": "2023-12-29T07:00:39.434000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Not exactly, we have had this discussion with \u003c@340345049063882753\u003e for years I think 🙂 there's an edge case I think in which you can have a \"self reorging block\" that is a block that includes a lot of attestations for a contending block to its parent",
+        "created_at": "2023-12-29T12:57:14.933000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "That is again a bit more of complicated code logic, but it's true that in principle I can avoid dealing with INVALID blocks if I already know the block is valid",
+        "created_at": "2023-12-29T12:59:11.846000+00:00",
+        "attachments": null
+    }
+]

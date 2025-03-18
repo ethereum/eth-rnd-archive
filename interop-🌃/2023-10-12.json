@@ -1,0 +1,482 @@
+[
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "I am going to need some help on a hive test. It is this test: `engine-cancun/Invalid Missing Ancestor ReOrg, Invalid StateRoot, Invalid P10`. (There are similar other tests)\n\nIn this test, we currently fail, because hive wants to `engine_forkchoiceUpdatedV3` rollback to a block which has a block number lower than the currently `finalizedBlockHash`. \n\nIn this test, it imports a lot of blocks and sets the finalized block to block N 13. Then, it FCUs to:\n\n```typescript\n[10-12|09:10:33] DEBUG engine_forkchoiceUpdatedV3 called with params:\n[\n  {\n    headBlockHash: '0xe610ab1ea17217024f1677aa61b507fdcc5cd791204d53727ecb453dd8c17338',\n    safeBlockHash: '0xe610ab1ea17217024f1677aa61b507fdcc5cd791204d53727ecb453dd8c17338',\n    finalizedBlockHash: '0x0000000000000000000000000000000000000000000000000000000000000000'\n  },\n]\n```\n\nThis tries to rollback head/safe to block number 6. We reject this because now head + safe is lower than the known finalized block (block number 13). Other clients seem to accept this and rollback. I am not sure here. What does `0x0000000000000000000000000000000000000000000000000000000000000000` for `finalizedBlockHash` mean? Is it a special value?",
+        "created_at": "2023-10-12T11:57:39.403000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "https://github.com/ethereum/execution-apis/blob/main/src/engine/paris.md#forkchoicestatev1\n\n\u003e Note: safeBlockHash and finalizedBlockHash fields are allowed to have `0x0000000000000000000000000000000000000000000000000000000000000000` value unless transition block is finalized.\n\nMight it be that this test scenario contains transition from PoW to PoS?",
+        "created_at": "2023-10-12T12:00:51.766000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Let me check 🙂",
+        "created_at": "2023-10-12T12:01:09.674000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "No, it starts at merge",
+        "created_at": "2023-10-12T12:01:20.856000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "```typescript\n  \"config\": {\n    \"ethash\": {},\n    \"chainId\": 7,\n    \"homesteadBlock\": 0,\n    \"eip150Block\": 0,\n    \"eip155Block\": 0,\n    \"eip158Block\": 0,\n    \"byzantiumBlock\": 0,\n    \"constantinopleBlock\": 0,\n    \"petersburgBlock\": 0,\n    \"istanbulBlock\": 0,\n    \"muirGlacierBlock\": 0,\n    \"berlinBlock\": 0,\n    \"yolov2Block\": 0,\n    \"yolov3Block\": 0,\n    \"londonBlock\": 0,\n    \"mergeForkBlock\": 0,\n    \"terminalTotalDifficulty\": 0,\n    \"shanghaiTime\": 0,\n    \"cancunTime\": 0\n  },\n```",
+        "created_at": "2023-10-12T12:01:39.414000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Then the `finalizedBlockHash` should be set to genesis block hash unless I am missing anything 🤔",
+        "created_at": "2023-10-12T12:03:01.783000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Or CL genesis block contains empty payload -- in this case empty `finalizedBlockHash` would make sense",
+        "created_at": "2023-10-12T12:03:47.968000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "If CL genesis block has empty payload, what does this mean..?",
+        "created_at": "2023-10-12T12:05:43.931000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm not too deep into CL side but can CL side override the finalizedBlockHash for EL such that it \"forces\" EL to rollback the finalized block (so in this case maybe to genesis)?",
+        "created_at": "2023-10-12T12:06:10.374000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Note: it tries to rollback head/safe to block 6 (from finalized block 13 / head 15) 🤔 So it seems it does not want to rollback to genesis",
+        "created_at": "2023-10-12T12:06:48.080000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Could you please provide a link to the trace of this scenario?",
+        "created_at": "2023-10-12T12:20:16.023000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Sure 🙂",
+        "created_at": "2023-10-12T12:22:28.797000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Here is Geth (passes): https://hivecancun.ethdevops.io/viewer.html?suiteid=1697105917-45511182516c9dc879cc1d8ba97ebfe0.json\u0026suitename=engine-cancun\u0026testid=134\u0026showtestlog=1\n\nHere are we (fail): https://hivecancun.ethdevops.io/viewer.html?suiteid=1697085380-8bc507b2463d244d05c30cabcb998352.json\u0026suitename=engine-cancun\u0026testid=134\u0026showtestlog=1\n\n(Note: there are 2 hive tests with the same name, so not sure if those two are the same tests, however we diverge for both tests at the same point, i.e. when `finalizedBlockHash` is set to these zeros in FCU)",
+        "created_at": "2023-10-12T12:24:13.086000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Oh wait the testid is the same so they are the same tests",
+        "created_at": "2023-10-12T12:24:26.280000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "All clients except Reth and us are passing these kind of tests",
+        "created_at": "2023-10-12T12:24:44.794000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "The only potential issue that I can see with this test as it sends `0x00` as the `finalizedBlockHash` because it shouldn't happen post-Merge. cc \u003c@892053833121923094\u003e \n\n\u003e In this test, we currently fail, because hive wants to `engine_forkchoiceUpdatedV3` rollback to a block which has a block number lower than the currently `finalizedBlockHash`. \n\nActually, the same can happen with a real CL. EL shouldn't make any assumptions about finalized block hash and should be capable of resetting the finalized block to the one that is provided by CL disregarding whether this block steps back in time. This can aid recovery in an extreme scenarios when an invalid chain has been finalized. The only check that EL should do is to ensure that the finalizedBlock is consistent with the headBlock, i.e. these two belong to the same chain",
+        "created_at": "2023-10-12T13:36:26.530000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ok great thanks for your reply, I was unsure if EL should be able to step back in time. CC \u003c@792822129019584562\u003e",
+        "created_at": "2023-10-12T13:37:46.119000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "BTW, if this 0x00..00 post-merge cannot happen then the passing clients (geth/erigon/besu/nethermind) might want to TAL why they allow for 0x00..00 as `finalizedBlockHash` if this really is not possible 🤔",
+        "created_at": "2023-10-12T13:38:39.176000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I don't know how critical it is, but it might be that they don't distinguish between post or pre Merge chains and somehow handle `0x00` in any of these cases",
+        "created_at": "2023-10-12T13:39:50.037000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I am curious what would they return as the \"finalized\" block requested via JSON-RPC in this case",
+        "created_at": "2023-10-12T13:44:33.622000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Oh yes that's a very interesting question 😄",
+        "created_at": "2023-10-12T14:02:48.347000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ah this might be an oversight on the test, it's not its purpose to test anything related to finalization, so we should be able to easily relax this and make it jump back to a not finalized/unsafe block",
+        "created_at": "2023-10-12T14:47:09.952000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "It seems this test is borrowed from one of the Merge test scenarios which assumed that it is fine for EL to revert finality",
+        "created_at": "2023-10-12T14:51:18.904000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes I'm not sure why I wrote it like that, but we'll change it so it doesn't cause issues because the thing it's trying to test is something completely different 😅",
+        "created_at": "2023-10-12T14:52:57.490000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "it this okay-to-revert-finality thing specific to ELs, or are CLs expected to do this too?",
+        "created_at": "2023-10-12T14:53:11.696000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "it seems ... not final",
+        "created_at": "2023-10-12T14:53:16.894000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "and at least Nimbus does all sorts of things with finalized blocks which it does not with nonfinalized blocks",
+        "created_at": "2023-10-12T14:53:35.651000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Well this is a bit weird right, because we first finalize blocks, and then go back to this 0x00..00 behavior which seems to be pre-merge?",
+        "created_at": "2023-10-12T14:53:40.893000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "I somehow disagree with reverting the finalized on EL as well, because what is the use of telling EL what is finalized and safe",
+        "created_at": "2023-10-12T14:53:56.806000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "might as well skip it",
+        "created_at": "2023-10-12T14:54:12.056000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'd sort of assumed ELs might make this optimization, or were allowed to, yeah",
+        "created_at": "2023-10-12T14:54:18.189000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "The change here will be that the safe/finalized blocks never change from 0x00..00, so no block finalizes during the test time span",
+        "created_at": "2023-10-12T14:54:56.488000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "so, e.g., Nimbus's light client support is very careful not to ever pass along a non-consensus-finalized \"final\" block but it passes along all sorts of maybe-theoretically-is-wrong sync committee head blocks for that",
+        "created_at": "2023-10-12T14:55:11.036000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "i think finalized was for everyone on EL side to use it as a tag to see if their transactions are finalized or not",
+        "created_at": "2023-10-12T14:55:15.782000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "but if we let it be reverted, this totally goes against its intend",
+        "created_at": "2023-10-12T14:55:48.013000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "optimizations etc can still be done by ELs (state pruning etc) by the length of the chain  so i don't really see the need of finalized anymore",
+        "created_at": "2023-10-12T14:56:32.990000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "That will work. But this specific test case should I think have some attention because to me it does not make sense to first finalize blocks and then override to 0x00. (We indeed fail this test early because of this reason, I see that indeed test is not meant to actually test this 🙂 )",
+        "created_at": "2023-10-12T14:56:55.636000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "yeah, they already all have some notion of \"ancient\"/pre-reorg-capable blocks, for example",
+        "created_at": "2023-10-12T14:57:16.558000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "It will only revert in the rare edge case when an invalid chain has been finalized by CL and CL is switching to a chain conflicting with the previously finalized one. Definitely not a regular case, but EL capable of doing the switch in this case can make this recovery path easier",
+        "created_at": "2023-10-12T14:57:17.634000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "using early finalization is a bonus",
+        "created_at": "2023-10-12T14:57:26.101000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "then people should also revert EL back manually",
+        "created_at": "2023-10-12T14:57:38.273000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "for e.g. in ethereumjs one can provide `startBlock` in startup args to revert it back",
+        "created_at": "2023-10-12T14:58:21.825000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "In case of EL it would require wiping out the database and resyncing from scratch then",
+        "created_at": "2023-10-12T14:58:49.204000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Maybe have the default finalized/safe blocks point to the genesis you mean?",
+        "created_at": "2023-10-12T14:58:54.816000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "ELs should support this mechanism",
+        "created_at": "2023-10-12T14:59:05.616000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "ok, I see",
+        "created_at": "2023-10-12T14:59:21.701000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "i mean its not really difficult for them to implement it, just need some push lol",
+        "created_at": "2023-10-12T14:59:32.672000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "then they can also throw errors like they have pruned state etc or whatever validations they need to do and the user will be right there so he/she can take appropriate action",
+        "created_at": "2023-10-12T15:00:33.179000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes, this way it can work and it can be implementation dependent. Then implementations will have to provide instructions for the cases when finality has to be reverted which seems OK considering already lots of coordination required to recover from finalizing an invalid chain",
+        "created_at": "2023-10-12T15:01:16.559000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes, and this can allow ELs to make the `finalized` consistency check for the double safety of the user",
+        "created_at": "2023-10-12T15:02:31.732000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "which, IMO, is more useful than handling this chain recovery edge case in a slightly more automatic way",
+        "created_at": "2023-10-12T15:03:04.628000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Maybe this would be even better as `0x00` is only for the case when no PoS block is yet finalized which can only happen pre-Merge",
+        "created_at": "2023-10-12T15:03:38.507000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "This could also fix this test but I mean to essentially create a new test scenario. In this scenario, we will diverge on EthereumJS + Reth vs all other clients. The test scenario is: (this is essentially the scenario of running this same test in the current situation, up to the point where EthereumJS fails)\n\n-\u003e Create post-Merge chain\n-\u003e Import some blocks up to block N (lets say 10). FCU finalize block X (lets say 5)\n-\u003e Now call FCU again with some valid safe/head block back in the canonical chain (this should be before block 5, lets say block 3). The `finalizedBlockHash` of this FCU should be set to the `0x00..00`.\n\nIf we assume that this FCU does not throw and it is VALID, then Reth+EthereumJS will fail, other clients will pass. (It might be that in the special case of `finalizedBlockHash` of FCU set to this `0x00..00` then there is different behavior in these passing clients than if it is not set to this \"special\" value)\n\nReth ref: https://hivecancun.ethdevops.io/viewer.html?suiteid=1697119955-3393c4cb92497cd4c71bf3dbd23c77cb.json\u0026suitename=engine-cancun\u0026testid=134\u0026showtestlog=1 (also fails at same scenario)",
+        "created_at": "2023-10-12T15:04:18.230000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Do CLs default to sending the safe/finalized == genesis when a new chain starts ?",
+        "created_at": "2023-10-12T15:08:17.958000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I would assume yes if the chain is post merge? because 0x00 is pre-merge?",
+        "created_at": "2023-10-12T15:08:41.591000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes in lodestar we do that",
+        "created_at": "2023-10-12T15:08:45.692000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "pre merge there is no api call",
+        "created_at": "2023-10-12T15:09:12.177000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I would assume that genesis block contains genesis payload block hash, otherwise, the parent hash check happening on CL side for a child of the genesis won't pass. But i am not sure if a block hash from the genesis payload is used as the `finalizedBlockHash` when it is sent to EL",
+        "created_at": "2023-10-12T15:10:59.650000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "we use finalized/init state's latestExecutionPayloadHeader 's blockHash to set our forkchoice's protoblock on init ... so lodestar should actually be sending the blockHash in genesis as `finalizedBlockHash`",
+        "created_at": "2023-10-12T15:15:24.787000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "this is not really to spec is it? the genesis block on the CL side ends up with an empty execution payload currently, which I've been meaning to suggest we change: \u003chttps://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#genesis-block\u003e.\n\nIMO it would be better to shim the latest execution payload's data into the genesis block, but this might require that the genesis block has 0 transactions + 0 withdrawals (so we can unblind it)\n\nwhat do you think?",
+        "created_at": "2023-10-12T22:28:10.102000+00:00",
+        "attachments": null
+    }
+]

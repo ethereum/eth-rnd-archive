@@ -1,0 +1,122 @@
+[
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I need to do some work with the KZG precompile. It is always a big warning if there are cases in the implementation which are not covered by the test vectors. This usually means that tests sucks. But it this situation, it looks such test vectors are mathematically improbable to create.\n\nFurthermore:\n- the reference implementation doesn't have the subgroup checks.\n- the implementation I'm working with (Silkworm, probably based on c-kzg) does have the subgroup checks.\n- the procompile is heavily downpriced. for me it runs at ~50Mgas/s while EVM itself ~1000Mgas/s.",
+        "created_at": "2024-08-18T09:19:33.498000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "BTW, why is the proof allowed to be 0?",
+        "created_at": "2024-08-18T10:09:57.851000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e the reference implementation doesn't have the subgroup checks.\nI'll need to double check if this is the case for eip7594, though for 4844, I think it should have these checks.\n\nThe method for the precompile specifically should be this one: https://github.com/ethereum/consensus-specs/blob/dev/specs/deneb/polynomial-commitments.md#verify_kzg_proof\n\nWhen we receive the raw untrusted byte, then we call: `bytes_to_kzg_commitment` for the commitment or `bytes_to_kzg_proof` for the proof.\n\nThese methods respectively should call `validate_kzg_g1`\n\nI do think that the naming of `bytes48_to_G1` is probably confusing since its only called internally to convert the bytes type into actual elliptic curve points so that you can do something like an MSM or elliptic curve operations on it. \n\nIt would be less confusing if we removed `bytes48_to_G1` and `bytes96_to_g2` entirely from the \"public spec API\" I think or added more docs to say why one would call them",
+        "created_at": "2024-08-18T16:53:41.535000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "----------------------------------------------------------\n\n\u003e the implementation I'm working with (Silkworm, probably based on c-kzg) does have the subgroup checks.\nTo be concrete, this is the correct behaviour -- can you link a PR that I can look at ?",
+        "created_at": "2024-08-18T16:55:35.315000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "-----------------------------------------------\n\n\u003e the procompile is heavily downpriced. for me it runs at ~50Mgas/s while EVM itself ~1000Mgas/s.\n\nYou are suggesting that it should possibly be doubled? I have not looked at these in a while, so would be interested in any new findings re this, the bn254 benchmarks which last time I checked seem to be overpriced, and EIP 2537",
+        "created_at": "2024-08-18T16:59:22.542000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "------------------------------------------------\n\n\u003e BTW, why is the proof allowed to be 0?\nAny point on the elliptic curve should be a valid witness and it should still be sound",
+        "created_at": "2024-08-18T17:31:04.175000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Heres a rough sketch as to why proof == 0 is okay and needed for completeness:\n\nhttps://hackmd.io/@6iQDuIePQjyYBqDChYw_jg/SkdbQn1sC\n\nYou can skip to verification for brevity (Haven't fully proof-read 🙂 )",
+        "created_at": "2024-08-18T17:52:12.628000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "O wow, this is great. Big thanks for your time. If you publish this I'm happy to link it from my code.",
+        "created_at": "2024-08-18T18:30:15.967000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Sorry, my bad. I really missed the `bytes_to_kzg_commitment` function because later the commitment still looks like bytes because the `bls.bytes48_to_G1` is used...",
+        "created_at": "2024-08-18T18:38:30.028000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yeah, I think thats a bit confusing  in hindsight -- a tongue in cheek rename for  `bls.bytes48_to_G1`  would be : `bls.typed_bytes48_to_concrete_g1_type_needed_by_underlying_bls_library`\n\nSo it is bytes, its just that its \"typed bytes\" and the current API needs you to convert it to the concrete type needed by the underlying library",
+        "created_at": "2024-08-18T18:49:35.383000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Feel free to copy-paste wherever you want!",
+        "created_at": "2024-08-18T18:49:50.720000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I mean you can give it a nice URL...",
+        "created_at": "2024-08-18T18:56:10.959000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "changed to \u003chttps://hackmd.io/@kevaundray/kzg-is-zero-proof-sound\u003e",
+        "created_at": "2024-08-18T19:06:03.897000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "One more stupid idea: can you combine the subgroup checks by adding the points and performing the check once?",
+        "created_at": "2024-08-18T19:06:23.310000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This would not be sound because the resultant point could be in the subgroup whereas the two individual points are not necessarily.\n\nIf you imagine that you have P1 = P + B and P2 = Q + 3B\n\nLets say P and Q are in the subgroup, but B is not, so P1 and P2 should get rejected.\n\nWhen I add them together, I get P1 + P2 = (P + B) + (Q + 3B) = (P+Q) + (B + 3B)\n\nThe (P+Q) part is in the prime order subgroup, but if B has order 4 for example, then (B+3B) will become 0 and as a result you have P1+P2 = (P+Q) which does past the test.",
+        "created_at": "2024-08-18T19:12:50.604000+00:00",
+        "attachments": null
+    }
+]

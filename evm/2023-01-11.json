@@ -1,0 +1,50 @@
+[
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "EOF implementers call 6 in 10 minutes https://github.com/ethereum/pm/issues/705",
+        "created_at": "2023-01-11T14:51:04.193000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@226589605816696832\u003e examples of test expectations. They are in the matching \"filler\" files in \"src\" dir.\n- https://github.com/ethereum/tests/blob/develop/src/GeneralStateTestsFiller/EIPTests/stEOF/stEIP3540/CREATE_EOF1InvalidFiller.yml#L403\n- https://github.com/ethereum/tests/blob/develop/src/GeneralStateTestsFiller/EIPTests/stEOF/stEIP3540/CREATE_EOF1Filler.yml#L92",
+        "created_at": "2023-01-11T15:53:44.201000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "daniel.kirchner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Just to quickly explain what I had in mind wrt stack validation during the call:\nThe issue is that an EOF function may e.g. have multiple code paths with the same reverting conditions (e.g. an empty revert). Now since the current stack validation algorithm requires any path through an opcode to have the same stack height, we need to generate separate ``PUSH 0 PUSH 0 REVERT`` snippets each time, which is a bit silly and wasteful. We could outline snippets like that into a function, but that comes at a cost both in code size and in runtime gas cost (well, it's revert cases, but still), while pre-EOF we could just deduplicate/collapse code in cases like this (i.e. the jumps to these blocks will usually be ``JUMPI``s/now ``RJUMPI``s and we could just use the same target for multiple such jumps).\nI'm pretty sure that for being able to omit runtime stack checks, it would be enough to ensure that the stack size remains constant in loops of the function's control flow graph plus that the worst path through the control flow graph is valid (i.e. the one with the largest stack height). I also think that, while the algorithm for this may be more complex conceptually, it can be done in linear complexity in the number of opcodes.\n\nBut yeah, I hadn't considered that allowing more code to be valid (which a change like this would strictly be), is only a weak change that doesn't require a version bump, so it's true that this doesn't necessarily need to be addressed in the first version - still wanted to quickly explain the general issue, s.t. you're aware.",
+        "created_at": "2023-01-11T16:21:17.734000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I though a bit about it and if you think about the code as a graph of basic blocks you can assign a range of stack heights to a basic block. If all ranges are bounded we should be good.\n\nBut I'm happy to handle this problem to a person who knows graph algorithms and/or compilers. I definitely don't qualify.",
+        "created_at": "2023-01-11T16:25:28.800000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "daniel.kirchner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We basically do something very similar when we generate stack layouts in solc in the first place - I think you can basically do a clever enough depth first search (-ish thing) through such a graph of basic blocks that tracks maximum required stack height backwards from leafs back to the entry point or something like that. But yeah, I haven't had the chance to take the time to come up with anything concrete. And yeah, in the compiler we also don't care about the complexity of the algorithm for this.",
+        "created_at": "2023-01-11T16:29:51.536000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e depth first search (-ish thing) through such a graph of basic blocks that tracks maximum required stack height backwards from leafs\n\nWhat I originally did for EIP-2315 was something like ...\n* Do validation with a recursive DFS of the CFG.\n* At each leaf return the stack height,\n* keeping track of the max.\nThe algorithm could also use an explicit stack of continuations.",
+        "created_at": "2023-01-11T16:43:42.898000+00:00",
+        "attachments": null
+    }
+]

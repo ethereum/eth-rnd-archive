@@ -1,0 +1,122 @@
+[
+    {
+        "author": "0xevan",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks I'll start here",
+        "created_at": "2024-04-03T00:35:23.133000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Do we have a helper to get a generalized index on an SSZ path where replace an entry with its root?  That is, instead of specifying the entry name as a string, I want to specify the SSZ type for that entry whose root is included in the parent SSZ type. cc \u003c@881905303011086387\u003e may know this.",
+        "created_at": "2024-04-03T12:07:44.172000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "in remerkleable? or where? `get_generalized_index` works for summaries as well, but cannot further dig down. can concatenate their binary representations though, omitting a bit",
+        "created_at": "2024-04-03T12:10:14.896000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "in nimbus, we just computed them manually so far:\n\n```\n  # https://github.com/ethereum/consensus-specs/blob/v1.4.0-beta.5/specs/altair/light-client/sync-protocol.md#constants\n  # All of these indices are rooted in `BeaconState`.\n  # The first member (`genesis_time`) is 32, subsequent members +1 each.\n  # If there are ever more than 32 members in `BeaconState`, indices change!\n  # `FINALIZED_ROOT_GINDEX` is one layer deeper, i.e., `52 * 2 + 1`.\n  # https://github.com/ethereum/consensus-specs/blob/v1.4.0/ssz/merkle-proofs.md\n  FINALIZED_ROOT_GINDEX* = 105.GeneralizedIndex  # finalized_checkpoint \u003e root\n  CURRENT_SYNC_COMMITTEE_GINDEX* = 54.GeneralizedIndex  # current_sync_committee\n  NEXT_SYNC_COMMITTEE_GINDEX* = 55.GeneralizedIndex  # next_sync_committee\n```\n\nthe computation shows how they can be combined though. `FINALIZED_ROOT_GINDEX` = `get_generalized_index(BeaconState, \"finalized_checkpoint\") * 2 + get_generalized_index(Checkpoint, \"root\") - 2 (leading bit)` etc",
+        "created_at": "2024-04-03T12:13:23.741000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I meant in the specs, yeah I am writing currently a concatenation of `get_generalized_index` with extra multiplication by 2, was hoping that we had already a helper for this",
+        "created_at": "2024-04-03T12:14:30.727000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "not that I'm aware of",
+        "created_at": "2024-04-03T12:14:53.323000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "But somehow I believe it's better to hardcode the constant value precomputed at the fork",
+        "created_at": "2024-04-03T12:15:04.135000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "than having these table entries with very long formulas that anyway just a few understand what they are referring to",
+        "created_at": "2024-04-03T12:15:21.327000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "sure, yeah, and with EIP-7495 the indices would even be static across future forks",
+        "created_at": "2024-04-03T12:16:06.563000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "swp0x0",
+        "category": "general",
+        "parent": "",
+        "content": "Are there any stats on how much time it takes for a validator to do all the post-epoch calculations?\nBy post-epoch calculations, I mean all the things that a node needs to calculate for the consensus layer, like beacon chain root caused by EB changing, new validators joining, withdrawals, etc",
+        "created_at": "2024-04-03T12:46:06.966000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Aditya was there any clean solution to this issue? I have some but I'm not sure about any of them https://github.com/ethereum/consensus-specs/pull/2197#issuecomment-783109619",
+        "created_at": "2024-04-03T20:27:18.098000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "adiasg",
+        "category": "general",
+        "parent": "",
+        "content": "The best mitigation was to have a self-adjusting backoff to account for latency. Each validator maintains a local `k` initialized to `1`, and votes within the most recent `k` blocks or for an empty slot, and adjusts `k` based on how many votes for empty slots it saw recently.",
+        "created_at": "2024-04-03T23:26:13.182000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm that adds a ton of complexity specially in a world of ePBS where nodes are either full, empty or missed",
+        "created_at": "2024-04-03T23:29:10.946000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "For clarity this is not an issue in ePBS with a PTC since attesters vote only in the CL side",
+        "created_at": "2024-04-03T23:35:10.569000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "But still wanted to make the case in general grounds",
+        "created_at": "2024-04-03T23:35:25.681000+00:00",
+        "attachments": null
+    }
+]

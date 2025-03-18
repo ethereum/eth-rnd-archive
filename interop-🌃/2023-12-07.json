@@ -1,0 +1,152 @@
+[
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "Seeing an error on devnet 12 when submitting a block proposal to lighthouse (using commit e5a0e2c500f756ef7d2abf556e3371cc5dd96d3e):\n```\n{\n  \"code\": 400,\n  \"message\": \"BAD_REQUEST: BlobError(RepeatBlob { proposer: 2827, slot: Slot(57582), index: 0 })\",\n  \"stacktraces\": []\n}\n```\n\nNote that this is with a block retrieved from the MEV relay.\n\nThe block appears to be accepted by teku, though, and does make it on-chain.  Is this a known issue?\n\nOr is this potentially due to the block being accepted by teku over the REST API, transmitted to lighthouse via P2P, and so lighthouse seeing a duplicate when this is sent via the REST API?",
+        "created_at": "2023-12-07T13:12:43.062000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "this is thrown if the blobs come later than 4 secs into the slot",
+        "created_at": "2023-12-07T13:14:04.177000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "is the node having issues with peering etc?",
+        "created_at": "2023-12-07T13:14:20.219000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "no",
+        "created_at": "2023-12-07T13:15:11.160000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tbenr",
+        "category": "Testing",
+        "parent": "",
+        "content": "seems like it is possible. If their default is broadcast_validation=gossip, then if the validation fails it should return 400",
+        "created_at": "2023-12-07T13:36:50.864000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tbenr",
+        "category": "Testing",
+        "parent": "",
+        "content": "but `BlobError` is weird",
+        "created_at": "2023-12-07T13:38:59.826000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "I just disabled submission to teku and it's only being submitted to lighthouse now, still seeing the same error but the block appears to be accepted anyway!",
+        "created_at": "2023-12-07T13:47:06.438000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tbenr",
+        "category": "Testing",
+        "parent": "",
+        "content": "so most probably a bug 🙂",
+        "created_at": "2023-12-07T13:47:42.645000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yep, lighthouse folks any thoughts on this?",
+        "created_at": "2023-12-07T13:48:24.802000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003crealbigsean\u003e If the block is being accepted by the chain and only submitted to the lighthouse node, maybe we are seeing it broadcast by the relay before we even import it? I’ll dig into it. Do you have some debug logs you could send over?",
+        "created_at": "2023-12-07T14:25:57.123000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "I can fire up lighthouse in debug mode and will capture them for you.",
+        "created_at": "2023-12-07T14:55:29.463000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "Here you go.",
+        "created_at": "2023-12-07T15:17:48.799000+00:00",
+        "attachments": [
+            {
+                "type": "text/plain; charset=ISO-8859-1",
+                "origin_name": "lighthouse.log",
+                "content": "ad8c70fe57484d57b3f98bea0db2b1afb15d1b93e2e98e1e17d9b0a787d4e267"
+            }
+        ]
+    },
+    {
+        "author": "realbigsean",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thanks! This looks like it confims this is what's happening:\n\n\u003e If the block is being accepted by the chain and only submitted to the lighthouse node, maybe we are seeing it broadcast by the relay before we even import it? I’ll dig into it. Do you have some debug logs you could send over?\n\nI'll work on updating this to not error in this scenario",
+        "created_at": "2023-12-07T15:34:15.706000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "Great, thanks.",
+        "created_at": "2023-12-07T15:35:52.570000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "Incidentally, Nimbus has the same issue (https://github.com/status-im/nimbus-eth2/issues/5499) and it's because the gossip specs and the builder API/relay specs don't play nicely.",
+        "created_at": "2023-12-07T15:37:32.069000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, it can/should be worked around, but it re-occurs across clients because it's an emergent property of the interaction of how relays work and gossip works.",
+        "created_at": "2023-12-07T15:38:18.692000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tbenr",
+        "category": "Testing",
+        "parent": "",
+        "content": "You make me think that we should check our side too",
+        "created_at": "2023-12-07T22:17:42.483000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "realbigsean",
+        "category": "Testing",
+        "parent": "",
+        "content": "this has led me down a bit of a rabbit hole: https://github.com/ethereum/consensus-specs/pull/3561",
+        "created_at": "2023-12-07T23:44:03.178000+00:00",
+        "attachments": null
+    }
+]

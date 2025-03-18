@@ -1,0 +1,234 @@
+[
+    {
+        "author": "draganrakita",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Was thinking about verkle, we can pack header differently and optimise access to header fields by shuffling sections. Data first, then code (as first code is always needed for execution), than types and containera last.",
+        "created_at": "2024-04-24T08:33:58.053000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "What is the cost model based on?",
+        "created_at": "2024-04-24T09:40:15.719000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "```\n./eofdump eofdump --hex 0xef0001010004020001000804000000008000016000e10002600100\nHeader\n-----------\nEOFMagic: ef00\nEOFVersion: 01\nKindType: 01\nTypesSize: 0004\nKindCode: 02\nCodeSize: 0001\nCode 0 length: 0008\nKindData: 04\nDataSize: 0000\nTerminator: 00\n-----------\nBody\n-----------\nType 0: 00800001\nCode 0: 6000e10002600100\nData: \n```\nThis code does not pass our max-stack-height verification (but should according to the tests)\n\nIntuitively our implementation looks correct to me\npush1 00\njumpi 0002\npush1 01\nSTOP",
+        "created_at": "2024-04-24T09:51:08.921000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If we don't know whats on the stack, the worst case would be to do two pushs, right? So max stack should be 2?",
+        "created_at": "2024-04-24T09:52:00.671000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Verkle EOF",
+        "created_at": "2024-04-24T10:04:54.106000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the max stack height is 1: the stack height after each instruction: 1, 0, 1, 1.",
+        "created_at": "2024-04-24T10:07:49.974000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "rjumpi pops one from stack",
+        "created_at": "2024-04-24T10:10:15.815000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ah yes",
+        "created_at": "2024-04-24T10:12:07.264000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ah our problem was that STOP could be called once with empty stack and once with 1 element on the stack",
+        "created_at": "2024-04-24T10:33:02.708000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Doesn't this mean we would need to visit that branch again?\nSo we're not strictly Theta(len(n))",
+        "created_at": "2024-04-24T10:35:30.335000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "You are accessing stop on rjumpi and again on iteration, but there is only single iteration",
+        "created_at": "2024-04-24T11:00:39.376000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I did it little bit differently from evmone and put everything in one loop, maybe it can help: https://github.com/bluealloy/revm/blob/1ca3d39f6a9e9778f8eb0fcb74fe529345a531b4/crates/interpreter/src/interpreter/analysis.rs#L298",
+        "created_at": "2024-04-24T11:02:21.980000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gumb00",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "See latest spec in https://eips.ethereum.org/EIPS/eip-5450, different stack heights for same code are allowed (when jumped-to with forwards jump), and we do keep O(n) complexity",
+        "created_at": "2024-04-24T12:23:28.387000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "New calls cost analysis:\n\n```md\n|                 | Cost (burned) | Callee min | Callee max          | Min retained |   \n|-----------------|---------------|------------|---------------------|--------------|\n| CALL V=0        | 100           | 0          | g - g/64            | g/64         |\n| CALL V≠0        | 100+6700      | 2300       | g - g/64            | g/64         |\n| DELEGATECALL    | 100           | 0          | g - g/64            | g/64         |\n| STATICCALL      | 100           | 0          | g - g/64            | g/64         |\n| EXTCALL V=0     | 100           | 2300       | g - max(g/64, 5000) | 5000         |\n| EXTCALL V≠0     | 100+9000      | 2300       | g - max(g/64, 5000) | 5000         |\n| EXTDELEGATECALL | 100           | 2300       | g - max(g/64, 5000) | 5000         |\n| EXTSTATICCALL   | 100           | 2300       | g - max(g/64, 5000) | 5000         |\n```",
+        "created_at": "2024-04-24T12:29:33.347000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Please note the `6700` vs `9000` difference.",
+        "created_at": "2024-04-24T12:52:08.411000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "poojaranjan",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "**EOF Implementers Call #43**\nMeeting Info: Apr 24, 2024, 15:00 UTC\nAgenda: https://github.com/ethereum/pm/issues/1020\nJoin Zoom Meeting\n\nhttps://us02web.zoom.us/j/88940506383?pwd=aTdsbHVyMTNDSUFHYmhTWlI2ZEVldz09\n\nMeeting ID: 889 4050 6383\nPasscode: 424973",
+        "created_at": "2024-04-24T13:07:49.904000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Why us EXTCALL with value more than call with value?  What is the cause for that? Not wanting to change the legacy schedule?",
+        "created_at": "2024-04-24T13:23:15.161000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Because of how stipend is applied in legacy and how we do it in EXTCALL. I think it is just a coincidence and we should fix it.",
+        "created_at": "2024-04-24T13:30:53.553000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I.e. in legacy `CALL` the stipend gas (2300) is added from nowhere so the actual value transfer is 6700 not 9000. Try sending a value to an empty contract, you will get the 2300 back.",
+        "created_at": "2024-04-24T13:32:32.229000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "In EOF we kinda implemented it properly so the cost is actually 9000 🙂",
+        "created_at": "2024-04-24T13:33:09.064000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gumb00",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "new EIP for EOF support in creation transactions\n(the scheme with tx.data containing initcontainer || calldata, as discussed before) \nhttps://github.com/ethereum/EIPs/pull/8498",
+        "created_at": "2024-04-24T13:33:58.132000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Reported: https://github.com/ipsilon/eof/issues/94",
+        "created_at": "2024-04-24T13:37:29.634000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "wjmelements",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Shouldn’t it be 6700 instead if you are removing stipend?",
+        "created_at": "2024-04-24T17:40:35.286000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "wjmelements",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I like the gas *CALL operands because I can guarantee a payment won’t attempt re-entry or anything malicious. The PAY opcode would be even safer though.",
+        "created_at": "2024-04-24T17:42:01.440000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "EOF Call # 43 summary\n\nClients\n- Besu, EVMONE keeping up with current spec\n- Geth's implementation progressing at a good pace, working on bugs relating to subcontainer data length\n\nCompilers\n- Solidity has an old shanghi era compiler that is a base for mega work\n- Compiler teams want some parts of the spec guaranteed before serious work can progress.  Specifically the container format and the subroutine and jump functions locked in.\n\nTesting\n- Test team is bringing over container testing from retesteth \n  - Format is old shanghai fuzzing format, evmone-parse and geth eofdump implement it\n- There is a desire to standardize errors for tests, either as strings or as integer numbers\n- Client teams expressed willingness to contribute more tests to supplement testing team's work\n\nSpecs\n- The [EOF mega spec](https://github.com/ipsilon/eof/blob/main/spec/eof.md) is considered to be canonical, EIPs will be brought in line to match\n- The following PRs were adopted\n  - [PR 78](https://github.com/ipsilon/eof/pull/78) and [PR 76](https://github.com/ipsilon/eof/pull/76) relating to TXCREATE and create transactions\n  - [PR 86](https://github.com/ipsilon/eof/pull/76) adding validation rules for init mode and run mode validation\n- There was no consensus on the following\n  - [PR 90](https://github.com/ipsilon/eof/pull/90) relating to changing zero padding behavior or RETURNDATACOPY in EOF\n    - One sentiment expressed by Ipsolon is to not change opcodes, but introduce new ones.  This impacts EIP-7676\n- New PRs that may be adopted next week\n  - [PR 94](https://github.com/ipsilon/eof/pull/94) to change EXTCALL costs to match CALL\n  - [PR 95](https://github.com/ipsilon/eof/pull/95) to adjust the min retained gas on a CALL operation\n  \n~~Due to May Day in Europe next week's meeting may be moved, with notice coming no later than Monday the 29th.~~ Next weeks call will proceed as normal.",
+        "created_at": "2024-04-24T17:44:15.473000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Okay last one, I promise: \n`e0000100e0fffc`\nis \n```\nRJUMP 1\nSTOP\nRJUMP -4\n```\n(if I parse that correctly)\nI think the idea is to jump over the stop and back creating an infinite loop, but the position of the second jump is -4 + 3 + pc (4) = 3 which is the STOP opcode right?",
+        "created_at": "2024-04-24T17:55:06.624000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "its the third test here: https://github.com/ethereum/tests/blob/develop/src/EOFTestsFiller/efStack/unreachable_instructions_Copier.json",
+        "created_at": "2024-04-24T17:58:23.379000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This one is validating the \"no backward only references\" rule.  PC=0 is root, then sends you to PC=4, skipping PC=3, then goes back to PC=3.  This is, by spec, prohibited [unless there is a way to get to PC=3, such as RJUMPI or another jump, but not in this setup].  This allows stack analyzers to work front to back without a work list to detect dead code, as code only referenced by backwards jumps is considered dead.",
+        "created_at": "2024-04-24T18:33:56.371000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It also has positive interactions with the rules around stack ranges.  A forward jump can widen a stack range but a backward jump must be compatible with the existing stack range, the net being no unbounded stack.",
+        "created_at": "2024-04-24T18:36:26.500000+00:00",
+        "attachments": null
+    }
+]

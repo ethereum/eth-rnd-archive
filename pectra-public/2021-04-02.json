@@ -1,0 +1,194 @@
+[
+    {
+        "author": "ryanleeschneider",
+        "category": "general",
+        "parent": "",
+        "content": "To clarify, I was thinking about the \"identifier\" of the new head that the beacon chain sends in the `NewHead` message.  If it's an eth1 block hash my gut is that the beacon chain side should be generating that hash itself rather than trusting a field in the `AssembleBlock` response, but it sounds like if thats the case the beacon node can do `keccak(RLPencode(SSZdecode(AssembleBlock Response)))`.    But maybe my gut feeling around the beacon node needing to verify the AssembleBlock response is unwarranted?",
+        "created_at": "2021-04-02T00:04:26.590000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "general",
+        "parent": "",
+        "content": "I also just realized that chat-bridge probably doesn't capture the fact that I was replying to Mikhail's earlier reply to my incorrect assumption that `AssembleBlock` returns an RLP-encoded block.",
+        "created_at": "2021-04-02T00:11:25.033000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "general",
+        "parent": "",
+        "content": "Some of the eth1 block header fields are just specified as \"scalars\" rather than with an explicit size, will we need to specify canonical `uintN` sizes for those fields for the SSZ encoding?",
+        "created_at": "2021-04-02T00:32:08.398000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "IIUC, the beacon chain isn't planning on having keccak256 nor RLP as a library requirement.",
+        "created_at": "2021-04-02T00:34:05.299000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "While those both *could* be added, it is unnecessary since the application layer is doing block construction and validation anyway, and adding two unnecessary dependencies doesn't seem worth the incredibly marginal gains they would provide in this case.",
+        "created_at": "2021-04-02T00:34:43.523000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "The connection between beacon and application is *highly trusted* already, so anything more than a CRC check is probably overkill.",
+        "created_at": "2021-04-02T00:35:53.261000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "general",
+        "parent": "",
+        "content": "Ok, so that's why I was thinking that if we could embed the SSZ merkleization/hash of the BlockHeader in the header itself (and sorry I should've said `mixHash` not `nonce`) then perhaps this would provide _some_ extra level of _possible_ verification w/o resorting to implementing RLP etc",
+        "created_at": "2021-04-02T00:37:09.623000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "It is inversely assumed that the application layer won't need to implement SSZ for The Merge.  🙂",
+        "created_at": "2021-04-02T00:39:07.530000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "What is the attack vector you are concerned with?  If the communication channel between the application and the consensus client is compromised, an attacker can do incredibly bad things that SSZ/RLP/Keccak256 won't protect us from.",
+        "created_at": "2021-04-02T00:39:47.386000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "general",
+        "parent": "",
+        "content": "Less of an explicit attack and more \"trust but verify\".  I'm also somewhat concerned that some block proposers will say \"running an application node is too complicated\" and just propose empty blocks, which might lead to a scenario where having external \"application nodes as a service\" is preferable to having a large number of proposers forgoing advancing the application chain, so any trust we can build into the API w/o _too much_ effort seems worth it.",
+        "created_at": "2021-04-02T00:45:07.623000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "general",
+        "parent": "",
+        "content": "I guess _if_ my concerns are warranted (I might totally be misunderstanding the ability to propose empty application blocks) then we can brainstorm solutions to that, I'm probably jumping the gun.",
+        "created_at": "2021-04-02T00:48:28.452000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The same reasoning applies to attestations as was mentioned before here: no punishment is there for validators that just attest to any block they see, without checking its validity in the application layer",
+        "created_at": "2021-04-02T00:53:33.564000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e It is inversely assumed that the application layer won't need to implement SSZ for The Merge.\n\nBut then how will the application node return the data needed for this?  \n\n\u003e We really want to have application block header fields and its hash on the beacon chain in SSZ structures to be able to read them and build proofs linked to beacon state/block roots.\n\nIs the application node just returning JSON and one of the fields happens to be the opaque eth1 block in RLP format?  And the other fields are returned separately?",
+        "created_at": "2021-04-02T00:55:20.045000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e But then how will the application node return the data needed for this?\nI believe the tentative plan is just JSON payload or something.",
+        "created_at": "2021-04-02T00:56:17.557000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "general",
+        "parent": "",
+        "content": "Ok, I guess there's nothing _preventing_ an extra paranoid beacon chain implementation from verifying the `keccak(RLP)` matches the `BlockHash`, its just not required.",
+        "created_at": "2021-04-02T02:14:51.708000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chat-bridge",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e Yeah. Its really a separation of concerns and duties across two pieces of software that already bave specialities \nYou can also just tightly couple the whole thing into one piece of software but that doesnt adequately leverage existing tools and team specialities very well",
+        "created_at": "2021-04-02T02:34:52.258000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chat-bridge",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e Inside the actual primary pos consensus, things arepacked as an ssz payload. Its expected beacon and app-layer communicate via json or some standard format protocol and each can pack the data locally however is needef (re @ef_general_chat_bridge_bot: \u003cRyanSchneider\u003e \u003e It is inversely assumed that the application layer won't need to implement SSZ for The Merge.\nBut then how will the application node return the data needed for this?  \n\u003e We really want to have application block header fields and its hash on the beacon chain in SSZ structures to be able to read them and build proofs linked to beacon state/block roots.\nIs the application node just returning JSON and one of the fields happens to be the opaque eth1 block in RLP format?  And the other fields are returned separately?)",
+        "created_at": "2021-04-02T02:35:57.574000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Current proposal assumes a common format for communication which both sides are familiar with, e.g. JSON. We don't want to make SSZ mandatory for app-layer, likewise RLP for consensus-layer. But application block hash is required for consensus, thus, it is sent in response to `AssembleBlock`.\n\nApart from requiring RLP and keccak on cosnensus-layer, there are two more reasons for having app block hash on the beacon chain. First one is to be able to strip down app block to app payload (throw away redundant fields) on consensus side; then nodes receiving a block from the wire may check that redundant fields are filled correctly according to protocol (set to pre-defined constants). Second, have app block hash finalised on beacon chain explicitly, it would allow to use most recent finalised block hash in smart contracts.\n\nAnd yes, beacon node _may_ verify app block hash to limit the level of trust in case of \"app node as a service\".",
+        "created_at": "2021-04-02T08:37:50.313000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "general",
+        "parent": "",
+        "content": "Ah ok I got it.  I was hung up on thinking that the JSON payload was still going to be an opaque RLP or SSZ blob, not all the _individual fields_ from a block header (which then gives either side enough information to reconstruct either an RLP eth1 block or a simplified beacon chain SSZ block).  That totally makes sense now (I'm also catching up on the call recording and just got to where this was discussed, so sorry about that).",
+        "created_at": "2021-04-02T15:01:30.025000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "all good! we're very happy to help get everyone up to speed",
+        "created_at": "2021-04-02T15:02:19.462000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "general",
+        "parent": "",
+        "content": "I'm also confident that once we get to the point of spec'ing out the message request/response payloads these sorts of confusions should all go away so thanks for bearing with me 🙂",
+        "created_at": "2021-04-02T15:03:56.163000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "general",
+        "parent": "",
+        "content": "I am still a little concerned that a beacon chain node could opt to plug in a simple \"empty block producer\" on the application node side instead of trying to keep a full eth1 client running, but I guess that's something that needs to be solved at the economics/incentives layer not this API.",
+        "created_at": "2021-04-02T15:07:07.414000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Definitely specs will answer a bunch of questions by itself but I am happy to keep answering. So, keep asking 🙂",
+        "created_at": "2021-04-02T15:27:26.275000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Right, attesting without checking the execution is even worse. And I guess if there is a service that would allow for relatively cheap app block verification then there will be incentive for individual stakers to use it instead of misbehaving with incentive to avoid weakening the security of the network.",
+        "created_at": "2021-04-02T15:33:10.420000+00:00",
+        "attachments": null
+    }
+]

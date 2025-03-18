@@ -1,0 +1,42 @@
+[
+    {
+        "author": "shrevespringer",
+        "category": "general",
+        "parent": "",
+        "content": "gm y'all. Currently, external slashing events (such as those on restaking services) are not accounted for on the Beacon chain. This results in validators being perceived as having staked more than they actually have on the Beacon chain, thereby compromising the security. The work below analyses why this is an important issue and the consequences of the same. It also proposes a solution that accounts for the reduced security offered by the validators during slashing events on external services (like EigenLayer). \nThis work is done during my time at Nethermind.\nhttps://nethermind.notion.site/Reflecting-External-Slashings-on-Beacon-Chain-5aaf748602364417985f14c69a07930a\nI would like the community to review this proposal and share your suggestions and views. Thank you🙌",
+        "created_at": "2024-07-17T13:10:51.536000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "One of the mayor components of our slashing mechanism is the correlation penalty and the churn conditions applied to exits/slashings so that these can be applied. I don't see how this is accounted for in this proposal. Other questions include who controls these contracts? who's able to submit slashings? should the balance actually be decreased or these validators become fully withdrawable and someone actually gets that ETH?",
+        "created_at": "2024-07-17T14:49:08.474000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "shrevespringer",
+        "category": "general",
+        "parent": "",
+        "content": "1) The idea behind introducing `execution_balance` here is that, this variable will now account for the activities that happen outside of Beacon chain for the validators who have opted for additional external slashing conditions (for validators who have not opted for the same, `execution_balance` = `effective_balance` and essentially everything remains the same). The only change here is the way issuance is calculated, where we incorporate the `execution_balance` value, explained in section 5.1, and the way compute_proposer_index() function is calculated where instead of `effective_balance`, we use `execution_balance` instead. All the rest of the Beacon chain related functions remains unchanged and will be based on `effective_balance`.\n2) Initially, validators will control the `Controller` contract (section 4.1), but here comes the question of why validators would want to update the `execution_balance` by emitting the event themselves whenever they have been slashed on an AVS. The idea here is that eventually, the external services come to a social consensus to give control of the Controller contract to this external service, after which this external service can deterministically emit events whenever the validator commits a slashable offense. Well, why would external service want to do that? This would practically increase the cost of corruption and, therefore, increase the security of these external services (AVS on EigenLayer).\n3) `execution_balance` is not new ETH. It is essentially there to keep track of what's happening on the execution layer (like EigenLayer). Let's say a validator who opts to restake, gets slashed by 10 ETH on one of the AVS. The execution_balance will now be 22 ETH (assuming `effective_balance` was 32 ETH, and due to backward compatibility, `execution_balance` will also be 32 to start with). Now this validator will have to deposit 10 more ETH (to the contract of that AVS let's say) inorder to increase the `execution_balance` back to 32 ETH.",
+        "created_at": "2024-07-17T16:36:35.513000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "1) If you have some validators that are being slashed on AVS and are coopting with some validators attacking on the beacon chain and not on AVS, How do I apply the correlation penalty?\n2) ETH on the BC is fully withdrawable, if in the above scenario some validators have been slashed on AVS, and some in the BC and have not been correlated... there's attacking ETH that is leaving in fact both systems.",
+        "created_at": "2024-07-17T17:43:12.371000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "shrevespringer",
+        "category": "general",
+        "parent": "",
+        "content": "If I am not wrong, correlation penalties are present to punish to the maximum extent in case of a mass attempt at finalizing the conflicting blocks. Here, we are talking about the mass committing of slashable offenses on the Beacon chain (related to Casper or Ghost). So if some validators have been slashed on AVS but are honest on BC, and some other validators are trying to attack on the beacon chain and not AVS, what is the need to include AVS slashings in the correlation penalty? Or maybe I do not understand \"coopting\" here. What exactly do you mean by coopting here? Like could you give an example of such case?",
+        "created_at": "2024-07-17T19:06:53.308000+00:00",
+        "attachments": null
+    }
+]

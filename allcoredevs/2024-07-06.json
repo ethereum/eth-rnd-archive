@@ -1,0 +1,66 @@
+[
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "the motivation is that EIP-4788 exposes the beacon root to smart contracts, but smart contracts using it need to be redeployed / upgraded whenever the indexing is changed by a fork, even if that fork does not touch any of their used functionality. this problem expands further to bridges on other blockchains, or even into wallet apps on a phone that verify data from the beacon chain instead of trusting the server. depending on the use case, it is quite unrealistic to expect them to align their release cadence with ethereum's forks.\n\n- Research that ran into this: https://ethresear.ch/t/slashing-proofoor-on-chain-slashed-validator-proofs/19421/3\n- RocketPool also ran into this:  https://ethereum-magicians.org/t/eip-4788-beacon-root-in-evm/8281/13\n- Essentially, anyone using EIP-4788 or pulling in beacon data, runs into this",
+        "created_at": "2024-07-06T09:16:38.591000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "The `StableContainer` is quite straight forward. it essentially pads the SSZ binary merkle tree to its design space capacity upfront, instead of growing in capacity over time, as new forks are introduced. it also limits valid extensions from future forks to append-only, ensuring that existing fields remain at their original index, and therefore, that proofs remain compatible with existing deployed smart contracts / wallet apps / other data consumers.\n\n- To distinguish 0 from absence, an additional bitvector is mixed in at the top level, same as is done for list length\n- For serialization, the same bitvector is prepended to the data",
+        "created_at": "2024-07-06T09:19:41.121000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "general",
+        "parent": "",
+        "content": "I agree, i didn't find profile particularly useful in my ethereumjs implementation of eip 6493, so diff between profile and stablecontainer should just be the typing, i.e. profiles should retain the bitvector and be interchable to corresponding stablecontainer in all respects including serialization",
+        "created_at": "2024-07-06T09:20:08.301000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "As for `Profile`, it serializes the same as existing `Container` and adds type safety that people have asked for. But it pulls in the merkleization from the base `StableContainer`.\n\n- It's quite useful when nesting structures, such as `ExecutionPayload` inside `BeaconBlockBody` inside `SignedBeaconBlock`. As all of these are `StableContainer` based in EIP-7688, it would add quite a bit of overhead and redundant checking if `Profile` was not used, as each layer would come with its own bitvector prefix, and would be forced variable-length. While `Profile` retains the compact serialization of `Container`.",
+        "created_at": "2024-07-06T09:22:07.375000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "Implementations are quite flexible in how to adopt it. For example, a protobufs approach may be used where a CL implementation simply annotates each field with its gindex and the object with its capacity, and otherwise treats `Profile` as any other `Container`",
+        "created_at": "2024-07-06T09:22:53.966000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "imagine having to recompile all of your software whenever you update your OS, that's essentially what's being addressed with 7495/7688.\nhow to achieve it, it's flexible. but, we should find a solution for pectra, because the new validator operations break smart contracts anyway, and we can use this opportunity to fix the merkleization so that buidlers only have to deal with this once instead of repeatedly.",
+        "created_at": "2024-07-06T09:25:58.057000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "the `Profile` is a concrete configuration of a `StableContainer`. so, a concrete sequence of \"required\"/\"optional\"/\"absent\" for the fields.\nthe leading bitvector only contains \"optional\" bits.\n\nthe `StableContainer` aims to have forward-compatible serialization as well, so that objects can still be parsed even if the `StableContainer` is extended with additional fields in the future. that's why its bitvector is zero padded to the full capacity, and why it also contains the bits for currently \"required\"/\"absent\" fields",
+        "created_at": "2024-07-06T09:28:55.800000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "wemeetagain",
+        "category": "general",
+        "parent": "",
+        "content": "I think sc/profile is also used a little different in 7688 vs 6493. On the consensus side, we're using sc/profile to model our data structures that get updated on forks.  So we have one set of profiles active per fork, and only one set of profiles at a time is used. Since all of our networking channels are scoped by fork already, profiles are nice here to not have to pay additional serialization size costs and to simplify what would be additional application validation logic into decode logic.",
+        "created_at": "2024-07-06T20:16:53.992000+00:00",
+        "attachments": null
+    }
+]

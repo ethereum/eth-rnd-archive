@@ -1,0 +1,554 @@
+[
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "It would appear that \u003c@\u0026688090867927482525\u003e is returning type 1 and 2 transactions in JSON-RPC responses that are missing the `yParity` field, and it further appears that \u003c@\u0026595683609080365088\u003e rejects type 1 and 2 transactions in JSON-RPC responses that contain `yParity` (but no `v`).",
+        "created_at": "2023-07-15T08:04:04.453000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Type 1 and type 2 transactions do not have a `v` value, and there is no specification for what would be in such a `v` value (is it 0|1, or is it 27|28 or is it 36+?).  Can we please fix Geth (and any other clients that mirror Geth) so it correctly returns a `yParity` for all type 1 and 2 transactions, and can we fix Prysm so that it correctly accepts a `yParity`?",
+        "created_at": "2023-07-15T08:04:07.737000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "We will likely need to continue supporting both on both sides (so Geth will need to return both whatever weird unspecified `v` value it returns as well as the `yParity` value, and Prysm will need to accept both `v` and `yParity`), but after a couple of hard forks we should be able to delete the old code at lesat on the Prysm side since we can be confident everyone has updated Geth by then.",
+        "created_at": "2023-07-15T08:04:09.220000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "It would also be good to figure out what other clients are doing.  Since everyone seems to blindly copy and test against Geth I suspect that many clients probably have this same bug.",
+        "created_at": "2023-07-15T08:05:47.683000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Also, we should figure out what exactly Geth is packing into the `v` property and make a note on it somewhere so people doing integrations can know how to deal with unspecified behavior of older clients.",
+        "created_at": "2023-07-15T08:06:24.194000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "peter.davies",
+        "category": "general",
+        "parent": "",
+        "content": "That field (in the RLP struct) is currently named `v` in the Python specs. We should change it if that is nonstandard. EIP-2930 calls it `signatureYParity`, EIP-1559 calls it `signature_y_parity`.",
+        "created_at": "2023-07-15T08:21:51.774000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "`v` is not defined anywhere in either of the typed transaction EIPs.  😖  What lead to you all naming it `v` in the python spec?",
+        "created_at": "2023-07-15T08:22:41.683000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "This is particularly frustrating because its not like `v` has an \"obvious\" definition.  There are at least 3 definitions of `v` that I have seen used, so to use `v` in a response one has to either be unaware of 2 of the definitions, or you have to pick one of the three and willfully ignore the other two.",
+        "created_at": "2023-07-15T08:24:16.813000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Issue for fixing this in the execution specs: \u003chttps://github.com/ethereum/execution-specs/issues/814\u003e",
+        "created_at": "2023-07-15T08:32:23.734000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "Afaik we have r,s,v. V being the thing you call yParity in older transaction types.",
+        "created_at": "2023-07-15T08:34:04.575000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "This statement seems off to me",
+        "created_at": "2023-07-15T08:35:29.820000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "I'd suggest filing an issue with geth and discuss there instead of here.",
+        "created_at": "2023-07-15T08:36:07.827000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "`v` is well defined in the yellow paper and EIP-155, and it does not mean \"the y value parity bit\" in either of those.  It is the parity bit plus 27 in legacy transactions, and it is the parity bit plus 2 times the chain ID in 155 transactions.  Storing `yParity` in `v` is like storing the name of a city in a variable called `favorite_fruit`.",
+        "created_at": "2023-07-15T08:37:21.644000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I can file an issue there.  I brought it up here because the problem appears to be systemic across many clients.  Nethermind tried to fix this in their code and ran into a problem because Prysm refuses to talk to them after they applied the fix.",
+        "created_at": "2023-07-15T08:38:20.039000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "And this all started because Ethers (JS library) has a similar bug.  I don't know how this whole cascade started (who was the first to store `yParity` in a variable called `v`), but it seems to have spread quite a bit and the fix likely needs to be made in many clients/libraries/tools.",
+        "created_at": "2023-07-15T08:39:17.357000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "Why even expose/store it if it can be derived from V?",
+        "created_at": "2023-07-15T08:40:23.863000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "The reason we put `yParity` in type 1 and 2 transactions instead of `v` was because `v` was considered a vestigial tail/tech debt that historically has caused a lot of confusion.  With the introduction of typed transactions, we finally had an opportunity to partially clean up some of that tech debt and make the Ethereum protocol easier to understand at least for the set of people who don't need to deal with legacy transactions.",
+        "created_at": "2023-07-15T08:41:50.679000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "And for a bit of clarity, `v` can be derived from `y-parity`.  The secp256k signing process spits out a `y` or `y-parity` and the Ethereum protocol specification then munges that into something else (for historical reasons that are unnecessary now).",
+        "created_at": "2023-07-15T08:43:01.639000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "Anyway, if we have a geth-ticket, we will discuss it on a ticket triage, the whole team.",
+        "created_at": "2023-07-15T08:43:17.363000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I believe this new derived variable was called `v` because the people who originally wrote the yellow paper hate words and love letters.  (also, coming up with a concise word for \"the y-parity bit plus 26 because Bitcoin has this thing that doesn't apply here but we want to use their libraries\" is hard)",
+        "created_at": "2023-07-15T08:43:25.119000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Geth issue created: \u003chttps://github.com/ethereum/go-ethereum/issues/27727\u003e",
+        "created_at": "2023-07-15T08:57:12.986000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I'm sorry but I didn't understand a word here, fields in transactions are things from a different world,  in the world I live in, we speak a language where transactions are just raw bytes, and we couldn't care less what they are, we just accept whatever comes.",
+        "created_at": "2023-07-15T10:10:22.172000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I believe the issue here is with the JSON-RPC API which Prysm uses to do some communication with EL client.",
+        "created_at": "2023-07-15T10:11:16.504000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "If you return a data structure that correctly has a `yParity` (and no `v`), then Prysm errors with:\n```\n[2023-07-14 16:01:00] ERROR sync: Could not get reconstruct full block from blinded body error=could not fetch execution block with txs by hash 0x48d999f5ffccf044a12237be5e369b013ded8ec16a4472650b12b71410554bc2: got an unexpected error in JSON-RPC response: missing required field 'v' in transaction handler=beacon_blocks_by_root\n```",
+        "created_at": "2023-07-15T10:14:47.035000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "`v` should not be a required field, and in fact shouldn't really even be an optional field.  `yParity` is what Prysm should be looking for (though perhaps fallback to `v` for backward compatibility).",
+        "created_at": "2023-07-15T10:15:50.540000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "so that error is actually from geth",
+        "created_at": "2023-07-15T10:19:39.795000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "We use geth's data structures for json-rpc, otherwise Prysm does not explicitly care about the internal intricacies of transactions",
+        "created_at": "2023-07-15T10:20:37.341000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Both.  Getting is returning a `v` and not a `yParity`.  Prysm is throwing an error if you correctly respond with `yParity` and no `v`.",
+        "created_at": "2023-07-15T10:21:00.815000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Ah, if you are just blindly using Geth's data structures then yes, you are inheriting Geth's bug.",
+        "created_at": "2023-07-15T10:21:32.356000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah we don't implement ethereum transactions in prysm itself, we are just using geth's data structures",
+        "created_at": "2023-07-15T10:22:00.963000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "The problem is that it makes Prysm incompatible with a correctly implemented client.  😢",
+        "created_at": "2023-07-15T10:22:24.079000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I guess the argument here though is to fix Geth, and then update Prysm's dependency?",
+        "created_at": "2023-07-15T10:22:45.456000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "yes, that should fix it on our end",
+        "created_at": "2023-07-15T10:23:04.067000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "we would stop erroring it out. Once geth has a release with this case handled we can update Prysm with the new changes",
+        "created_at": "2023-07-15T10:23:36.065000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Does Prysm automatically follow Geth, or will a separate PR need to be filed against Prysm to pull in the updated data structures?",
+        "created_at": "2023-07-15T10:23:36.149000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "it is fixed to a particular geth version, so prysm will also need to be updated with the new geth version",
+        "created_at": "2023-07-15T10:24:03.313000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ricmoo",
+        "category": "general",
+        "parent": "",
+        "content": "I would definitely appreciate some place where changes made to JSON-RPC were broadcast; or is there? These changes have historically broke random parts of ethers… Which I think is where this discussion stemmed from as ethers currently doesn’t handle some client output (fix going out soon).",
+        "created_at": "2023-07-15T13:29:16.677000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ricmoo",
+        "category": "general",
+        "parent": "",
+        "content": "🙂",
+        "created_at": "2023-07-15T13:29:23.594000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "Geth will be fixed soon",
+        "created_at": "2023-07-15T13:37:57.885000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@358385024573243393\u003e the canon source of information is https://github.com/ethereum/execution-apis",
+        "created_at": "2023-07-15T13:38:17.830000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "as defined there, transactions should have `yParity` and not `v` so geth is wrong",
+        "created_at": "2023-07-15T13:38:44.541000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ricmoo",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks. I kinda want a channel (I don’t even know what’s available) where all clients announce their random changes to their spec. Historic examples, Parity made some words in their error strings plural (but not consistently so ;)), quantities change to disallow leading 0’s, status was added and root dropped (by some clients; some backfilled, some did something else)…",
+        "created_at": "2023-07-15T13:41:51.464000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ricmoo",
+        "category": "general",
+        "parent": "",
+        "content": "I usually find out when people say “blah stopped working”. :p",
+        "created_at": "2023-07-15T13:43:12.940000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I think the goal is to have the execution APIs become cannon for the JSON-RPC API, but at the moment it is basically a handful of people filling in one client's (or another's) behavior.  The hope is that we can use it to start to figure out where clients differ and eventually it will become authoritative.",
+        "created_at": "2023-07-15T13:43:24.859000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "That being said, I haven't followed that repo closely so perhaps it has made it closer to that goal than when I last looked into it.",
+        "created_at": "2023-07-15T13:43:42.874000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ricmoo",
+        "category": "general",
+        "parent": "",
+        "content": "Cool. I’m “watching” it then. Hopefully it will help me in the future. 😉",
+        "created_at": "2023-07-15T13:44:35.359000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I definitely encourage all client and library developers to watch it!  That is probably the best way to get quick feedback on changes.",
+        "created_at": "2023-07-15T13:44:58.328000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "The spec is canonical.",
+        "created_at": "2023-07-15T13:48:59.748000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "The tests are filled by one client, but we run them on all clients and also observe the results",
+        "created_at": "2023-07-15T13:49:18.781000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "The issue with `yParity` is pretty interesting because it has been there ever since access list transactions were added",
+        "created_at": "2023-07-15T13:50:11.261000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "Just goes to show people do not seem to need tx signature values in JSON",
+        "created_at": "2023-07-15T13:50:44.391000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "Or rather, nobody actually cared to check if the spec is being followed re. `v` and `yParity`",
+        "created_at": "2023-07-15T13:51:26.136000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@543900561460822016\u003e I'm wondering why this wasn't caught in rpctestgen? it's supposed to validate the test outputs against the spec JSON schema",
+        "created_at": "2023-07-15T13:51:49.189000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "do we even have tests for transaction objects in rpc-compat?",
+        "created_at": "2023-07-15T13:52:27.221000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Before the spec can become canonical, there should be a discussion on what the spec should actually contain.  Again, I have been a bit out of the loop lately but back when the repository was created it was just populated by a couple of people manually by looking at what a subset of clients currently did.  At the time, not all clients were investigated and no discussion happened around what behavior is \"correct\".  It is certainly possible that the situation has improved since then, and I would be curious to know if it has!",
+        "created_at": "2023-07-15T13:55:18.480000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Libraries like Ethers go to quite a bit of trouble to try to normalize the output of the different clients, so a lot of users may not even realize the clients are returning different values.",
+        "created_at": "2023-07-15T13:56:04.316000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "So here is the thing. Instead of arguing, we have taken the practical approach of seeing what the subset of APIs supported by clients is, and have taken this as the starting point for the spec. For the  `eth_` namespace, the spec is pretty much complete. For other namespaces, it is not complete.",
+        "created_at": "2023-07-15T13:57:39.096000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "If we would've tried to battle it out in theory, nothing would ever be produced.",
+        "created_at": "2023-07-15T13:58:11.623000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I agree that using an existing implementation as a starting point is a great idea!  My only contention here is that we shouldn't be asserting that \"what \u003cthe client the spec was derived from\u003e does is canonical\".",
+        "created_at": "2023-07-15T13:58:22.758000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "But this is not what we are doing at all.",
+        "created_at": "2023-07-15T13:58:38.808000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "When we encounter a difference, we should discuss that difference and then decide what the *right* way is and then canonize that in the spec.",
+        "created_at": "2023-07-15T13:58:54.383000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "The spec has been hand-edited to match EIPs and multiple client's behavior",
+        "created_at": "2023-07-15T13:59:00.004000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "It is not 'derived from a single client'",
+        "created_at": "2023-07-15T13:59:14.478000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Originally it was, but perhaps the situation has improved since then.",
+        "created_at": "2023-07-15T13:59:37.481000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "You can see it with this issue, the spec says clearly that transactions should have `yParity` even though geth does not have it.",
+        "created_at": "2023-07-15T13:59:50.830000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "So it was not derived from geth for sure",
+        "created_at": "2023-07-15T14:00:02.607000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "rubo2",
+        "category": "general",
+        "parent": "",
+        "content": "to keep end-users happy and have the latest nethermind work with prysm, looks like we'll have to temporarily add the `v` back as i'm not sure how long the geth/prysm fix is gonna take. not saying any other potential issues with other consensus clients... although this is not what we'd like to do, people want things just to work",
+        "created_at": "2023-07-15T15:47:36.338000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ryanleeschneider",
+        "category": "general",
+        "parent": "",
+        "content": "While everyone is focused on this general topic is like to highlight another “gotcha” with the execution-apis: the schemas don’t really say anything about the semantics of input params (and fields but that’s a lesser issue). For example it’s unclear which RPCs should support non-canonical block hashes so my guess is clients behave differently for these.",
+        "created_at": "2023-07-15T19:34:06.071000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "highdensitydevices",
+        "category": "general",
+        "parent": "",
+        "content": "Probably too soon to ask, but is one to assume for the validators that run both GETH and Prysm that they should wait and update both at the same time or at the least update Prysm first? My thinking is if Geth clients update and then start returning `yParity` values the non updated Prysm clients will reject them.",
+        "created_at": "2023-07-15T22:38:13.235000+00:00",
+        "attachments": null
+    }
+]

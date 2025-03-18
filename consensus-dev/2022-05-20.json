@@ -1,0 +1,322 @@
+[
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Regarding running fork choice and on_tick prior to creating a block proposal, there's an interesting corner case when you consider the beacon node vs validator client split.  If the clocks are even just slightly out of sync, the validator client may request the BN create a block just before the start of the slot the block is for. The beacon node now needs to update its state to transition into the next slot even though it may not actually see it as started yet.\nHow are other clients handling this? Do you trust the VC (seems like a bad idea) or do you just delay responding until the slot starts? or do you reject the request as too early? In Teku we've always allowed a little time tolerance when creating a new block but this is introducing some new side effects.",
+        "created_at": "2022-05-20T03:24:48.515000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "general",
+        "parent": "",
+        "content": "Prysm is \"passive\" at updating the state slot. It only updates the state slot when receiving beacon chain objects or performing validator duties concerning the wall time. For us, `on_tick` is just to reset the proposer boost and update the justified checkpoint. We have a lock within `on_tick` to defend against race conditions while proposing could happen in parallel",
+        "created_at": "2022-05-20T03:50:14.865000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah but when we call to process attestations (which we will on proposals now) they won't be processed if the clock is off",
+        "created_at": "2022-05-20T03:51:37.619000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Right so if the VC calls early it essentially doesn't get fork choice run prior to its proposal?",
+        "created_at": "2022-05-20T03:52:16.793000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "But this only affects vc running on separate systems right?",
+        "created_at": "2022-05-20T03:52:36.931000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Depends on how you manage time.  It sounds like for Prysm that would be true.  For Teku the beacon node still actually gets tick events to drive time so it can be 500ms behind - we'd like to remove that but it's there for now.",
+        "created_at": "2022-05-20T03:53:42.262000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "general",
+        "parent": "",
+        "content": "We do have a 500ms buffer as well",
+        "created_at": "2022-05-20T03:55:04.103000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@602753420033785856\u003e and I have just been working on this in Lighthouse. We've decided to:\n\n- 500ms before the start of the slot (aka gossip clock disparity), we artificially push fork choice into the next slot and then compute the head. We then leave it \"time warped\" in to the next slot, which is technically off-spec.\n- Call fork choice before producing a block at whatever slot fork choice happens to be at.\n\nThe reason we do the 500ms early advancement is since protoarray tends to run slowly on the first call and then quickly on the second. Especially after a epoch transition. We've chosen 500ms since it is the longest we've seen fork choice take on acceptably crap hardware and because it's also within the gossip clock disparity.",
+        "created_at": "2022-05-20T03:57:38.762000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Going off-spec here doesn't feel nice but we need to do *something* to try and prevent late blocks caused by fork choice. Staying within the gossip disparity makes it feel more reasonable.",
+        "created_at": "2022-05-20T03:59:14.455000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "We will also make any block production wait until that 500ms fork choice run completes (with a timeout of 250ms).",
+        "created_at": "2022-05-20T04:00:01.347000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Due to the gossip clock disparity (not necessarily an active effort), Lighthouse will allow API users to produce blocks 500ms early. Any earlier and they'll get an error.\n\nSo, if a VC tries to produce a block 500ms early in Lighthouse, they'll *usually* end up building atop a fork choice that thinks it's in the same slot as the block being produced (aka the next slot). If they hit the timeout they might end up building atop the fork choice view from slot prior to the block being produced (aka the current slot). That being said, it's likely that an upcoming refactor to the way we do locking/mutexing in Lighthouse will force any block being produced to wait until fork choice has finished be computed from the perspective of the \"next slot\".",
+        "created_at": "2022-05-20T04:03:07.414000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah I can see how that makes sense. I think the easiest option in Teku would be to make all block creation wait until the fork choice for the slot runs. We could tighten up the tolerance on creating \"future\" blocks and then the BN can still trigger the fork choice slot transition. I'm not against \"cheating\" and running it a little early since aggregates usually arrive quite quickly but it is possible we'd not include some aggregates that we should include.  That's to the detriment of our block creation though so seems like a reasonable trade off - tiny increase in chance our block is orphaned for building on the wrong parent, but get the block out slightly faster.",
+        "created_at": "2022-05-20T04:06:55.175000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Do you have any concerns about the fork choice `get_head` call delaying blocks?",
+        "created_at": "2022-05-20T04:07:49.578000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I understood from Paul's message that they run forkchoice twice, so you wouldn't risk not including some aggregates",
+        "created_at": "2022-05-20T04:08:09.886000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah I'm uncomfortable about including anything that slows down block proposals. I'm pleasantly surprised the merge actually works to be honest - I was expecting to drown in late blocks.",
+        "created_at": "2022-05-20T04:09:43.089000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e  I'm pleasantly surprised the merge actually works to be honest\nI know the feels 😄",
+        "created_at": "2022-05-20T04:10:15.764000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "But you don't run it twice before creating the block surely? You'd pick up those aggregates before attesting in the slot but not before creating the block right?",
+        "created_at": "2022-05-20T04:10:36.150000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The concern of going off spec here is that you are for a little time changing the current view of the head state using information of the current slot. I can't really see anything against it now, specially if you run again before actually proposing. To me this is literally a precompute with perhaps some weird edge case if an API caller requests head right at the end of the slot.",
+        "created_at": "2022-05-20T04:10:42.624000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "We are running fork choice once at -500ms and then once when we produce the block.",
+        "created_at": "2022-05-20T04:11:04.983000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Right, the second run is faster",
+        "created_at": "2022-05-20T04:11:24.715000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "ah ok, interesting.",
+        "created_at": "2022-05-20T04:11:27.092000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, we're also in the same boat regarding it being weird but not obviously dangerous. We're going to get the view of the next slot in the last 1/2 second of the current slot. It seems a bit odd, but probably not really going to be of concern to users. They already need to deal with 500ms of weirdness due to the gossip clock, anyway.",
+        "created_at": "2022-05-20T04:12:52.838000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Same here, but that's in part why I suspect that these optimisations may be useless, we won't really have a gauge about late blocks until the mev people start actually testing in a public setting. Optimizing the few milliseconds that forkchoice takes before producing a block may be irrelevant if the payload takes seconds to come",
+        "created_at": "2022-05-20T04:38:08.069000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "You could also argue that you can't request a payload until you know the head of the chain and if that payload is going to take seconds then it's all the more important that fork choice doesn't delay the process.",
+        "created_at": "2022-05-20T04:39:42.092000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah I was going to say that.  The interesting wrinkle is that we do request the payload before this fork choice run - as part of the call to prepare payload.  This run would effectively invalidate that work if it then selected a different block.",
+        "created_at": "2022-05-20T04:40:43.617000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Which I think is still the right thing to do - the EL won't have any time to prepare a block so it likely winds up with no transactions but that's still better than a block we know is going to be orphaned.",
+        "created_at": "2022-05-20T04:41:36.509000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "The fact that fork choice can suddenly swap its head based on the slot clock is something that Michael and I have been talking about regarding short payload preparation times. It's unfortunate that \"ungating\" attestations from the previous slot and also updating justification will happen right at the start of the slot and could potentially invalidate a block preparation. I'm not sure that this attack surface is very large though, we're doing some more thinking about it.",
+        "created_at": "2022-05-20T04:43:27.006000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I'll get some benchmarks tomorrow, I'm not against running 500ms as you guys, I think it's a good idea. Just that I had in my mind that forkchoice would be much faster, orders of magnitude faster than that. You're counting processing of attestations in your timing, this is done in a separate routine in prysm. But if it turns out that it's taking that long then I think it's reasonable to process attestations twice, at 11.5 and then again at 0",
+        "created_at": "2022-05-20T04:43:55.334000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "It seems that the pattern we're seeing is that every time fork choice does something in a step-wise manner, a metaphorical puppy dies.",
+        "created_at": "2022-05-20T04:44:22.882000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "I think what burns us the most is the balances changes after justification. I'm not certain, but I think that's where the long runtimes come from.",
+        "created_at": "2022-05-20T04:45:18.519000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I did think about this for a sufficiently large and sophisticated actor that holds many attestations on N and knows it's proposing at N+2 it may be worth trying to induce this change",
+        "created_at": "2022-05-20T04:46:53.304000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I don't actually know if the fork choice run is going to be a problem for us, but adding anything makes me nervous so once I get things working on the slot boundary I'll get some measurements of the cost and go from there.  We did just recently change how we handle deferring attestations from the current slot which made the significantly cheaper to apply, but I suspect actually adjusting the protoarray weights may still take longer than I'd like.",
+        "created_at": "2022-05-20T04:47:09.572000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Currently, validator spec defines `prepare_execution_payload` method with the following note:\n\u003e Note: It is recommended for a validator to call `prepare_execution_payload` as soon as input parameters become known, and make subsequent calls to this function when any of these parameters gets updated.\n\nThis method call implies knowledge of a slot where a block is being proposed and accepts `suggestedFeeRecipient` as a parameter.\n\nNot sure if we can add beacon-API call to the spec, because VC/BN separation is implementation detail that is out of the scope of the spec",
+        "created_at": "2022-05-20T08:22:18.523000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Considering this, shouldn't we trigger fork choice even earlier than 0.5s (2s probably, in the middle of aggregates gossip) in attempt to predict whether the head is gonna change after attestation from current slot are applied. This may inform the build process earlier and give enough time for EL to prepare a payload if the head is about to change at the very beginning of the next slot. \n\nIt could be kind of dry run but from previous conversations I can conclude that dry run could be very difficult to implement because attestations and justification could have to be rolled back.",
+        "created_at": "2022-05-20T12:05:16.579000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "What is the rationale behind applying attestations starting from the next slot?",
+        "created_at": "2022-05-20T12:21:41.264000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "One thing come to my mind is preventing current slot attestations that have come from the network from having an impact on the process of producing an attestation by local validator. I am wondering if there are any other reasons?",
+        "created_at": "2022-05-20T12:25:02.183000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I am seeing numbers very different from what we're talking here. I just benchmarked in my little NUC the time it takes to run forkchoice for us: we divide this process in two separate routines, one that just simply feeds attestations to forkchoice, and another that recomputes the node weights and gives the current head. We are averaging 12ms in the first one and 15ms in the second one for a total of 27ms. This is in a box that runs only two validators but the head computation is independent of the number of attestations processed so only the first number can change.  \n\nIncidentally, as a form of advertising: you may really want to consider using our hashing library. We shipped it in our latest releases and I am using it in my mainnet node (this little NUC), I went from 20 bad head votes/day per validator to 3-5 bad head votes/day per validator, consistently, and verified a few times it was 100% of the time on late blocks. Batch block processing has been cut literally in half (so init Sync is faster) and we are currently using this **only** in hashing the beacon state and not on beacon blocks. We are impressed by the numbers so are rushing to apply this to blocks as well cause hashing of transactions will be relevant in block processing. I want to get adoption of this library cause if at least a few teams use it there's some chance that it continues being maintained. I've been in touch with \u003c@602753420033785856\u003e, and will ping \u003c@449019668296892420\u003e to try to convince Nimbus.",
+        "created_at": "2022-05-20T12:50:35.103000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I suspect that this can be a spec implementation detail. The way this check is enforced currently on `validate_on_attestation` is \n```python\n    # Attestations can only affect the fork choice of subsequent slots.\n    # Delay consideration in the fork choice until their slot is in the past.\n    assert get_current_slot(store) \u003e= attestation.data.slot + 1\n```\nChanging that `1` for a `0` would indeed be dangerous since validators would affect the current head with votes that can only be included in the future. But if we change that assertion to a time based assertion as the one LightHouse is doing, I don't really see any dangers.",
+        "created_at": "2022-05-20T12:59:00.166000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "yeah i don't think we want to bring in the beacon APIs and as long as it is clear what is possible here then we are fine. I don't think this is super clear just from reading the validator specs but it may be ok enough",
+        "created_at": "2022-05-20T15:57:55.731000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "I'm writing up release notes for consensus-specs `v1.2.0-rc.1` which is the near-frozen spec to be run in Ropsten.\n\nPlease leave any final notes/review here ***TODAY*** \nhttps://github.com/ethereum/consensus-specs/pull/2896\n\nrelease scheduled for tomorrow morning",
+        "created_at": "2022-05-20T19:38:32.070000+00:00",
+        "attachments": null
+    }
+]

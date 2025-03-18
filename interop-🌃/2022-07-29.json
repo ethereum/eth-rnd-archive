@@ -1,0 +1,298 @@
+[
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@340345049063882753\u003e I have seen you a couple of times mention that Teku sends fcu on the terminal block to ensure they'll be able to propose the merge block. We don't do this, should we? I just don't know the reason this would be needed and I'm lazy enough that I'm tempted to ask \u003c@199561711278227457\u003e if there are statistics of clients missing on proposing the merge block to find out if Prysm has or hasn't proposed regularly",
+        "created_at": "2022-07-29T00:09:14.110000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "We don't even track the ttd block that's why I'm asking, it will require some work to do this",
+        "created_at": "2022-07-29T00:10:12.945000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "minor correction: it's not so we don't track ttd block, we don't retrospectively verify the block if that's synced through optimistically",
+        "created_at": "2022-07-29T00:12:16.298000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "LH also sends a fcU with to the terminal block so the EL can prepare a payload. It's pretty awkward and I'm not sure how likely it is to cause *actual* problems if that doesn't happen.",
+        "created_at": "2022-07-29T00:12:28.984000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "The only benefit is that you can prepare the block in advance right?",
+        "created_at": "2022-07-29T00:12:57.181000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hmm, I think so. There might be some edge-cases with ELs; explicitly telling then that you prefer *this* transition block seems helpful. However I'm just speculating.\n\nThe main driver for me was that the transition block is kinda special and I thought that if Lighthouse produced it then I wanted it to do a really good job of it 😅",
+        "created_at": "2022-07-29T00:16:34.065000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "We're in the final stages of implementing this retrospective verification now. Any transition blocks that are synced optimistically are put in the DB. Then we go through that column in the DB every once in a while and try to verify them. If we find that one is justified and invalid then we explode.",
+        "created_at": "2022-07-29T00:20:05.446000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ah thanks, that makes sense. We've been contemplating about implementing it for a while. Still undecided on which is the best approach",
+        "created_at": "2022-07-29T00:22:59.670000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'd have thought it was required to be able to propose the actual merge block.  I'm a little abstracted from the engine API so may have this wrong but my understanding is:\n\n* To get an execution payload from the EL, we need a payload ID\n* To get a payload ID we send a fCU with payload attributes included. That fCU would normally indicate what the head block is which would be the TTD block. I guess it might work if you sent fCU with payload attributes and a zero hash for the head block hash then the EL just picks the head to build on.\n\nTeku is a bit overeager on this and will send fCU with the terminal block we found even if we aren't scheduled to propose. There's no real reason to do that and it means we likely pick the first terminal block we see even if later one winds up with a higher total difficulty but that seems like a fairly arbitrary selection as we switch to fork choice and we'll happily reorg if someone else produces the merge block with a different terminal block.",
+        "created_at": "2022-07-29T00:28:31.209000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "\"fairly arbitrary selection\" is probably understating it - we definitely should pick the block with the higher TD but it's picking between two sibling blocks and there's still a timing factor between when the EL receives the block and when Teku then notices and then when the fCU kicks in so there's a reasonable amount of time for an alternative to show up.",
+        "created_at": "2022-07-29T00:30:06.656000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "We don't track it: we only go back after the fact and check that it was the right TTD, but perhaps I'm getting even that wrong 😂",
+        "created_at": "2022-07-29T00:34:16.339000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thanks for this. I'll chew on this tomorrow to see if I understand it.   A first reading tells me that at least you get a few seconds head notice by calling FCU as soon as you notice the TD.",
+        "created_at": "2022-07-29T00:44:47.707000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Teku records the first non-default execution block that's finalized in the db so we can find and validate is easily after the fact.  I'm unclear how important the check is but the EL won't have performed that check if we optimistically synced the block so seems safer to have it than not. So far the only thing its done is find a bug in Geth's TD calculation... 🙂",
+        "created_at": "2022-07-29T00:47:11.446000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "Following up on this, can we expect ELs to open the auth port before the ttd is set ? Like paul, it would allow our users to get their setups ready earlier rather than wait till a TTD is set.",
+        "created_at": "2022-07-29T03:48:51.665000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "Testing",
+        "parent": "",
+        "content": "Geth starting from ~~yesterday(?)'s~~ wednesday's release opens the auth port even if the ttd is not set",
+        "created_at": "2022-07-29T08:01:35.482000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "Testing",
+        "parent": "",
+        "content": "Do we have some form of a heartbeat from the beacon client towards the exec client *before* the merge?",
+        "created_at": "2022-07-29T08:03:24.491000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'd like to add a warning to Geth if you're just heading towards the merge but there's no beacon client running",
+        "created_at": "2022-07-29T08:03:45.923000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "Testing",
+        "parent": "",
+        "content": "After the merge, that warning is tied to a 1m timeout after the last beacon update",
+        "created_at": "2022-07-29T08:03:59.447000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "Testing",
+        "parent": "",
+        "content": "But before the merge, I'm not sure if there's any recurring message sent from the beacon client",
+        "created_at": "2022-07-29T08:04:21.466000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "Testing",
+        "parent": "",
+        "content": "I could hook into the transition exchange message, but I think that's only done once per run, not regularly",
+        "created_at": "2022-07-29T08:05:10.833000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "No exchange transition configuration is supposed to be called regularly afaik",
+        "created_at": "2022-07-29T08:06:45.121000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "Testing",
+        "parent": "",
+        "content": "`No exchange [...]`, or `No \u003ccomma\u003e exchange [...]` ? 😛",
+        "created_at": "2022-07-29T08:08:06.728000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "no, eschange should happen n a regular basis :D",
+        "created_at": "2022-07-29T08:09:12.218000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "Testing",
+        "parent": "",
+        "content": "ty",
+        "created_at": "2022-07-29T08:22:31.072000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "great, this would be perfect for us then. Yeap, as marius mentioned transition config exchange should happen regularly between CL and EL",
+        "created_at": "2022-07-29T08:23:32.015000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "In general case yes, it would double check after EL on picking the right block wrt TTD. But `validate_merge_block` does also include TBH override case and validates `TERMINAL_BLOCK_HASH_ACTIVATION_EPOCH` parameter, though, merge block validation in TBH override case does not require anything from EL and can be run over optimistic block",
+        "created_at": "2022-07-29T08:47:11.157000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "If CL doesn't send `fcU` with head set to a terminal block and other payload attributes then the build process won't start and CL won't be able to propose a merge transition block",
+        "created_at": "2022-07-29T08:48:33.800000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Perhaps I'm reading our own code wrong but I don't think we do this. And we run e2e constantly going through the merge so I would suppose that Prysm not proposing the merge block would have popped up already",
+        "created_at": "2022-07-29T11:15:19.475000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, this would also occur on Hive",
+        "created_at": "2022-07-29T11:29:10.709000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "I’m guessing the EL is being nice and using its current head for you if you don’t specify one but ask it to create a block. I didn’t think that was part of the spec but it’s certainly quite reasonable behaviour. And I guess all ELs do it if it’s not showing up in hive (or those tests are failing and this is why…)",
+        "created_at": "2022-07-29T21:14:37.446000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "It is somewhat hard to specify this on the CL given that the TTD block could be considered outside of its realm. Everything in the current spec tells us to validate when we see an embedded block that the TTD was right. I kind of agree that it would be a minor change for us to track difficulty and if we reach the threshold start sending FCUs. But it seems simpler to specify on the El that a getpayload has to be built on the current head",
+        "created_at": "2022-07-29T22:11:09.728000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "How do you know when to start asking the EL for a payload though if you aren't monitoring its chain head to see when it reaches TTD?",
+        "created_at": "2022-07-29T22:13:48.489000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Tracking the EL chain isn't really out of scope for the CL given we already do it to include deposits.",
+        "created_at": "2022-07-29T22:14:08.205000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I agree with this, I'm not saying it's impossible to specify, just seems harder",
+        "created_at": "2022-07-29T22:14:38.992000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "These are different paths, we call fcu on events that may change head, and call to get a payload in events that require us to propose",
+        "created_at": "2022-07-29T22:15:33.318000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "If we change head to a non execution block then we don't call FCU",
+        "created_at": "2022-07-29T22:16:07.320000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ah but actually I got this wrong the whole time. With one of the spec changed we do call FCU on block proposal cause it would have missed the cache hit at the beginning of this function \u003chttps://github.com/prysmaticlabs/prysm/blob/5005fbfe717e09befb2525fecfe45f93108081a1/beacon-chain/rpc/prysm/v1alpha1/validator/proposer_execution_payload.go#L147\u003e. I apologize for the noise, at least this clarified this for me",
+        "created_at": "2022-07-29T22:25:54.112000+00:00",
+        "attachments": null
+    }
+]

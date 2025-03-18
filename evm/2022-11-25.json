@@ -1,0 +1,354 @@
+[
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "As far as I can tell, you can safely ignore and discard the returned `max_stack_height`.  The consensus rule requires `validate_function`  to be run but only cares about \"did it throw an exception?\".  In other words, the important result is boolean not integer.  Perhaps the EIP should clarify this.\n\nPerhaps the function should return a boolean or error to make it more obvious what the important part for consensus is.  `max_stack_height` is just a handy value implementations may find useful but can ignore.\n\nNot only that, it's not a value implementations should trust from the network.  A wrong value is likely to crash any implementation that uses it seriously it to skip stack bounds checks to boost performance.  (If your implementation has array bounds checks to prevent crashes on stack access, then you don't need separate EVM stack overflow checks anyway, as you can use those array bounds checks.)  Implementations must do the analysis locally for this sort of value to be useful for performance optimisation.\n\nFor these reasons, I think storing and transmitting it in the contract EOF for everyone seems like imposed overhead. (1) Implementations should be able to choose between optimising storage space, or optimising speed.  (2) They cannot trust the value in the contract anyway.  (3) Implementations are free to store stack analysis results alongside EOF code cheaply (as extra bytes in the same db record) if they find it useful - the same way as they are free to store any other kind of analysis or metadata unique to the implementation (e.g. JIT code has been suggested for hot contracts, and I recently suggested value range analysis).",
+        "created_at": "2022-11-25T12:41:23.975000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "You are mistaken , unfortunately. You cannot ignore/discard it, which is something the eip is not really explicit about. \n\nInternally, a function may have two paths, one which uses the full max stack depth N, one which does not.  If you ignore the 'declared' max value N, then you can successfully execute a call which would fail if you preemptively checked it against N.",
+        "created_at": "2022-11-25T12:46:06.341000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think this needs to be clarified in the eip",
+        "created_at": "2022-11-25T12:47:04.682000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "From EIP-5450 currently:\n\u003e In the current proposal stack overflow checks are unchanged (i.e. are done for every instruction). However, we can provide more efficient variant where stack overflow check is performed only in CALLF instruction and uses called function’s max_stack_height information for this. This decreases flexibility of an EVM program because max_stack_height corresponds to the worst-case control-flow path in the function. Moreover, the max_stack_height computed during validation must be stored alongside the code. This can be in the EOF itself or in implementation-defined format.",
+        "created_at": "2022-11-25T12:47:18.568000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If that's to be changed, then yes the value must be used and stored.",
+        "created_at": "2022-11-25T12:47:57.952000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Oh wait. So which one is it that is currently on the table, \u003c@425274498732916736\u003e ?",
+        "created_at": "2022-11-25T12:48:21.252000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We discussed this exact thing some weeks ago, and Pawel alerted me to my misunderstanding, which was exactly the same idea you just mentioned:)",
+        "created_at": "2022-11-25T12:49:56.483000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I dispute \"more efficient\" in that wording... It's a trade-off, some things are made less efficient by it, i.e. needing space to store the value, and it doesn't allow stack bounds checks to be fully removed from the EVM interpreter anyway - low level array bounds checks have to stay, because the value can't be trusted from the network.",
+        "created_at": "2022-11-25T12:50:31.841000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "As far as I can tell (and I'd welcome being shown otherwise), the fastest plausible EVM interpreter with no stack bounds checks has to do its own, local analysis separate from any value transmitted with the EOF (or it hasn't really eliminated the bounds checks in the interpreter).  There's probably some magic involving zero-knowledge proofs which would allow local analysis to be skipped, but we aren't going there! 🙂",
+        "created_at": "2022-11-25T12:57:44.784000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e because the value can't be trusted from the network. \nI don't understand this though.. If it's in the EOF envelope, it's been validated and can be trusted.",
+        "created_at": "2022-11-25T12:58:53.248000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Are you talking about validation of the EOF header which you said you didn't like, \"every contract execution will have to do a full verification of every eof-contract it encounters\", or validation as in the Eth consensus mechanism?",
+        "created_at": "2022-11-25T13:05:44.980000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Well, \n- If the `maxdepth` is _not_ part of state (the trie), then a newly synced node does not have it, and needs to do a full verification every time it executes an eof contract, \n- If the `maxdepth` _is_ part of the state, then a newly synced node has it, and can use it from the get-go. \n\nIf it can be ignored, then ... things start to not make sense again... 🙂",
+        "created_at": "2022-11-25T13:08:31.466000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The idea is to put this value in the EOF. During validation of a code section you compute it and check if it matches the value in the header. Then during execution you can trust stack underflow nor overflow will happen in a function.",
+        "created_at": "2022-11-25T13:09:51.171000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "None of the EIP variants reflect this because I just don't have time to update it yet.",
+        "created_at": "2022-11-25T13:10:12.402000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It depends on your trust model. Currently we treat network data as trusted by validation to be the \"true\", consensus state of the network.  But we still don't let network data cause arbitrary local code execution vulnerabilities, i.e. crashes, undefined behaviour, etc.  Eliminating all EVM interpreter stack bounds checks and trusting `max_stack_height` because it's part of the consensus network state is roughly equivalent to being willing to download arbitrary x86 code and just run it without a sandbox, because it's been signed by the network.",
+        "created_at": "2022-11-25T13:10:26.802000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "You're mixing different areas of concern here. We're talking about how the evm behaves, not how the evm implementation manages memory on the host system.",
+        "created_at": "2022-11-25T13:11:16.196000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The areas are linked by virtue of the claim to use `max_stack_depth` to eliminate bounds checks to improve performance.",
+        "created_at": "2022-11-25T13:11:57.368000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, but those are evm stack depth, not the actual host `stack`",
+        "created_at": "2022-11-25T13:12:31.152000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "if that goes wrong, you'll have some sort of interpreted stack overflow, not an actual memory unsafe stack pop -- at least in go-ethereum, which is an interpreted virtual machine.",
+        "created_at": "2022-11-25T13:13:27.931000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Sure, and in that case (go-ethereum) you haven't eliminated the stack overflow checks, you've just deferred them to the Go runtime, rendering the claim that `max_stack_depth` lets you eliminate the bounds checks for performance not really true.  I have no objection on the grounds of security if the overflow checks are being left in 🙂",
+        "created_at": "2022-11-25T13:15:44.190000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e rendering the claim that max_stack_depth lets you eliminate the bounds checks for performance not really true\n\nNo, it is true. The interpreter loop can skip the check on the evm-stack depth. But the evm stack is an abstraction which is actually made of from something else, not the raw machine call stack. There will always be bounds-check and various sanity checks to ensure that the EVM implementation is memory safe",
+        "created_at": "2022-11-25T13:18:07.184000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I realise you're thinking \"but we can remove the stack overflow check from the Go code, as the EVM stack depth check is not the same as host `stack`\", and this is true, there are effectively two bounds checks taking place not one, and the change will allow it to be reduced to one.  `stack` is an array on the host's heap, btw, not the machine stack.",
+        "created_at": "2022-11-25T13:20:21.374000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This seems to be accurate: you can remove the programmer's check, but Go's check will stay.",
+        "created_at": "2022-11-25T13:21:17.664000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "On the other hand, if a programmer can cooperate with Go compiler to asure it the array out-of-bounds access cannot happen you could have single check in the legacy EVM.",
+        "created_at": "2022-11-25T13:22:25.012000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Practically speaking: https://github.com/ethereum/go-ethereum/blob/master/core/vm/interpreter.go#L187 -- these lines can be removed. \nIf we were to push too many items, more than 1024: https://github.com/ethereum/go-ethereum/blob/master/core/vm/stack.go#L54 -- this would not pop, just continue running (breaking consensus rules, but not memory unsafe)",
+        "created_at": "2022-11-25T13:22:34.555000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Which raises the question of why bother with the programmer's check, as you can set `stack` size appropriately and let Go's check do the job.  (I don't know Go well, maybe it just crashes instead of letting you catch the array bounds overflow.  In which case, that's still a crash and I rest my case ;-))",
+        "created_at": "2022-11-25T13:22:38.951000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Because it's an interpreter which models the evm as abstractions. The `stack` is not a fixed-size array of pointers, it's modelled by a dynamically-sized slice of 256-bit ints. Anyway, let's not dive too deeply .... ?",
+        "created_at": "2022-11-25T13:24:57.305000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Anyway, tangentially: I much prefer a good old crash over \"continue but break consensus\". It's much better for the network, easier to analyze, no wrong sidechains, easier to get people to notice and upgrade  etc.",
+        "created_at": "2022-11-25T13:28:20.204000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Sure, I didn't want to go into gory details particularly.  Then I agree.  `max_stack_depth` lets EVM interpreters which have apparently _duplicate_ bound checks due to their internal abstraction, become a little more efficient.",
+        "created_at": "2022-11-25T13:29:35.808000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "My point regarding local validation is for any hypothetical heavily-optimised EVM interpreter, which I thought the EIP was alluding to (because of talk of JIT etc which is brought up from time to time in this context).  For those, to _completely_ eliminate bounds checks is actually possible, but only safe if the calculated `max_stack_depth` is safe in the appropriate trust model.  For now, that means _those implementations_ would have to perform local analysis on each contract they execute.",
+        "created_at": "2022-11-25T13:31:03.424000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I considered this optimization for Geth. You can catch a panic but only using \"deferred\" in some other goroutine. Maybe you can make it work, but looks risky at least.",
+        "created_at": "2022-11-25T13:31:37.938000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "You can catch a panic, yes, but what do do with it afterwards - if it happens within the interpreter? In many cases, it's better to let the panic kill the node. (We do catch panics that occur due to rpc calls, for example)",
+        "created_at": "2022-11-25T13:32:51.699000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "You would need to convert the panic into a EVM \"stack overflow/underflow\" error. Not sure if this is possible or practical. I stopped at the idea.",
+        "created_at": "2022-11-25T13:34:36.779000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "(Also, I'm not sure about Go, but some other languages which normally have array bounds checks will let you turn it off in particular cases.  For the EVM that's a micro-optimisation for stack access which is safe, if the EOF stack validation is performed locally.  So if that's not done in Geth it might still be a motivation in some of the others.)",
+        "created_at": "2022-11-25T13:34:36.853000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Or C++. YOLO",
+        "created_at": "2022-11-25T13:44:11.677000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I've missed this discussion, it being a family holiday here.  Had small children and dogs climbing over me much of the day 🙂",
+        "created_at": "2022-11-25T13:48:51.964000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Will be driving home today, will try to catch up.",
+        "created_at": "2022-11-25T13:49:12.609000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "(Btw, I honestly thought the texts about being able to eliminate stack overflow checks meant removing the low-level ones as well, i.e. all of them.  Since the difference between eliminating the \"programmer's check\" and the \"low-level check\" relates to the _trust \u0026 security model_ and whether it's useful to store `max_stack_depth` in the EOF code _at some cost to storage space_ or calculate it, perhaps that should be discussed somewhere in the EIP.  But I'm not sure how to do so without confusing half the readers!  Also, C++ EVM implementors should beware, that it's insecure for them to eliminate the programmer's check while trusting the EOF-stored value, the same way as other languages do it.  And I know some EL code gets written by cloning the implementation from other languages without thinking too hard about subtle issues.  So this security point relating to EOF-stored values is subtle but maybe not insignificant.)",
+        "created_at": "2022-11-25T13:49:35.113000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm currently working on improved validation algo. When finished I will update the EIP. Then we should definitely discuss it.",
+        "created_at": "2022-11-25T13:54:19.853000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "As of trust model, I'd probably add validation step for code loaded from disk or network (also for the code already in state). But not all people agree about it.",
+        "created_at": "2022-11-25T13:56:07.803000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e ... The Java and Wasm teams went to a lot of effort to design VMs whose code can be validated in the ways that EOF is proposing, and can be validated in linear time.\n\u003e I agree, it is certainly worth understanding why exactly those designers picked those constraints, when designing or improving a modern VM.\n\n\u003e ... I tried to look for some rationale in WebAssembly design doc but having verification seems obvious  for a VM having types ...\n\nI think most of the discussion for Wasm is buried in issue threads in the original github.  And the discussion for Java happened internally at Sun many years ago.  For Java this sort of validation is so obvious as not to need much rationale -- there is no good reason to allow ill-formed code to get through the classloader.",
+        "created_at": "2022-11-25T13:56:22.068000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e \u003c@807285075736789062\u003e Any program can be compiled to machine code in linear time in its size, regardless of constraints or even language\n\nYou are right for machines that have an indirect jump, and I hadn't considered this sort of \"transliteration\".",
+        "created_at": "2022-11-25T14:04:47.040000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I have a prototype implemented but is ugly.\n\nThis is the previous 2-pass version but the first pass (instruction validation - going in order) is merged into the second pass (control-flow analysis). So we go out-of-order but mark visited bytes as before to detect jumps into immediate bytes. The worklist (or recursion) of size `len(code) // 4` is still needed to handle `RJUMPI`. The final trick is to check for unreachable instructions by checking if we visited all bytes. Unreachable instructions are not allowed (some people wanted this requirement anyway). Therefore, if there are no unreachable instructions it means we visited and validated all of them.\n\nNew code: https://github.com/ipsilon/eof/blob/stack_validation/eips_code/eip5450.py#L290\n2-pass from the EIP: https://github.com/ethereum/EIPs/blob/c98ba59b258407fc0116385a57c5862815c26422/EIPS/eip-5450.md#reference-implementation",
+        "created_at": "2022-11-25T22:52:06.036000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Created the tracking issue: https://github.com/ethereum/pm/issues/677\n\nLet's try to do 3pm UTC then! \u003c@552133098075193354\u003e \u003c@543900561460822016\u003e can one of you add it to the calendar and set up zoom please?",
+        "created_at": "2022-11-25T22:59:23.601000+00:00",
+        "attachments": null
+    }
+]

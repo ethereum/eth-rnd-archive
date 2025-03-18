@@ -1,0 +1,154 @@
+[
+    {
+        "author": "chat-bridge",
+        "category": "general",
+        "parent": "",
+        "content": "\u003csvantemand\u003e \u003c@489217181104734219\u003e Sounds very valuable. But to be pragmatic, it would probably make sense to start with a common minimum set of metrics that all clients are expected to provide. And let every client provide metrics beyond that, which might be included in the minimum set in the future.",
+        "created_at": "2021-01-25T08:38:49.194000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "There's already https://github.com/ethereum/eth2.0-metrics which gives a basic set of metrics.  Not sure how well implemented they are.",
+        "created_at": "2021-01-25T08:52:39.202000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "per latest dev call, here are some timings for state transition function in nimbus, excluding all signature verification except deposit signatures (which we check even when replaying \"trusted\" blocks) - they also do not include what makes up the majority of processing: database pruning, networking, signature verification etc\n```\n     Average,       StdDev,          Min,          Max,      Samples,         Test\n       0.186,        0.188,        0.012,       99.561,       357262, Advance slot, non-epoch\n      14.161,        5.966,        1.099,      395.511,        11524, Advance slot, epoch\n       1.372,        4.170,        0.017,      276.401,       363345, Apply block, no slot processing\n```",
+        "created_at": "2021-01-25T10:58:28.110000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "times in `ms`, mainnet, ~363k slots",
+        "created_at": "2021-01-25T10:58:50.340000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "profiling shows the \"slowness\" in epoch processing is predominantly getting the new shuffling for the epoch (attestation \u0026 proposer) as well as having to refresh a larger part of the merkle tree",
+        "created_at": "2021-01-25T11:44:58.207000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@449019668296892420\u003e what is the shuffling time? I think shuffling of a 400.000 validators index list should equal about 1.1 seconds, if I remember the original benchmarks correctly. And technically this can be done in the background, any time, during the epoch before. And if really needed, it can be parallelized too (run ranges of shuffling rounds in parallel, and merge them at the end). So if that's implemented properly, the remaining part is just regular epoch processing and hashing, for which there exist optimizations as well. Does Nimbus have a list of already implemented optimizations?",
+        "created_at": "2021-01-25T14:27:01.788000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "Also, what's up with the super high max values, is it sometimes literally stuck for minutes? Or is that just startup or something?",
+        "created_at": "2021-01-25T14:29:19.552000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "Oh I see, it's supposed to be decimals. That's not as bad then, haha",
+        "created_at": "2021-01-25T14:30:38.276000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "\"milliseconds\" 🙂",
+        "created_at": "2021-01-25T14:31:08.145000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "the max times might be affected by the fact of my timing method: busy laptop - should probably do those fancy 95% statistics things we learned in uni, though the unfiltered value is useful to find real outliers (I found an instance of a missed cache with a totally out-of-whack max)",
+        "created_at": "2021-01-25T14:32:38.493000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "if I were to guess, maybe 10ms  to shuffle the 50k or so mainnet validators",
+        "created_at": "2021-01-25T14:33:11.537000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "\"Milliseconds\" meaning that epoch processing is 14 ms, not 14 seconds I hope?",
+        "created_at": "2021-01-25T14:34:16.558000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "yes, 14ms for `process_epoch`",
+        "created_at": "2021-01-25T14:35:24.449000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "in nimbus, that indirectly heats the cache for the block processing for the whole \"next\" epoch as well - for example, it calculates _all_ block proposers in the epoch that are used to verify the block proposer in the block",
+        "created_at": "2021-01-25T14:36:31.140000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "what's interesting though is that I found some faulty eth1 tests",
+        "created_at": "2021-01-25T14:36:50.945000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "basically, when processing a block, we call `get_beacon_proposer_index` in a number of places during block processing - in particular, we call it inside `process_block_header` which guarantees that `state.latest_block_header.proposer_index == block.proposer_index`-  later, we use `get_beacon_proposer_index` in a number of places like rewards for slashing and for block proposal - because the sequence of operations, the invariant `state.latest_block_header.proposer_index == get_beacon_proposer_index` should hold throughout all  block processing functions, but some of the tests that target specific operations like `process_slashing` have an invalid `latest_block_header.proposer_index` in the pre-state and one _must_ use `get_beacon_proposer_index` instead",
+        "created_at": "2021-01-25T14:41:37.328000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "I noticed this because I wanted to use `state.latest_block_header.proposer_index` instead of calling `get_beacon_proposer_index` which is a valid optimisation for `process_block`",
+        "created_at": "2021-01-25T14:42:36.103000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "generally, nimbus is structured a bit differently as well, with regards to the spec: we process slots/epochs separately from blocks: we first calculate a \"base state\" for a slot regardless if we have the block or not - we then use this base state to compute an epoch cache - then, iff there is a block, we apply the block - this is useful because if the first block in the epoch is skipped / reorged, we have a pristine state to start from without having to redo epoch processing",
+        "created_at": "2021-01-25T14:44:30.091000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Teku works this way too. It allows us to precompute the epoch transition prior to the epoch starting so unless the last block of the previous epoch is particularly late epoch processing is essentially free.",
+        "created_at": "2021-01-25T21:17:06.342000+00:00",
+        "attachments": null
+    }
+]

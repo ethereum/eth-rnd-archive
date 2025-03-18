@@ -1,0 +1,176 @@
+[
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003csigpaul\u003e They're passing on our end, thanks for the vectors. (re @dannyryan: so I suggest utilizing those vectors for better coverage)",
+        "created_at": "2021-09-28T00:22:46.521000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003csigpaul\u003e Some JSON vectors for the minimal execution API would be awesome, if anyone gets a chance to produce them. I can make some when I have access to an execution implementation.",
+        "created_at": "2021-09-28T00:24:21.089000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctersec\u003e 1.1.0 vectors passing for Nimbus across all of phase0/altair/merge",
+        "created_at": "2021-09-28T02:53:33.027000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e Fantastic!",
+        "created_at": "2021-09-28T02:55:54.923000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cn0ble\u003e Consensus-spec tests version is updated in the Interop spec",
+        "created_at": "2021-09-28T02:58:52.211000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "It is expected that the consensus client provides the parent payload it references to in `preparePayload`. If this is not the case then something went wrong. It either a bug in the consensus client or an outage that lead to such inconsistency between the state of the layers (consensus and execution) of a client.\n\nThe resolution of such cases depends on the strategy the consensus and execution client software choose to recover from failures. Options are as follows:\n- Any call referencing an unknown block triggers the sync process, i.e. `preparePayload` in the provided example turns execution client into the sync state, to pull missing data from the wire\n- Only `executePayload` triggers the sync. It makes sense because whatever state of the execution client is, if it's missing something then `executePayload` will reference an unknown block pretty soon\n- Execution client responding with error triggers recovery from failure procedure if such a procedure is implemented by the consensus client. For instance, consensus client may try to replay the previous block or a number of previous blocks. In addition, execution client may share an information about the head it observes to give consensus client more understanding how many blocks the execution client misses.\n\nTaking any of this option should be up to implementation. The only thing we should decided for next iteration of Engine API development is whether do we want to have a better support for recovery from failures or not. If we do then consensus client will be able to support such recovery, if we don't then the 3rd option won't work well.\n\nFor the initial interop, implementations may handle such exceptional cases in a straightforward way, just stop functioning with respective error message logged. It should aid better bugs discovery.",
+        "created_at": "2021-09-28T04:10:33.250000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "The sync process piggy backs on other messages of Engine API by default. It means that the consensus client will have to try operating as usual and track the responses it got from the execution client. Once `SYNCING` status response to `executePayload` is switched to `VALID/INVALID` the consensus client should react accordingly and switch its own status to fully synced and able to operate normally, i.e. fully verify the chain and produce blocks and attestations.\n\nThe other option could be the execution client sends a message to the consensus client once the sync process is finished. But that would require the underlying communication protocol to be *bi-directional* which is a pretty strong restriction. And doesn't seem to buy us anything as every 12 seconds there is an `executePayload` call which allows to read the state of the sync process.",
+        "created_at": "2021-09-28T04:16:03.206000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "This case is a bit tricky and leads us to another yet under designed part of Engine API which is message ordering model.\n\nYes, `forkchoiceUpdated` call has the `consensusValidated(status=\"VALID\")` semantics for any block it has a reference to. Thus, `forkchoiceUpdated` can be used to confirm the block validity wrt consensus rules.\n\nOTOH, consensus client block processing flow emits `consensusValidated(blockHash=X)` *before* `forkchoiceUpdated(headBlockHash=X)`. Missed `consensusValidated(blockHash=X)` or an emission of this call *after* `forkchoiceUpdated(headBlockHash=X)` is a failure due to either bug or outage of client software.\n\nAnd following actions depends on the message ordering model. If there is requirement that messages must be delivered (to the execution client) in the same order as they were emitted then the unexpected message ordering should be treated as an exceptional case with according reaction. If there is no strict ordering then each of the corner cases should have its own way to proceed.\n\nIn this particular case, we *may* rely on `forkchoiceUpdated` to confirm the block validity. But not every block gets referenced by `forkchoiceUpdated`, therefore, failure around `consensusValidated` potentially prevents blocks from being persisted hence the cause of it must be detected and resolved.\n\nFor the initial interop, it is recommended for clients to follow the strict message ordering and fire exceptions upon receiving unexpected messages. I believe that this way of implemented things may be easily upgraded to the final solution we will come up with around message ordering and failure recovery.",
+        "created_at": "2021-09-28T04:43:45.791000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Started writing up some test vectors for the EL clients: https://notes.ethereum.org/@9AeMAlpyQYaAAyuj47BzRw/rkwW3ceVY",
+        "created_at": "2021-09-28T14:44:21.348000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tbenr",
+        "category": "Testing",
+        "parent": "",
+        "content": "hi guys, i'm loading the latest 1.1.0 ref tests. experimenting with the genesis\\initialization for merge i noticed that the state contains phase0 as previous_fork  instead of altair fork. Is it correct?\n https://github.com/ethereum/consensus-spec-tests/blob/master/tests/minimal/merge/genesis/initialization/pyspec_tests/initialize_beacon_state_from_eth1/state.ssz_snappy",
+        "created_at": "2021-09-28T16:47:08.974000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "Schermata_2021-09-28_alle_18.43.10.png",
+                "content": "bfea10e937be571b0807122466842e3c9ea26aed18ac8ca1f1e8432690d949c4"
+            }
+        ]
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003chwwang\u003e you're right it is now pointing to phase0. I think we should fix it. (re @amphora_interop_bot: \u003ctbenr\u003ehi guys, i'm loading the latest 1.1.0 ref tests. experimenting with the genesis\\initialization for merge i noticed that the state contains phase0 as previous_fork  instead of altair fork. Is it correct?\n https://github.com/ethereum/consensus-spec-tests/blob/master/tests/minimal/merge/genesis/initialization/pyspec_tests/initialize_beacon_state_from_eth1/state.ssz_snappy\nhttps://cdn.discordapp.com/attachments/892088344438255616/892452383135768596/Schermata_2021-09-28_alle_18.43.10.png)",
+        "created_at": "2021-09-28T17:02:54.126000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tbenr",
+        "category": "Testing",
+        "parent": "",
+        "content": "in teku we are failing those tests because of that",
+        "created_at": "2021-09-28T17:07:08.447000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e yep, an error",
+        "created_at": "2021-09-28T17:17:29.447000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003chwwang\u003e I'm fixing it (waiting for CI pass) (re @hwwang: you're right it is now pointing to phase0. I think we should fix it.)",
+        "created_at": "2021-09-28T17:18:39.499000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctbenr\u003e 🤝",
+        "created_at": "2021-09-28T17:19:22.447000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003chwwang\u003e Does Teku only fail on initialize_beacon_state_from_eth1, or all state tests? If it's the later, we have to release the fixed test vectors asap. 😅",
+        "created_at": "2021-09-28T17:20:47.560000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctbenr\u003e well, we are failing on all 5 tests, but i havent checked if the previous state actually is the reason for all of them. i guess it is reasonable :)",
+        "created_at": "2021-09-28T17:22:17.428000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003ctbenr\u003e *previous fork",
+        "created_at": "2021-09-28T17:22:34.549000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e it isn’t *incorrect* to have a state that has an unexpected fork version in a noral test so I suspect all the other tests should work fine",
+        "created_at": "2021-09-28T17:22:35.156000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e On second thought, I’m not convinced what correct behaviour for this versioning is.\n* compute_domain() in process_deposit is “fork agnostic” and is *always* based on GENESIS_FORK_VERSION\n* There is no prior fork when initializing a chain so the use of ALTAIR does not immediately seem correct\n* The primary usecase of previous_version is to verify signatures from the previous fork, but there is no previous history prior to the genesis in this case\nBecause of the above, I’d argue to either initialize it to GENESIS_FORK_VERSION because deposits use this OR just initialize it to MERGE_FORK_VERSION which I think is a bit more semantically correct when looking at how the state in initialized in phase 0.\nThe altair analogue of this function uses GENESIS_FORK_VERSION so double MERGE_FORK_VERSION isn’t consistent unless we change the function in altair as well.",
+        "created_at": "2021-09-28T18:02:08.359000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e put the comment in the PR. we can discuss there",
+        "created_at": "2021-09-28T18:03:33.900000+00:00",
+        "attachments": null
+    }
+]

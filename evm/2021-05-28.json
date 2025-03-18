@@ -1,0 +1,122 @@
+[
+    {
+        "author": "roshanroshan",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Has there been any discussion/EIPs around increasing storage read/write sizes from 32 bytes to something higher (up to potentially page size of 4K)? From what I'm reading, it seems like the main reason for gas price increases has been the cost of traversing the merkle tree. A larger read/write size doesn't affect it while providing the ability to \"merge\" multiple reads/writes when they can be consecutive. For example, a big use case is contract parameters stored on-chain (like ERC20 name, decimals, symbol), there's no particular reason they need to be stored sparsely in a merkle tree if not for the small storage slot size. Not to mention, in modern systems, reads up to the page size are essentially \"free\" since the OS does reads in that size anyway (correct me if I'm wrong here).",
+        "created_at": "2021-05-28T10:58:05.174000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e Not to mention, in modern systems, reads up to the page size are essentially \"free\" since the OS does reads in that size anyway (correct me if I'm wrong here).",
+        "created_at": "2021-05-28T12:49:24.200000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The problem isn't storage costs, the problem is witness data",
+        "created_at": "2021-05-28T12:49:31.855000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "There's actually proposals to go in the other direction, charge per-chunk-accessed for *contract code*",
+        "created_at": "2021-05-28T12:49:46.769000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So we can bound the witness to ~3 MB or so",
+        "created_at": "2021-05-28T12:49:59.644000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That said, my proposal for doing this does do one other interesting thing, which is charging less for accessing storage slots that are \"beside\" each other",
+        "created_at": "2021-05-28T12:50:33.123000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So accessing 100 slots in random places might cost 100 * 2000 gas, but accessing 100 consecutive slots might only cost 2000 + 99 * 300",
+        "created_at": "2021-05-28T12:51:00.433000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!273808422753796097\u003e with the new storage layout, we talked about having account header, first section of contract bytecode, and maybe a few storage slots all be collocated within the same subsection of the trie.  This gave me the idea that we could look into adjusting the gas schedule such that the following are roughly equivalent in gas costs:\n\n- CALL to account A which touches the header **and** accesses storage or code in one place outside the header.\n- CALL to account A which touches the header **and** does a DELEGATECALL to account B which only accesses the header of account B\n\n(when I say \"header\" above, I really mean that initial section of the trie)\n\nIf this is viable, it means that we could actively encourage modular smart contract architecture which isolates certain functions as standalone contract code.",
+        "created_at": "2021-05-28T14:52:09.989000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Is that based on the hashed key? If so it does not really help the contracts to optimise for this.",
+        "created_at": "2021-05-28T14:53:29.488000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think the most significant 31 bytes of the key would be hashed, and the least significant 1 byte would not be.",
+        "created_at": "2021-05-28T14:54:47.246000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So one could put up to 256 consecutive slots? Does that pose any risk for the current trie?",
+        "created_at": "2021-05-28T15:06:19.714000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e Does that pose any risk for the current trie?\nCan you explain, not following what kind of risks this might be...",
+        "created_at": "2021-05-28T15:06:57.068000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The current trie would end up being migrated into this new layout via some not-yet-defined mechanism, maybe via state-expiry mechanisms, maybe something else....",
+        "created_at": "2021-05-28T15:07:51.497000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I meant the whole point of hashing is to have good distribution in the current trie. Does the above just refers to verkle trees?",
+        "created_at": "2021-05-28T15:08:33.357000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yes, above only applies under verkle-trie",
+        "created_at": "2021-05-28T15:08:49.188000+00:00",
+        "attachments": null
+    }
+]

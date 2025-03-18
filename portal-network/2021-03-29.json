@@ -5,7 +5,7 @@
         "parent": "",
         "content": "Thinking a bit about how we can allow new nodes joining the network to quickly learn about data that is of interest to them:\n\n1. Alice comes online, her node has storage capacity that she wishes to fill.\n2. Alice is aware of \"Bob\" who is \"close enough\" to her that she expects bob to have data that she is interested in.\n3. Either via normal messages or uTP, alice asks bob to send her the `content_key` values that he knows about.\n4. Alice uses the `path` information to construct her own inclusion proof by fetching all of the necessary nodes from the network that she needs to prove the content is part of a recent state root, after which she stores the content.\n5. Alice gossips the proof she has just constructed to her neighboring peers in case they are interested in it as well.\n\nThis process only introduces a single new message to the system, which is the ability to learn about content keys that another node has.  This message could have a `cursor` which allows them to resume from where they last left off.  \n\nThe burden of \"proving\" the data falls on Alice which leaves this open to a form of griefing.  Need to explore the significance of this and how it might be mitigated.",
         "created_at": "2021-03-29T17:08:45.616000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "We should also explore whether we actually \"care\" about this.  The POKE mechanism that we've talked about before doesn't require any additions to the protocol, and should actively spread content that people are actually interested in.  This still leaves the \"cold\" stuff as having no mechanism for replicating, but this may not be a significant problem.",
         "created_at": "2021-03-29T17:11:10.120000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jason.carver",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "Yeah, throw in a state-sweeping daemon node that fills in the cold data, and I think we can table this as not a critical issue.",
         "created_at": "2021-03-29T17:17:07.205000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -29,7 +29,7 @@
         "parent": "",
         "content": "Does anyone have suggestions on the format of proofs?  I'm not aware of anything that's already well established.",
         "created_at": "2021-03-29T17:18:51.834000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -37,7 +37,7 @@
         "parent": "",
         "content": "The simplest \"structured\" format I'm aware of is:\n\n1. sort all the nodes by trie path (preorder)\n2. encode things as a stream of `[[path_0, node_0], [path_1, node_1]]`\n\nThis can be made more efficient by de-duplicating the \"path\" components since each successive path will often contain a common prefix with the previous path.",
         "created_at": "2021-03-29T17:22:11.640000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -45,7 +45,7 @@
         "parent": "",
         "content": "hrm, maybe not the simplest, simplest might be just nesting the nodes so that they are \"structured\" like the trie.",
         "created_at": "2021-03-29T17:51:16.229000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jason.carver",
@@ -53,7 +53,7 @@
         "parent": "",
         "content": "Yeah, simplest to me would be to just send the trie nodes",
         "created_at": "2021-03-29T17:52:03.008000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -61,7 +61,7 @@
         "parent": "",
         "content": "or just transmitting the nodes, and having the party on the other side re-assemble them into a trie.",
         "created_at": "2021-03-29T17:52:06.214000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -69,7 +69,7 @@
         "parent": "",
         "content": "I will probably leave that one to be figured out in the trenches, since the way we actually work with proofs will probably inform what the preferred format will be.",
         "created_at": "2021-03-29T17:53:27.209000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "levi.korg",
@@ -77,7 +77,7 @@
         "parent": "",
         "content": "IIRC, we established that uTP enables POKE / that POKE messages are too large for a single UDP packet, but I don’t recall how big we expect these messages to be. A specific answer is probably wrapped up in the encoding question you raised above, but I am wondering if you have a rough idea of what we’re expecting here. Are we talking “measured in 100s of KB” or something larger?",
         "created_at": "2021-03-29T19:27:10.120000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "levi.korg",
@@ -85,7 +85,7 @@
         "parent": "",
         "content": "Or maybe more concisely: how big is a raw proof? 🙂",
         "created_at": "2021-03-29T19:29:26.100000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -93,7 +93,7 @@
         "parent": "",
         "content": "\u003c20kb is my gut.  Currenty hexary trie is \"full\" down to layer 4/5-ish in the account trie.  That means that for a single leaf proof, we've got ~5 layers of 512kb (16 x 32-byte hashes) which is a baseline of 2560 bytes, and then a bunch of scattered hashes as things get more and more sparse until we hit the leaf.  So maybe ~5kb for a single account proof, and same rough order of magnitude for worst-case contract storage leaf proofs.",
         "created_at": "2021-03-29T19:32:36.174000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -101,7 +101,7 @@
         "parent": "",
         "content": "I think POKE is a concept, not a message or protocol thing.\n\n1. alice wants the data at path X\n2. alice gathers trie data, walking down the trie until she gets to X\n3. everything she just gathered constitutes a \"proof\" for X\n4. if she keeps track of all the nodes that she asked for data, who's radius should contain the data, and who did not have the data, she can then use that proof and the gossip system to distribute it to those nodes.",
         "created_at": "2021-03-29T19:34:35.762000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "samwilsn",
@@ -109,6 +109,6 @@
         "parent": "",
         "content": "I believe `POKE` is referred to as `STORE` in the original kademlia paper",
         "created_at": "2021-03-29T21:17:15.857000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

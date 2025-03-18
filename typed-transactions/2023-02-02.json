@@ -5,7 +5,7 @@
         "parent": "",
         "content": "Have updated EIP 6404 for readability: https://ethereum-magicians.org/t/eip-6404-transition-to-ssz/12783/4",
         "created_at": "2023-02-02T11:32:05.073000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "\u003c@273808422753796097\u003e I think both of our proposals want the same (SSZ), and the only differences are:\n\n(A) Stability of `GeneralizedIndex` for individual fields, e.g., `value` of the transaction with index 42.\n(B) Signature/TxId computation",
         "created_at": "2023-02-02T16:56:11.327000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "Regarding (A), let's assume a simple example with your `LegacyTransaction` and the EIP-4844 `BlobTransaction`.\n– `get_generalized_index(SignedLegacyTransaction, \"value\") == 20`\n– `get_generalized_index(SignedBlobTransaction, \"value\") == 38`\n\n——— SSZ `Union` approach ———\n```TransactionsList = List[Union[SignedLegacyTransaction, SignedEIP2930Transaction...], MAX_TRANSACTIONS_PER_PAYLOAD]```\nTwo round trips are needed:\n(1) `get_generalized_index(TransactionsList, 42, \"__selector__\")`\n(2a) `get_generalized_index(TransactionsList, 42, 0, \"value\")`  -- Legacy case\n(2b) `get_generalized_index(TransactionsList, 42, 1, \"value\")` -- EIP-2930 case\n(2c) `get_generalized_index(TransactionsList, 42, 2, \"value\")` -- EIP-1559 case\n(2d) `get_generalized_index(TransactionsList, 42, 3, \"value\")` -- EIP-4884 case (no blobs)\n(2e) `get_generalized_index(TransactionsList, 42, 4, \"value\")` -- EIP-4884 case (with blobs)\nNote that some of `2a, 2b, 2c, 2d, 2e` may conflict with each other, or may be inaccessible / error if accessed when current selector does not support them.\n\n——— SSZ `Onion` approach ———\n```TransactionsList = List[Onion[SignedLegacyTransaction, SignedEIP2930Transaction...], MAX_TRANSACTIONS_PER_PAYLOAD]```\nOne round trip is needed, to request `[1, 2a, 2b, 2c, 2d, 2e]` indices in a single request.\nIn the `Onion`, it is guaranteed that `2a, 2b, 2c, 2d, 2e` are distinct, and that they always exist.\nAfter that, based on (1), client can assert that all but the correct one are zero hashes of appropriate height, and then select the correct value from the response.\n\n——— EIP-6404 Normalized `Transaction` approach ———\n```TransactionsList = List[Transaction], MAX_TRANSACTIONS_PER_PAYLOAD]```\n`get_generalized_index(TransactionsList, 42, \"value\")`\nAlways works, even if future transaction types are introduced. \nAnd it automatically gives correct result, e.g., when requesting priority fee field on a pre-1559 tx.\n——————————————",
         "created_at": "2023-02-02T16:56:17.038000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -29,7 +29,7 @@
         "parent": "",
         "content": "Regarding (B), you define `sighash = hash_tree_root(tx.message)`.\n```\nclass LegacyTransaction(Container):\n    nonce: uint64\n    gasprice: uint256\n    startgas: uint256 # consider uint64?\n    to: Address\n    value: uint256\n    data: ByteList[2**24]\n```\nImagine that someone creates a new type, with an additional `bool` indicating whether they like blobfish.\n```\nclass BlobfishVotingTransaction(Container):\n    nonce: uint64\n    gasprice: uint256\n    startgas: uint256 # consider uint64?\n    to: Address\n    value: uint256\n    data: ByteList[2**24]\n    likes_blobfish: bool\n```\nThis leads to this signature collision:\n```\nhash_tree_root(LegacyTransaction(\n    nonce=1,\n    gasprice=2,\n    startgas=3,\n    value=4,\n) == hash_tree_root(BlobfishVotingTransaction(\n    nonce=1,\n    gasprice=2,\n    startgas=3,\n    value=4,\n    likes_blobfish=False,\n)\n```",
         "created_at": "2023-02-02T16:56:23.354000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -37,7 +37,7 @@
         "parent": "",
         "content": "Bumped EIP-6404 to further reduce scope: https://ethereum-magicians.org/t/eip-6404-ssz-transactions-receipts-and-withdrawals/12783/5",
         "created_at": "2023-02-02T21:18:31.729000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -45,7 +45,7 @@
         "parent": "",
         "content": "Also, there is no devp2p spec for `withdrawals` / `withdrawals_root` exchange.\nIn case that full `withdrawals` are exchanged, I wonder if they are also versioned (EIP-2718 style), or if they have been botched to be stuck at RLP encoding for the forseeable future.",
         "created_at": "2023-02-02T21:19:48.476000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -53,6 +53,6 @@
         "parent": "",
         "content": "Also, \u003c@273808422753796097\u003e, I'm new to the EIP process, but looking at some of the other EIPs, they mention multiple authors. Should I add you on EIP-6404 as well, given your continued drive to push the SSZ transition and the significant contributions in meetings and writing? If yes, do I just add you in there, or do you need to add yourself there? Or would you prefer to be added after the normalized `Transaction` vs Onion vs Union debate is complete / the EIP is cleaned up some more?",
         "created_at": "2023-02-02T21:52:44.448000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

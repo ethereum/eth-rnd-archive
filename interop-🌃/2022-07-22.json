@@ -1,0 +1,90 @@
+[
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "Lighthouse release with support for Goerli merge:\n\nhttps://github.com/sigp/lighthouse/releases/tag/v2.4.0\n\nWe expect to push another release a few days before August 4th with some more fixes/features. I would recommend running this for the time being, though.",
+        "created_at": "2022-07-22T04:46:05.649000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "All the MSF9 testing seems to be done. I'll go ahead with deprecating the network if no one has an objection.",
+        "created_at": "2022-07-22T06:33:38.369000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "We have similar tests on Hive already, but in this particular situation we'd like to have two chains and a reorg after invalidating one of them via INVALID response from EL. Scenarios with several forks are quite difficult to deterministically emulate either in Hive or in Kurtosis. So, this tests are kind of exceptional for consensus-spec-tests suite thus it is proposed to have them optional",
+        "created_at": "2022-07-22T09:41:39.921000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "I analyzed GSF5. We had two terminal blocks:\nTerminalBlockA - BlockNumber: 7265399 0xfdb92f094731d12237c408bcbf49af80c726a17a3e3da3be06f148bf650df748 TotalDifficulty:10,625,004 \nTerminalBlockB - BlockNumber: 7265399 0x96083b54f789d3f78445f81b3316758e5ec442074378750a8c07897775fcb732 TotalDifficulty: 10,625,004 \n\nFirst PoS block: 0xe3ba2ca1369a13810fd921161d8126da23ec88dfc27e0d50e512604a07f9c2ae, parent: TerminalBlockB\n\nThe canonical for GSF5 is now TerminalBlockB https://explorer.goerlishadowfork5.ethdevops.io/block/7265399/transactions\n\nFrom a pre-merge perspective, Nethermind will process one of them and later can be reorged to the correct one. So some nodes received TerminalBlockA at first. The sequence of the requests which lead to out of sync for Nethermind (erigon probably too):\nThe first request from CL: New payload: 0xe3ba2ca1369a13810fd921161d8126da23ec88dfc27e0d50e512604a07f9c2ae EL -\u003e SYNCING/ACCEPTED, because our head was on TerminalBlockA. I think it is correct with the spec (I might be wrong, of course). If not, EL should probably process all terminal blocks on NewPayloads. We will provide the fix to be more resilient to such situations. And we had a bug on our side too, because we started receiving fcUs from correct chain (~after 30minutes), so all nodes should recover.\n\nCL kept sending new payload: 0xe3ba2ca1369a13810fd921161d8126da23ec88dfc27e0d50e512604a07f9c2ae and EL kept returning SYNCING in the same time it started progressing on chain with TerminalBlockA. Worth adding we've never received fcU to TerminalBlockB or child of TerminalBlockB( 0xe3ba2ca1369a13810fd921161d8126da23ec88dfc27e0d50e512604a07f9c2ae). I believe it could cause issues because EL could return SYNCING/ACCEPTED and wait for fcU.",
+        "created_at": "2022-07-22T11:22:05.070000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "The first request after the PoS is a new payload. However, in hive tests, the first request in transition is fcU(terminalBlock). The first fcU on GSF5 to correct branch was ~30minutes after the first PoS request. I am wondering if the first request from CL shouldn't be fcU(terminalBlock) as it is implemented in the hive. WDYT \u003c@425572898787426305\u003e  \u003c@892053833121923094\u003e ?\n\nMoreover, in hive tests, we're testing a bit different scenarios. During the real transition, we're receiving blocks via discovery, but in hive tests, we can run the sync and download blocks from the network.",
+        "created_at": "2022-07-22T11:22:52.005000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "So this is precisely the 128 slot safety margin for nodes that are optimistic syncing during the merge transition to avoid forkchoice poisoning. I see the chicken/egg problem with FCU but need to take a look at spec and think about it. Will do so soon\n\nBypassing ACCEPTED for any first PoS blocks might be a good solution so CL can't be put into optimistic sync on this scenario but it has potential load consequences for nodes that aren't setup for efficient execution of shallow forks",
+        "created_at": "2022-07-22T12:34:54.341000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "Summoning \u003c@361447803194441738\u003e, fc poisoning expert",
+        "created_at": "2022-07-22T12:35:08.446000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "The CL Mock will have a behavior similar to a CL with `SAFE_SLOTS_TO_IMPORT_OPTIMISTICALLY` equal to zero.\n\nFrom what I've seen on the CL tests in hive is that, before this value passes (128 by default on most CLs), the CL will not send you an FcU to force a re-org, only the NewPayload, whereas the CL Mock sends the FcU to all clients immediately.",
+        "created_at": "2022-07-22T14:14:50.705000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "Testing",
+        "parent": "",
+        "content": "Interesting scenario! Nice and detailed description Marek. It’s been a while since I’ve had my head in FC poisoning but I’ve had a good think about it. \n\nWhat we’re really trying to avoid with FC poisoning is to avoid scenarios where it’s very easy for an attacker to craft a block that puts *a majority of* nodes into optimistic sync (using “majority” loosely here). FC poisoning has always imagined this attack to be done via a junk parent hash on the transition block;  all ELs would return SYNCING because no ELs would have the parent. It might be that the valid block hash and “known and well-formed” ancestors from an ACCEPTED response protect us from this. Therefore importing an ACCEPTED transition block is just as safe as any other block in the post-merge chain. This is not an *obviously* safe solution to the problem IMO, it needs some more thought, but it might turn out to be safe.  One caveat is whether or not ELs follow the ACCEPTED definition in the engine API exactly. If some are lenient with the “known and well formed ancestors” then we’d get ourselves into trouble. \n\nIf ELs could always process the transition block then that would be an obvious solution here. But that might not be achievable for other reasons.",
+        "created_at": "2022-07-22T21:24:00.592000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "The CL would only send a fcu if it can actually import blocks - so in that period it would need to receive a VALID response for the block it’s going to import and reorg to. But regardless of whether it got valid or accepted/syncing it will always follow fork choice rules for selecting the chain head and pick the fork with the most attesting balance. There’s no weighting to favour non-optimistic forks over optimistic ones or linger over shorter etc",
+        "created_at": "2022-07-22T21:31:52.855000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "\"If ELs could always process the transition block then that would be an obvious solution here. But that might not be achievable for other reasons\"\n\nI plan to fix the issue in this way. I don't see problems on Nethermind side. Not sure about erigon though.",
+        "created_at": "2022-07-22T21:49:10.742000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,1002 @@
+[
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "I've got Teku and EthereumJS partially syncing merge-devnet-0 but EthereumJS doesn't seem to like some of the payloads:\n```\n[11-22|14:25:39] DEBUG engine_executePayloadV1 responded with:\n{\n  jsonrpc: '2.0',\n  id: 84,\n  result: {\n    status: 'INVALID',\n    message: 'Error verifying block while running: Error: invalid receiptTrie (vm hf=london -\u003e block number=2758 h'... 111 more characters,\n    latestValidHash: '0x20c314a7fadc6ef586abcc82408f748e0b3e580722f8529902a07e8c445a73ac'\n  }\n```\n\nI'm up to beacon block slot 1252.",
+        "created_at": "2021-11-22T04:28:28.114000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Also \u003c@!199561711278227457\u003e the link above (https://discord.com/channels/595666850260713488/892088344438255616/910916546396823643)  to the testnet config gives me a 404. Fortunately the EthereumJS repo includes a copy (which I hope is accurate).",
+        "created_at": "2021-11-22T04:29:30.644000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "And if there are instructions around somewhere for geth that would be greatly appreciated. \u003c@!360491619402776577\u003e maybe?",
+        "created_at": "2021-11-22T04:31:16.010000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Will write something up",
+        "created_at": "2021-11-22T07:30:54.437000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "This could be the block where I send an eip4399 transaction, so maybe that's the issue?",
+        "created_at": "2021-11-22T07:32:06.371000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Possibly. I guess the key question is whether something like lighthouse+Ethereumjs can sync the chain. If that works teku must be doing something stupid. \nWe’re passing all the beacon reference tests but I can’t do 1-1 testing because currently teku can’t produce blocks with non empty payloads. So we’re kind of doing the milestones out of order. 🙂",
+        "created_at": "2021-11-22T07:46:14.418000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Oh the other key question - are EL clients respecting the ordering that json rpc request Id provides? Teku goes heavy on the optimistic sync and will just fire requests at the EL and deals with the a requests asynch so could easily have multiple requests in flight.",
+        "created_at": "2021-11-22T07:48:26.706000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Clone pari's consensus-deployment-ansible repo, go to the devnet folder and do\n```\n~/go/src/github.com/ethereum/go-ethereum/build/bin/geth --catalyst --datadir \"./testnet\" init genesis.json\n~/go/src/github.com/ethereum/go-ethereum/build/bin/geth --datadir \"./testdir\" --http --http.api=\"engine,eth,web3,net\" --http.corsdomain \"*\" --networkid=1337302 --syncmode=full  --catalyst --bootnodes \"enode://5f294bee0e8d8bc8b37d9884af6a4e7f8cf46f34257da2e747d21ebb559034fa99a504ef2f1437395bb2b085e078a7df1f3b9aa81e6451cfb1d25564696aa9cd@206.189.207.53:30303\" console\n```",
+        "created_at": "2021-11-22T08:25:02.321000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Brilliant thank you.",
+        "created_at": "2021-11-22T08:25:28.756000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@!340345049063882753\u003e sorry about the broken link, in the process of renaming the `eth2-clients` org and I deleted the other org. \n\nI've pushed the config so that its accessible for now, it's here: https://github.com/eth2-clients/merge-testnets/tree/main/merge-devnet-0",
+        "created_at": "2021-11-22T08:27:30.023000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "As you might have seen/heard, the first Kintsugi devnet had a couple of roadblocks and is not finalizing at the moment. There are two different issues that might have caused issues on the devnet. \n\nI send some EIP-4399 transactions before and after the transition. Before the transition they should have been executed as Difficulty, so all clients hardcoding Difficulty to Random would have been forked of the pre-merge chain (which afaict did not happen). After the merge all clients that did not implement 4399 would be forked off on block 2758 (with hash  0xf860596f144b0185976e7bacaaa13659ce525a2bd79d75976e42f0554f4469d0).\n\nDuring the transition I also started a second miner which did mine the final block. However since the node was not connected to the network very well, only a subset of the nodes received this block (2680: 0xdb0a73a65fad4e1c4c98f944482dc68d3ce9f0a48808d503ed5e7ecba072ee30). All others decided to use Pari's block (2680: 0x9073752c0ce331f8cf9e58aab0d55e04da577a31e85f47982871c77fcc5267b0). The jucy part is that 0xdb0a has a TD of 600097754 while 0x90737 has a TD of 600016632 which means that all node should have reorged to 0xdb. \n\nHowever since that block was not available for most of the network, the CL nodes did not know about it. So the CL's issued their ExecutePayload/ForkchoiceUpdated command on top of 0x90. The correct behavior (imo) would have been to reorg to 0xdb shortly after the merge. However now that the network has been running for a longer time and most nodes seem to be on 0x90, it would make sense for the other nodes to change. This needs to be commanded by the CL clients (and I'm not sure how gracefully the EL's can handle such a reorg).\n\nAll in all it's nice that we hit this scenario so soon and managed to break stuff. \ncc \u003c@!199561711278227457\u003e \u003c@!758579010027782144\u003e \u003c@!792822129019584562\u003e",
+        "created_at": "2021-11-22T09:18:23.335000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "we did break it alright 🤣",
+        "created_at": "2021-11-22T09:19:55.966000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e The jucy part is that 0xdb0a has a TD of 600097754 while 0x90737 has a TD of 600016632 which means that all node should have reorged to 0xdb. \n\nThe things aren't that certain. If CL saw a payload built on top of `0x90737` then it switched the fork choice rule by calling `forkchoiceUpdated` and no re-org happened even though `0xdb0a` has a greater TD",
+        "created_at": "2021-11-22T09:24:09.889000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "There is a long discussion thread here https://github.com/ethereum/consensus-specs/issues/2636#issuecomment-960647404, and the recent comment related to the exact case which you've got on the devnet! This is actually great that you had run this miner and we get into this case",
+        "created_at": "2021-11-22T09:25:34.296000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "the validator which produced the merge block gets to decide (on what it sees) as terminal pow, post which ELs (on receivers of the block) are supposed to follow in my opinion (SYNCING status at first if the competing block not available and then resolve valid or invalid) and reorg as long as TTD condition is met on the terminal block",
+        "created_at": "2021-11-22T09:27:01.056000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "The problem is that nodes might not have the terminal block available, so they need to fetch it from the network. \nSo if the first validator lies about the block it will trick all nodes to go searching for the block",
+        "created_at": "2021-11-22T09:28:38.605000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "But if a part of a network wouldn't receive this first payload at all, then it could propose on top of another terminal block and it will be fine as well",
+        "created_at": "2021-11-22T09:28:44.453000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Right, but if it lies then EL won't receive `forkchoiceUpdated` and it's fork choice rule won't be switched. And it will still respect the TD rule",
+        "created_at": "2021-11-22T09:29:32.754000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "so if next validator's EL is not in agreement with TTD block what exactly should it do, pass its own block as merge block?",
+        "created_at": "2021-11-22T09:29:58.659000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "in optmistic sync scenario it would receive (i think)",
+        "created_at": "2021-11-22T09:31:08.278000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "if the ELs respond with syncing",
+        "created_at": "2021-11-22T09:31:19.963000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "If the payload is built on top of either unavailable or not yet a terminal block then CL deems a beacon block as invalid or non-existing and doesn't send the `forkchoiceUpdated` to EL. In this case the state of CL and EL would be the same as if they met skipped slots, i.e. no block exists",
+        "created_at": "2021-11-22T09:32:00.038000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Wouldn't the EL send Syncing?",
+        "created_at": "2021-11-22T09:33:05.111000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "EL as per my understanding of optimistic sync should send Syncing and then the 2 nd validator would be able to propose, unless it decides to reject the previous merge block, this would cause deadlock!!!",
+        "created_at": "2021-11-22T09:35:44.440000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "In optimistic sync it would in some edge case, but then validators not attesting to invalid block in this slot and not building on top of this block will change guide the fork choice of syncing node",
+        "created_at": "2021-11-22T09:36:27.878000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "yea but a non existent block would send everyone to syncing status",
+        "created_at": "2021-11-22T09:37:03.246000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "and no one would be able to move forward as no one would propose (as everyone's EL is syncing)",
+        "created_at": "2021-11-22T09:37:30.017000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "True, we had specced this case in the Interop specs, see no 5. here https://github.com/ethereum/execution-apis/blob/main/src/engine/interop/specification.md#specification-2",
+        "created_at": "2021-11-22T09:39:40.236000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "true, but in part a of no 5, what will EL say to a competing (and potentially non existent block): invalid?",
+        "created_at": "2021-11-22T09:41:18.293000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "validator 2 has to propose, so it needs valid, invalid or syncing",
+        "created_at": "2021-11-22T09:42:05.271000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "if responded with syncing, the network will be stalled",
+        "created_at": "2021-11-22T09:42:48.475000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "as so will every other validator do if the terminal pow proposed is non existent",
+        "created_at": "2021-11-22T09:43:20.266000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "It will not say anything, just silence. So, the block doesn't exist",
+        "created_at": "2021-11-22T09:43:35.007000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "The idea is that unavailable block must not turn nodes into syncing at the point of transition",
+        "created_at": "2021-11-22T09:44:09.299000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "And this is very good catch",
+        "created_at": "2021-11-22T09:44:29.722000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "But we can not easily distinguish between unavailable and unknown (for us) block",
+        "created_at": "2021-11-22T09:44:52.370000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think what \u003c@!425572898787426305\u003e  is saying is that EL has to go with its local pow which meets TTD if it hasn't seen the competing block instead of searching for it",
+        "created_at": "2021-11-22T09:45:41.732000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "so the \"real\" or more 'popular\" pow can be voted on",
+        "created_at": "2021-11-22T09:46:15.499000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Right, and if EL hasn't resolved it fast (within 4 seconds) then a beacon block referring such EL block will be orphaned",
+        "created_at": "2021-11-22T09:46:35.021000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "only if the validator 2 for e.g. decides to build block on his local pow block passing TTD",
+        "created_at": "2021-11-22T09:48:24.990000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "if it even has another terminal block, otherwise it just builds yet another beacon block with empty payload",
+        "created_at": "2021-11-22T09:49:16.264000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "it can't build with empty payload",
+        "created_at": "2021-11-22T09:49:44.718000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "as merge block needs payload",
+        "created_at": "2021-11-22T09:49:53.961000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "sorry pow",
+        "created_at": "2021-11-22T09:50:01.788000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "it can still build with empty unless the transition has happened. if a beacon block with the payload built on top of unavailable pow block appears this block won't initiate the transition",
+        "created_at": "2021-11-22T09:51:33.703000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "btw, it will have more than 4 seconds to resolve the dependency, it will have all the time until the beginning of the next slot",
+        "created_at": "2021-11-22T09:52:23.967000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "ok, so right now optimistic sync says not to propose (as EL should respond syncing), but if the transition has not happened and EL says syncing, validator should propose keeping the '1 previous to merge block' as parent",
+        "created_at": "2021-11-22T09:54:24.065000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "It would be correct but It shouldn't propose because it can't distinguish two flavours of `SYNCING`",
+        "created_at": "2021-11-22T09:56:05.286000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "but then network would stall on unavailable pow block",
+        "created_at": "2021-11-22T09:56:29.067000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "as everyone's EL would go syncing and not propose",
+        "created_at": "2021-11-22T09:56:43.125000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, and this seems to be an issue with the spec",
+        "created_at": "2021-11-22T09:57:13.852000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "and i havent thought it fully, but it could be a problem even after transition",
+        "created_at": "2021-11-22T09:58:31.127000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "some rouge validator could bring down full chain",
+        "created_at": "2021-11-22T09:58:49.439000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "stall*",
+        "created_at": "2021-11-22T09:59:15.874000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "It's not possible post-Merge as there is a mapping of beacon block tree onto EL's block tree that is enforced by CL",
+        "created_at": "2021-11-22T10:03:10.368000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "If you have been syncing and some bad block has been received during the syncing process then the optimistic sync should rely on the information received from the network and converge eventually dropping bad block. If a node has been fully synced and bad block is received such that it's PoW parent is unavailable then it must be dropped and don't turn node into `SYNCING` status",
+        "created_at": "2021-11-22T10:05:43.272000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "I have a feeling it would, as if a validator passes an unavailable pow payload, every other validator that sees it will go into syncing and assuming perfect network (for nonavailable block to propogate), no validator post it would be able to propose",
+        "created_at": "2021-11-22T10:06:24.257000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "There is the following check in the spec:\n```\n    if is_merge_complete(state):\n        assert payload.parent_hash == state.latest_execution_payload_header.block_hash\n```\nWhich would prevent sending a payload to EL if it's not a child of the previous payload",
+        "created_at": "2021-11-22T10:08:49.010000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "yea, this takes care of it 👍  as the payload itself is also beinf circulated in beacon blocks post merge",
+        "created_at": "2021-11-22T10:09:39.043000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "so we have an issue at transition only!",
+        "created_at": "2021-11-22T10:10:02.164000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Basically, this issue is introduced in Kintsugi spec by removing the handling of this corner case when moving from Interop spec",
+        "created_at": "2021-11-22T10:11:56.170000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ah thats why the two network halves cannot unite again",
+        "created_at": "2021-11-22T10:13:14.976000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "correct! 👍",
+        "created_at": "2021-11-22T10:13:33.855000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "i think easy resolution is, if the merge is not complete (with valid status) and a validator is proposing , it should propose with its own local pow meeting TTD if it has one, rather go searching for the one it receieved",
+        "created_at": "2021-11-22T10:14:54.251000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "this was the \"real\" or \"popular\" pow will be introduced in the network and the networks would converge",
+        "created_at": "2021-11-22T10:15:55.688000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "or TBH can finally be put into use! 🤣",
+        "created_at": "2021-11-22T10:21:52.722000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "if above scenario happens",
+        "created_at": "2021-11-22T10:22:12.019000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Another problem we need to solve is how to tell both el and cl which chain to follow, so we can at least manually solve conflicts like this. \nWe have a whitelisting function in geth which enables you to pin a certain block to a certain height, but if the CL is on a different chain, it will go bust again",
+        "created_at": "2021-11-22T10:34:39.816000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "TBH on both CL and EL side will solve this problem i think",
+        "created_at": "2021-11-22T10:37:43.341000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "apart from TTD checks",
+        "created_at": "2021-11-22T10:37:43.896000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "To Be Honest?",
+        "created_at": "2021-11-22T10:38:23.703000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "terminal block hash! 😛",
+        "created_at": "2021-11-22T10:38:43.286000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "i think we have all forgotten about it 🤣",
+        "created_at": "2021-11-22T10:39:01.429000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "TBH, TBH is a bit complicated thing as it's implementation likely to be: TBH_ACTIVATION_EPOCH and TTD override on CL + block hash whitelisting and TTD override on EL",
+        "created_at": "2021-11-22T10:42:54.744000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "in which scenario?",
+        "created_at": "2021-11-22T10:43:16.006000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "currently in devnet, there are two competing Terminal pows",
+        "created_at": "2021-11-22T10:44:25.523000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "causing network split, and no way for nodes to converge",
+        "created_at": "2021-11-22T10:45:16.587000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I got that there are two terminal PoW blocks. But I didn't get why the proposer of the first payload couldn't manage to resolve the conflict",
+        "created_at": "2021-11-22T10:47:37.354000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "there also seems to be some peering issue so the EL's are not getting updated",
+        "created_at": "2021-11-22T10:49:00.998000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "effectively causing \"unavailable\" block scenario",
+        "created_at": "2021-11-22T10:51:15.875000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "The handling of this corner case as it's described in the Interop spec might not work well or be complicated in terms of implementation. As EL might not distinguish the first payload from any other payloads",
+        "created_at": "2021-11-22T10:53:12.081000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "EL must not turn into `SYNCING` until it receives the first `forkchoiceUpdated` call. But this kind of rule looks brittle and we might want to improve on it. Probably, `engine_executePayload(mergeBlock: bool, payload: ExecutionPayload)` could work, this flag could also trigger TTD check on EL side.",
+        "created_at": "2021-11-22T11:08:26.811000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Also I would vote for starting testnets not on Thursday, since they might break and we would have to fix it on the weekend \u003c@!199561711278227457\u003e",
+        "created_at": "2021-11-22T11:17:49.094000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yea I agree, seems like earlier in the week would make more sense. Would tuesday make sense from next week? \n\nAlso, what do we do with the current devnet? Should i throw it away and create a new one from scratch without a competing PoW chain - or is it worth having around to test fixes?",
+        "created_at": "2021-11-22T11:19:56.904000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "I would like to see the current one finalize, but maybe we can already start a new one?",
+        "created_at": "2021-11-22T11:20:39.856000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'll promise not to ruin it 😛",
+        "created_at": "2021-11-22T11:20:52.115000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mahdiamer5272",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hi",
+        "created_at": "2021-11-22T11:21:00.777000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yea, I can already work on `merge-devnet-1` and leave `merge-devnet-0` as it is.",
+        "created_at": "2021-11-22T11:21:02.303000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mahdiamer5272",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@199561711278227457\u003e",
+        "created_at": "2021-11-22T11:21:15.675000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Someone keep \u003c@!360491619402776577\u003e distracted please? Take him out for lunch or something?",
+        "created_at": "2021-11-22T11:21:29.216000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "you better promise to keep trying ruining it! 👍",
+        "created_at": "2021-11-22T11:23:20.467000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "Another issue which needs clarification or quickfix, that has been discovered is : when CL syncing is ahead of EL and since EL hasn't reached TTD, but CL gets merge block and calls EL's engine_ api, there is an ambiguity in response. in my opinion it should always respond SYNCING if EL called before it reaches TTD \u003c@!758579010027782144\u003e",
+        "created_at": "2021-11-22T13:59:15.545000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "yeah, it has a sense. We found this issue with \u003c@!792822129019584562\u003e in a situation when the EL (Nethermind) node doesn't have any peers.\u003c@!425572898787426305\u003e could you confirm?",
+        "created_at": "2021-11-22T14:03:09.709000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "EL should always respond with `SYNCING` if the sync is in progress. Even in the case when it has reached TTD but is guided by CL to keep syncing beyond the terminal block. When optimistic sync finishes CL should go back find the merge block. If the merge block has been processed optimistically CL must verify this block with respect to terminal block conditions",
+        "created_at": "2021-11-22T14:36:08.663000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "EL should also respond `SYNCING` if it has initiated a sync process on its own before CL has started to communicate with it",
+        "created_at": "2021-11-22T14:37:27.201000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "But when EL gets the first `forkchoiceUpdated` it should re-wind its sync process to start adhering to CL's messages",
+        "created_at": "2021-11-22T14:39:26.278000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "`merge-devnet-1` is up! \nConfigs can be found here: https://github.com/eth2-clients/merge-testnets/tree/main/merge-devnet-1\nExplorer can be found here: https://merge-devnet-1-explorer.wenmerge.dev/\n\nIn general, its the same as `merge-devnet-0`, just not broken yet. Its running the same versions (without any fixes that broke 0). But its finalizing and gives us another shot at breaking it differently/test sync or whatever.",
+        "created_at": "2021-11-22T17:50:45.598000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Its a few days early, but based on feedback we'd move testnet launches from thursday to tuesday to give us more time to debug before the weekend. This means `merge-devnet-1` will last till Tuesday (30th) - or till someone breaks it of course.",
+        "created_at": "2021-11-22T17:53:19.171000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "excellent. good call on the tuesday launches \u003c@!199561711278227457\u003e",
+        "created_at": "2021-11-22T17:55:17.221000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "lodestar synced nicely on devnet 1 with geth `Nov-22 18:31:18.000 []                 info: Synced - slot: 1031 - head: 1031 0x96a4…e908 - finalized: 0x9c8e…b71a:30 - peers: 17`",
+        "created_at": "2021-11-22T18:32:43.246000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm spamming the chain a bit btw",
+        "created_at": "2021-11-22T18:33:30.294000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "hmm, my geth isn't finding any peers on devnet-1.\n```\n$GETH --catalyst --datadir \"${DATADIR}\" init ../merge-testnets/merge-devnet-1/genesis.json\n$GETH --catalyst --http --ws --http.api \"engine,eth,web3,net\" --datadir \"${DATADIR}\" --http.corsdomain \"*\" --networkid=1337402 --syncmode full --bootnodes \"enode://                                                                            6538a7ac0748d24caec2470879d0fa35cbafa62e5d22532a3634119eb9360b28e615d0e960bacfb8d26e3ef646adb64c5a0689ed378ce69efba3f190fa8f26a6@137.184.108.205:30303\" --port 8545 console\n```\n\nI'm assuming the network ID is the same as the chain ID.",
+        "created_at": "2021-11-22T21:34:14.350000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pawandhananjay",
+        "category": "Testing",
+        "parent": "",
+        "content": "i'm getting the same issue",
+        "created_at": "2021-11-22T21:40:22.564000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "That's confusing...The config looks correct to me. afaik \u003c@!792822129019584562\u003e and \u003c@!360491619402776577\u003e  were also able to connect to the nodes and sync up. Maybe it just takes a bit of time?",
+        "created_at": "2021-11-22T22:04:45.134000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "ah could you try removing the `--syncmode full` flag?",
+        "created_at": "2021-11-22T22:05:49.296000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Pretty sure I tried without that the first time but trying again now.",
+        "created_at": "2021-11-22T22:07:10.135000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "nope, still no luck.",
+        "created_at": "2021-11-22T22:09:53.080000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "```\nDial error                               id=2bbc8da8344e27db addr=137.184.108.205:30303 conn=dyndial err=\"connect: connection refused\"\n```",
+        "created_at": "2021-11-22T22:10:44.622000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "That suggests the bootnode is unavailable from here.",
+        "created_at": "2021-11-22T22:11:11.727000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "... interesting, bootnode crashed:\n```\nINFO [11-22|18:56:22.666] Syncing beacon headers                   downloaded=2235 left=0    eta=0s\npanic: runtime error: invalid memory address or nil pointer dereference\n[signal SIGSEGV: segmentation violation code=0x1 addr=0x1c0 pc=0xa6b811]\n\ngoroutine 655992 [running]:\ngithub.com/ethereum/go-ethereum/eth/downloader.(*Downloader).findBeaconAncestor(0xc000162180)\n        github.com/ethereum/go-ethereum/eth/downloader/beaconsync.go:162 +0x231\ngithub.com/ethereum/go-ethereum/eth/downloader.(*Downloader).syncWithPeer(0xc000162180, 0x0, {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, ...}, ...)\n        github.com/ethereum/go-ethereum/eth/downloader/downloader.go:488 +0x57a\ngithub.com/ethereum/go-ethereum/eth/downloader.(*Downloader).synchronise(0x0, {0x0, 0x0}, {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, ...}, ...)\n        github.com/ethereum/go-ethereum/eth/downloader/downloader.go:418 +0x425\ngithub.com/ethereum/go-ethereum/eth/downloader.(*beaconBackfiller).resume.func1()\n        github.com/ethereum/go-ethereum/eth/downloader/beaconsync.go:78 +0x91\ncreated by github.com/ethereum/go-ethereum/eth/downloader.(*beaconBackfiller).resume\n        github.com/ethereum/go-ethereum/eth/downloader/beaconsync.go:69 +0xe5\n```",
+        "created_at": "2021-11-22T22:12:09.721000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'll restart it and share a few more enodes",
+        "created_at": "2021-11-22T22:12:17.149000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "restarted. \nfew more enodes:\n```\nenode://7a615b6926daad3cf8bca1cb86d5163d7b1481d16e7c0310985eccd6670545b8a43c45a33d0cd8f00a30958d46ce1ba3ab8d8762333747fd3bd9898fdbcd80aa@137.184.101.107:30303\n\nenode://782606f7e2c782cb48fa0b0bdaf31ecb3fc063ae8593357dd0e4482f07367f4551df38b80a82f693f52d5f9f167256675b9e5fe1ec49a2e9eab690181958c2a7@137.184.109.236:30303\n\nnethermind has issues, but still:  enode://3a514176466fa815ed481ffad09110a2d344f6c9b78c1d14afc351c3a51be33d8072e77939dc03ba44790779b7a1025baf3003f6732430e20cd9b76d953391b3@137.184.97.41:30303\n```",
+        "created_at": "2021-11-22T22:16:58.240000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "That's got it going. Thanks.",
+        "created_at": "2021-11-22T22:19:56.377000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "oh no, it dropped all its peers again:\n```\nWARN [11-23|08:20:15.664] Synchronisation failed, dropping peer    peer=fa7a3e1ddd55862136c8b192a94f5374fce5edbc8e2a8697c15331677e6ebf0b err=\"retrieved hash chain is invalid: invalid mix digest\"\n```",
+        "created_at": "2021-11-22T22:21:07.791000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Let me check I actually built the version of geth I checked out...",
+        "created_at": "2021-11-22T22:21:44.409000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "im seeing the exact same error on my end using the bootnode `7a6...137.184.101.107:30303`",
+        "created_at": "2021-11-22T22:27:23.284000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "It seems to be quite insistent:\n```\nINFO [11-23|08:23:45.353] Imported new chain segment               blocks=192 txs=0 mgas=0.000 elapsed=977.771ms   mgasps=0.000 number=192 hash=ee24f8..2e2ec0 age=7h37m    dirty=209.60KiB\nINFO [11-23|08:23:45.926] Imported new chain segment               blocks=576 txs=0 mgas=0.000 elapsed=570.036ms   mgasps=0.000 number=768 hash=d52c7e..6f7017 age=6h24m20s dirty=209.60KiB\nWARN [11-23|08:23:46.368] Synchronisation failed, dropping peer    peer=fa7a3e1ddd55862136c8b192a94f5374fce5edbc8e2a8697c15331677e6ebf0b err=\"retrieved hash chain is invalid: invalid mix digest\"\n```\nGets as far as block number 0x4b2 for me.",
+        "created_at": "2021-11-22T22:27:37.977000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Are  you all on the `Beacon-ontopof-4399` branch of marius's repo?",
+        "created_at": "2021-11-22T22:31:42.318000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "commit `369a2f6`",
+        "created_at": "2021-11-22T22:32:04.627000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "Nope. Let me try that",
+        "created_at": "2021-11-22T22:32:06.400000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "oh, that's not the PR linked from the milestone tracker. 🙂",
+        "created_at": "2021-11-22T22:34:20.021000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pawandhananjay",
+        "category": "Testing",
+        "parent": "",
+        "content": "this one is working fine 🙂 I was running the `kintsugi-spec` branch earlier",
+        "created_at": "2021-11-22T22:35:31.654000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "I can't find that branch in https://github.com/MariusVanDerWijden/go-ethereum/tree/kintsugi-spec",
+        "created_at": "2021-11-22T22:37:13.059000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "ah but I can find that commit hash. Will give it a go.",
+        "created_at": "2021-11-22T22:37:47.148000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Different but still not working:\n```\nWARN [11-23|08:38:24.939] Synchronisation failed, dropping peer    peer=fa7a3e1ddd55862136c8b192a94f5374fce5edbc8e2a8697c15331677e6ebf0b err=\"retrieved hash chain is invalid: invalid gas used (remote: 75152 local: 55252)\"\n```",
+        "created_at": "2021-11-22T22:38:51.062000+00:00",
+        "attachments": null
+    }
+]

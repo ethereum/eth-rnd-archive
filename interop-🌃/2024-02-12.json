@@ -1,0 +1,58 @@
+[
+    {
+        "author": "marcinds",
+        "category": "Testing",
+        "parent": "",
+        "content": "Just FYI - I will be spamming devnet-12 again today, including tx replacements",
+        "created_at": "2024-02-12T12:34:38.939000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "will there be spamming on Holesky or Goerli?",
+        "created_at": "2024-02-12T13:38:26.742000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marcinds",
+        "category": "Testing",
+        "parent": "",
+        "content": "From my side, today only devnet-12",
+        "created_at": "2024-02-12T14:02:36.077000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marcinds",
+        "category": "Testing",
+        "parent": "",
+        "content": "Today I sent 48k 1-blob txs to devnet-12 (from 3k acounts) and then sent 3k 1559-type txs from the same addresses, cleaning balances. All txs were included in the blocks with an ease. Nodes removed blob txs, invalid at that point. It seems like easy and cheap way for DoS attack - send thousands of txs good enough to be added to blob pool, but not-good-enough to be included in the blocks and then send 1559-type txs invalidating such blob txs. Cost for operation like today, spamming each node on the network with about 6-7GB of data: just cost of sending 6k 1559-type txs (3k txs to add balances, then sending blob txs with no cost when are not included, then 3k txs clearing balances) \u003c@360491619402776577\u003e \u003c@206016661470314496\u003e",
+        "created_at": "2024-02-12T16:41:15.039000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "Testing",
+        "parent": "",
+        "content": "Is this a concern because the checks on the total gas price for the 1559-type txn happens independently of the one for the blob txn?",
+        "created_at": "2024-02-12T18:52:46.706000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marcinds",
+        "category": "Testing",
+        "parent": "",
+        "content": "No, I think it is handled correctly on the level of single node (for sure it is in Geth and Nethermind). Potential issue is caused because of non consistent amount of blob txs in different clients.\n\nMy experiment was like:\n1) send 48k 1-blob txs from 3k accounts to my local Nethermind node (with max blob tx count bumped from default 16k to 64k) - 48k txs propagated to the devnet\n2) remove blobTxs db and disable blob txs at all and restart\n3) send non-blob txs clearing accounts of previously sent blob txs\n\nAnd such txs were included in blocks, because my local node broadcasted it and every node in devnet received it. If node already had blob tx from such account, most likely rejected replacement (for sure Geth and Neth), but if node doesn't have corresponding blob tx, it was totally fine to accept non-blob \"clearing\" one and include it when building block.\n\nSo potential problem is about inconsistency of blob pools across clients. We decided at earlier stage of development, that TxPools/BlobPools are implementation details and sticked to it. Now it can be a bit problematic. I'm familiar only with implementations of Geth and Nethermind, so I will describe it on this example.",
+        "created_at": "2024-02-12T20:43:09.227000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marcinds",
+        "category": "Testing",
+        "parent": "",
+        "content": "Example 1:\nSending 48k 1-blob txs.\nGeth is capping blob pool to ~10GB, so is able to accept 48k 1-blob txs (and more).\nNethermind is capping blob txs by count, to 16k. 32k is not added, as it exceed capacity.\nSo Nethermind can accept \"replacements\" for txs from accounts, which are not represented in their blob pool. If such txs are included in the block, Geth is forced to remove it from their blob pool.\n\nExample 2:\nSending 16k 6-blob txs.\nGeth is capping blob pool to ~10GB, so is able to accept ~13k 6-blob txs.\nNethermind is capping blob txs by count, to 16k, so is able to accept all 16k 6-blob txs.\nSo in this example Geth can accept \"replacements\" for txs from accounts, which are not represented in their blob pool (Nethermind has ~3k txs more). If such txs are included in the block, Nethermind is forced to remove it from their blob pool.",
+        "created_at": "2024-02-12T20:45:21.719000+00:00",
+        "attachments": null
+    }
+]

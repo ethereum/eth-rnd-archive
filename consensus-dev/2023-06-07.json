@@ -1,0 +1,450 @@
+[
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Hi Martin there must be a misunderstanding, this is not about dropping blocks. This is about the EL returning an indication that it believes that there's censoring on chain and that it's own block should be considered instead of relying on an external builder. You should think on this data as something like the current block value that is returned with the payload: that information is useful for the proposer if he is willing to use external builders only in case they pay him much more than locally, but otherwise he'll run his locally constructed block. \n\nThe CL can use other heuristics to decide that it wants to construct a local block, but in this case, of seeing consistently some transactions being reorged or simply not included, I think it's best for the EL to make this call",
+        "created_at": "2023-06-07T00:31:50.520000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The mechanism is to see a transaction included and then reorged consistently. This cannot be caused by a user. It may be caused by a player that can reorg its own blocks and in a way that its guaranteed that its own public transactions won't be valid in the next slot, but anyone that can do this at will can already do much nastier things",
+        "created_at": "2023-06-07T00:34:17.449000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Most importantly, it cannot be triggered by an unstaked player",
+        "created_at": "2023-06-07T00:34:50.637000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Just to be precise: what we're asking is for geth to implement two heuristics:\n1) track if some valid tx are paying highly and are not included in blocks\n2) track if some transactions are being reorged when they appear in blocks. \nThere's an open issue in the engine API but it was deemed necessary that some EL implements some of these heuristics before opening the PR. \u003c@360491619402776577\u003e opened that draft out of kindness when I asked him if he was on board",
+        "created_at": "2023-06-07T00:43:29.491000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Uncouple blobs from the execution payloa...",
+        "created_at": "2023-06-07T07:26:47.746000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "I think we were curious about the actual fork choice logic that would cause 2) to occur  - what is the minimum stake required to censor blocks? what does the attack look like?",
+        "created_at": "2023-06-07T08:07:00.570000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "what about an API that simply returns the transactions that were higher-paying than the highest-paying in the last block?",
+        "created_at": "2023-06-07T09:49:32.430000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Probably would want to constrain to transactions that have been higher paying than the average or median base fee, and has been around and in that state for at least 2 blocks.",
+        "created_at": "2023-06-07T10:21:27.433000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Highest paying transaction is trivial to game by the builder just including a single ETH transfer with a very high fee.",
+        "created_at": "2023-06-07T10:22:08.131000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "And if you trigger on first block it could just be network latency/propagation speed that caused the miss.  Not included in 2 blocks in a row where it should have is I think a reasonably trigger timeline.",
+        "created_at": "2023-06-07T10:22:41.098000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "There's a meta-concern about how well-defined this \"belief that there's censoring on chain\" can become, whether it can be defined precisely enough to be worth codifying in a spec at all",
+        "created_at": "2023-06-07T10:22:44.563000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "If you don't mind liveness failure it can be semi-part of consensus.  The problem is that if you want liveness (as Ethereum does) then it is *incredibly* difficult to come to consensus on *when* censorship occurs.",
+        "created_at": "2023-06-07T10:23:31.965000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Each node individual can identify that censorship is occurring, but it is next to impossible to agree on *when* the censorship started (and thus *when* you should take action).",
+        "created_at": "2023-06-07T10:24:17.043000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, in general I find censorship problematic as well, but am wary of encroaching on flipping between type 1/type 2 error regimes",
+        "created_at": "2023-06-07T10:24:20.390000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "for Ethereum as a whole",
+        "created_at": "2023-06-07T10:24:36.045000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "If all official clients had some *personal* block building rule where they will cease using builders if they see 2 blocks in a row where a transaction was overlooked, then I think that could give a *huge* amount of anti-censorship power just from defaults being sticky.",
+        "created_at": "2023-06-07T10:25:50.721000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "That is pretty much what \u003c@755590043632140352\u003e proposal is. The CL has no way to know this, which is why it needs the EL to determine this",
+        "created_at": "2023-06-07T10:26:34.668000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "well, this is basically what happened before already with the liveness check",
+        "created_at": "2023-06-07T10:26:42.532000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "pull 47 or whatever still isn't merged or an official spec, nor is it what any CL apparently implements, including Nimbus",
+        "created_at": "2023-06-07T10:27:02.512000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "but it's in hive anyway, and the social pressure to implement it grew enough I implemented it anyway",
+        "created_at": "2023-06-07T10:27:20.201000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "so, I don't trust that .. \"process\"",
+        "created_at": "2023-06-07T10:27:37.590000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "It would not be unreasonable to expect profit motivated builders to stop censoring in such a world because their profits go down when a majority of validators will temporarily cease using builders every other block.",
+        "created_at": "2023-06-07T10:27:44.382000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "The censorship isn't because people love censorship, it's because people feel externally constrained to do so",
+        "created_at": "2023-06-07T10:28:12.873000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "those perceived external constraints haven't disappeared",
+        "created_at": "2023-06-07T10:28:25.587000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Figuring out how to include non-consensus censorship resistance features into all clients is a hard problem.  😖",
+        "created_at": "2023-06-07T10:28:32.544000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "AFAICT this would be a backdoor way to try to kill the builder API. fine but label it as such",
+        "created_at": "2023-06-07T10:29:03.865000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "My recommendation to those people is to go find another line of work.  I hear TradFi is hiring.  😬",
+        "created_at": "2023-06-07T10:29:05.305000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Why would it kill the builder API?",
+        "created_at": "2023-06-07T10:29:18.573000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "(I'm no fan of the builder API)",
+        "created_at": "2023-06-07T10:29:22.430000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "because we know with high probability censorship is happening",
+        "created_at": "2023-06-07T10:29:32.456000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Right, but would it continue to happen if builder bottom line was significantly harmed when they did it?",
+        "created_at": "2023-06-07T10:29:52.571000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "I can't predict for sure, but OFAC still exists",
+        "created_at": "2023-06-07T10:30:54.237000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Lets say clients switched to local blocks for 2 blocks following a 2-block long censorship (as defined above), and lets say that we managed to get all of the clients to implement it and 80% of validators use stock clients.  Builders (as a group) would have their rewards cut to 60% of previous.",
+        "created_at": "2023-06-07T10:31:29.062000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "so sort of a punctuated pattern, builder until backlog of censored transactions appear?",
+        "created_at": "2023-06-07T10:32:59.005000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "There will certainly be some who are willing to eat the cost in order to keep censoring.  I think a significant portion will switch to non-censoring relays/builders though.  More importantly though, this strategy would largely mitigate the censorship problem and do so in a way where there is a financial incentive to be a non-censoring builder/relay.",
+        "created_at": "2023-06-07T10:32:59.788000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I wouldn't wait for a backlog, I would just wait for 2 consecutive blocks where a single transaction *should* have been included in both but it wasn't.  Such a transaction would need to have a gas price higher than median for each of those two blocks.",
+        "created_at": "2023-06-07T10:33:47.385000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "That would trigger a \"failsafe\" mode that would last for 2 blocks where the validator will stop using the builder network for those two blocks, then resume using the builder network after that.",
+        "created_at": "2023-06-07T10:34:24.309000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "You can tune the parameters of course, but 2 consecutive blocks for triggering seems good to me because it avoids triggering the failsafe in all but pathological gossip failures.  Turning it back on after two blocks is pretty arbitrary, but \"feels\" like a sufficient punishment without being so harsh that people will go out of their way to fork clients over it.",
+        "created_at": "2023-06-07T10:35:47.497000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "this seems to group supposedly-censoring and supposedly-noncensoring builders together? that is, it penalizes noncensoring builders in a way they can't do much about, if censoring builders still dominate",
+        "created_at": "2023-06-07T10:36:18.810000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "That is correct.  I don't know that we can separate the two unfortunately.  😢",
+        "created_at": "2023-06-07T10:36:41.735000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "This doesn't need to be turned into a governance nor political argument. There's no need for ELs to implement any particular heuristics and probably client diversity is a strength here in that different heuristics are harder to exploit. The engine API PR requests for simply a boolean that says either \"yes\" build locally or \"no\" you can build externally. And the EL is allowed for example to use a random number here for all I know.",
+        "created_at": "2023-06-07T10:41:07.581000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "More constructively, I believe the most correct approach here is integrating L1 PBS more properly",
+        "created_at": "2023-06-07T10:44:07.533000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "In a way which allows for each CL or EL (however implemented, regarding engine API) to add transactions they want",
+        "created_at": "2023-06-07T10:46:32.904000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Agreed, there are designs where ePBS allows for this, but like it or not we live in a mev boost world now and this is\n1) trivial to implement\n2) a net improvement over the current status\nSo I believe wasting on arguments of what's the best heuristic is just playing for the censors. We should just ship **any** heuristic and worry about that later",
+        "created_at": "2023-06-07T10:57:28.702000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Btw, random sounds quite interesting and it doesn't require Engine API mods. The problem is that unless this strategy is implemented by every client, stakers who use mev-boost will be biased towards a client that doesn't implement it",
+        "created_at": "2023-06-07T11:00:40.707000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "So you are saying that Geth should implement this in the most constraining/aggressive way possible.  😄",
+        "created_at": "2023-06-07T11:16:00.368000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "haha, sounds like a possible way to make Geth a minority client indeed",
+        "created_at": "2023-06-07T11:21:03.518000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "this doesn't matter materially for the sake of the API, ie it would return transactions without opinion about them via some filtering mechanism - CL:s can then keep track of history and implement their own thresholds etc",
+        "created_at": "2023-06-07T11:22:43.315000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "the point was more that we can ask the el to *decide* or we can have the EL provide data that allows the CL to decide",
+        "created_at": "2023-06-07T11:23:29.400000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "CL:s already implement _some_ policy, ie looking at profit thresholds between local and mev-boost - might be worthwhile to keep it all in one place rather than adding more cooks to the soup",
+        "created_at": "2023-06-07T11:25:16.114000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "itexplee",
+        "category": "general",
+        "parent": "",
+        "content": "?",
+        "created_at": "2023-06-07T11:33:54.296000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I would also be in favour of CL implementing heuristics. The complexity is CL isn't having access to raw data required for this, a variety of heuristics would require access to the mempool data for instance. Tho, it can be some data which allows for a subset of or just one heuristics which is already better than status quo",
+        "created_at": "2023-06-07T11:39:41.785000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "promised last ACDC to post this link: https://github.com/libp2p/specs/pull/548 - interesting for anyone in saving lots of bandwidth when blobs hits the net",
+        "created_at": "2023-06-07T12:12:24.080000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I disagree but not strongly, by keeping the current API proposal the EL can send `true` or `false` and this is trivially implementable by everyone. The other way around the EL needs to send data that the CL will need to be able to parse. We will need to \n1. Agree what this data should consist of. \n2. Have a fork or an engine API version bump, whenever we want to change this dataset. \n3. Break the CL/EL boundary by having the CL interpret EL data (arguably already is the case with the block value)\n\nThe other way around, as in the current proposal, the EL can change the heuristic whenever they like, they are not constrained by the API itself. It's less exploitable in that the EL used by validators is more hidden that the CL (that blockprint can guess). But most importantly: it can be done now instead of being lost in countless forever discussions like deciding for big endian vs little endian or Wei vs Gwei.",
+        "created_at": "2023-06-07T12:23:46.921000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "One small disadvantage of having the EL send true/false is that a validator can run requests through a proxy pretty trivially and return something else.  This is a *much* lower barrier to overriding this behavior than maintaining a fork of a client.",
+        "created_at": "2023-06-07T12:26:48.815000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "We can have an `eth_` or a separate `engine_` method supplying required data. I do agree that finding the right data to be exposed can become an obstacle for this approach",
+        "created_at": "2023-06-07T14:59:48.977000+00:00",
+        "attachments": null
+    }
+]

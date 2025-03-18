@@ -1,0 +1,970 @@
+[
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hi everybody, hope you don't mind me posting here.  I'm looking at the recent EOF presentation slides from ACDE.  I'm interested in the argument that immediate values change the interpretation of existing code.  The example given (slides 23/24) is: `0x61E001615B610100EFE05BFFC92A` The argument is that adding `RJUMP` leads to a change in validity of the code.  But, I don't see that (in this particular case) it is true.  Assembly code for the example is:\n```\n.code\n        push 0xe001\n        push 0x5b61\n        add\n        stop\n.data\n        0xefe05bffc92a\n```\nMy understanding of the Yellow Paper suggests that this code would not be affected by the introduction of `RJUMP` as it does not attempt a branch to the second `JUMPDEST`.  Hence, whether or not its considered a valid Jump Destination does not matter.  *Did I miss something here?*\n\nAnyway, an example like this seems to make more sense to me:\n```\n.code\n   push lab\n   jump\n   db 0xe0\nlab:\n   jumpdest\n   stop\n```\nIn this case, reinterpreting `0xe0` as an `RJUMP` with a two-byte immediate operand completely changes the meaning of the program.",
+        "created_at": "2023-10-17T03:22:31.454000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It's not the best example, mostly to illustrate the overwrite, and an incomplete segment.",
+        "created_at": "2023-10-17T14:04:23.473000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Its still allowed by legacy rules, so we also need to be bould by what is possible and not what is logical.",
+        "created_at": "2023-10-17T14:06:03.071000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Which ASM are you using and what is the db symbol for?",
+        "created_at": "2023-10-17T14:10:34.010000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eniko9443",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hey everyone, \nMake sure to tune in tomorrow (October 18, Wednesday) at 5 pm UTC to the next Devconnect Space to learn more about what the Ipsilon team and other contributors are planning for the first-ever EVM Summit!\nhttps://twitter.com/EFDevconnect/status/1713974107283571064\n\nApplications to attend the event are still open. Learn more and apply 👇\nhttps://evmsummit.org/",
+        "created_at": "2023-10-17T14:29:46.243000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e Its still allowed by legacy rules,\nOk, that's cool ... I just realised I was confused about what it was trying to show.  \n\n\u003e Which ASM are you using and what is the db symbol for?\nThe assembly language is just made up for the example based on other assembly languages (see e.g [here](https://stackoverflow.com/a/22554838)).  `db` stands for databyte and is a common way to indicate a raw byte.  `dw` is also typically used for a data word, etc.",
+        "created_at": "2023-10-17T20:00:33.165000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So, my next question then.  I'm not super familiar with the inner working of the Solidity or Vyper compilers.  But, do we have any reasons to expect arbitrary bytes within a contract's bytecode, other than as a single block at the very end?  For example, compilers might in theory insert constants at arbitrary positions in the code, etc.",
+        "created_at": "2023-10-17T20:02:29.920000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We need to worry about what is possible, not what Vyper and Solidity does.  Voluntarily following conventions does make it easier, but it is still possible to do non-conventional things all EVMs must support.",
+        "created_at": "2023-10-17T20:37:19.466000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Solidity does currently re-write contracts to handle immutable constants initialized in the constructor.  That's why we need data sections and DATALOADN addresses the size regression.",
+        "created_at": "2023-10-17T20:38:15.946000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e We need to worry about what is possible, not what Vyper and Solidity does.\nYeah, I understand.  I'm just trying to get a feel for the current state of play.",
+        "created_at": "2023-10-17T20:52:40.181000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e Solidity does currently re-write contracts to handle immutable constants initialized in the constructor.\nI'm not following what you're getting at here.  Does it result in constant bytes at arbitrary positions in the bytecode?",
+        "created_at": "2023-10-17T20:54:39.096000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e That's why we need data sections \nYeah, I understand the benefit of splitting out code from data.  It makes complete sense to me to do it like this.",
+        "created_at": "2023-10-17T20:57:06.727000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think that's what they do.  The contained bytecode in initcode would contain blank data or be done in parts and then either replaced or copied in sections.  But per their docs it's a code alteration, not just a data section reference.",
+        "created_at": "2023-10-17T20:59:00.304000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e But per their docs it's a code alteration, not just a data section reference.\nYeah, ok I understand ... you're talking about treating contract code as a template before deployment with `CREATE`, etc.",
+        "created_at": "2023-10-17T21:02:52.886000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But I'm interested more in this argument around immediate operands.",
+        "created_at": "2023-10-17T21:03:06.653000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Adding immediates to the legacy EVM won't pass security researcher scrutny.",
+        "created_at": "2023-10-17T21:04:27.180000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ok ... but if you can make the argument that its _impossible_ to add to the legacy EVM .... then the EOF case is stronger, no ?",
+        "created_at": "2023-10-17T21:06:01.195000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Whilst the _possibility_ remains that immediates could be added to the legacy EVM ... then seems to me its a harder sell",
+        "created_at": "2023-10-17T21:07:21.229000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm just trying to understand if its really impossible or not",
+        "created_at": "2023-10-17T21:08:02.819000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It's been tried and rejected.",
+        "created_at": "2023-10-17T21:08:04.208000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Sure, but its still an argument someone can make. If you can say: *no its actually impossible to do this and here's why*.  Then, there's no argument.",
+        "created_at": "2023-10-17T21:09:07.758000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Nothing is truely impossible in the EVM.  It's a question of how much breakage you are willing to introduce.  Historically the amount of breakage immediates add was higher than was acceptable.  The appetite for breakage as decreased, not increased.",
+        "created_at": "2023-10-17T21:10:15.885000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e It's a question of how much breakage you are willing to introduce.\nRight.  And I'm just trying to understand (for myself) what the level of breakage really is.",
+        "created_at": "2023-10-17T21:10:50.917000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "To require it to be impossible is moving the goalposts.",
+        "created_at": "2023-10-17T21:11:03.118000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That it has been rejected before should be an indication to not try again.",
+        "created_at": "2023-10-17T21:11:42.078000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Well, impossible is relative of course.  Low breakage =\u003e possible, very high breakage =\u003e impossible.  Something inbetween =\u003e grey area.",
+        "created_at": "2023-10-17T21:11:45.587000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e That it has been rejected before should be an indication to not try again.\nWell, to be clear: I am not at all proposing to try again!!",
+        "created_at": "2023-10-17T21:12:45.137000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Making previously valid jumpdests invalid was the argument used to reject it, so any solution proposed needs to fit that bill.",
+        "created_at": "2023-10-17T21:13:20.987000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Is it a strong enough argument though, to say that something was previously rejected so we need a completely new way?  I mean, I have no idea",
+        "created_at": "2023-10-17T21:14:12.590000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It means we cannot introduce it in a way that changes semantics of previously contracts.  That implies code validation as well.",
+        "created_at": "2023-10-17T21:15:29.009000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "code validation allows us to ensure future space is safe, so we suddenly don't have a vaid sequence of bytes become invalid or mean something else.",
+        "created_at": "2023-10-17T21:16:00.848000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e Making previously valid jumpdests invalid was the argument used to reject it, so any solution proposed needs to fit that bill.\nYes, I understand this is the crux of the problem.  I'm just looking for incontravertible evidence that its really impossible (i.e. way too many contracts would be broken).  If the solidity compiler (or even an earlier version which was widely used) inserted arbitrary data at arbitrary points in the bytecode ... then that's really it, case closed.",
+        "created_at": "2023-10-17T21:22:59.763000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I can look for that evidence myself, but figured someone around here might know it already",
+        "created_at": "2023-10-17T21:23:18.034000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We can't use solidity as the basis.  Solidity is not part of the EL spec.",
+        "created_at": "2023-10-17T21:23:30.815000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Its part of mainnet though",
+        "created_at": "2023-10-17T21:23:40.784000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "As is Vyper.",
+        "created_at": "2023-10-17T21:23:46.884000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "They are part of the state of play",
+        "created_at": "2023-10-17T21:23:53.490000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The EVM bytecode produced by those tools are, but not the compiler semantics as a hard and fast rule.",
+        "created_at": "2023-10-17T21:24:00.495000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The biggest value comes when these are hard and fast protocol rules.",
+        "created_at": "2023-10-17T21:24:19.683000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yeah, ok.  And that's all I care about: code produced by them now, or in the past",
+        "created_at": "2023-10-17T21:24:22.337000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e code validation allows us to ensure future space is safe, so we suddenly don't have a vaid sequence of bytes become invalid or mean something else.\nYeah, I totally get this.  I understand the need for EOF.  I am a supporter.  What I don't understand, is how to convince enough people.",
+        "created_at": "2023-10-17T21:25:59.212000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm thinking Address Space Expansion may be that lever.",
+        "created_at": "2023-10-17T21:26:22.789000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i.e. what argument can be constructed that EOF is absolutely needed.  The \"killer feature\"",
+        "created_at": "2023-10-17T21:26:32.469000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e I'm thinking Address Space Expansion may be that lever.\nOk, and I heard you talk about that ... though I didn't fully get it.",
+        "created_at": "2023-10-17T21:26:56.484000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "For some people getting rid of code obsevability is that killer features.  Not universal.",
+        "created_at": "2023-10-17T21:26:57.817000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ok, interesting.",
+        "created_at": "2023-10-17T21:27:27.534000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "9 opcodes (call\\*, extcode\\*, balance, selfdestruct) take an address as a stack argument.  They trim off the high 96 bytes. Because of that trimming you couldn't send ether to an account that requires ASE.",
+        "created_at": "2023-10-17T21:28:12.413000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, I understand that.  `u160` vs `u256`",
+        "created_at": "2023-10-17T21:28:44.818000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But, what's the problem with it?",
+        "created_at": "2023-10-17T21:28:51.095000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It would be nice to find examples, but my understanding is standard ABI decoding in some circumstances takes that for granted.  So a MCOPY from CALLDATA would not neeed to mask out the high 96.",
+        "created_at": "2023-10-17T21:29:17.035000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Right .... 🤔",
+        "created_at": "2023-10-17T21:29:59.765000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So, changing the semantics of those opcodes would break existing contracts that, for whatever reason, left junk in the high bit positions",
+        "created_at": "2023-10-17T21:30:26.215000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yep.",
+        "created_at": "2023-10-17T21:30:32.624000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "packed ABI encoding is a useful reason.",
+        "created_at": "2023-10-17T21:30:42.529000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But, one could just introduce `EXTCODECOPY2`, etc no?",
+        "created_at": "2023-10-17T21:30:42.834000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yes, 7 more opcodes. (not CALLCODE or SELFDESTRUCT)",
+        "created_at": "2023-10-17T21:30:49.162000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "and then teach solidity to use it.",
+        "created_at": "2023-10-17T21:31:12.315000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e packed ABI encoding is a useful reason\nOk, I need to think about that",
+        "created_at": "2023-10-17T21:31:31.091000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Maybe an Addres32/Address256 type?  PITA",
+        "created_at": "2023-10-17T21:32:01.373000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "More transparent to make it the rule in EOF.",
+        "created_at": "2023-10-17T21:32:13.082000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e yes, 7 more opcodes. (not CALLCODE or SELFDESTRUCT)\nYeah, its a lot.  People could still argue that its worth it though ... for this particular high-value use case.",
+        "created_at": "2023-10-17T21:33:06.292000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So, how do you feel about the EOF versioning issue then?  That is, we'll end up with a chain full of different versions which clients then have to support",
+        "created_at": "2023-10-17T21:33:50.989000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But ending code observability is a goal Vitalik has.",
+        "created_at": "2023-10-17T21:34:02.562000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "(that's the argument, not my personal feeling)",
+        "created_at": "2023-10-17T21:34:02.978000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e But ending code observability is a goal Vitalik has.\nOk, so that's solid then",
+        "created_at": "2023-10-17T21:34:26.191000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Versioning means that we will need multiple EOF validators in all clients forever.  If EOFV1 is just Big EOF from shanghai + data-appending and EOFv2 is code and data inobservability then we will need two validators in addition to jumpdest analysis.",
+        "created_at": "2023-10-17T21:35:10.268000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If we do all the breaks in one go then, in theory, we can just relax the validator with new compatible chanes like new opcodes or laxer stack validation rules.",
+        "created_at": "2023-10-17T21:35:37.722000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, and two validators is not too much trouble.  I guess the argument is more like: ten years down the track if we have say 10+ EOF versions.",
+        "created_at": "2023-10-17T21:36:07.708000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That's the issue. That sets the precident that a new validator per release is acceptable.",
+        "created_at": "2023-10-17T21:36:26.414000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e compatible chanes like new opcodes\nYeah, any change thats backwards compatible doesn't need a new EOF version.",
+        "created_at": "2023-10-17T21:36:42.459000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It should be more like 1 validator per 5-10 year cycle.",
+        "created_at": "2023-10-17T21:36:45.601000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "haha, you want micro versions!!!",
+        "created_at": "2023-10-17T21:37:19.398000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Micro versions are very very small changes which could be easily maintained, and hence could be made more frequently",
+        "created_at": "2023-10-17T21:37:39.323000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And if we shut down legacy deployments we may be able to wrap old code and special case the truly problematic contracts.",
+        "created_at": "2023-10-17T21:37:41.237000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "For example, gas schedule changes should be easy enough to maintain",
+        "created_at": "2023-10-17T21:37:53.948000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "micro versions?",
+        "created_at": "2023-10-17T21:38:02.438000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Sorry (just thinking out loud)",
+        "created_at": "2023-10-17T21:38:11.473000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Every time we add an opcode we do a micro-version.  There are 11 versions of the EVM.  But only one live on a chain at a time",
+        "created_at": "2023-10-17T21:38:34.337000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "1 validator per 5-10 cycle doesn't sound like a high enough frequency to me personally.  But, I think you could allow more frequent changes if they were (by some argument) easily maintainable.  Gas schedule changes would be one example here.",
+        "created_at": "2023-10-17T21:39:21.297000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So, one major version increase every 5-10 years with micro version increases inbetween.  Anyway random idea just ignore",
+        "created_at": "2023-10-17T21:40:09.530000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Well, space for 1 validatior.  Years 0-8 get just jumpdest, 9-16 get jumpdest+EOF, 17-14 get jumpdest+EOF+EOFv2.  The validtors can compatibly change, but only breaking changes rarely (if ever!)",
+        "created_at": "2023-10-17T21:40:17.949000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hmmm, but there have been quite a fre breaking changes in the history books already.",
+        "created_at": "2023-10-17T21:41:02.743000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Adding codesize limit cap; repricing `SSTORE`",
+        "created_at": "2023-10-17T21:41:44.639000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If we get code obervability and gas observability right, if we need EOFv2 we could have a standard transformation that changes EOFv1 contracts into EOFv2 or legacy EVM, so we only have two live validators.",
+        "created_at": "2023-10-17T21:41:49.689000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "did any contracts over 24K ever get deployed?",
+        "created_at": "2023-10-17T21:42:24.403000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And the pain with SSTORE and hard-wired gas is what's motivating removing gas observability.",
+        "created_at": "2023-10-17T21:42:42.477000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ok, so that's your answer to the versioning issue --- there isn't one because of lack of code observability.",
+        "created_at": "2023-10-17T21:42:42.618000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e did any contracts over 24K ever get deployed?\nNot at the time, but I think they would now no?",
+        "created_at": "2023-10-17T21:42:58.279000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Well, you can.  IIRC 24K was chosen because that's all the calldata you could fit in a 6MGas block.",
+        "created_at": "2023-10-17T21:43:25.728000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "People go up to the limit now don't they?  So to change again would mean breaking change, and new EOF version",
+        "created_at": "2023-10-17T21:43:52.099000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i'm just thinking of how often we could expect new EOF versions which are not \"small\" in some sense",
+        "created_at": "2023-10-17T21:44:25.262000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Seems to me the history books suggest more frequent than 5-10 years. 🤷‍♂️",
+        "created_at": "2023-10-17T21:45:08.875000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If we are dribbling in compatible changes we can take multiple forks.  If it's incompatible cahnges we either need multiple EOF versions or break deployed EOFv1 code.",
+        "created_at": "2023-10-17T21:45:11.802000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yeah, I'm talking about incompatible changes and adding more EOF versions.",
+        "created_at": "2023-10-17T21:45:38.183000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But those breaking changes were done for everybody.  There was little interest in leaving old behavior for existing contracts.",
+        "created_at": "2023-10-17T21:46:21.584000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This is something people must surely be concerned about no?  That EOF will lead to a big increase in maintainability (well decrease I guess)",
+        "created_at": "2023-10-17T21:46:26.037000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Banning EXTCODE* for everyone will break the chain.",
+        "created_at": "2023-10-17T21:46:38.368000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It's not as big as it seems.  Code validation logic and opcodes.",
+        "created_at": "2023-10-17T21:47:02.126000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The core opcode loop stays the same, the contract call protocols stay the same.  memory, storage, and transient storage stay the same.",
+        "created_at": "2023-10-17T21:47:36.685000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e It's not as big as it seems.  Code validation logic and opcodes\nYes, this.  Trying to make a case that its not as big a deal as it might seem",
+        "created_at": "2023-10-17T21:47:51.016000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Reverts stay the same.",
+        "created_at": "2023-10-17T21:47:51.862000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Core semantics are identical, it's all in how it is packaged.",
+        "created_at": "2023-10-17T21:48:07.481000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And by identical I really mean \"uses the same code\"",
+        "created_at": "2023-10-17T21:48:21.370000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e The core opcode loop stays the same, the contract call protocols stay the same.  memory, storage, and transient storage stay the same. \nYes, trying to package this into an argument as to how things will work in the future",
+        "created_at": "2023-10-17T21:48:25.140000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e And by identical I really mean \"uses the same code\"\nWell, except not for `EXTCODE` for ASE",
+        "created_at": "2023-10-17T21:49:38.419000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "there is discussion of EXTDATALOAD",
+        "created_at": "2023-10-17T21:49:52.029000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Surely we'd assume some cases where even the sematics are actually changed",
+        "created_at": "2023-10-17T21:50:04.977000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Those are \"big\" version changes.  Others are \"small\" version changes",
+        "created_at": "2023-10-17T21:50:26.889000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hence container versioning.  Side by side deployment.  If you _really_ need it you can depoly legacy code, but with a little bit of forethought you won't _really_ need it.",
+        "created_at": "2023-10-17T21:50:41.892000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Argument: very few big changes, but lots of small changes ==\u003e ok",
+        "created_at": "2023-10-17T21:50:48.423000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Think of it as Win16-\u003e Win32 (just dated myself)",
+        "created_at": "2023-10-17T21:51:43.785000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e Side by side deployment.\nRight, and trying to manage that and give a clear idea of how it will work seems ... useful",
+        "created_at": "2023-10-17T21:51:55.831000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "haha, I remember windows 2.03",
+        "created_at": "2023-10-17T21:52:09.276000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Anyway, I'm going to be a EvmSummit / DevConnect ... so keen to hear more about EOF.  Is there going any specific events for EOF (e.g. outside of Evm Summit).  If so, how do we find out about them?",
+        "created_at": "2023-10-17T21:54:06.421000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "L2 days may have some content.  Not sure yet.",
+        "created_at": "2023-10-17T21:54:24.134000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ok, I didn't sign up for that",
+        "created_at": "2023-10-17T21:54:54.400000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I guess people at EVM summit will be talking about it though",
+        "created_at": "2023-10-17T21:55:14.002000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Day 1 overlaps with EVM summit.  Tuesday and Wednsday are PACKED.",
+        "created_at": "2023-10-17T21:55:31.707000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yeah, I was planning to do the FE hackathon on Wed ... to learn more about their compiler",
+        "created_at": "2023-10-17T21:55:59.542000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "whileydave",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Anyway, thanks --- I think that has helped me understand the vision better 👍",
+        "created_at": "2023-10-17T21:57:26.366000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Glad to be of service",
+        "created_at": "2023-10-17T22:24:12.086000+00:00",
+        "attachments": null
+    }
+]

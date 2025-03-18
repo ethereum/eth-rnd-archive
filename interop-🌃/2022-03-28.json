@@ -1,0 +1,322 @@
+[
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "If EL doesn't track information about invalid block subchains then it shouldn't be able to serve `latestValidHash` even for canonical chain. Suppose, there is only one chain which is canonical and EL responds with `SYNCING`, CL keeps updating it with payloads optimistically, thus, CL is far behind latest executed payload. At some point EL meets an invalid payload `X` and stops processing this chain, after that has happened CL sends payload `Y` which is descendant of `X` 1000 blocks down this invalid chain.\n\nEL doesn't know `Y` is from this invalid chain and responds with `SYNCING` trying to pull ancestors and execute them. Then it meets `X` block once again and the same sequence of actions repeats. In the result, a node will be in limbo, CL will not know that it must stop following this chain and do something else instead.",
+        "created_at": "2022-03-28T10:11:23.139000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "If EL would store `Y` as the most recent known header of an invalid chain and `parentOf(X)` as the closest valid ancestor then it would be able to respond correctly and inform CL whenever child of `Y` is received.\n\nIn general case CL may miss a child of `Y` and EL would have to fill the gap to link the most recent payload with its chain and then recognize that this chain is invalid and respond accordingly. Various edge cases of this kind is the complexity EL have to deal with if we want this functionality to be supported and clients follow the spec.",
+        "created_at": "2022-03-28T10:22:51.352000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "We may consider returning `latestValidHash` in response to `fcU` only, making it clear that `latestValidHash` makes sense for canonical chain only. But I don't see how this limitation reduces the complexity on EL side.",
+        "created_at": "2022-03-28T10:31:04.054000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I have been thinking about the situation of LVH and I think our implementation at prysm (and I suspect also Teku's and LightHouse's, hopefully they'll chime in) relies on a trust on the EL that's more important than the  chain supporting the LVH. We rely on a guarantee that if LVH is indeed and ancestor of the passed root, then its child in that chain **must be invalid**. Ultimately this is what matters the most and this should be clearly stated in the EIP",
+        "created_at": "2022-03-28T11:07:05.766000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "If the EL can't guarantee this, I think we need to allow for it to return nothing",
+        "created_at": "2022-03-28T11:08:25.201000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e We rely on a guarantee that if LVH is indeed and ancestor of the passed root, then it's child in that chain must be invalid. \nThis is the idea behind `latestValidHash` in the spec. CL must invalidate a subchain starting from a block that it has received an `INVALID` status to, back to a child of a block with `block_hash` equal to `latestValidHash`.",
+        "created_at": "2022-03-28T11:26:12.641000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I understand that this is the idea, but from what I'm reading here if no one is following as it's written and specially given \u003c@360491619402776577\u003e's reply that geth returns the last valid block in the canonical chain. It's not clear to me that ELs are validating that the child of the block with the given LVH is actually INVALID",
+        "created_at": "2022-03-28T11:29:43.158000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I would rephrase the EIP to state explicitly that either LVH is not there, or if it's included in the reply then it's guaranteed to be an ancestor and it's guaranteed that its child in that chain is INVALID",
+        "created_at": "2022-03-28T11:31:01.238000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "And of course that itself is VALID",
+        "created_at": "2022-03-28T11:31:14.837000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "We're discussing implementation of `latestValidHash` on EL side (https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md#payload-validation) and would like to hear opinions of EL client implementers. Questions:\n1) Is this possible for your client to support `latestValidHash` as it's currently stated in the spec?\n2) If not what potential edge cases and issues do you see with that?\n3) Will providing `latestValidHash` only for *canonical chain* reduce the complexity anyhow?\n\ncc \u003c@\u0026688101493978562687\u003e \u003c@\u0026652918665943056397\u003e \u003c@\u0026836981603216654336\u003e \u003c@\u0026688090867927482525\u003e",
+        "created_at": "2022-03-28T11:48:44.225000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "1) Yes, it would be possible given we had received from CL *ALL* other blocks for the fork (so latestValidHash would have to always be the payload `parenthash`), this is because 2) in order to determine which hash to give to CL, we need to go backward from the fork tip, if we do not have the payload `parenthash` we basically lack a piece of the chain and we cannot really determine what came before and how to what it eventually connects to. 3) yes, definetely, it would be straight trivial and we already do that in some cases 🙂",
+        "created_at": "2022-03-28T12:13:04.955000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "1. 2. I think it is doable, but returning the canonical chain hash will reduce complexity. I think to handle such situation we need to add extra storage for it. I wrote about it here: https://discord.com/channels/595666850260713488/892088344438255616/907586429725605949 or we can do it as \u003c@!687974325072035882\u003e described\n3. Significantly ! 🙂",
+        "created_at": "2022-03-28T12:15:11.153000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "so it depends on how CL interacts with Erigon, if we are at block number 1000, and there is a fork at block 752 but we do not know the parenthash (we do not have block 751 of the fork), but we have the block 750 to the fork, which connects to the canonical chain at 749, then how can we tell that we need to return the hash for 750 or 749?",
+        "created_at": "2022-03-28T12:16:29.608000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "we would lack information",
+        "created_at": "2022-03-28T12:16:34.421000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "maybe in this case we could still recover using block numbers but what if we have multiple for starting at block 749 and there are many blocks 750?",
+        "created_at": "2022-03-28T12:18:56.207000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "which one would be the right fork?",
+        "created_at": "2022-03-28T12:19:10.842000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Just to repeat a silly point, but for the CL, having the LVH on a sidechain does not provide that much of an optimization. It would be no trouble at all for the CL just getting a LVH in the canonical chain, or as Adrian put it, none at all.",
+        "created_at": "2022-03-28T12:23:04.392000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "So if there's any complication on the EL, I don't see why we would go with this design instead of simplifying your life",
+        "created_at": "2022-03-28T12:23:50.707000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "+1 for simplification",
+        "created_at": "2022-03-28T12:25:00.710000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Technically Erigon implements latestValidHash according to the spec, but it might be of little use to the CL. Modulo some basic checks our implementation is the following. If some ancestors are missing, we return SYNCING (no LVH). Otherwise for side-chain blocks we return ACCEPTED (no LVH). For blocks from the canonical chain we return either VALID (LVH=blockHash) or INVALID (LVH=parentHash). We do not store any invalid blocks, so LVH can only be equal to either blockHash or parentHash.",
+        "created_at": "2022-03-28T12:28:55.421000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "^That's for newPayload^",
+        "created_at": "2022-03-28T12:32:30.682000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "For fcU latestValidHash is more meaningful. When we switch to a side chain, and there are some invalid blocks there, returned LVH points to the last valid block on the side chain that has become canonical.",
+        "created_at": "2022-03-28T12:34:30.787000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "What would happen if Erigon is `SYNCING` and meets an invalid block in the canonical chain?",
+        "created_at": "2022-03-28T12:40:27.076000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "It will discard it. We should probably memorize bad blocks and don't attempt to download them again, but it's not implemented yet.",
+        "created_at": "2022-03-28T12:41:48.463000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think it would be amazing to have hive test cases for such scenarios!",
+        "created_at": "2022-03-28T12:43:15.895000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Correct me if I am wrong but implementation of `latestValidHash` requires EL to keep information about invalid chains. While EL is `SYNCING` it may not send a message to CL if it has found an invalid block because the communication channel is unidirectional, and has to keep this information until at least the next roundtrip initiated by CL. This would be required disregarding the chain is canonical or not.",
+        "created_at": "2022-03-28T13:14:27.021000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "My understanding from \u003c@583892532644151312\u003e's reply is that there's a risk of not being able to sync for Erigon. Suppose the CL gets an invalid block and reorgs to that. It sends fcu and it gets SYNCING from the EL because it's still computing. The next block builds on top of it, so it sends fcu again. By now Erigon has executed the previous block and found it invalid so it discarded it. It doesn't have it anymore so it will reply SYNCING again and request it again. This will proceed and never stop so the CL will be able to continue syncing an INVALID chain",
+        "created_at": "2022-03-28T13:22:04.461000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes, I agree. However in canonical chain as LVH EL could store invalid hashes only. Right? I mean there is no need to store (hash, parentHash) for every invalid block, but only (hash)",
+        "created_at": "2022-03-28T13:22:05.523000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "Testing",
+        "parent": "",
+        "content": "for Besu 1) remains to be seen how easy it is. right now our naive impl returns LVH from the canonical chain. I am replacing that with a walk back from the new blocks parent, which should be easy. 2) I'm not sure what edge cases are, because I'm not sure how LVH from a fork being decided on is useful to the CL. 3) Yes, but wouldn't that be current chain head?",
+        "created_at": "2022-03-28T13:27:28.183000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "3) yes it will be the chain head but you need to keep all the children hashes so that when requested you know that the CL is requesting the execution status of a descendant and therefore you can return INVALID and the last chain head. I don't see how this can work discarding them as in Erigon reply",
+        "created_at": "2022-03-28T13:30:00.955000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "2) One of the main situations to handle is when EL is `SYNCING` and CL is optimistically sending `newPayload` and `fcU` messages. EL faces an invalid block on canonical chain that was optimistically provided by CL and has to return `latestValidHash` in response to the next `newPayload` message and inform CL that i) the chain CL is syncing with is invalid ii) it's invalid starting from child of `latestValidHash`. And this already requires to keep information about invalid chain in memory between roundtrips.",
+        "created_at": "2022-03-28T13:48:26.858000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "Testing",
+        "parent": "",
+        "content": "so is LVH the common ancestor of all forks, which must occur after finalization?",
+        "created_at": "2022-03-28T14:01:31.981000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "LVH points to the last valid ancestor of an invalid block. There can be more forks that are valid beyond finalized checkpoints",
+        "created_at": "2022-03-28T14:06:31.078000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "Testing",
+        "parent": "",
+        "content": "and an invalid block (in this case) is invalid because we haven't connected it through its parents back to a finalized block. i.e. there is nothing wrong with these in isolation that would have caused them to be thrown out.",
+        "created_at": "2022-03-28T14:38:43.765000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "Testing",
+        "parent": "",
+        "content": "we have a bad block collection somewhere, let me see if we can just consult that as we walk back up the parents.",
+        "created_at": "2022-03-28T14:47:40.623000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "invalid is invalid if it fails execution. It can be valid from every aspect from a consensus perspective, but the execution payload not pass execution validation",
+        "created_at": "2022-03-28T14:48:33.156000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "A child of latest valid ancestor is also invalid, `latestValidHash` is the parameter that alongside with a block in question (a block sent via `newPayload` or set by `fcU`) defines an invalid subchain that CL should remove and stop following. Invalidity here means invalidity wrt execution",
+        "created_at": "2022-03-28T14:49:27.983000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "Testing",
+        "parent": "",
+        "content": "that helps, thanks",
+        "created_at": "2022-03-28T14:51:53.419000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, it's probably a problem in Erigon and we have to address it. I also concur with \u003c@!758579010027782144\u003e that it'd be very useful to have Hive tests for such scenarios.",
+        "created_at": "2022-03-28T15:35:34.612000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Just to be completely clear, when a latestValidHash is provided to the CL, that hash and all of it's ancestors are marked VALID.  All descendents of that hash (from any fork) are marked INVALID. I assume in the Erigon discussion above that when it's returning parentHash as the latestValidHash that it has actually executed the parent block and found it to be VALID - otherwise that would break things very badly.",
+        "created_at": "2022-03-28T20:56:28.192000+00:00",
+        "attachments": null
+    }
+]

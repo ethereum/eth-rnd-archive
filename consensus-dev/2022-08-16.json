@@ -1,0 +1,226 @@
+[
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "nice work! played with this  over the weekend, https://github.com/status-im/nim-ssz-serialization/pull/35 reduces a full state hash_tree_root from 480ms to 320ms on my laptop using your hashtree lib (and a few other minor cleanups on the Nim side) - this is only the padding optimization which is easier to introduce in our codebase (I much prefer algorithmic optimizations - CPU-specific stuff is a mess, ie avx512 is not always faster than avx1/2, depending on the CPU etc - it's a mess).",
+        "created_at": "2022-08-16T12:47:47.083000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I'm a bit shocked, how do you manage to use my library without the vectorization? ahh are you using the avx1 function or something like this?",
+        "created_at": "2022-08-16T12:51:20.684000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "by passing in count=1?",
+        "created_at": "2022-08-16T12:55:50.478000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "ie shouldn't all of the functions work for arbitrary counts? I'll admit, I didn't read the full code but the shani version I run on my laptop seems to have a special case for count==1",
+        "created_at": "2022-08-16T12:56:24.866000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "ah yeah, so if you pass count==1 then it will jump down to avx1 anyway.",
+        "created_at": "2022-08-16T12:59:08.309000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "now that I think about it, I'm also comparing the perf numbers with blst which I don't think has shani support",
+        "created_at": "2022-08-16T12:59:10.564000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Let me know if you plan to use that library in production eventually cause\n1) There is no support yet for ARM with shani (can quickly add it cause I already did it for gohashtree)\n2) There is no pure SSE code for very old CPUs or even some new Celerons that do not support even AVX1. \nWhat we do for 2 in gohashtree is use a generic go function that catches very old CPUs but it's not good at all",
+        "created_at": "2022-08-16T13:00:52.538000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "cool, thanks, will do! we have a few options to evaluate - I'm curious if you have any thoughts:\n\n* use the perf gains to switch to a plain C/Nim version and thus maintain absolute performance compared to status quo more or less, but gain code simplicity\n* use hashtree as-is - I understand gohashtree uses as separate codebase for the assembly files because go comes with a different assembler? I didn't look at it in detail, but it feels like that could potentially be fragile where small differences between the libraries start appearing.. blst/openssl solves this by using a generator for the assembly language that can adapt to different asm compilers, from what I understand\n* implement the padding trick in the blst version (which is based on openssl vs intel that you used), and maybe upstream it there - do you ever get to talk to the blst guys about this?",
+        "created_at": "2022-08-16T13:10:35.403000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "in the end, we also have a catch-all implementation for old / special CPU:s - that also helps the codebase stay compatible with weirder non-x86 platforms - that said, arm-shani is interesting, apparently \u003c@784446040073175040\u003e found a nice raspi replacement that has the arm crypto extensions enabled, but otherwise keeps a similar form factor / profile",
+        "created_at": "2022-08-16T13:12:43.071000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jcrtp",
+        "category": "general",
+        "parent": "",
+        "content": "I have been summoned",
+        "created_at": "2022-08-16T13:25:26.639000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jcrtp",
+        "category": "general",
+        "parent": "",
+        "content": "https://forum.radxa.com/t/introduce-rock-5-model-b-arm-desktop-level-sbc/8361",
+        "created_at": "2022-08-16T13:25:40.146000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jcrtp",
+        "category": "general",
+        "parent": "",
+        "content": "Are we doing both `portable` and `modern` builds for ARM now too? 😆",
+        "created_at": "2022-08-16T13:27:58.566000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "So here are some quick comments:\n- I'll change the names as per your request immediately.\n- I haven't decided about runtime selection of the best algorithm. I originally thought about leaving this to the consumer so that they can do at initialization once and for all to pick the best choice. I could add a method \"init\" that chooses the best function and returns a pointer to a hasher function. \n- I followed Intel's assembly for AMD. Indeed BLST was written by dot-asm that also is who pipelined most of the assembly in OpenSSL. I did not want to spend weeks learning the perl generator and decided to simply rewrite it in plan9 for goassembly. I did contact dot-asm several times to ask him if we could maintain such a library (eventually I would want to go back to math) but he never replied. \n- The ARM NEON implementation is mine, in openSSL it was disabled cause the scalar version is faster, but for merkle trees the vector version is much faster. \n- The ARM+Shani version is useful in M1 and any newer machine, they are much faster than the vector versions on ARM.\n- In my experience the code changes to merkleize sending the tree layers to the hasher instead of just two chunks is minimal so I'd give it a try. \n- I have fuzzed extensively gohashtree that we are using in production in prysm. But I can quickly add a fuzzer for this one as well. The code is not branching so in just a few hours you get to fuzz each routine. In any case, if you plan to use this then I'll add the missing ARM code and a bunch more of unit tests cause those aren't enough as the ones in gohashtree.",
+        "created_at": "2022-08-16T13:38:10.138000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@449019668296892420\u003e",
+        "created_at": "2022-08-16T13:38:20.868000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "lol, heavens no .. we've been trying to convince blst to upgrade their build to make runtime selection more simple, to no avail - it's _almost_ worth forking blst over, just to get separate symbol names for each cpu - their objection is basically that they don't want to expose runtime selection for the low-level functions which is fine - we're looking to do it for the high-level entry points",
+        "created_at": "2022-08-16T13:41:47.182000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "fwiw, I gave the arm version a quick spin on raspi3b+, the benchmark at least works fine there too (unsurprisingly perhaps, but still). I feel for your unwillingness to dive into perl 😉",
+        "created_at": "2022-08-16T13:44:00.390000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jcrtp",
+        "category": "general",
+        "parent": "",
+        "content": "That's how Teku does it, right - embeds both copies, detects the CPU features on startup, and loads the appropriate SL",
+        "created_at": "2022-08-16T13:44:56.683000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e - In my experience the code changes to merkleize sending the tree layers to the hasher instead of just two chunks is minimal so I'd give it a try. \nthey are sort of trivial, but we'd have to leave the \"memory-safe\" subset of nim in yet one more way, so we have to do it a bit carefully - it also intervenes with our caching scheme somewhat that caches the full tree of every List/Array (such that one can update single entries in the list and only dirty the relevant path)\n\nwhen we talked about this 6 months ago, the caching layer was the main reason we didn't jump on it straight away - it is exceedingly rare that we hash a full state or anything else that takes significant time, meaning that we rarely would find use for vectorized hashing (and we'd have to .. hm, I guess detect how many consecutive cache cells are dirty and pass that to the algo which is a complexity of its own)",
+        "created_at": "2022-08-16T13:50:53.509000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "however, the padding trick speeds up _all_ our hash operations trivially - dirty caches included - so it's a nice way to combat the performance cost of ever-growing validator set",
+        "created_at": "2022-08-16T13:52:24.309000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I'm surprised by this, we use this on our cached trie layer too... then it becomes just like the old method, since effectively you pass `count=1` to the function and the only gain is indeed the padding block",
+        "created_at": "2022-08-16T13:56:01.743000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "indeed - it's not a difficult change, just a bit messy - basically, our cache is lazy, so when a value changes, we just mark that cell and its ancestors dirty - for the vectorization to work optimally, we'd have to find properly aligned ranges of adjacent cells and update those, walking up the tree as appropriate - that would also mean changing the tree hashing traversal itself from a fairly simple recursive matter to something that reasons botton-up about the aligned leaves",
+        "created_at": "2022-08-16T14:06:39.248000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "no no, what I mean is that for that hashing you can keep the exact same algorithm and just change the hasher to get the padding block.",
+        "created_at": "2022-08-16T14:26:19.171000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "oh - yeah, that change is trivial indeed -that's what the nim-ssz-ser PR does",
+        "created_at": "2022-08-16T14:26:52.733000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "oh.",
+        "created_at": "2022-08-16T14:27:26.229000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "maybe I misunderstand .. you mean .. changing the blst hasher?",
+        "created_at": "2022-08-16T14:27:42.977000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "to be clear, the change to use the padding block optimization by calling hashtree is already implemented - that's simple - what's less simple is to process several hashes in parallel",
+        "created_at": "2022-08-16T14:28:49.238000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "yeah yeah, I can see that... we only apply the vectorized algo when we hash large lists. Essentially this happens on epoch transitions or on hashing transactions on blocks.",
+        "created_at": "2022-08-16T14:54:26.741000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "yeah indeed - they load a shared library - we want the same, but stay with static linking / single binary (for ease of distribution)",
+        "created_at": "2022-08-16T15:10:49.959000+00:00",
+        "attachments": null
+    }
+]

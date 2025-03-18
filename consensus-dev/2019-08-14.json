@@ -1,0 +1,162 @@
+[
+    {
+        "author": "eth2_gitter_bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003czilm13\u003e @protolambda we are not caching. Forget to finish this task. Thanks that remembered. I will do it soon.",
+        "created_at": "2019-08-14T08:44:39.461000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_gitter_bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cprotolambda\u003e @zilm13 if LFS is difficult in your CI setup, we also have gzipped archive files per configuration",
+        "created_at": "2019-08-14T10:11:50.886000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@203220829473996800\u003e some time ago we discussed that processing of initial deposits in the spec uses suboptimal algorithm and implementations can improve on that. But it turns out that there is no room for improvement because genesis initialisation tests that are generated from the spec would fail then.",
+        "created_at": "2019-08-14T11:18:51.248000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_gitter_bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003czilm13\u003e @protolambda I had difficulties in maintaining several caches (different commits could rely on different version of tests) but I think I know how to sole it",
+        "created_at": "2019-08-14T11:36:10.230000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@425572898787426305\u003e Yes, the genesis spec processes one by one. I encourage the other solution of doing all in one time, but only if it makes sense (e.g. process a set of existing deposits). The one by one thing is closer to listening for deposits pre-genesis.",
+        "created_at": "2019-08-14T11:44:50.632000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "We don't have merkle proofs coming from contract alongside with deposit data anymore. Basically, client listens for deposit data and stores them into a merkle tree. What is the benefit of maintaining a list of deposits with pre-calculated proofs in addition to that tree? Why not just compute proofs from a merkle tree that contains all deposit data passed to `initialize_beacon_state_from_eth1`?",
+        "created_at": "2019-08-14T12:28:20.200000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@415109946682769408\u003e You worked on both the genesis and deposit code, do you have a preference for one solution over the other here?",
+        "created_at": "2019-08-14T12:57:19.785000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "reminder! \neth2 call in 24 hours\nagenda: https://github.com/ethereum/eth2.0-pm/issues/68 (just made the agenda sorry about that)",
+        "created_at": "2019-08-14T14:03:02.072000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "hsiaowei",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@425572898787426305\u003e \n\n\u003e What is the benefit of maintaining a list of deposits with pre-calculated proofs in addition to that tree?\n\u003e Why not just compute proofs from a merkle tree that contains all deposit data passed to initialize_beacon_state_from_eth1?\n\nI had that debate with Justin in https://github.com/ethereum/eth2.0-specs/pull/1202 about the fact that we don’t need to regenerate `deposit_root` again. And like you said, we also don’t need to verify the Merkle branches that the client side generated. The opposite argument was that’s not neat enough wrt the spec writing.\n\nNote that there’s an assumption of that `MIN_GENESIS_ACTIVE_VALIDATOR_COUNT` will be met before `MIN_GENESIS_TIME`. In Justin’s previous stub, it’s about 2 days preparing time - which seems good enough even if it’s not fully optimized.\n\nThe easy dirty optimization in my mind is, if you have something like `prepare_genesis_deposits` helper: https://github.com/ethereum/eth2.0-specs/blob/931c51ce7af067c632ae5d8121db451e070f0244/test_libs/pyspec/eth2spec/test/helpers/deposits.py#L58 for preparing `deposits`, we can:\n 1. Add a flag parameter `skip_verify_merkle_branch` in `process_deposit(..., skip_verify_merkle_branch=False)`, to skip `verify_merkle_branch` if the call is from `initialize_beacon_state_from_eth1`.\n 2. In  `initialize_beacon_state_from_eth1`:\n     1. Pass `skip_verify_merkle_branch=True` when calling `process_deposit`.\n     2. Moreover, we can pass the pre-generated `deposit_root`  to `initialize_beacon_state_from_eth1(..., deposit_root)`. And change `state.eth1_data.deposit_root = hash_tree_root(deposit_data_list)` to `state.eth1_data.deposit_root = deposit_root`.\n\n^^^^^ Might need more reviews if we use this kind of solution in production.",
+        "created_at": "2019-08-14T14:03:02.303000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e But it turns out that there is no room for improvement because genesis initialisation tests that are generated from the spec would fail then.\n\nwhat would fail? Do you not maintain some sort of validity check that you can pass a state into?",
+        "created_at": "2019-08-14T14:06:28.807000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "aah, Or is it the single initialization test?",
+        "created_at": "2019-08-14T14:07:41.905000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@415109946682769408\u003e Thanks for detailed answer! I've got the readability point but as a result if we add an efficient algorithm we can't strictly follow the spec as it requires us to do some tweaks in order to pass initialisation test. We'd like to have an efficient implementation that follows the spec and passes state tests whenever it's possible. That is my point.",
+        "created_at": "2019-08-14T16:00:49.453000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e aah, Or is it the single initialization test?\nyes, this one.",
+        "created_at": "2019-08-14T16:01:26.850000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "trent_vanepps",
+        "category": "general",
+        "parent": "",
+        "content": "it's come to my attention that two client implementers hadn't seen this doc on \"Serenity's design rationale\" so here it is! \u003c@291925846556540928\u003e is there a way it could be more visible / linked near the spec?\n\nhttps://notes.ethereum.org/s/rkhCgQteN#Why-32-ETH-validator-sizes",
+        "created_at": "2019-08-14T16:10:42.426000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "can add to the list of resources in README 👍 \n\nin some convos about how to clean things up and get this info closer to the spec. simply linking to everything is step 1",
+        "created_at": "2019-08-14T16:11:39.034000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "Any reason to not pack 2 basic types into one root in the merklization of a container? E.g. a container like:\n\nstruct Foo {\n  x: u64,\n  y: u64\n}",
+        "created_at": "2019-08-14T18:11:17.445000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "the current spec says its root is `hash(merkleize(x), merkleize(y))` but since it is \u003c 32 bytes it seems fine to interpret it as one chunk",
+        "created_at": "2019-08-14T18:13:13.408000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**schroedingerscode**\nWhile I agree that's a fair optimization (i.e. packing up to 4 uint64s into a single root, and avoiding a technically unncessary SHA256 call), that introduces a number of edge cases I honestly don't want to handle yet. Not disagreeing that it's worth considering, I just don't think now is the time for it as clients are working towards interop.",
+        "created_at": "2019-08-14T18:21:23.712000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "yeah definitely an optimization to come later just wasn't sure if i was missing something",
+        "created_at": "2019-08-14T18:28:24.601000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**schroedingerscode**\nI like the idea. Because a bytes32's root is just itself, packing does certainly reduce unnecessary hashing, which is slow.",
+        "created_at": "2019-08-14T18:28:54.948000+00:00",
+        "attachments": null
+    }
+]

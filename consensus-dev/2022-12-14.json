@@ -1,0 +1,186 @@
+[
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Wouldn't this change make it so a validating node would now need to retain a complete history of blockhashes?",
+        "created_at": "2022-12-14T10:17:20.951000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "While ~84MB / year (not counting the tree structure itself!) isn't huge, it is unbounded linear growth and I think we should try very hard to avoid such things where possible.",
+        "created_at": "2022-12-14T10:19:29.756000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Anyone have any idea how much it is per year including the tree structure (actual size on disk)?",
+        "created_at": "2022-12-14T10:19:45.357000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Are there any ideas/proposals on how we can make it so it isn't retained indefinitely, and perhaps very ancient data gets dropped eventually?",
+        "created_at": "2022-12-14T10:20:34.148000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Perhaps something like a tree is built up over time, and after living for a certain amount of time it gets frozen and stored and a new tree is built.  This way you have maybe 1 year of a tree, and then 32 bytes (tree root) for every previous year.  This way you have ~100MB + ~32 bytes / year.",
+        "created_at": "2022-12-14T10:21:49.415000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "(it is also possible I'm misunderstanding this proposal, so please correct me if I got it wrong!  cc \u003c@449019668296892420\u003e",
+        "created_at": "2022-12-14T10:22:17.805000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "It is not unbounded, the field is a circular buffer which will keep the last 65536 historical summaries. Anything beyond that will be overwritten by the latest one written to the state",
+        "created_at": "2022-12-14T10:38:56.492000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Ah, OK.",
+        "created_at": "2022-12-14T10:39:13.858000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm, in that case how does this work all the way back to genesis?",
+        "created_at": "2022-12-14T10:39:44.925000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "The new field can't verify all the way from genesis as it only starts being accumulated after capella",
+        "created_at": "2022-12-14T10:45:22.816000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pietjepuk",
+        "category": "general",
+        "parent": "",
+        "content": "~~Does that work out to be 204 years worth (writing one entry per 8192 slots)?~~",
+        "created_at": "2022-12-14T11:02:00.074000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "in the current beaconstate, the `historical_roots` field grows by ~one hash per day, unbounded - in the proposal, it's two hashes per day, also unbounded - the hashes accumulate the block_roots/state_roots field which indeed are circular and thus get overwritten (yes, with a cycle of ~one day) - the new field can be used to verify blocks all the way to capella - the old field, *if* you store the state roots in a constant table in the verifier, for the phase0-\u003ecapella period, can be used to verify the rest cc \u003c@476250636548308992\u003e (the new fields are unbounded, not circular)",
+        "created_at": "2022-12-14T11:02:41.184000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "Ah I mixed this up with the other fields, it is not a circular buffer",
+        "created_at": "2022-12-14T11:05:29.072000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "the current historical_roots field is constructed in such a way that it combines state root and block root - since the state root is updated on an empty slot, you cannot verify that a block belongs to a state without computing the missing state roots, or effectively, without computing all state roots - the proposal fixes this gap so that having only 8192 slots of block data, you can verify it belongs to a recent state without computing state roots at all (computing state root is very expensive - computing block roots is cheap _and_ covers execution data these days)",
+        "created_at": "2022-12-14T11:06:12.614000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "so previously, the growth was 32b/27h or ~10kb/year - it doubles now to 20kb/year",
+        "created_at": "2022-12-14T11:08:05.290000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "and strictly, the new field is bounded too - we can fit 16777216 roots in there, then it breaks. I hope we don't discover immortality any time soon, so this quite safely can remain someone elses problem.",
+        "created_at": "2022-12-14T11:10:34.276000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pietjepuk",
+        "category": "general",
+        "parent": "",
+        "content": "Is the `# Frozen in Merge, replaced by historical_batches` still accurate, or is that \"Frozen in Capella\" now?",
+        "created_at": "2022-12-14T11:12:21.444000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "it should be \"frozen in capella\" - it's a pre-merge PR 🙂",
+        "created_at": "2022-12-14T11:12:48.251000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "It is odd to have a dead field here post-capella. Although the space it takes up is negligible, maybe in a follow up fork we can add the respective summaries for epochs before capella to `historical_batches` and remove the `historical_roots` field altogether.",
+        "created_at": "2022-12-14T11:14:42.351000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "nothing against this, but it was considered too complex to do in a single fork",
+        "created_at": "2022-12-14T11:23:34.702000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "it's fitting though in a sense - the field data was meant to remain in the state forever, it's just the shape that changed a little",
+        "created_at": "2022-12-14T11:24:31.226000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah dont disagree, it would be pretty non-trivial to implement this in a single fork. Also the new form it is kept in is a lot more useful",
+        "created_at": "2022-12-14T11:27:53.294000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "thanks, would be great with an issue in the tracker for this one - it's .. possible we don't have a filter for that",
+        "created_at": "2022-12-14T17:59:00.033000+00:00",
+        "attachments": null
+    }
+]

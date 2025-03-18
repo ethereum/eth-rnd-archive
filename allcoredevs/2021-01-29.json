@@ -1,0 +1,698 @@
+[
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "From the cheap seats, it feels like there is value in having consistency in payload shape across requests.  If every other request with a `request_id` is of the form `[request_id, [...]]`, having `GetBlockHeaders` be the only one that doesn't follow that pattern means you'll have to special case it anywhere you are handling request/response messages.",
+        "created_at": "2021-01-29T03:25:39.500000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "maybe i misunderstand, but i interpreted the change as `GetBlockHeaders` is *currently* the only one that doesn't follow the pattern `[request_id, element1, element2, ..., elementN]` because it encodes `[request_id, [element1, element2, ...]]`. It just turns out that the other messages only have `element1` which is just a list of hashes/objects",
+        "created_at": "2021-01-29T05:23:13.446000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I think every other message is a two item tuple.  This change would make `GetBlockHeader` be a 5 item tuple, unlike the rest.",
+        "created_at": "2021-01-29T05:36:27.020000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "It's already unlike the rest however we do it. Depending on what feature you decide to focus on, it should be one or the other. Two-item-tuple-ness or just-insert-id-as-first-thing.",
+        "created_at": "2021-01-29T06:51:33.726000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm, at a glance it looked like it was essentially an envelope being introduced.  Perhaps I missed something?",
+        "created_at": "2021-01-29T07:36:28.804000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "```\npayload = [...]\nresponse = [request_id, payload]\n```",
+        "created_at": "2021-01-29T07:36:53.640000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "cburgdorf",
+        "category": "general",
+        "parent": "",
+        "content": "EIP author for `eth/66` here. \u003c@!301186049323958275\u003e yes, that's exactly what was done and the reason I did that was to conform to how the LES protocol is shaped (which uses request ids already).\n\nE.g. LES defines:\n\n```\nGetBlockHeaders (0x02)\n[reqID: P, [block: {P, B_32}, maxHeaders: P, skip: P, reverse: P in {0, 1}]]\n```\n...\n\n```\nGetProofs (0x08)\n[reqID: P, [[blockhash: B_32, key: B_32, key2: B_32, fromLevel: P], ...]]\n```\n\nhttps://github.com/ethereum/devp2p/blob/master/caps/les.md#getblockheaders-0x02\n\nSince the `request_id` is somewhat \"meta\" this introduces a separation between the actual request data and meta data that is just about the request, not the actual payload.\n\nCiting from the Geth PR it seems that this is just seen as an unecessary wrapping though.\n\n\u003eHowever, wrapping the GetBlockHeaders message is just extra wrapping for no particular purpose, hence why we propose to drop it.\n\n\nBut really, the actual reason I did that was to follow the LES protocol. Since LES is a dying protocol I don't have any objections to change the EIP if there's a good reason to do so.",
+        "created_at": "2021-01-29T07:57:37.966000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "I'm quoting \u003c@!206016661470314496\u003e here, but LES has for example this: `[reqID: P, BV: P, [[blockHeader, [node_1, node_2...]], ...]]`",
+        "created_at": "2021-01-29T07:59:47.496000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "Where the `reqID` is not \"meta-wrapping\" the entire thing (as there's BV too)",
+        "created_at": "2021-01-29T08:00:13.621000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "cburgdorf",
+        "category": "general",
+        "parent": "",
+        "content": "But doesn't `BV` also fall into the \"meta\" category which is why it sits there next to the request id and not with the rest of the actual payload?",
+        "created_at": "2021-01-29T08:01:18.116000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Hey all",
+        "created_at": "2021-01-29T08:16:43.910000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Apologies for my crappy wording yesterday, I didn't sleep for 2 days and got pissed that things were messed up, shouldn't have",
+        "created_at": "2021-01-29T08:17:19.558000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "My best guess is that the LES wrapping was an implementation bug, which got specced because it was easyer to do that than to fix the bug",
+        "created_at": "2021-01-29T08:18:14.790000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "From my perspective, when we define some network packet, or network protocol, is it very important to ensure it makes sense standalone, without taking any coding details, previous version, other protocols, etc into account",
+        "created_at": "2021-01-29T08:18:52.687000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Now, lets say that I want to create a new packet, than requests a single header, nothing more",
+        "created_at": "2021-01-29T08:19:25.843000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "If I want to support request IDs, then my best shot at defining such a packet would be `{reqid int, headerid hash}`",
+        "created_at": "2021-01-29T08:20:27.601000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Looking at it purely standalone, it doesn't really make sense to add a second layer of wrapping",
+        "created_at": "2021-01-29T08:20:51.765000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "`{reqid int, {headerif hash}}` would be an extra thing that brings no value at all, but data content wise it's actually larger and wastes more resources",
+        "created_at": "2021-01-29T08:21:26.791000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Now, the misunderstanding stems from a RLP weirdness, where you can have both a **struct** and a **list** as an outer container",
+        "created_at": "2021-01-29T08:22:17.111000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "So `{headerid hash, number int}` and `[hash1, hash2, hash3]` can be both encoded raw and sent over",
+        "created_at": "2021-01-29T08:22:55.681000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Now, when we wnt to add a request ID to the second, the list remains a list, because I can't just make a list contian arbitrary elements",
+        "created_at": "2021-01-29T08:23:45.751000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "`{reqid int, hashes []hash}`, in this case indeed we could \"forcefully\" say that the original packet is embedded in the second field of the struct",
+        "created_at": "2021-01-29T08:24:25.402000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "but only because RLP is weird and allowed a list to be sent over as a struct in the first place",
+        "created_at": "2021-01-29T08:24:46.075000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "in reality that list of hashes is jsut a list and remains a list, it cannot be simplified more and it cannot be flattened out",
+        "created_at": "2021-01-29T08:25:13.014000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "but `{headerid hash, number int}` on the other hand is an entire packet that can be nicely extended, so there it makes sense to think about it standalone",
+        "created_at": "2021-01-29T08:25:46.632000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "f we want to add a request id, it makes sense to create a *new* packet, independent of th eold one",
+        "created_at": "2021-01-29T08:26:02.234000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "which in the simplerst form would be `{reqid int, headerid hash, number int}`",
+        "created_at": "2021-01-29T08:26:17.061000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Thus `{reqid int, headerid hash, number int}` (as in `{1, 0x22, 3}` and `{reqid int, hashes []hash}` as in `{1, [0x2, 0x3, 0x4]` are the simplest form we can create to represent the data we want",
+        "created_at": "2021-01-29T08:27:18.273000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Anything more complicated imho requires rationalization as to why it's not the simplest form",
+        "created_at": "2021-01-29T08:27:32.029000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "And rationalization must not simply point to \"les is broken too\" or \"it simpler to define an overarching rule as to how to pass a req id\"",
+        "created_at": "2021-01-29T08:27:59.138000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "I think it's a common fallacy that specs follow implementations. Sure, specs depend on implementations and often the implementation comes first or goes hand in hand, but when all is said and done, we need to ensure the spec is meaningful standalone and fix the code if something got weird",
+        "created_at": "2021-01-29T08:29:10.681000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "To add one point against wrapping: These messages are already enveloped by the type itself `GetBlockHeadersMsg = 0x03` -- so at any point where unmarshalling is called for, we know what we expect, and can thus pick out the ID easily. As opposed to, if we had to \"blindly\" mux messages, and wanted to mux it without having the type info, but relying only on the request-id (which cannot be trusted on the input)",
+        "created_at": "2021-01-29T08:30:27.173000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I think there is great value in layering/enveloping because it allows you to reuse code easier (with less boilerplate and complexity).  If all of your requests have a request ID, you can have a layer of abstraction that will allow you to consolidate your request-response mapping code into one place and blindly pass along the payload to individual handlers.\n\nHowever, perhaps the argument you are actually making is that we cannot generalize the code here for some reason, so we don't actually get the benefit of being able to consolidate the request-response mapping code?\n\nAn example of a handler that can be written when you have a well defined envelope, but becomes much more complex if you don't have a well defined envelope:\n```ts\nfunction sendRequest(request, callback) {\n    requestHandlers[request.id] = callback\n    // TODO: serialize and put bytes on wire\n}\nfunction processResponse(wireBytes) {\n    const decoded = rlpDecode(wireBytes)\n    const requestId = decoded[0]\n    const payload = decoded[1] // this is harder without an envelope\n    requestHandlers[requestId](payload)\n}\n```",
+        "created_at": "2021-01-29T08:31:16.754000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "Hah \u003c@!301186049323958275\u003e my point above was in response to what you wrote just afterwards 🙂",
+        "created_at": "2021-01-29T08:32:14.220000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "`requestHandlers[requestId](payload)` this is the message type, not the request id",
+        "created_at": "2021-01-29T08:32:19.965000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "requestID is random numbers to identify multiple concurrent requests of the same type",
+        "created_at": "2021-01-29T08:32:36.472000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "E.g. GetHeader(1, 0x222), GetHeader(2, 0x333), GetHeader(3, 0x4444)",
+        "created_at": "2021-01-29T08:32:55.869000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm, so the assumption here is that by the time you get to the point that you are plucking off the requestId, you already have narrowed down to a point where you know exactly the shape of the rest of the response?",
+        "created_at": "2021-01-29T08:33:05.368000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "so that when the responses come, you know what t's for",
+        "created_at": "2021-01-29T08:33:08.232000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@!301186049323958275\u003e yes",
+        "created_at": "2021-01-29T08:33:17.583000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "When you parse the reqID, you already parse all the rest of the messages, or can really",
+        "created_at": "2021-01-29T08:33:38.209000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "On a wire level, it looks like this: msg = {msg_type, msg_data}, where msg_data is {reqid, headerid, headernum, etc}",
+        "created_at": "2021-01-29T08:34:17.904000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "my reasoning is that there's no point to wrap {headerid, headernum} once again, because the reqid and headerid are consumed together",
+        "created_at": "2021-01-29T08:34:55.066000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "^ yup",
+        "created_at": "2021-01-29T08:35:05.813000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "This is a pretty compelling argument to me.  While I can imagine adding in another layer of abstraction for dealing with request to response mapping, I suspect that for a protocol whose size is the order of magnitude of devp2p that would be over-engineering (though perhaps useful for a much bigger protocol).",
+        "created_at": "2021-01-29T08:35:24.342000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "I guess if you implement a special req-id multiplexer-demultiplexer which adds/reamoves id's and the calling code is oblivious to them then it's a bit dofferent",
+        "created_at": "2021-01-29T08:35:36.204000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "but then we're again back to the point where we have an implementation and want to write a spec to it vs write a standalone spec",
+        "created_at": "2021-01-29T08:35:58.224000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "After your arguments above, I am reasonably convinced such a thing would be overengineering for devp2p.",
+        "created_at": "2021-01-29T08:36:22.145000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "My gut kind of tells me that the request ID should live at a higher envelope layer than the message type, but that is a *far* bigger change (e.g., HTTP requests are paired at a layer way above the HTTP request type like POST/GET).",
+        "created_at": "2021-01-29T08:37:32.834000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "the other argument is that not all messages have req id's: eg. block propagation block accounement, etc everything that does not expect a reply does not have a request id",
+        "created_at": "2021-01-29T08:37:35.657000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "so some generid id handling code would need tp special case messages that do not have ids",
+        "created_at": "2021-01-29T08:37:47.008000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "In the past I have seen the layer ordering go something like \u003cresponse vs broadcast\u003e as the top layer and then if it is a response it has correlation ID in the next layer, then below that is type information (or in some cases you leave it out since the correlation ID effectively tells you that already).  Again however, this is a much bigger change that is way out of scope for this conversation.",
+        "created_at": "2021-01-29T08:39:20.091000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "The discussion of elevating reqIDs to a higher place is not a bad one, just that should be had outside of eth/6x",
+        "created_at": "2021-01-29T08:40:21.027000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "If we add it at a devp2p layer, I'm fine with having it out of scope from the rest of the fields",
+        "created_at": "2021-01-29T08:40:50.574000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "But that's a super invasive change, as you mentioned",
+        "created_at": "2021-01-29T08:40:59.884000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "That said, I;m unsure if that would be a good idea because devp2p currently is just a \"dumb\" transmission layer that delivers messages without a rule as what those are. Once we start adding new features like reqids, we need to start typing even further, explicirly saying if something is a request and needs an' id or not. Then we might start thinking about \"what happens if there's no response to a request\"? Since devp2p is tracking it, we need a way to clean up stale data, then devp2p all of a sudden needs to handle timeouts, etc. Things just get very very messy if we bubble this upwards (or downwards really, closer to the network stack)",
+        "created_at": "2021-01-29T08:43:46.691000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "cburgdorf",
+        "category": "general",
+        "parent": "",
+        "content": "\u003edata content wise it's actually larger and wastes more resources\n\nThat's a good argument. \n\nIf any other client team has already implemented eth/66 I'd encourage to chime in and leave an opinion. Trinity has a (rotten) implementation sit in an old PR based on the current EIP but Trinity development has halted. Based on a quick search I couldn't find any other existing implementations (nethermind created an issue to implement eth/66 just 2 days ago).\n\nI'm happy to change the EIP if there aren't any objections.",
+        "created_at": "2021-01-29T09:28:01.398000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "madeof_tin7509",
+        "category": "general",
+        "parent": "",
+        "content": "Any updates on Yolov3 status? \u003c@!211091239112671234\u003e \u003c@!213672586264051717\u003e",
+        "created_at": "2021-01-29T13:31:38.966000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, actually, I'm trying to deploy the components now",
+        "created_at": "2021-01-29T13:40:11.521000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "It's not merged to 'master' geth yet, but the 2718/2930 PR has been updated, and should be able to serve `--yolov3`",
+        "created_at": "2021-01-29T13:40:42.360000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "11 empty blocks so far: https://yolov3.ethdevops.io/",
+        "created_at": "2021-01-29T13:43:55.680000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "Faucet seems somehat disconnected though. If anyone wants to submit transactions, it should be possible to use access lists with geth (on https://github.com/ethereum/go-ethereum/pull/21502)",
+        "created_at": "2021-01-29T13:45:42.366000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "madeof_tin7509",
+        "category": "general",
+        "parent": "",
+        "content": "That's great 👏",
+        "created_at": "2021-01-29T13:53:00.298000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "More info: https://gist.github.com/holiman/b2c32a05ff2e2712e11c0787d987d46f",
+        "created_at": "2021-01-29T14:10:31.403000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "How to send an access-list transaction using that geth: \n```\n\u003e eth.sendTransaction({from: eth.accounts[0] , to: eth.accounts[0] , accessList: [{\"address\": \"0x0000000000000000000000000000000000001337\",\"storageKeys\": [\"0x0000000000000000000000000000000000000000000000000000000000000000\"]}] })\n```",
+        "created_at": "2021-01-29T14:53:19.522000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "Also perfectly possible to get it 'filled' and then sign it externally, \n```\n\u003e eth.fillTransaction({from: eth.accounts[0] , to: eth.accounts[0] , accessList: [{\"address\": \"0x0000000000000000000000000000000000001337\",\"storageKeys\": [\"0x0000000000000000000000000000000000000000000000000000000000000000\"]}] })\n{\n  raw: \"0xb86701f86486796f6c6f763202843b9aca008262d4948a8eafb1cf62bfbeb1741769dae1a9dd479961928080f838f7940000000000000000000000000000000000001337e1a00000000000000000000000000000000000000000000000000000000000000000808080\",\n  tx: {\n    accessList: [{\n        address: \"0x0000000000000000000000000000000000001337\",\n        storageKeys: [...]\n    }],\n    chainId: \"0x796f6c6f7632\",\n    gas: \"0x62d4\",\n    gasPrice: \"0x3b9aca00\",\n    hash: \"0x7b3084c76f21cf284623c47d144b5786539e5066a289fb90f91dc6becc763679\",\n    input: \"0x\",\n    nonce: \"0x2\",\n    r: \"0x0\",\n    s: \"0x0\",\n    to: \"0x8a8eafb1cf62bfbeb1741769dae1a9dd47996192\",\n    type: \"0x1\",\n    v: \"0x0\",\n    value: \"0x0\"\n  }\n}\n```",
+        "created_at": "2021-01-29T14:54:04.233000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "I think this is exposing the extraction Geth uses to decode RLP, where the whole list is extracted in-memory and then the array is portioned out to the struct.  In besu we stream the RLP exclusively.  For example, here's our [GetBlockHeaders](https://github.com/hyperledger/besu/blob/ccefada736850eee6db58d1503f079482ff254a0/ethereum/eth/src/main/java/org/hyperledger/besu/ethereum/eth/messages/GetBlockHeadersMessage.java#L144) code\n```\n      input.enterList();\n\n      final Optional\u003cHash\u003e blockHash;\n      final OptionalLong blockNumber;\n      if (input.nextSize() == Hash.SIZE) {\n        blockHash = Optional.of(Hash.wrap(input.readBytes32()));\n        blockNumber = OptionalLong.empty();\n      } else {\n        blockHash = Optional.empty();\n        blockNumber = OptionalLong.of(input.readLongScalar());\n      }\n\n      final int maxHeaders = input.readIntScalar();\n      final int skip = input.readIntScalar();\n      final boolean reverse = input.readIntScalar() != 0;\n\n      input.leaveList();\n\n      return new GetBlockHeadersData(blockHash, blockNumber, maxHeaders, skip, reverse);\n```",
+        "created_at": "2021-01-29T15:39:09.080000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "I don't like the precedent of making special cases because of one client's implementation (If multiple clients have an issue, that's a good signal to change).  We should either unwrap all the messages with request id inline, or wrap all the messages like the original spec IMHO, not pick and choose off of implementation details.  And align with that other ethereum specs do (like LES).",
+        "created_at": "2021-01-29T15:40:54.301000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "unless there is a reasonable higher level protocol place to do it, but RLPx doesn't have much enveloping so I don't see where that is accessible.",
+        "created_at": "2021-01-29T15:42:37.097000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Is `eth_fillTransaction` a new JSON-RPC method or an existing one?",
+        "created_at": "2021-01-29T16:30:26.216000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "If it is new, it would be cool to get an EIP created for it so clients can standardize on behavior.",
+        "created_at": "2021-01-29T16:30:41.403000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Like what account is used to fill in when no coinbase address is configured, etc.",
+        "created_at": "2021-01-29T16:31:08.919000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I wonder if an `eth_getAccessList` would make sense as a separate thing?  Where it behaves like an `eth_call` but returns an access list instead of result?",
+        "created_at": "2021-01-29T16:32:01.016000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm... I think it's a bit wrong to call it a client implementation detail: the concept of a \"dynamic sized list of homogenous items\" (such as a list of transactions, or a list of hashes) being represented as a 'list', and it's quite \"natural\" to, if we want to send `integer + arbitrary many transactions`, that those are encoded as `integer + list(items)`, not `integer, item1, item2 .. itemN`. I mean sure, an implementation can have a super-duper generic rlp decoder which handles it...",
+        "created_at": "2021-01-29T17:05:05.098000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "It's a semi-old one, which stems from when we broke off `clef` as a separate entity, resposnible for signing. So there are three parts to \"making\" a transactions, which are `fill`, `sign` and `send` (broadcast).",
+        "created_at": "2021-01-29T17:06:05.683000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "And the old `sendTransaction(..)` did all three, and wasn't always the thing one wanted",
+        "created_at": "2021-01-29T17:06:54.630000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pipermerriam",
+        "category": "general",
+        "parent": "",
+        "content": "I think it'd be nice to have a `eth_runTransaction` that encapsulates the `eth_call`, `eth_estimateGas` and any of the other execution based things into a single response, maybe with flags that get passed in to denote what you want returned.",
+        "created_at": "2021-01-29T17:07:51.309000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "IIUC, you are suggesting that a list of variable size should have consistent types for each item, while a list of static size can be considered a tuple, and it is reasonable to have inconsistent types between items?",
+        "created_at": "2021-01-29T17:10:22.148000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, I'm suggesting that most languages have a concept of a typed `list` or `vector` (dynamic number of homogenous-typed items), which is different from the concept of `struct` or `object` (fixed number of differently typed fields)",
+        "created_at": "2021-01-29T17:12:46.922000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "There is only one RLPx message where this applies, it seems like a odd one off to break the pattern of `[ request_id, \u003ceth65 message\u003e]`",
+        "created_at": "2021-01-29T17:14:31.472000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "where in all other cases you pull the RPL in straight including the list wrapping but for one message and only one message you don't include the list wrapping.",
+        "created_at": "2021-01-29T17:15:07.882000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "BTW yolov3 already broke consensus \u003c@!187490121698770945\u003e -- se \u003c#779922457631916064\u003e for more info. Some bug in geth. To be redeployed in a few days, I'd guess",
+        "created_at": "2021-01-29T17:15:50.421000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pipermerriam",
+        "category": "general",
+        "parent": "",
+        "content": "I'm of the same viewpoint as \u003c@!403707149043105803\u003e that doing things consistently has value.  (https://en.wikipedia.org/wiki/Principle_of_least_astonishment)",
+        "created_at": "2021-01-29T17:21:13.770000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "We are probably moving to SSZ on the wire or whatever Eth2 settled onbefore this happens, but if we needed to add more \"out of band\" info in the Eth66 packets (such as \"please slow down\", \"I've lost some of your packets,\" or \"Its blank because I don't have that data\") it could go in the outermost list after the wrapped eth65 packet.",
+        "created_at": "2021-01-29T17:42:50.707000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "unwrapping one message forecloses this design space.",
+        "created_at": "2021-01-29T17:43:23.299000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "(up again, reset from genesis)",
+        "created_at": "2021-01-29T19:04:54.794000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "general",
+        "parent": "",
+        "content": "Fun weekend read 😄 : I've spent the past few weeks chatting with various client teams and some folks involved closely with ACD about what they like/dislike, and how we can improve. \n\nHere's a summary of the various feedback, along with some potential improvements: https://hackmd.io/@timbeiko/acd-feedback\n\nDoes it make sense to add this to next week's call to discuss (after Berlin stuff, obviously)? 👍-react if you think so, 👎 if not.",
+        "created_at": "2021-01-29T19:51:19.005000+00:00",
+        "attachments": null
+    }
+]

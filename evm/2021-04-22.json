@@ -1,0 +1,66 @@
+[
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hey, \u003c@!211091239112671234\u003e and \u003c@!683653554631868440\u003e,\n\nI heard you were discussing JUMPDEST analysis issues.\n\nevmone/Baseline is using different bitmap than geth. I only keep 1 bits for valid JUMPDEST locations.\nI spent some time on optimizing it recently. There is some progress, but not 100% sure of results because on my laptop there seems to be a regression with one of the compilers.\nHere are the results: https://github.com/ethereum/evmone/pull/306\n\nThere is also a more fancy implementation, I will benchmark it some other time.\n```cpp\n    for (size_t i = 0; i \u003c code_size; ++i)\n    {\n        const auto op = code[i];\n        const auto data_len = op - size_t{OP_PUSH1 - 1};\n        if (data_len \u003c= 32)\n            i += data_len;\n        else if (INTX_UNLIKELY(op == OP_JUMPDEST))\n            m[i] = true;\n    }\n```\n\nDo you have information how fast is the geth analysis? For me the lower bound seems to be ~700MB/s.\n\nFinally, I tried to accelerate it with SIMD without success. I can share some code, but I'm SIMD noob. Maybe some SIMD hacker can solve this. There is generic problem description for that: https://notes.ethereum.org/@chfast/fast-evm-bytecode-analysis.",
+        "created_at": "2021-04-22T11:34:28.973000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I don't but I can look it up sometime. The reason we were discussing it, is that I talked about the old attack with a large initicode, and I discouraged  \u003c@!683653554631868440\u003e from using a \"append to vector\" approach. He thought that you did something like that -- but seems you're using a bitmap, which I was almost certain you would have.",
+        "created_at": "2021-04-22T12:08:36.667000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The evmone/Advanced uses something heavier, but I'm considering it only for benchmarks right now.",
+        "created_at": "2021-04-22T12:21:00.060000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm currently looking to use the exisiting bitvector approach for saying whether there is a jumpdest.  I'll still need more information at the start of each block but can generate that lazily.  Problem is saving that information so I can get it fast enough - it will need to be fetched for every jumpdest.",
+        "created_at": "2021-04-22T14:57:34.602000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "evmone/Advanced compresses this information to 8 bytes.",
+        "created_at": "2021-04-22T15:28:56.750000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!425274498732916736\u003e I'll go looking later, but how do you store and retrieve it?",
+        "created_at": "2021-04-22T19:42:05.025000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "In evmone's internal program representation every instruction has additional argument of size 8. It can contain e.g. push data or other things, depending on the instruction. For block gas counting I attach the \"block info\" to `JUMPDEST` instructions, or insert internal `BEGINBLOCK` instruction in case a block does not start with a `JUMPDEST`. https://github.com/ethereum/evmone/blob/master/lib/evmone/analysis.hpp#L20-L42",
+        "created_at": "2021-04-22T19:52:49.947000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Thanks.  Right now I have parallel array of pointers, one per instruction.  Those that begin a block point to a larger struct with stack and gas info. Your approach sounds more generally useful, and at least tells me I can afford to use that much space.",
+        "created_at": "2021-04-22T22:21:44.651000+00:00",
+        "attachments": null
+    }
+]

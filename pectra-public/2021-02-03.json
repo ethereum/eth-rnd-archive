@@ -1,0 +1,210 @@
+[
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Regarding the question about latency. How is the latency of the RPC call between BN and eth1-engine differs from the same thing between VC and BN? Or adding yet another point of latency is just worrisome? cc \u003c@!361447803194441738\u003e \u003c@!449019668296892420\u003e",
+        "created_at": "2021-02-03T00:24:57.970000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Another thing to consider is that the network latency of the RPC calls should be significantly lower than the eth1 execution time. Though, it's in a high dependency on the infrastructure setup",
+        "created_at": "2021-02-03T03:24:40.066000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Regarding producing eth1 block in advance upon receiving a beacon block of the previous slot. This kind of optimisation either leaves no chance or reduce the chance of transactions which reads the post-block state to be included right in the next slot. I'd consider such optimisation only if eth1 block processing time will become a real issue which is yet to be proven and evaluated.",
+        "created_at": "2021-02-03T03:55:17.203000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "We are already seeing major issues with block being received late, so I think we do need to look at options.  We don't necessarily have to produce the eth1 block immediately though.  We could produce it 1 or 2 seconds prior to the start of the slot for example. Also I believe geth already maintains a `pending` block which is continually kept up to date - there may be some details to tweak to take advantage of it but it may well be possible for the eth1 node to keep a block ready to go pretty much all the time.",
+        "created_at": "2021-02-03T04:20:16.778000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "What is the reason behind block propagation issues? What is the main time consumer there, is this signature verification? Right, the geth is able to do so because it always know the head of the chain while eth1-engine does not know which block is the head, at least at the moment",
+        "created_at": "2021-02-03T04:29:02.446000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Pending block sounds like a good option for reducing block proposal time in the case of the merge",
+        "created_at": "2021-02-03T04:30:59.715000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Won't we need to make the eth1-engine know the right chain head so that all the JSON-RPC methods work correctly anyway?  I suppose you could proxy them through the beacon node but that's a lot of APIs to implement that are primarily just proxied.\n\nIn terms of what's slow, seems to be a bunch of factors - epoch processing is definitely a big problem and there are a bunch of optimisations going on around that.  Network propagation seems to be problematic in at least some places as well.  It's an area that I think more work needs to be done to really understand the cross-client details and what's really happening on MainNet.",
+        "created_at": "2021-02-03T04:37:02.758000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "It's not so much that we can't optimise things and make room, just that right now the single most problematic area performance wise seems to be getting blocks created, propagated and imported before attestation creation is due so I get nervous about anything that potentially makes it slower.",
+        "created_at": "2021-02-03T04:38:28.608000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "We will probably have to proxy calls to JSON-PRC for another reasons, like finality and beacon block roots exposure if we talk about transaction that reads the beacon state. In general, I am not opposed to `eth2_setHead` and we used to have it previously. One caveat here is that if several beacon nodes use the same eth1-engine which is reasonable because of the cost of the latter then they may concurrently switch the head from one to another, probably this is fine, though.",
+        "created_at": "2021-02-03T04:48:00.106000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "That's fair!",
+        "created_at": "2021-02-03T04:48:14.107000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "My intuition is to understand more about beacon chain network and then make a decision on the optimisations we need for the merge in order to not affect the network progress much",
+        "created_at": "2021-02-03T04:50:41.487000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah the multiple beacon nodes sharing an eth1-engine is a strong reason to try to avoid a setHead method if we can. Ugh, I was so hoping to never have to deal with JSON-RPC again....",
+        "created_at": "2021-02-03T04:50:42.424000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "there are three principal issues as I see it: there comes a moment when the client decides that it's time to do work, and at that time the clock starts ticking - with the current eth1 data, we can monitor eth1 and keep the \"latest\" known information, so there's a one-way flow and the two systems operate independently - we don't query eth1 data when it's time to produce a block, we just use whatever is there so the delta from \"time to produce a block\" to \"block produced\" is short which gives more time for networking, gossip etc - the second issue is validation: when we receive a block, we need to validate what's going on: already delayed by production time, the block arrives later and takes longer to validate - although the average time for eth1 blocks is say.. 500ms, the peaks are much higher when eth1 needs to access state - it's highly likely that blocks that contain eth1 processing data that takes long will be orphaned, and then the question is what to do next.",
+        "created_at": "2021-02-03T11:41:41.789000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "the third issue is replay - when eth2 clients store things, we typically store a snapshot state and then diffs on top - this relies on replaying lots of already validated blocks being really fast - I hope / presume that we would not need to call eth1 during this replay, but it does raise quesitons as to what utility you can get out of an eth2 client with eth1 merged in if you can't replay the two systems efficiently together - ie rerunning eth1 transactions during eth2 replay would not cut it - I anticipate one would need to redesign this flow quite a bit",
+        "created_at": "2021-02-03T11:44:01.382000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "I think it all boils down to the assumption of synchronicity between eth1 and eth2 - the lock-step interaction between the two will need more care when implementing things - in particular, because eth2 has a fairly strict time schedule, while eth1 has more of a flexible clock, differences in eth1 processing time will lead to mechanical stress between the two systems",
+        "created_at": "2021-02-03T11:50:32.997000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "I'm not _too_ worried about the pure json-rpc part of things, it didn't look like there was a lot of data travelling across the border, but then again, inserting it in the middle of block production and validation stings a bit (as opposed to having it before / after where it can be optimized in a different way - in the middle, it becomes slightly harder to reason about partially applied state, hashes etc, so again, it's harder to optimize - every serial roundtrip to \"outside\" systems adds to things",
+        "created_at": "2021-02-03T11:54:04.040000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "as an example, many validators can use 3rd party or remote servers for eth1 right now - bn/vc are \"assumed\" to be low-latency/same local network at most",
+        "created_at": "2021-02-03T11:56:24.751000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e 500ms\n500ms was an over estimate\n\n\u003e it's highly likely that blocks that contain eth1 processing data that takes long will be orphaned\nThis shuold be a function of the gas limit as in eth1 today. Essentially, if you can't get the work done as a normal node in time, the gas limit is not well tuned. Blocks are propogated on eth1 network in far less than 3 seconds. If you can parallelize verificaiton of eth1 and eth2 components, then I suspect there is no issue here with normally resourced machines\n\n\n\u003e I hope / presume that we would not need to call eth1 during this replay\nIn current prototypes, eth1 manages it's own state diff and just prunes on calls to `finalize`. The eth2 client drives when doing block production and verification by pointing to the node in the eth1 state/block tree to do verificaiton off of\n\n\n\u003e eth2 has a fairly strict time schedule, while eth1 has more of a flexible clock, differences in eth1 processing time will lead to mechanical stress between the two systems\nI don't presume this is actually going to be an issue, especially if you can parallelize block production and block verification methods (which the current design allows for). Eth1 is *very* responsive to block production and verification. It's been economically paramount that that is the case for many years now.\n\n\u003e inserting it in the middle of block production\nparallelizability is high goal. Thus it could go essentially at the beginning and inserted into the eth2-block payload at the end before hashing and signing\n\n\u003e I'm not too worried about the pure json-rpc part of things\nnote, json-rpc is an excellent choice to allow modularity and code reuse, but it is ultimately a design choice. Nimbus could, for example, natively couple nimbus-eth1 into nimbus-eth2 or bring in eth1 components as a library or something",
+        "created_at": "2021-02-03T14:31:10.737000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": ".\n\u003e as an example, many validators can use 3rd party or remote servers for eth1 right now - bn/vc are \"assumed\" to be low-latency/same local network at most\nThe base design is being doing in a way that assumes a low-latency/same network. Eth1 is core to ethereum and should live next to the consensus. Just as you can attempt to move the VC far away from BN, you could attempt to move eth1 far away from eth2 on your machine(s) but if you are a validator, you take on latency (And maybe 3rd party risks)",
+        "created_at": "2021-02-03T14:32:33.154000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "A nice thing about the merge is that at that point validators can exit/withdraw. So if the requirement of running eth1 was not taken into account, they can rethink their commitment",
+        "created_at": "2021-02-03T14:33:03.078000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e  in the middle, it becomes slightly harder to reason about partially applied state, hashes etc\nSo that's why there are discrete elements from eth2 passed to eth1 and these elements are all either known at the start of the slot *or* data from previous slots. This allows the eth1 verification to not depend on the results of the eth2 slot execution and opens up opportunity for parallel execution or ordering things in whatever way you want",
+        "created_at": "2021-02-03T14:34:21.567000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": ".\nNone of the above are my major concern 😅 \nI, instead, tossed and turned all night thinking about state sync in a merged context (yes, seriously). My final dream-ish state decision was \"fuck it, \u003c@!206016661470314496\u003e can just manually do the state sync\" \u003c--- manually like physically, manually. Not really sure how that'll work though...",
+        "created_at": "2021-02-03T14:39:48.917000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e not well tuned.\nwell, eth1, if a block takes a little longer, doesn't really matter _that_ much as long as as the average block processing time is decent - from what I remember of the eth1 , storage operations are underpriced and becoming more so over time as state grows and disk access gets slower - of course, this is being worked on, but it's a difference worth considering at least - for example, what will happen when someone posts a couple of malicious \"high-storage-access\" txns in a row?",
+        "created_at": "2021-02-03T18:43:00.559000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "I hear cloning technology is advancing 🙂",
+        "created_at": "2021-02-03T18:47:55.474000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e The base design is being\nsure - but that's because the vc-bn part is _cheap_  so far - running an eth1 node, less so. we toss eth2 shards in there with data and disk access becomes a bottleneck - eth1\u00262 compete for the disk and things slow down meaning that what was previously a 1-computer setup now becomes a 2-computer thing at least",
+        "created_at": "2021-02-03T18:50:12.777000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e state sync in a merged context \nlol, I'm probably missing lots here, but this seems much more like a much more tractable problem after eth2 - ie from a user point of view, once we have consensus and finality and weak subjectivity and all that, loading state can be done more flexibly than replaying everything from 0 - of course, block producers don't get away with the lazy partial-state loading tricks that mere users probably can do, but..",
+        "created_at": "2021-02-03T18:53:11.701000+00:00",
+        "attachments": null
+    }
+]

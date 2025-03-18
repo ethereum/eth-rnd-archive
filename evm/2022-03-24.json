@@ -1,0 +1,186 @@
+[
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "A couple more case study examples: Java and CIL (what C# compiles down to).  They are both an \"intermediate language\", which contains various high level data structures and concepts including classes, loops (IIRC), Generics (in the case of C#) etc.",
+        "created_at": "2022-03-24T05:12:39.501000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "In both cases, they get just-in-time compiled down to native code (some Java implementations execute the IL directly in some cold paths).",
+        "created_at": "2022-03-24T05:13:12.596000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "One caveat, it is generally assumed that most code will be executed multiple times, so the overhead cost of JIT compiling is amortized over the entire run of the application.  In the case of Ethereum, this causes problems with gas costs because caching of already-JIT-compiled code is how those languages are able to maintain close to performance parity with native languages, but having gas costs be a function of caching efficiency is *really hard*.",
+        "created_at": "2022-03-24T05:15:26.708000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This is of course a conversation we've had many time over the years, \u003c@!273808422753796097\u003e  😉\n\nJava has opcodes that are close to the metal, with just a few to provide support for faster loops and such.  But the Java VM also provides a high-level object model designed to support the Java language.  CIL I know less about, but I know it provides low-level opcodes to support C and C++.",
+        "created_at": "2022-03-24T13:47:27.452000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Wasm is closer to what you describe, \u003c@!301186049323958275\u003e  -- low-level arithmetic, high-level control structures.  Its standard text format reads almost like C, but it is a decent compilation target for lots of languages.",
+        "created_at": "2022-03-24T13:49:35.768000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!273808422753796097\u003e We've known from the start that we cannot JIT compile code without creating DoS vulnerabilities, and \u003c@!425279588009246720\u003e, \u003c@!425274498732916736\u003e, and others demonstrated the problem empirically.  One is to cause the EVM to JIT code that is then never used again.  Another is to deploy code that takes quadratic time to compile.\n\nTo compile EVM code in linear time we have to be rid of dynamic jumps so that we can create the control-flow graph in linear time.",
+        "created_at": "2022-03-24T14:01:09.361000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Actually, I think a VM like ours needs low-level operations to be a good target for compilers.  It may seem complicated, but compilers know how to deal with this, and too much high-level stuff can just get in the way.\n\nOur wide arithmetic amounts to higher-level operations for some of the heavier things people do.  We've seen with the EVM384 how a larger set of primitives would help, including even wider registers.  My old SIMD proposal is still there and could be done better with the new EOF immediate data.  It or some other approach could give us a collection of wide register sizes for crypto primitives like these.",
+        "created_at": "2022-03-24T14:07:30.675000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Anyway, we have the EVM we have, and I think it can be evolved to be a better target for more high-level languages.\n\nThe current set of proposals on the table, made possible by EOF, can provide an even better (safer, more efficient ...)  EVM than EIP-615 did, and  deserve to be called EVM 2.0.",
+        "created_at": "2022-03-24T14:25:10.986000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "(and \u003c@!273808422753796097\u003e) I disagree that control-flow graphs need to be linear-time traversal.  In graph terms, graph nodes are instructions, edges are all the possible jump source-destination pairs, and traversal time is O(N+E).  Replacing dynamic jumps with chains of if-then just acts to make the number of nodes increase to match the number of edges, so that it looks like linear time in nodes again, _at the cost of using additional storage space for the contract, and additional execution time_.  Analysis time attacks can just as well be prevented by making the gas cost of new contract creation (when you would do the analysis) be a function of N+E instead of just N as it is now.",
+        "created_at": "2022-03-24T15:05:40.431000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The principle generalises to any kind of mandatory pass-fail analysis that requires any other time complexity bound: Add the mandatory part to gas cost, and leave optional analyses (such as value-range that will convert 256-bit registers on small values to faster 64-bit operations) to optimisers in individual implementations.",
+        "created_at": "2022-03-24T15:06:31.775000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This is interesting.  So easily-traversed CFGs make this (and other) problems easier to solve, but at least for this problem are not necessary.",
+        "created_at": "2022-03-24T15:07:54.480000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e Analysis time attacks can just as well be prevented by making the gas cost of new contract creation (when you would do the analysis) be a function of N+E instead of just N as it is now.\nI think this means that this fairly simple change in gas cost generalizes to other problems that can cost gas nonlinear in N.",
+        "created_at": "2022-03-24T15:11:22.479000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "One way to do this is to have the EVM itself run the init code, which is on the blockchain as a canonical contract.  That run gets metered, so the attack fails because its costs go up quadratically with the malicious code.",
+        "created_at": "2022-03-24T15:18:19.805000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That might be a bit much though 😉  Counting the number of edges in a section of EVM code isn't that hard.",
+        "created_at": "2022-03-24T15:22:41.031000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Would getting rid of dynamic jumps have any serious downsides (beyond backwards compatibility)?",
+        "created_at": "2022-03-24T15:46:13.893000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "One big thing that concerns me about the EOF stuff is that it risks making the EVM 2x more complex with even more features; ideally, we would have some pathway to actually get rid of the old features and force-convert contracts that use them into an equivalent using new features",
+        "created_at": "2022-03-24T15:47:09.395000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "A bigger question here is, what's a long-term roadmap for the EVM that makes it better *and* makes the spec and compilers have fewer lines of code?",
+        "created_at": "2022-03-24T15:59:05.974000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "One can imagine each EOF having a separate EVM that it executes against.  This would at least make it so we don't have to continue working inside of code that supports old contracts.",
+        "created_at": "2022-03-24T18:48:48.118000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Essentially you could fork the current EVM and your client could now have two of them.  We would go to great lengths to not touch the old EVM, and any new features would target the new EVM (via a particular EOF prefix).",
+        "created_at": "2022-03-24T18:49:38.024000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I understand that JUMP isn't used dynamically by Solidity, except for subroutine returns.  But they are useful for jumptables (dense switches), virtual functions, and pointers to functions.  And it's good that so much can be done with just two instructions.\n\nIf \u003c@!807285075736789062\u003e's ideas work out I could see leaving them in and (sadly) scrapping my more efficient 2315 proposal.  But I'm not sure I want to give up linear-time code traversal - Wasm and JVM both restrict control flow to make that possible, and I know I've taken advantage of that compiling JVM bytecode.",
+        "created_at": "2022-03-24T20:19:45.182000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "As for EOF -- it does make it possible to add features, but also makes it possible to remove them.  E.g. if we add static jumps and subroutines (3 instructions), we can remove dynamic jumps and jumpdest (3 instructions).",
+        "created_at": "2022-03-24T20:22:35.058000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Whether to handle EOF changes by maintaining separate versions of the interpreter or with internal polymorphism is an implementation decision, but so far I think most clients have taken the latter path.  The changes usually just aren't that radical.",
+        "created_at": "2022-03-24T20:26:55.988000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "As for making the spec be shorter and force-converting programs - I don't think it's possible.  There is too much code already on our own blockchain,  and too many other blockchains adopting the EVM.  All of that old code has to keep on running.  \n\nOver time there will be demand for a \"better VM\" being one that is not just safer and more efficient, but one with new features.  With a lot of the push for EOF coming from the Solidity co-lead I'm not worried right now about that creating too much work for the Solidity code generator -- we have been very slow and deliberate in making changes.",
+        "created_at": "2022-03-24T20:46:39.435000+00:00",
+        "attachments": null
+    }
+]

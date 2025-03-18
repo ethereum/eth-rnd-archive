@@ -1,0 +1,74 @@
+[
+    {
+        "author": "sauceboss.tm",
+        "category": "general",
+        "parent": "",
+        "content": "hey! i have a question about the `weigh_justification_and_finalization` function for finalization. i dont understand why the function does not check the previous and current justified checkpoints are on the same fork of the chain. is this done implictly in the proposer/attester slashing rules when checking for surround votes? this is in reference to the consensus spec: https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md?plain=1#L1374-L1409",
+        "created_at": "2024-04-02T08:04:28.966000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "to select a head for attestation, the consensus client requires the candidate block to be fully validated (including both execution and consensus client validation) - validation includes inspecting / validating blobs - so for something to be attested to, the beacon node must have received the blobs in order to be able to validate the block fully.\n\non p2p, things are done optimistically: blocks are allowed to propagate without this extended validation in order to achieve lower distribution latency - thus, it is possible for a block to be gossiped that is invalid, either because the blobs are withheld/missing/invalid or because it has invalid execution data (and a few other edge conditions) - in all relevant aspects, clients behave (or should behave) as if such a block did not exist at all",
+        "created_at": "2024-04-02T09:01:33.227000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "0xevan",
+        "category": "general",
+        "parent": "",
+        "content": "For selecting a head for attestation, is the head for slot n being chosen at slot n+1? Or at slot n?\n\nIf it is slot n, not sure how it makes sense that p2p could be propagated optimistically and then attest on the head if it is an optimistic head.\n\n___\n`so for something to be attested to, the beacon node must have received the blobs in order to be able to validate the block fully.`\n\nand\n\n`on p2p, things are done optimistically: blocks are allowed to propagate without this extended validation in order to achieve lower distribution latency`\n\n^ What is the difference between p2p and attesting from a networking perspective? My understanding was that p2p occurs first, and then attestation occurs later in the same slot.",
+        "created_at": "2024-04-02T14:34:44.144000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "I'm not sure we're using the same terminology.\n\nwhen a client receives a block for slot N, from any source, it performs a series of validations - the block has to be consensus-valid and execution-valid - consensus-valid means it has to have blobs, if it is within the blob retention period. it doesn't matter how the block arrives (network, REST API etc), it goes through this process.\n\nat slot N+(1/3), ie part-way through the slot, the client selects what to attest to - if there's a block from slot N, it'll attest to that, else it'll select whatever else came earlier.\n\nso the slot of the attestation is the same as that of the block, assuming there's a valid block at slot N.\n\nthe above two points taken together mean that we have ~4s to propagate the block and its blobs. p2p propagation means that peers hand the blocks to each other, so it takes a few hops for all validators to have observed the block so they can attest to it. if each hop had to go through full validation (let's say full validation, including executing the block with the execution client, takes 1s), only some beacon nodes would see it on time, and as a consequence, many validators would attest to the block at N-1.",
+        "created_at": "2024-04-02T14:56:37.313000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "p2p is not something that \"occurs\" - it's a mechanism for delivering blocks and attestations to all nodes on the network so they can form the same view of what the \"latest\" (or really, most voted-for)  block is",
+        "created_at": "2024-04-02T14:58:51.030000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "a client will never attest to any optimistic information - anything we attest to has to have gone through full validation - if MEV relays or modified clients play tricks and withhold or delay the blobs for example, or provide invalid execution data, they will not see their block attested to",
+        "created_at": "2024-04-02T15:04:03.919000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "0xevan",
+        "category": "general",
+        "parent": "",
+        "content": "where can I find the source code for this - is it better to refer to the consensus specs or the actual consensus client code?",
+        "created_at": "2024-04-02T15:39:47.071000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "0xevan",
+        "category": "general",
+        "parent": "",
+        "content": "thank you for the clarifications.\n\n- Why would a block arrive through a REST API as opposed to p2p network? By REST API, are you referring to the beacon chain API spec?\nhttps://ethereum.github.io/beacon-APIs/#/Beacon/getBlockV2\n\n- Do you know where the 4 second timing window came from? I wasn't able to find the historical precedent for why it's 4 seconds.",
+        "created_at": "2024-04-02T15:41:34.148000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "https://eth2book.info/capella/part3/ is perhaps the most approachable resource on these things",
+        "created_at": "2024-04-02T19:39:37.963000+00:00",
+        "attachments": null
+    }
+]

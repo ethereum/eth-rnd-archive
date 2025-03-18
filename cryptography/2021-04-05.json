@@ -1,0 +1,106 @@
+[
+    {
+        "author": "nicolas.alhaddad",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Honestly, I don't understand your conversion to bytes (each word already has a bit representation). But here is what I came up with: What i am effectively doing is secret sharing each of the 12 words. Instead, secret share the first 11 words  and the last word you can split it in two: 7 + 4 bits. The first 7 bits you secret share them using shamir secret sharing (you might want to do that in GF(2^7) and then compute the checksum for the last 4 bits according to the 11 words you got per share (since the last 4 bits are a function of the first 128 bits anyways).",
+        "created_at": "2021-04-05T00:20:08.650000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dstreit",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The conversion to bytes follows the spec of BIP-39. I guess that's also why I'm partial to it. There are already a lot of libraries that implement it.\n\nSo, to implement this EIP, you could basically combine two libraries in the language of your choice:\n* A BIP-39 library to convert words to entropy (as bytes) , omitting the checksum (and vice versa)\n* A shamir library to share and recover the entropy (as bytes)\n\nThe relevant section of the BIP-39 spec: https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki#generating-the-mnemonic",
+        "created_at": "2021-04-05T00:39:31.461000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dstreit",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So, if we omit the requirement that the shares are valid BIP-39 mnemonics, then I agree with you that the GF(2048) is much more elegant. And I'd adopt that approach without hesitation.\n\nBut, I still feel like the requirement is useful. And that's what keeps leading me back to the approach outlined above.",
+        "created_at": "2021-04-05T00:42:03.411000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dstreit",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The conversion isn't far from what you've outlined above. We just drop the checksum portion of the data after the conversion",
+        "created_at": "2021-04-05T00:45:11.920000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nicolas.alhaddad",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Why GF(256)? BTW I updated the sharing to reflect what I meant.",
+        "created_at": "2021-04-05T01:20:09.627000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dstreit",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Once we are working with bytes, GF(256) seems like a natural choice. The possible values for a byte corresponds with that of GF(256). In other words, a byte and GF(256) have the same domain, [0, 255].\n\nSimilar to how GF(2048) seems natural for a set of 2048 words",
+        "created_at": "2021-04-05T02:48:45.442000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nicolas.alhaddad",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Why not work in GF(2^128) from the start? You secret share the first 128 bits without the last 4 bits. And compute the last 4 bits for each share separately.",
+        "created_at": "2021-04-05T02:54:37.468000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dstreit",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "GF(2^128) is a very large field. For example, the max number in JavaScript is 2^53 - 1. If we used GF(2^128) it would be much more difficult to implement for a browser app.\n\nAlso, 128 is the minimum size. The entropy could be between 128 and 256 bits, depending on the selected strength. GF(2^256) would be off the charts.\n\nNote that when I talk about GF(256), I'm talking about a vector. The entropy for a 12 word mnemonic would be 128 bits, or 16 bytes. For the calculations, we treat that as a vector of bytes with length 16 and apply Shamir's to each element in the vector, with each element belonging to GF(256). The result is a set of vectors of bytes, each with length 16.\n\nSo, the actual field that we are talking about is GF(256)^n, where n is the length of the vector and each element in the vector belongs to GF(256). While this is outlined in the spec I wrote, I've glossed over it a bit in the questions I've posted.",
+        "created_at": "2021-04-05T03:21:31.079000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nicolas.alhaddad",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "When you are working with GF(2^128) each element in the field is of size 128 bits so you would be ok. The same goes for GF(2^256). Most libraries that support Shamir Secret Sharing will support GF(2^128) because of AES (Most people would be secret sharing AES keys). But your approach also works fine (probably more efficient).",
+        "created_at": "2021-04-05T03:36:41.408000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dstreit",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm not sure about that. I must admit that I'm far from expert on AES, but section 3.2 describes using arrays of bytes for operations and section 4.2 describes multiplication over GF(2^8) (aka GF(256)).\n\nSo, I think that my proposed approach of using vectors of bytes and GF(256) is actually well aligned with how AES works.\n\nIt may be a notation thing or I might be misunderstanding something, but I'm skeptical that GF(2^256) would be used for anything. That is an incredibly large field.\n\nhttps://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.197.pdf",
+        "created_at": "2021-04-05T03:59:13.967000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nicolas.alhaddad",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If you want to secret share a secret, usually you would want your secret to fit in the field. You can break your secret into smaller secrets and go for a smaller field (and then run multiple secret sharings in parallel). However, this is not always possible (Example: you want to run MPC operations on secret shares). From an implementation perspective I think it's easier to use GF(2^128) simply because you would be running Shamir secret sharing once vs running it multiple times. In the code snippet that I shared, the library that I was using (pycryptodome) was using GF(2^128) I modified it to work with GF(2^11). Probably, in javascript you will have problems dealing with 128-256 bit numbers (you need a library).",
+        "created_at": "2021-04-05T04:15:30.315000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dstreit",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Fair enough, maybe can be done. I wonder what the irreducible polynomial would be for a large field like that 🤔\n\nAnyway, it seems like it still might be a good idea to continue with the vector approach in order to support more platforms",
+        "created_at": "2021-04-05T04:33:18.326000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nicolas.alhaddad",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think both bitcoin and ethereum use Fields of size approximately 2^256 for ECSDA signaures (Secp256k1) with p = 2^(256) - 2^(32) - 977 so i don't know about the more platforms argument.",
+        "created_at": "2021-04-05T06:08:07.626000+00:00",
+        "attachments": null
+    }
+]

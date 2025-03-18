@@ -5,7 +5,7 @@
         "parent": "",
         "content": "I need to do some thinking.  I realize I don't think I've explored the idea of still exposing the full trie (both leaves and intermediate nodes), but addressing them by their path in the trie.  Not at all clear how to do that and still side-step the problem of contract storage being imbalanced.",
         "created_at": "2021-01-06T02:39:15.340000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "All of my exploration into solutions that use trie paths (either intermediate or full paths to the leaf nodes) have only dealt with intermediate nodes as part of proofs.",
         "created_at": "2021-01-06T02:40:02.395000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "_shemnon",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "Would we also need to pair paths with block hashes for those paths?  Addressing trie nodes by hash had the implicit point in time semantics and would always be the same, whereas location will change over time.",
         "created_at": "2021-01-06T16:09:32.073000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -29,7 +29,7 @@
         "parent": "",
         "content": "Yes. Those are the complexities that arise once you start addressing using trie paths. I'm trying to find a way to layer some sort of indexing scheme on top of the node by hash base layer.",
         "created_at": "2021-01-06T16:11:27.483000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -37,7 +37,7 @@
         "parent": "",
         "content": "Unrelated. There may be a \"thundering herd\" problem for the unlucky nodes in the network that end up closest to the most recent state root or holding the state root for a popular contract.",
         "created_at": "2021-01-06T16:15:22.617000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "holiman",
@@ -45,7 +45,7 @@
         "parent": "",
         "content": "Yes, it becomes tied to root hashes (not blocks per se (in the case of e.g. clique, where the same root can repeat itself)). The same problem is already present in fast-sync today, where we have to move the pivot point, as the remote part prunes older states",
         "created_at": "2021-01-06T16:26:19.567000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "holiman",
@@ -53,7 +53,7 @@
         "parent": "",
         "content": "So, for snap aswell, we need to move the pivot from time to time",
         "created_at": "2021-01-06T16:26:39.748000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "holiman",
@@ -61,7 +61,7 @@
         "parent": "",
         "content": "(and that's really the basic reason why a snap sync doesn't wind up with a complete trie, but a mismash of individually verified slices of tries)",
         "created_at": "2021-01-06T16:27:31.597000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -69,7 +69,7 @@
         "parent": "",
         "content": "Supposing we have a DHT that houses all historical trie nodes by their hash...  (`node_hash -\u003e node`)\n\nIIRC the current trie requires traversing down ~7 layers till you hit the leaves where the account information lives.  That means 7 network round trips to get account data.\n\nThe more efficient scheme is to do this as `(state_root, trie_path) -\u003e node`.  This allows bypassing the intermediate nodes at the cost of 1) needing an accompanying proof and 2) losing de-duplication for trie nodes that don't change since the network would need to house a new record for each state root, regardless of whether the node changed.\n\nSo maybe we can do this as layers:\n\n- layer 0: `node_hash -\u003e node`\n     - data is \"durable\" and the network is designed to house all the historical data without any concept of expiration\n- layer 1: `(state_root, trie_path) -\u003e (node + proof)`\n    - data is \"ephemeral\" expiring relatively quickly, typically only available for recent blocks, not necessarily available for all trie paths, maybe only lazily added to the network as it's accessed by someone.\n\nSo a consumer of data in the network might use the scheme of first attempting to hit layer-1 and then falling back to layer-0 if the data they need can't be found in layer-1.  And then, if they do fall back to layer-0, they can pipe the discovered data into the layer-1 network.",
         "created_at": "2021-01-06T16:27:54.694000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "holiman",
@@ -77,7 +77,7 @@
         "parent": "",
         "content": "Have you done any sort of modelling on the feasibility of storing trie hashes in a DHT. Like, if we have 2K modifications per 14 seconds, how large/small would such a DHT need to be? What kind of network RTT's would be required to manage that kind of rapidly changing data? Spontaneously, I get the feeling that it might not be practically doable, but I can't back that with any kind of scientific reasoning",
         "created_at": "2021-01-06T16:30:59.452000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -85,7 +85,7 @@
         "parent": "",
         "content": "That's what we're working on now.  Trying to nail down accurate numbers to prove/disprove feasibility.  I agree that it could very realistically exceed some level of reasonable bounds.  I'm guessing we're looking at \u003e1billion hashes which is an annoyingly large number.",
         "created_at": "2021-01-06T16:38:01.671000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "holiman",
@@ -93,7 +93,7 @@
         "parent": "",
         "content": "Yeah, 650M+ in a single trie.",
         "created_at": "2021-01-06T16:49:07.161000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -101,7 +101,7 @@
         "parent": "",
         "content": "Rough numbers just using the current state (not archive because I don't know how much bigger it would be).\n\nAssuming each node in the network stores 1GB of data, 700 million trie nodes, 320 bytes average per trie node, 10x replication factor\n\nwe would need a network of ~2,000 nodes to store this data.  That number is larger than I like and the individual node responsibilities are more than I'd prefer (1GB is too much for casual user).  But it doesn't eliminate this as a potential solution.",
         "created_at": "2021-01-06T19:28:27.024000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -109,7 +109,7 @@
         "parent": "",
         "content": "320 bytes average per trie node is a really rough estimate too.  32 bytes for the hash, full intermediate trie nodes are about 512 bytes, accounts are about 128 bytes, contract storage entries are 32 bytes.  320 bytes seemed like a decent filler number that probably over-estimates the real value.",
         "created_at": "2021-01-06T19:30:20.217000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "dryajov",
@@ -117,7 +117,7 @@
         "parent": "",
         "content": "\u003e Like, if we have 2K modifications per 14 seconds, how large/small would such a DHT need to be?\n\nI can think of two possible solutions for fast mutating data. They both assume that the trie is chunked tho.\n\n1) Use gossip channels to distribute updates. Suppose that the trie is chunked using a prefix - iirc using 4 nibbles as a prefix yields 64K chunks (for the state trie). One way to keep the sub-tries/chunks updated is to propagate periodic updates over gossip channels (gossipsub or similar for example). As long as the latest state root is known, it should be possible to verify that the update, which can be a full chunk or a delta, is valid. No node in the network would subscribe to 64K topics, but with enough nodes it should be possible to cover the entire range.\n\n2) Assuming that the trie is chunked as in 1). Suppose that instead of storing the data on the DHT, it's used as a finger table that points to nodes that store that sub-tries/chunks. Now, the DHT doesn't need to be updated with changes to the state at all, nodes simply announce that they provide a subtrie(s) and keep it updated out of band, for example using a full node or even option 1), which gives us a hybrid approach.",
         "created_at": "2021-01-06T19:55:05.960000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -125,6 +125,6 @@
         "parent": "",
         "content": "Under the `node_hash -\u003e node` scheme, I'm pretty sure data ingress won't be a problem.  I don't have hard numbers to back this up, but based on the network size and number of nodes coming into the network I am reasonably confident that this won't be the bottleneck (but I'll be looking to back this up with hard numbers)",
         "created_at": "2021-01-06T20:01:43.909000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

@@ -1,0 +1,122 @@
+[
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I still don't quite get it. Imposing LVH to be there in situations where the EL may choose to simply return the parent blockhash just to follow the spec seems like a lose-lose situation for both parts. I would much prefer to leave them to implement it only when they can, and just make sure that it's accurate when it's present. As for safety: As long as no VALID block ends up being tagged as INVALID there shouldn't be major implications in making LVH optional. Just a little delay in pruning blocks. Any extra INVALID block that we didn't clean in that branch because of a suboptimal assumption that we needed to remove just the last block becomes irrelevant cause it's weight does not count towards any viable head.",
+        "created_at": "2022-04-05T00:51:56.299000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "acid0003",
+        "category": "general",
+        "parent": "",
+        "content": "The nodes on pools that actually mine Eth could increase the gas by a lot with no problems. The reason for the gas limit is so that Eth users are able to keep up on non-server hardware at home.",
+        "created_at": "2022-04-05T02:34:04.995000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "alexssd7fp",
+        "category": "general",
+        "parent": "",
+        "content": "You never know how well things will go in actual production 😄",
+        "created_at": "2022-04-05T07:12:43.063000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "alexssd7fp",
+        "category": "general",
+        "parent": "",
+        "content": "Just impossible to predict. Hence dangerous",
+        "created_at": "2022-04-05T07:12:54.790000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "There is a limitation on gas limit diff per block, once PoW -\u003e PoS transition happens it will be unmanageable to bring gas limit back to the value before the bomb in one block, while avg block time drops immediately to 12 seconds, if there are blocks requiring ~4 seconds to be processed because of huge gas limit the system may start experience liveness failure. Another thing is dependency between avg block time and gas limit in PoW -- it's really hard to manage the situation and have a clear mapping of difficulty increase on the gas limit increase that we should have to supply the same block space per unit of time.",
+        "created_at": "2022-04-05T09:32:44.216000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "If we make LVH optional then of course proving the parent `block_hash` when only the current payload is `INVALID` is redundant and can be omitted. One of the scenarios that we have discussed was like what if there is a way to turn online EL clients to `SYNCING` and keep it locked in this state because of no LVH is returned to CL, I am not saying that it's 100% possible, need to think about it more, but if it is then it could be an attack when some ELs make nodes to become optimistic and affect attestations hence liveness of the network.",
+        "created_at": "2022-04-05T09:36:36.557000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I may be missing info here, but from what I can see, if the EL returned an INVALID, regardless of what happens with LVH, the CL will start serving payloads from a different fork with subsequent calls to `newPayload` and `forkchoiceUpdated`. I don't see how the LVH behavior could affect the syncing status of the EL. But admittedly I do not understand how the execution clients sync.",
+        "created_at": "2022-04-05T09:43:26.879000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "For the case when EL is `SYNCING`, if EL doesn't store an information about an invalid subchain and simply drops the subchain then it won't be able to return this information to CL while processing the next call. And CL will not know that this subchain is invalid and must be dropped",
+        "created_at": "2022-04-05T09:45:55.942000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "but this is independent of LVH here, either the EL already returned INVALID on some block in that chain before and the CL has stopped syncing it, or the EL didn't and the CL will continue syncing it and the EL responding `SYNCING` regardless of any behavior about LVH",
+        "created_at": "2022-04-05T09:48:27.928000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@!425572898787426305\u003e I have a question about whitelisting functionality of TERMINAL_BLOCK_HASH. So I see two potential cases:\n1. We haven't processed terminal_block_hash, so we can return INVALID_TERMINAL_BLOCK if we receive a different block hash in FCU or newPayload. Is that correct? 🙂\n2. Our EL has a different terminal block, and we just run it with different  TERMINAL_BLOCK_HASH. Let's say TerminalBlockNumber = 1000, but our BlockTree.Head = 2000. What should we do in this case?",
+        "created_at": "2022-04-05T09:54:15.469000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "This is correct. We have two problems here: 1) how to return information about an invalid subchain to CL if EL is `SYNCING` 2) how to make this information precise. `latestValidHash` is for (2), `invalidTipHash` is for (1). Precise information helps to invalidate a branch and may be just an optimisation of (1). If CL receives `INVALID` it will switch to another chain but this chain may also have the same `INVALID` ancestor as the previous one, sure it will resolve all invalid subchains step by step.",
+        "created_at": "2022-04-05T09:54:20.032000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "A block with `TERMINAL_BLOCK_HASH` becomes *the* terminal block. Any other block must be considered as invalid terminal block if `TERMINAL_BLOCK_HASH` is configured.\n1. Correct\n2. In this case CL should start building the first PoS block (a transition block) on top of terminal block with `block_hash == TERMINAL_BLOCK_HASH`. In your case when there is a 1000 block gaps the building might not be possible if the state were pruned, and in this case EL client will have to be re-synced to obtain required state",
+        "created_at": "2022-04-05T10:00:19.215000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "general",
+        "parent": "",
+        "content": "🙏 \n2. Okay, so to be 100% sure: What if our Head\u003eTerminalBlockNumber but we haven't pruned state yet? We can just set the Head = TerminalBlockNumber, and CL will send us other blocks, right?",
+        "created_at": "2022-04-05T10:06:24.322000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "CL will send `fcU(headBlockHash=TERMINAL_BLOCK_HASH)` either as a part of transition block proposal or while processing a block received from gossip. And when this happens EL should switch to PoS as it's usual. Also, IIUC EL clients don't sync with remote peer if there is no `TERMINAL_BLOCK_HASH` at a certain height in canonical chain of the peer",
+        "created_at": "2022-04-05T10:12:45.237000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "engine API timeouts as discussed on last ACD\n\nhttps://github.com/ethereum/execution-apis/pull/207\n\nreview welcome",
+        "created_at": "2022-04-05T21:13:53.612000+00:00",
+        "attachments": null
+    }
+]

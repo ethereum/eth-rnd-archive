@@ -1,0 +1,538 @@
+[
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "So, after thinking about EIP-3074 a bit more. I now object more strongly than initially. Given that `AUTHCALL` opcode opens up a security hole, and then `AUTH` tries to patch it, a better security analysis is in order (better than me trying to poke holes in it in my free time, which is minimal). My own superficial security analysis gives me conclusion that current version of EIP does trade off convenience of some users for security of most users of smart contracts. If you assume in your threat model that it is possible to occasionally trick a user into a signing a wrong message with its private key, and think about what consequences this has. With current Ethereum, I know that if I am tricked into a signing a message by fishing scam or malware (or in other ways), usually the damage is done straight away and is limited to the effect of 1 transaction (someone steals some of my ETH, or some tokens - usually only 1 type of token). If I am quick enough, I might be able to pre-empt the attack by signing a message with the same nonce. But after the damage is done - that's it. I can keep using my private key safely. With the capabilities of `AUTHCALL` out there, if I am tricked into signing the `0x3 | attacker_padded_address| \u003cany_commit\u003e` , all my tokens and other assets controlled by my private keys are compromised. And I cannot even mitigate it in any way - it is almost like I've given away my private key, only my ETH balance is still safe. You can argue with me, but I do think this is a significant change in security assumptions, and it will apply to all the users once `AUTH_CALL` is activated. What is the alternative? As I suggested before - new transaction type which allows multiple signatures, and `AUTHCALL` being able to select any one them (except perhaps the first one which is `tx.origin`). Multi-sig transactions may be useful for many other things, of course",
+        "created_at": "2021-03-17T11:32:17.768000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "In other words, I think the current version of EIP-3074 creates a new very potent scam opportunity",
+        "created_at": "2021-03-17T11:34:44.104000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "IIUC, you are arguing that this changes security from \"one transaction can steal one of my tokens or all of my ETH\" and this change will make it so that \"one transaction can steal all of my tokens or my ETH\"?",
+        "created_at": "2021-03-17T14:15:43.288000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "vorot93",
+        "category": "general",
+        "parent": "",
+        "content": "I guess it's worse than that - attacker doesn't just 'steal' (as in once), but backdoors the whole account",
+        "created_at": "2021-03-17T14:48:12.329000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "vorot93",
+        "category": "general",
+        "parent": "",
+        "content": "backdoor my account when I'm poor and start stealing when I get rich",
+        "created_at": "2021-03-17T14:49:03.193000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agusx1211",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, it's kinda scary. You could even have some wallet signing those messages in the background for a long long time, only to eventually sweep thousands of accounts at the same time.",
+        "created_at": "2021-03-17T14:50:47.381000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agusx1211",
+        "category": "general",
+        "parent": "",
+        "content": "Although that's equivalent to just capturing the private key, I guess it's worse because an attacker can easily accumulate the signatures, and then do a very quick sweep... tbf I am not sure how worse it is, because the attacker can also accumulate those pks",
+        "created_at": "2021-03-17T14:53:47.108000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agusx1211",
+        "category": "general",
+        "parent": "",
+        "content": "One could argue that EIP3074 gives any malicious app a path for something that's equivalent of \"leaking the private key\", but I think that can be solvable by the wallet, it shouldn't be signing EIP3074 outside a small list of allowed contracts",
+        "created_at": "2021-03-17T14:55:36.097000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pipermerriam",
+        "category": "general",
+        "parent": "",
+        "content": "worse because it can be exploited in a context where they only have access to \"tricking user to sign\" as opposed to direct private key access.",
+        "created_at": "2021-03-17T14:56:23.193000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pipermerriam",
+        "category": "general",
+        "parent": "",
+        "content": "(at least that's my interpretation)",
+        "created_at": "2021-03-17T14:56:50.575000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agusx1211",
+        "category": "general",
+        "parent": "",
+        "content": "Yes but the wallet shouldn't allow requesting signatures for those transactions directly, it should either A) be something that's pre-defined on the wallet or B) only allow a small set of pre-allowed contracts",
+        "created_at": "2021-03-17T14:57:32.227000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agusx1211",
+        "category": "general",
+        "parent": "",
+        "content": "failing to do those things is equivalent of adding an rpc endpoint called `export private key`",
+        "created_at": "2021-03-17T14:57:57.126000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pipermerriam",
+        "category": "general",
+        "parent": "",
+        "content": "Splitting hairs on wallet UX isn't the issue here.  I agree that wallets should do these things to protect users.  At a low level functionality standpoint a wallet either 1) has direct access to the private key and can sign whatever they want or 2) has indirect access via a signing interface.\n\nThe important point is that this makes it exploitable *as-if* the private key was stolen, even if they only have indirect access via a signing interface.",
+        "created_at": "2021-03-17T14:59:50.528000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agusx1211",
+        "category": "general",
+        "parent": "",
+        "content": "Yep, my point is that the transaction type should never be directly exposed by the signing interface, and signing a bad EIP3074 should be treated as leaking the private key.",
+        "created_at": "2021-03-17T15:01:17.390000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agusx1211",
+        "category": "general",
+        "parent": "",
+        "content": "The \"signing interface\" is a boundary defined by the wallet, not by the protocol",
+        "created_at": "2021-03-17T15:01:46.501000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pipermerriam",
+        "category": "general",
+        "parent": "",
+        "content": "I think we are agreeing with each other",
+        "created_at": "2021-03-17T15:01:46.856000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "general",
+        "parent": "",
+        "content": "I strongly agree with this, but this was always the intention of the EIP. Normal wallets should either not even expose 3074 signing capabilities over arbitrary invokers at all or if they do, do it with a big \"this is equivalent to giving the contract your private key. are you absolutely sure you want to continue? please enter your password to confirm\" warning.",
+        "created_at": "2021-03-17T15:05:25.222000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "general",
+        "parent": "",
+        "content": "The expectation was that we would initially only see implementations in a completely trusted context (e.g. exchanges collecting user deposits), where there is full trust between user and invoker. then over time the emergence of community-vetted invoker ERCs. wallets can then manually expose signing capabilities for specific invokers.",
+        "created_at": "2021-03-17T15:06:31.570000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agusx1211",
+        "category": "general",
+        "parent": "",
+        "content": "Or wallets can implement new functionality by themselves too, things like batch transactions or expirable transactions",
+        "created_at": "2021-03-17T15:08:19.607000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "general",
+        "parent": "",
+        "content": "yes, this is similar to the trusted case, and similar to the trust model services like Infura's ITX already have today",
+        "created_at": "2021-03-17T15:09:01.681000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agusx1211",
+        "category": "general",
+        "parent": "",
+        "content": "the only thing I really don't like is `tx.origin != signer`, because it makes that functionality not possible without a relayer, sometimes some users may want to self-sponsor transactions but still do a batch",
+        "created_at": "2021-03-17T15:09:02.590000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "general",
+        "parent": "",
+        "content": "this was mainly a concession to keep the EIP simple for now and be conservative on the security impact (ironic in light of the current discussion). This restriction could be lifted or otherwise mitigated in future forks.",
+        "created_at": "2021-03-17T15:10:17.567000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "general",
+        "parent": "",
+        "content": "(just to mention one mitigation idea that would be backward-compatible with the existing `require(tx.origin == msg.sender)` pattern: `AUTHCALL` could set `tx.origin` to a special entry point address, wich would then enable self-sponsoring, while retaining `tx.origin != signer`)",
+        "created_at": "2021-03-17T15:11:52.825000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pipermerriam",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@!415548822983278593\u003e can I ask to whom that concession was made?  Just curious who is championing preserving `tx.origin` pattern? (I know there are a few of us who are of the opinion that we should consider breaking it)",
+        "created_at": "2021-03-17T15:11:55.414000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agusx1211",
+        "category": "general",
+        "parent": "",
+        "content": "I wonder if there are popular smart contracts that would break for real if we don't require `tx.origin != signer`, because `tx.origin == msg.sender` is a not encouraged antipattern anyway",
+        "created_at": "2021-03-17T15:13:05.435000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "general",
+        "parent": "",
+        "content": "there was discussion on that point in the \u003c#812719315136675850\u003e channel recently. I think \u003c@!619357961923330051\u003e was arguing that this was an important pattern.",
+        "created_at": "2021-03-17T15:13:10.778000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e Given that AUTHCALL opcode opens up a security hole, and then AUTH tries to patch it\nIt's really not correct to say that `AUTHCALL` opens a \"security hole\" and `AUTH` tries to patch it. That's like saying a smart contract wallet opens a security hole and `ecrecover` tries to patch it.",
+        "created_at": "2021-03-17T15:13:32.608000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e If you assume in your threat model that it is possible to occasionally trick a user into a signing a wrong message with its private key, and think about what consequences this has\nI don't think this is a valid threat model. If you can trick a user into signing a message, they're at the mercy of how diverse their assets are (if they hold only eth, this can all be transferred out). If we ever support native batched txs then this would no longer be valid anyways since adversaries can trick users into signing a batch the empties out their entire account.\n\nRegardless--let's suppose it is a valid thread model. First, we'll assume the user is using a *sound* invoker contract. In this case, the **worst** that can happen is equivalent to what can happen today. E.g. the adversary is able to get one tx worth of an attack on you and once it is executed the nonce is updated and that's it. You can continue to use your private keys. User should only use vetted invokers and wallets should help enforce that. But we can't *force* it. Just like we can *force* users to store their keys safely or interact with safe contracts. So let's imagine that a user signs a message for an actively malicious invoker. In this case you're right, this is equivalent to given your private key to an adversary. They will have complete control over your account. This can't be done by accident though. The most likely security issue here is that a team builds an invoker that has a small bug. It is very unlikely that bug in the invoker will give full control over a user's account, but it may be able to be exploited to grief the user out of some gas or make some other parameter a little malleable. This is definitely a concern. `AUTHCALL` is like giving users a loaded gun. But the analogy I keep coming back to is that this is exactly like smart contract wallets. Your arguments are equally valid against smart contract wallets as they against `AUTHCALL`.",
+        "created_at": "2021-03-17T15:13:40.592000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pipermerriam",
+        "category": "general",
+        "parent": "",
+        "content": "I read at least some of that discussion and didn't find  it compelling, but I'll admit I didn't dig into it in detail",
+        "created_at": "2021-03-17T15:13:50.906000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pipermerriam",
+        "category": "general",
+        "parent": "",
+        "content": "(My comments above shouldn't be read as being in agreement or disagreement with this being a security hole, but just trying to gain clarification, I don't have an opinion at this stage)",
+        "created_at": "2021-03-17T15:14:46.971000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "general",
+        "parent": "",
+        "content": "We mainly decided for the restriction to be conservative here. There definitely are a relatively high number of contracts specifically using `require(tx.origin == msg.sender)` (if I recall correctly I think \u003c@!689161464829050960\u003e ran some sort of analysis and found more than 1000 distinct contracts with source code with that line published). It is unclear how important it really is to keep it intact, but we didn't want to allow for any risk of breaking existing security assumptions.",
+        "created_at": "2021-03-17T15:16:59.326000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "general",
+        "parent": "",
+        "content": "I think the most precise way to state the invariant we want to retain is that `tx.origin == msg.sender` currently ensures that the execution occurs on the topmost call level.",
+        "created_at": "2021-03-17T15:18:32.072000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samwilsn",
+        "category": "general",
+        "parent": "",
+        "content": "I think it's even better to say that no one wants to ban self-sponsoring, but I also didn't want to do the research to prove it's safe in all cases to allow.",
+        "created_at": "2021-03-17T15:25:04.221000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "The breadth of the discussion on 3074 indicates to me that at the very least it's not viable for London.",
+        "created_at": "2021-03-17T15:25:17.160000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samwilsn",
+        "category": "general",
+        "parent": "",
+        "content": "I see three points of contention:\n (1) Should we include EIP-3074 at all?\n (2) Do we break the top-level of execution invariant?\n (3) What do we do with `value`?\n\nThe safest option for (2) is to ban self-sponsoring, _for now_. It can always be changed later.\n\nSame for (3). We can require `value` to be set to zero, and kick the decision down the road.\n\nAs for (1), there's been nothing here that's new. It's always been very clear in our messaging that invokers have a ton of power. I mention it several times in my Peep an EIP, and it's mentioned in the EIP's security considerations section.",
+        "created_at": "2021-03-17T15:30:20.362000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I wish we would exercise the same conservatism for the source of `value`.  😢",
+        "created_at": "2021-03-17T15:30:55.792000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "I suggest a better security analysis. I do not have time and resources to argue about the threat model, but I do not want to  wave my concerns through because of that",
+        "created_at": "2021-03-17T15:30:58.149000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "general",
+        "parent": "",
+        "content": "I think this might very plausibly be the conclusion. I would want to note though that none of these aspects brought up in the discussion here so far were at all new to the EIP, but were on the contrary exactly what got us to the current design of the EIP. I do think it is important to distinguish between \"the EIP has open questions and thus is not safe for mainnet\" and \"the EIP has many implications and not enough people have reasoned those through to be confident it's safe\". In the former case I 100% agree the EIP should not be considered for London.",
+        "created_at": "2021-03-17T15:31:12.557000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I think your argument above is sound, however I believe the premise of it means that *all* transaction batching is off the table.",
+        "created_at": "2021-03-17T15:32:02.309000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "The underlying problem you are expressing is that \"if an EOA can batch operations into a single call, then an attacker that can trick a user into signing a single call can steal all of the user's assets.\"  3074 definitely enables that, but so does every *possible* transaction batching scheme that isn't neutered beyond usefulness.",
+        "created_at": "2021-03-17T15:33:01.916000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "as does the opt-in use of any smart contract wallet that allows batching",
+        "created_at": "2021-03-17T15:33:24.908000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agusx1211",
+        "category": "general",
+        "parent": "",
+        "content": "Isn't the issue more related with the mutability between the transaction and the signature?",
+        "created_at": "2021-03-17T15:33:50.464000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "general",
+        "parent": "",
+        "content": "(side note: I somewhat expect London to end up as an explicit 1559-only fork (+maybe refund removal) anyway, in which case this whole discussion will be moot)",
+        "created_at": "2021-03-17T15:34:20.717000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agusx1211",
+        "category": "general",
+        "parent": "",
+        "content": "the way I see it, the attacker can trick the user to sign a transaction that does X, but in reality the transaction does Y because the implementation contract has a backdoor",
+        "created_at": "2021-03-17T15:34:30.873000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@!469936733073702915\u003e in the threat model \"i can get someone to sign 1 bad tx\" then with batching that 1 bad tx could empty the account",
+        "created_at": "2021-03-17T15:34:47.423000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I don't believe that is the problem being discussed here?",
+        "created_at": "2021-03-17T15:34:47.967000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agusx1211",
+        "category": "general",
+        "parent": "",
+        "content": "Is the problem that makes signing a bad EIP3074 transaction equivalent to revealing your private key",
+        "created_at": "2021-03-17T15:36:02.560000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "there is a separate issue where if an invoker is insecure, e.g. accidentally introduces tx malleability it could be possible to backdoor tx in transit and if the bug is egregious (replay protection is broken) it could be used against past users of the invoker",
+        "created_at": "2021-03-17T15:36:29.161000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samwilsn",
+        "category": "general",
+        "parent": "",
+        "content": "What analysis would you like to see? What would change your mind?\n\nIt seems like your main concern (beyond that it's \"subtle\" and not \"elegant\") is that signing one of these packages is like giving away your private key?",
+        "created_at": "2021-03-17T15:36:33.265000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "I would like someone else (apart from you and me) to give opinion on whether this EIP significantly changes security assumptions for all contract users. I do not want to carry all the burden of being anti-champion",
+        "created_at": "2021-03-17T15:41:31.833000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "as we know, the EIP process is heavily biased against anti-champions",
+        "created_at": "2021-03-17T15:41:48.599000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "again, the point is not to satisfy me in some way",
+        "created_at": "2021-03-17T15:42:23.836000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "I am just flagging up the issue that you might not consider important, because you are biased as EIP author",
+        "created_at": "2021-03-17T15:42:45.737000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "if this EIP gets activated, I will \"suck it up\", of course, and I will make sure to be safe, but I will know that new scams could be possible",
+        "created_at": "2021-03-17T15:43:37.860000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samwilsn",
+        "category": "general",
+        "parent": "",
+        "content": "I really do appreciate that you're taking the time to review and voice concerns!\n\nIt's hard not to feel like I have to convince you, however, since your comments about non-inclusion were quoted on the GitHub issue 😛",
+        "created_at": "2021-03-17T15:44:01.324000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "general",
+        "parent": "",
+        "content": "To be clear: Wallets today do not let users sign arbitrary data. Thus, they don't by default expose signing capabilities for 3074. We explicitly argue that they should not do so even if the EIP reaches mainnet. So the security concerns here are around \"wallets mistakenly allow users to effectively give their private key away by accident\". Which I don't think means it's not a concern, but it does add important context imo.",
+        "created_at": "2021-03-17T15:44:17.452000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "You are basically arguing against multi-layer security approach",
+        "created_at": "2021-03-17T15:44:43.334000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "for good security, there must be multiple layers of protection. You remove one layer, it is still kind of secure, but less secure",
+        "created_at": "2021-03-17T15:45:17.899000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samwilsn",
+        "category": "general",
+        "parent": "",
+        "content": "That's a bit unfair. We're arguing that the security of EIP-3074 is equivalent to private keys, and that the benefits exist and are substantial.",
+        "created_at": "2021-03-17T15:45:20.701000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, it sounds harsh, but that reflects my strong opposition",
+        "created_at": "2021-03-17T15:45:43.861000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "general",
+        "parent": "",
+        "content": "Agree on this point though. If at the end of the day there is no (near-)consensus that the EIP is indeed safe, it should be removed from consideration. I think we are only pushing for having the opportunity to facilitate such consensus 🙂",
+        "created_at": "2021-03-17T15:46:32.895000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, the discussions should continue, but I don't think it will reach the needed resolutions in time for London and trying to force the conclusion to that schedule wouldn't be good.  Shanghai is a viable target however.",
+        "created_at": "2021-03-17T17:52:41.030000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Perhaps batching of EOA transactions in one call is also a relaxation of security. And perhaps we do need to make this tradeoff between extra convenience and security against such signature tricks. What I do not want to do is for this to \"fly under the radar\" and be only the subject of couple of discussions between core devs, only to be re-discovered with round eyes few months later. If there is a campaign to push for EIP-3074 (which I believe has already started), then the awareness of this security relaxation needs to be part of that. It has to be clear that the convenience here does come with a security cost",
+        "created_at": "2021-03-17T19:20:57.757000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "I assume that for anyone just reading the EIP (as it was for me), these issues are quite subtle, and can be easily missed. It required me 3 iterations of \"oh, I get it, oh no, I don't get it\" to actually understand it (and maybe I still don't understand it completely)",
+        "created_at": "2021-03-17T19:25:46.617000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "Agreed, there absolutely needs to be an awareness of the security implications of 3074. To note, it's very likely that action batching will become common even if it isn't implemented by the core protocol. More ERCs are coming along that validate signatures instead of authenticate `CALLER`. The next logical step is to begin batching those. It is possible with meta-txs to build the same scheme as 3074, with the caveat that contracts must explicitly support the meta-txs.",
+        "created_at": "2021-03-17T19:26:59.681000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "I started a doc to discuss different threat models 3074 should be considered under and how they compare to EOAs and smart contract wallets today: https://hackmd.io/@matt/BknnAnyNu",
+        "created_at": "2021-03-17T19:27:40.080000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "looks pretty good",
+        "created_at": "2021-03-17T20:09:38.896000+00:00",
+        "attachments": null
+    }
+]

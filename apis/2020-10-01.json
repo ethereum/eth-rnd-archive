@@ -5,7 +5,7 @@
         "parent": "",
         "content": "\u003c@!340345049063882753\u003e what are the internal triggers for those events?  What has to happen for a 'slot' event to be generated, for example?",
         "created_at": "2020-10-01T05:47:07.894000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "\u003c@144468805697929216\u003e slot is mostly timing I think but we currently reject creating blocks for future slots so the synchronisation is very difficult without the event. We could just relax that validation and allow creating a block for one slot ahead. \n\nThe key one is the attestations due as we only run full fork choice to consider if we should switch to a different fork just as attestations are due then fire the event. So once the event fires you know you have the very latest info and the best chance to vote for the winning chain head. We could automatically run that when the first request to create an attestation comes in for a slot and it should work out the same. \n\nSo I don’t think there’s any show stopper issues just that our beacon node happened to already know all those timings and have events for them so we used them. I’d have to look to see which of them are not actually needed by the beacon node - my guess is it only needs the slot event but there may be some other things hanging off them just because they’re around.",
         "created_at": "2020-10-01T07:22:40.910000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jgm",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "Thanks for the info.  Perhaps worth breaking down the process and consider the events individually.  Let's start with the slot event.  I'm going to assume that the clocks between client and beacon node are in sync.\n\nSeems to me that the slot event is the beacon node saying \"our state is up-to-date for slot x\".  Obviously this can change (and there is a chain reorg event for this), but come a slot boundary the beacon node would:\n\n  - update state for the new slot\n  - update state for the new epoch (if the slot is an epoch boundary)\n\nIf this is correct, does it make sense for there to be a \"slot ready\" event, saying that it's finished its slot/epoch processing?\n\n(Note that we already have something similar with the \"head updated\" event, but this is slightly different in that it is telling us that the state of the node is at a certain point so not dependent on the node receiving a new block).",
         "created_at": "2020-10-01T07:39:26.303000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -29,7 +29,7 @@
         "parent": "",
         "content": "I’ll be able to say more definitely next week when I really dig into this in earnest (on holidays this week) but I don’t think I’d argue particularly strongly for any of the events. Mostly our client uses them because they were already there and, especially when it was in the same process, it just made sense to reuse them. \n\nIf we allowed producing blocks a slot or two ahead, there’s no need for the slot event because it’s simple enough for the node to roll an empty slot or two forward if need be.",
         "created_at": "2020-10-01T07:47:35.813000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -37,7 +37,7 @@
         "parent": "",
         "content": "The attestation due event 1/3rd through the slot is more useful because it means fork choice has been updated but that’s solvable by just automatically making sure fork choice is up to date enough when a request to create an attestation is received and that makes the api more forgiving as well which seems good.",
         "created_at": "2020-10-01T07:49:13.573000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -45,7 +45,7 @@
         "parent": "",
         "content": "Aggregate due 2/3rds through the slot is really not needed as it’s just pure timing.",
         "created_at": "2020-10-01T07:49:47.597000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -53,7 +53,7 @@
         "parent": "",
         "content": "The one event the validator client definitely needs is knowing when a block for the latest slot has been imported as they should then create attestation a early. I can’t remember if that’s there already or not.",
         "created_at": "2020-10-01T07:50:31.392000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -61,7 +61,7 @@
         "parent": "",
         "content": "Oh and reorg notifications which is there.",
         "created_at": "2020-10-01T07:50:47.672000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jgm",
@@ -69,7 +69,7 @@
         "parent": "",
         "content": "On holidays?  Please don't respond to this one until next week, then; there's nothing that's particularly urgent.  I'll reply here just so I don't forget.\n\nWe do have an event for when a block has been imported: that's the \"head updated\" event.  So I think that's covered.\n\nThinking more about this, I _think_ that the biggest mismatch is around fetching attester duties at the beginning of a new epoch.  This is because the difference between the time of the start of the epoch and the time the node has finished processing the previous epoch is undefined (depends on the speed of the beacon node, how much it has to process, _etc.)  Given that we have seen data that shows that blocks for the first slot of the epoch come out a fair bit later than others, I'd assume that validator clients are going for some sort of \"it's the start of epoch: let's wait for a bit before we do anything\" approach that could be optimized with an \"epoch transition\" event that says the node is ready to go for the new epoch.  This would be simpler than having one for each slot, and hopefully allow the network to reduce the \"first slot of the epoch penalty\" that we see at current.\n\n(The attestation due event I need to think about a bit; would love to dig in to the \"guarantee\" about fork choice being updated, and if that should be its own event for other purposes, but will consider over the weekend).",
         "created_at": "2020-10-01T08:03:03.824000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "wemeetagain",
@@ -77,7 +77,7 @@
         "parent": "",
         "content": "I don't think we should be making the assumption that the attester duty state is precomputed (or needs to be precomputed) before a request is made. (Or, in general, that a client maintains a singular state that must be updated wrt time, ahead of request time, to ensure the correctness of responses).\nIn our implementation, we (re)compute states on-demand, from various caches. So we don't run into this situation where the 'epoch transition' event is necessary or where we won't provide the correct result because the node 'may not have completed the epoch transition yet'.",
         "created_at": "2020-10-01T20:54:55.338000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "wemeetagain",
@@ -85,7 +85,7 @@
         "parent": "",
         "content": "For us, the things that effect how responses are computed are: the fork choice and the clock",
         "created_at": "2020-10-01T21:04:51.917000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jgm",
@@ -93,7 +93,7 @@
         "parent": "",
         "content": "Interesting.  So for you, the \"start of slot\" event is equivalent to the suggested \"epoch transition\" event (for the first slot of the epoch,obviously).  So if we do go for an \"epoch transition\" event you would just push that out immediately at the start of the epoch, as you're ready immediately, yes?",
         "created_at": "2020-10-01T21:06:15.508000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "wemeetagain",
@@ -101,7 +101,7 @@
         "parent": "",
         "content": "yeah, it would be equivalent to a clock_epoch event",
         "created_at": "2020-10-01T21:08:12.984000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "wemeetagain",
@@ -109,7 +109,7 @@
         "parent": "",
         "content": "or rather, we could implement it that way",
         "created_at": "2020-10-01T21:08:30.052000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "wemeetagain",
@@ -117,7 +117,7 @@
         "parent": "",
         "content": "or alternatively, we could internally listen on our own clock epoch event, run the epoch transition (and cache the result), then emit the 'epoch transition'",
         "created_at": "2020-10-01T21:09:24.912000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jgm",
@@ -125,6 +125,6 @@
         "parent": "",
         "content": "Yep, either would work.  I'll have a think over the weekend about this, and wait for feedback from other client teams, but this could work.",
         "created_at": "2020-10-01T21:13:44.023000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

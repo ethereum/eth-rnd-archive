@@ -1,0 +1,1596 @@
+[
+    {
+        "author": "hugo_delacruz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e EOF1 requires presence of a code section therefore the minimal overhead EOF data contract consist of a data section and one code section with single instruction\nThis is from EIP-3540: https://eips.ethereum.org/EIPS/eip-3540#data-only-contracts",
+        "created_at": "2023-01-02T00:29:48.561000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Right, but I mean one of the code sections has size 0",
+        "created_at": "2023-01-02T02:19:40.329000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "EOF breakout room in about 10 hours: https://github.com/ethereum/pm/issues/692",
+        "created_at": "2023-01-02T05:17:27.164000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "in the \"container\" section under EOF1 in 3540 it specifies a valid range for `code_size` as `0x0001-0xFFFF`",
+        "created_at": "2023-01-02T05:19:14.681000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ahhhhh right, thanks 🙂",
+        "created_at": "2023-01-02T07:00:50.764000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hi \u003c@211091239112671234\u003e I found a test which I think is incorrect. It is this test:\n\n`0xef000101000c02000300030005000103000000000000010203000401010001604200604260420000`\n\nGeth reports: `OK 604200`\n\nI think this is invalid code. The second function is reported to have max stack height 4. However, the code section in question is `6042604200`, i.e. PUSH PUSH STOP. So the max stack height is 2.",
+        "created_at": "2023-01-02T07:29:33.362000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I am starting to think that Geth only checks the first code section..?",
+        "created_at": "2023-01-02T07:31:53.507000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Here is another faulty one:\n\n`0xef000101000c020003000300050001030000000000000130300030303000306030005d0000300000`\n\nThe second code section is `5d00003000`. Thus `RJUMPI ADDRESS STOP`. However, `RJUMPI` needs one stack item, but we only have 0, so this is invalid.",
+        "created_at": "2023-01-02T07:32:52.647000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The other tests match our results 🙂",
+        "created_at": "2023-01-02T07:32:58.998000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hmm never mind, I forgot that this function has 48 inputs so there is no stack underflow",
+        "created_at": "2023-01-02T07:40:27.359000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This one is also correct, so never mind, bugs are on our side",
+        "created_at": "2023-01-02T07:41:24.360000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'll change so we output `code1,code2,...` though?",
+        "created_at": "2023-01-02T08:33:16.088000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Sure! 🙂",
+        "created_at": "2023-01-02T08:57:11.936000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "EIP 4750 and EIP 3540 are now inconsistent. EIP 3540 notes that we can have 0xFFFF code sections, EIP 4750 states that it can only have 1024 functions. What is the right value?",
+        "created_at": "2023-01-02T08:57:41.770000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "c3cd56be237177864e6c6d90e52f2f3de26b3ef68f815b4b26acaa664114005e"
+            }
+        ]
+    },
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@543900561460822016\u003e Hi, I was trying \u003c@211091239112671234\u003e's updated EofFuzzer and I would like to know does Geth validate the number of outputs of section 0 when it encounters a terminating opcode ?\nI found these two tests in All.input : \n```\nline 225 : 0xef000101000402000100030300030000000001604200010203\nline 226 : 0xef000101000c02000300030005000103000000000000010203000401010001604200604260420000\n```\nwhen \"parsed\" we can see that the sections are as follows : \n```\n// Line225\nef00 // magic\n01 // version\n01 0004 // type section header\n02 0001 0003 // code section header\n03 0003 // data section header\n00 // terminator\n00000001 // type section\n604200 // code section\n010203 // data section\n// stack: [42] \n\n// Line226\nef00 // magic\n01 // version\n01 000c // type section header\n02 0003 0003 0005 0001 // code section header\n03 0000 // data section header\n00 // terminator\n00000001 02030004 01010001 // type section\n604200 6042604200 00 // code section\n// stack: [42]\n```\nin both tests Section 0 leaves the stack full with 1 number, even tho its type section state that it has 0 inputs and 0 outputs , I was just wondering is this by design of Eip5450 or is it a bug ?",
+        "created_at": "2023-01-02T11:27:22.843000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I  think this is by design, right? \u003c@1011612262743679036\u003e",
+        "created_at": "2023-01-02T11:46:37.577000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This output check should only be done in RETF",
+        "created_at": "2023-01-02T11:46:42.487000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Otherwise, you have to clear stack before all terminating opcodes",
+        "created_at": "2023-01-02T11:46:49.219000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "E.g., if you have a stack height of 20 items which you dont really need at this anymore, then if we need to enforce the output rule, you have to input 20 dummy POP opcodes before you can run STOP",
+        "created_at": "2023-01-02T11:47:13.485000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes. Only `RETF` has this check.",
+        "created_at": "2023-01-02T11:47:53.395000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It also means that if a function does not have any `RETF` you can declare it with arbitrary number of outputs.",
+        "created_at": "2023-01-02T11:48:26.942000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Cool 😄",
+        "created_at": "2023-01-02T11:48:52.282000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm not so sure 🙂",
+        "created_at": "2023-01-02T11:49:07.115000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "You want to put it 0 then, because otherwise you limit yourself if you CALLF",
+        "created_at": "2023-01-02T11:49:09.699000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think if we want to keep it really strict we should just note that it has 0 outputs in case it only has terminating opcodes and no RETFs",
+        "created_at": "2023-01-02T11:50:09.154000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Compilers may want to put a specific value there for the tail call scenario (`CALLF RETF`). But we don't know the full impact of that yet.",
+        "created_at": "2023-01-02T11:53:13.075000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The \"no return\" functions is probably much better solution.",
+        "created_at": "2023-01-02T11:54:15.536000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "```\n0 : { input:  0, output:  0, maxHeight : 23} ([CALLF 01, CALLF 02, STOP])\n1 : { input:  0, output: 23, maxHeight : 23} ([PUSH1 23, PUSH1 42, STOP])\n2 : { input: 23, output:  0, maxHeight : 23} ([POP, POP, POP ... , RETF])\n```\nwill this scenario pass the checks ? and if yes will result it a stack underflow given that section 1 only outputs 2 but declares 23 and section 2 expected 23 but will find only 2 ?",
+        "created_at": "2023-01-02T12:03:33.872000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "also another question, when can we expect the Revision 2 PR to be merged ?",
+        "created_at": "2023-01-02T12:04:32.870000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "(1) will not pass, because maxHeight is 2, not 23",
+        "created_at": "2023-01-02T12:05:08.309000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "but if I inserted 23 Items to reach it, and popped 20 items after",
+        "created_at": "2023-01-02T12:06:02.617000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Well (2) could be correct if you are talking about that, if you pop it 23 times",
+        "created_at": "2023-01-02T12:06:31.344000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If you pop it 20 times then output is 3",
+        "created_at": "2023-01-02T12:06:41.992000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "what about this scenario ?\n```\n0 : { input:  0, output:  0, maxHeight : 4} ([CALLF 01, CALLF 02, STOP])\n1 : { input:  0, output:  4, maxHeight : 4} ([PUSH1 23, DUP, PUSH1 42, DUP, POP, POP, STOP])\n2 : { input:  4, output:  0, maxHeight : 4} ([POP, POP, POP, POP, RETF])\n```",
+        "created_at": "2023-01-02T12:08:25.378000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "section 1 doesnt use RETF so it declared 4 and returned 2, section 0 validation will assume section 1 output 4 items and it's validation will pass, section 2 will pass also, but section 1 shouldn't IMO",
+        "created_at": "2023-01-02T12:10:19.127000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "if we ignored output count because it doesnt use RETF that clearly will result in a stack underflow for section 2, is it not ?",
+        "created_at": "2023-01-02T12:10:49.491000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "No, because after you CALLF 01, the function stops. 02 is never called, so it cannot stack underflow",
+        "created_at": "2023-01-02T12:19:03.593000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If 1 would have RETF then the 4 outputs would be incorrect",
+        "created_at": "2023-01-02T12:19:19.298000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But, I do agree that this looks a bit ugly",
+        "created_at": "2023-01-02T12:19:27.437000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm starting to think that the outputs should just report the stack height correctly. Because this looks a  bit confusing and it also looks a bit misleading",
+        "created_at": "2023-01-02T12:25:06.767000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Exactly, if a function doesn't have any `RETF` it will never return (i.e. it must have a terminating instruction (e.g. `STOP`) or an infinite loop).",
+        "created_at": "2023-01-02T12:54:00.216000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Do you mean the stack height should be 0 at `STOP`. This seems to be unnecessary restriction because it does not provide any practical benefits to EVM.",
+        "created_at": "2023-01-02T12:56:04.406000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "No, I mean that the max_stack_height is reported correctly\nI dont want the requirement that stack is of size 0 when STOP",
+        "created_at": "2023-01-02T12:57:07.424000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Difference between geth and ethereum-js, not sure who is right:\n```\necho \"ef0001010004020001000303000000000000000000fe\"  | ./comparer/comparer ./eofparse/eofparse,\"ts-node ../txparse-js/eofparse.ts --stdin\"\nUsing 2 processes\n1: proc 0: OK 0000fe\n1: proc 1: err: There exist opcodes which cannot be reached, expected error: undefined\n1 input ef0001010004020001000303000000000000000000fe\nef0001010004020001000303000000000000000000fe\n```\nGeth is `proc 0`, ethereum-js is `proc 1`",
+        "created_at": "2023-01-02T12:57:11.834000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Battle it out, \u003c@543900561460822016\u003e vs \u003c@508125616940515329\u003e",
+        "created_at": "2023-01-02T12:57:36.450000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Remind me, where is the spec for it?",
+        "created_at": "2023-01-02T12:58:08.071000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Geth should both be wrong on published 5450 (https://eips.ethereum.org/EIPS/eip-5450) and on your open draft PR also https://github.com/ethereum/EIPs/pull/5993",
+        "created_at": "2023-01-02T12:58:36.127000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Second stop cannot be reached",
+        "created_at": "2023-01-02T12:58:39.786000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "spec for what? the parser? it just unmarshals the blob as an eof blob",
+        "created_at": "2023-01-02T12:58:59.161000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yeah, the fuzzing.",
+        "created_at": "2023-01-02T12:59:16.794000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I need to update the readme/description, but essentially it's only a few lines: https://github.com/holiman/txparse/blob/main/eofparse/main.go",
+        "created_at": "2023-01-02T13:00:02.847000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So exit code other than 0 and error message to stderr?",
+        "created_at": "2023-01-02T13:01:34.169000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "no exit",
+        "created_at": "2023-01-02T13:01:59.064000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Just spit out either \"OK: \u003ccode1, code2..\u003e\" or \"Err: \u003cwhatever\u003e\". And then read the next line",
+        "created_at": "2023-01-02T13:02:26.884000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Description here (I will update it a bit) : https://github.com/holiman/txparse#eof-parser-eofparse",
+        "created_at": "2023-01-02T13:03:21.880000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ok, I can see it from the Go code 🙂",
+        "created_at": "2023-01-02T13:04:12.998000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "ethereum-js is correct here, i didn't exit the stack validation early - here is the fix: https://github.com/ethereum/go-ethereum/pull/26133/commits/3275c481b9730dba2cdcd3597485c71771c88c62",
+        "created_at": "2023-01-02T13:53:32.199000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Still not fully fixed ?",
+        "created_at": "2023-01-02T14:05:58.991000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "```\n1302: proc 0: OK 6000600060006000600060006000865291a060004260004360006000600060006000600060006000600060006000600060006000600060008f2060007785600036406000fe996000446000b060004560007360005e3c08a16000480360007b203e100a60006000600060006000600060006000600060008960005d0260003660007c12081560006000600060006000600060006000600060006000600060006000600060009e8460004200\n1302: proc 1: err: There exist opcodes which cannot be reached, expected error: undefined\n1302 input ef000101000402000100ab030000000000001d6000600060006000600060006000865291a060004260004360006000600060006000600060006000600060006000600060006000600060008f2060007785600036406000fe996000446000b060004560007360005e3c08a16000480360007b203e100a60006000600060006000600060006000600060008960005d0260003660007c12081560006000600060006000600060006000600060006000600060006000600060009e8460004200\nef000101000402000100ab030000000000001d6000600060006000600060006000865291a060004260004360006000600060006000600060006000600060006000600060006000600060008f2060007785600036406000fe996000446000b060004560007360005e3c08a16000480360007b203e100a60006000600060006000600060006000600060008960005d0260003660007c12081560006000600060006000600060006000600060006000600060006000600060009e8460004200\n```\nGeth thinks the input is ok, ethereum-js not",
+        "created_at": "2023-01-02T14:06:35.260000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "okay let me look",
+        "created_at": "2023-01-02T14:07:39.920000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And this error is either on geth or js: \n```\n62956: proc 0: OK 60006000600060006000600060006000600060006000600060009b926000452060007360006560006e60006000600060006000600060006000600060006000600060009b2060006ef0881060005f600042600044833f1360006b8d60003a6000751660005d83a26000b160007660003a6000685460007ff486600062066000368660004600\n62956: proc 1: err: RETF stack height invalid, expected error: undefined\n62956 input ef00010100040200010085030000000000001960006000600060006000600060006000600060006000600060009b926000452060007360006560006e60006000600060006000600060006000600060006000600060009b2060006ef0881060005f600042600044833f1360006b8d60003a6000751660005d83a26000b160007660003a6000685460007ff486600062066000368660004600\n```",
+        "created_at": "2023-01-02T14:09:34.384000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Besu reports max stack height mismatch (want 30 have 29) (possibly wrong, just was in that section of code)",
+        "created_at": "2023-01-02T14:10:32.882000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Besu calls dead code at section 0 pc 106",
+        "created_at": "2023-01-02T14:10:58.770000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "same as Nethermind",
+        "created_at": "2023-01-02T14:11:05.147000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Wow, I really need to bring in besu and nethermind into the mix now!",
+        "created_at": "2023-01-02T14:11:58.193000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "https://github.com/shemnon/besu/tree/eof-breakout5 is the latest besu, contains a few fuzzing fixes",
+        "created_at": "2023-01-02T14:13:23.676000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Manually checking this one",
+        "created_at": "2023-01-02T14:15:34.940000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This contains a RETF in middle of code section, which is terminating, so that should be wrong",
+        "created_at": "2023-01-02T14:17:31.023000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i am also getting err here now (unreachable code) after the last fix",
+        "created_at": "2023-01-02T14:19:49.633000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I guess it depends in what order you do the errors, but there is indeed unreachable code. Also indeed the stack height at RETF (25) is not what it should be (0). But the reported max size is thus correct 🙂",
+        "created_at": "2023-01-02T14:21:25.839000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "PC 106 is defined and reachable for me?",
+        "created_at": "2023-01-02T14:27:07.340000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Assuming that PC is the program counter here and not the relative opcode number (so like skip PUSHs)",
+        "created_at": "2023-01-02T14:27:41.719000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "PC, zero from each section header.",
+        "created_at": "2023-01-02T14:27:58.263000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Nvm I was taking PC from the entire container not from code section",
+        "created_at": "2023-01-02T14:28:40.553000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Reported PC is correct 🙂",
+        "created_at": "2023-01-02T14:28:43.473000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@403707149043105803\u003e which is the actual binary to build for a besu-flavoured eofparse?",
+        "created_at": "2023-01-02T14:29:44.018000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "`./gradlew ethereum:evmtool:installdist` and then to run  `./ethereum/evmtool/build/install/evmtool/bin/evm code-validate` - the whole evmtool dir is the self-container install.",
+        "created_at": "2023-01-02T14:30:45.537000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "ah I see",
+        "created_at": "2023-01-02T14:30:59.231000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "that is `./ethereum/evmtool/build/install/evmtool`",
+        "created_at": "2023-01-02T14:31:03.492000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "same binary as EVM fuzzing",
+        "created_at": "2023-01-02T14:31:10.561000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yep, I know",
+        "created_at": "2023-01-02T14:31:27.625000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@543900561460822016\u003e ef0001010004020001000303000000000000016001B1\nCode section here is PUSH 0 RETF, stack height at RETF is thus invalid (expect 0 but have 1)",
+        "created_at": "2023-01-02T14:44:51.472000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "```\nuser@debian-work:~/workspace/txparse$ cat eofparse/all.input| ./comparer/comparer ./eofparse/eofparse,\"ts-node ../txparse-js/eofparse.ts --stdin\",\"../besu/ethereum/evmtool/build/install/evmtool/bin/evm code-validate\" \nUsing 3 processes\n84: proc 0: err: computed max stack height for code section 2 does not match expected (want: 1, got: 0)\n84: proc 1: OK 604200,6042604200,00\n84: proc 2: OK 604200\n84 input 0xef000101000c02000300030005000103000000000000010203000401010001604200604260420000\n```",
+        "created_at": "2023-01-02T14:45:37.847000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "```\n104: proc 0: err: computed max stack height for code section 2 does not match expected (want: 48, got: 0)\n104: proc 1: OK 603000,5d00003000,00\n104: proc 2: OK 603000\n104 input 0xef000101000c020003000300050001030000000000000130300030303000306030005d0000300000\n```",
+        "created_at": "2023-01-02T14:45:51.452000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "```\n413: proc 0: OK 6000600060006000600060006000865291a060004260004360006000600060006000600060006000600060006000600060006000600060008f2060007785600036406000fe996000446000b060004560007360005e3c08a16000480360007b203e100a60006000600060006000600060006000600060008960005d0260003660007c12081560006000600060006000600060006000600060006000600060006000600060009e8460004200\n413: proc 1: err: There exist opcodes which cannot be reached, expected error: undefined\n413: proc 2: err: EOF Code Invalid : Calculated max stack height (30) does not match reported stack height (29)\n413 input 0xef000101000402000100ab030000000000001d6000600060006000600060006000865291a060004260004360006000600060006000600060006000600060006000600060006000600060008f2060007785600036406000fe996000446000b060004560007360005e3c08a16000480360007b203e100a60006000600060006000600060006000600060008960005d0260003660007c12081560006000600060006000600060006000600060006000600060006000600060009e8460004200\n```",
+        "created_at": "2023-01-02T14:46:34.597000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yep i realized i wasn't properly checking retf outputs - this fails now",
+        "created_at": "2023-01-02T14:46:36.148000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@403707149043105803\u003e could you please also make the OK-output `code1,code2,...` ?",
+        "created_at": "2023-01-02T14:48:08.616000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think Geth is wrong here. Section 2 (so `0x00` has 1 input and 1 output, this is correct, the stack height at section 2 starts at 1, and STOP pops/pushes nothing)",
+        "created_at": "2023-01-02T14:48:09.639000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Just pushed that change 5 seconds ago",
+        "created_at": "2023-01-02T14:48:51.551000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "same here. Geth does not set initial stack size of code section to number of inputs",
+        "created_at": "2023-01-02T14:49:07.180000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And Jochem can you (if you haven't already) make etheruem-js strip out ` ` and `-` from inputs ?",
+        "created_at": "2023-01-02T14:49:59.157000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Sure 🙂",
+        "created_at": "2023-01-02T14:50:12.794000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hmm weird the code is all reachable 🤔 (EthJS reports unreachable code)",
+        "created_at": "2023-01-02T14:52:52.260000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "you're right, i've updated it to start the max_stack_height calculation with the types[section].Input",
+        "created_at": "2023-01-02T14:54:21.221000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Breakout call in 3 minutes, right?",
+        "created_at": "2023-01-02T14:57:58.490000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yes!",
+        "created_at": "2023-01-02T14:58:11.738000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Great 😄",
+        "created_at": "2023-01-02T14:58:22.339000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "starting now: https://ethereumfoundation.zoom.us/j/81178422063?pwd=bFJIL3YwWXovZGZZWHN5VUJwZDRHQT09",
+        "created_at": "2023-01-02T15:01:56.514000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Geth (`0`) vs JS (`1`) vs Besu (`2`)\n```\n413: proc 0: OK 6000600060006000600060006000865291a060004260004360006000600060006000600060006000600060006000600060006000600060008f2060007785600036406000fe996000446000b060004560007360005e3c08a16000480360007b203e100a60006000600060006000600060006000600060008960005d0260003660007c12081560006000600060006000600060006000600060006000600060006000600060009e8460004200\n413: proc 1: err: There exist opcodes which cannot be reached, expected error: undefined\n413: proc 2: err: EOF Code Invalid : Calculated max stack height (30) does not match reported stack height (29)\n413 input 0xef000101000402000100ab030000000000001d6000600060006000600060006000865291a060004260004360006000600060006000600060006000600060006000600060006000600060008f2060007785600036406000fe996000446000b060004560007360005e3c08a16000480360007b203e100a60006000600060006000600060006000600060008960005d0260003660007c12081560006000600060006000600060006000600060006000600060006000600060009e8460004200\n```\n```\n417: proc 0: err: wrong number of outputs (want: 0, got: 1)\n417: proc 1: err: RETF stack height invalid, expected error: undefined\n417: proc 2: OK 6001b1\n417 input 0xef0001010004020001000303000000000000016001B1\n```",
+        "created_at": "2023-01-02T15:07:35.045000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@583892532644151312\u003e It's actually a part of https://github.com/ethereum/EIPs/pull/5993",
+        "created_at": "2023-01-02T15:11:07.113000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Nethermind's results : \n413 - err: EIP-5450 : Suggested Max Stack height mismatches with actual Max, expected 29 but found 107\n417 - err: EIP-5450 : Stack state invalid required height 0 but found 1",
+        "created_at": "2023-01-02T15:12:40.957000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think 417 is for sure a besu bug",
+        "created_at": "2023-01-02T15:13:02.829000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yeah section 0  ends with RETF, so it will check output stack height I guess",
+        "created_at": "2023-01-02T15:13:17.800000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Thanks, and sorry for not having added it into the mix yet 🙂 It's next on my todo",
+        "created_at": "2023-01-02T15:13:21.727000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Neat, all four: \n```\nuser@debian-work:~/workspace/txparse$ cat eofparse/all.input| ./comparer/comparer ./eofparse/eofparse,\"ts-node ../txparse-js/eofparse.ts --stdin\",\"../besu/ethereum/evmtool/build/install/evmtool/bin/evm code-validate\",\"../EOF-Header-Parser/bin/release/net6.0/linux-x64/EofParser\" 2\u003ediffs.txt\nUsing 4 processes\n52: proc 0: OK 604200\n52: proc 1: OK 604200\n52: proc 2: OK 604200\n52: proc 3: OK [EofHeader { Version = 1, TypeSection = SectionHeader { Start = 15, Size = 4, EndOffset = 19 }, CodeSections = Nethermind.Evm.EOF.SectionHeader[], DataSection = SectionHeader { Start = 22, Size = 3, EndOffset = 25 } }]\n52 input 0xef000101000402000100030300030000000001604200010203\n84: proc 0: OK 604200,6042604200,00\n84: proc 1: OK 604200,6042604200,00\n84: proc 2: OK 604200,6042604200,00\n84: proc 3: OK [EofHeader { Version = 1, TypeSection = SectionHeader { Start = 19, Size = 12, EndOffset = 31 }, CodeSections = Nethermind.Evm.EOF.SectionHeader[], DataSection = SectionHeader { Start = 40, Size = 0, EndOffset = 40 } }]\n84 input 0xef000101000c02000300030005000103000000000000010203000401010001604200604260420000\n```",
+        "created_at": "2023-01-02T15:36:57.840000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I have the evmone one too if you want to build C++. I can also ask CI to produce binaries.",
+        "created_at": "2023-01-02T16:02:28.582000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I just fixed tests on our side, we also get a reported stack height of 29 so the code is valid. \u003c@403707149043105803\u003e most likely one of your stack items has the wrong amount of inputs/outputs/stack delta?\nSpecial opcodes other than PUSH / DUP / SWAP in this code:\n`MSTORE, 0xA0 (LOG), TIMESTAMP, NUMBER, SHA3, EXTCODECOPY, ADDMOD, 0xA1 (LOG1), BASEFEE, SUB MUL, CALLDATASIZE, STOP`",
+        "created_at": "2023-01-02T16:16:55.779000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@403707149043105803\u003e is is EXTCODECOPY, you report 4 inputs 1 outputs, but it is 4 inputs 0 outputs 🙂",
+        "created_at": "2023-01-02T16:19:07.559000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Possibly the same error as the other besu invalid, just a table error.  I'll dive in in a bit",
+        "created_at": "2023-01-02T16:19:59.098000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yeah I have a lot of these table errors as well 😅",
+        "created_at": "2023-01-02T16:20:16.836000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I still got this question open. \u003c@425274498732916736\u003e ?",
+        "created_at": "2023-01-02T16:24:17.347000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "3540 should be updated",
+        "created_at": "2023-01-02T16:25:56.457000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "https://github.com/ethereum/EIPs/pull/6251",
+        "created_at": "2023-01-02T16:29:07.805000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Also, ISZERO was wrong.  But not tested.",
+        "created_at": "2023-01-02T16:31:24.953000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Could you test this one in Besu?",
+        "created_at": "2023-01-02T16:34:17.808000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "",
+        "created_at": "2023-01-02T16:34:20.844000+00:00",
+        "attachments": [
+            {
+                "type": "text/plain; charset=utf-8",
+                "origin_name": "message.txt",
+                "content": "5516abefe8dd9497140c5330e37895962ed61a5159b6d2c488fb9d2cc7623fa6"
+            }
+        ]
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "`err: layout - Invalid Code section size for section 0`",
+        "created_at": "2023-01-02T16:35:44.861000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hmm weird, I manually checked it and it seemed correct to me",
+        "created_at": "2023-01-02T16:36:04.708000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Oh wait",
+        "created_at": "2023-01-02T16:36:10.214000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "nvm",
+        "created_at": "2023-01-02T16:36:12.051000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "All code sections are size 0 😂",
+        "created_at": "2023-01-02T16:36:17.383000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "code section must be 1 or larger",
+        "created_at": "2023-01-02T16:36:17.514000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yup, thanks 🙂",
+        "created_at": "2023-01-02T16:36:24.498000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This one should pass? ( \u003c@211091239112671234\u003e this does not pass on Geth!)",
+        "created_at": "2023-01-02T16:37:38.095000+00:00",
+        "attachments": [
+            {
+                "type": "text/plain; charset=utf-8",
+                "origin_name": "message.txt",
+                "content": "49feb1e50335e7dc1b4d0843d95950006f8b19fd72c4c2d7cf08cfc911c23f8e"
+            }
+        ]
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Besu passes, all STOPs",
+        "created_at": "2023-01-02T16:38:29.014000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ok that test is 1023 fns.",
+        "created_at": "2023-01-02T16:38:50.733000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This is 1024",
+        "created_at": "2023-01-02T16:38:56.740000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "",
+        "created_at": "2023-01-02T16:39:00.350000+00:00",
+        "attachments": [
+            {
+                "type": "text/plain; charset=utf-8",
+                "origin_name": "message.txt",
+                "content": "6b0780210e68939bf928e3f1bb8044728472d5c17de81ad2e7acc18cf6809bb3"
+            }
+        ]
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This 1025",
+        "created_at": "2023-01-02T16:39:17.220000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "",
+        "created_at": "2023-01-02T16:39:22.015000+00:00",
+        "attachments": [
+            {
+                "type": "text/plain; charset=utf-8",
+                "origin_name": "message.txt",
+                "content": "7e16b585a5f89c57495587c8881bbd7a09b44226c2f239a7aa8db716ce10b094"
+            }
+        ]
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "1024 pases, 1025 fails",
+        "created_at": "2023-01-02T16:39:53.389000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yeah I am not sure what part of the spec is since 3540 and 4750 contradict each other. But those 3 tests should be added to the test suite anyways",
+        "created_at": "2023-01-02T16:40:57.724000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This one ^",
+        "created_at": "2023-01-02T16:41:17.296000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@543900561460822016\u003e geth seems to have an arbitrary limit of max 290 functions?",
+        "created_at": "2023-01-02T16:46:46.549000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "290 fns, pass:",
+        "created_at": "2023-01-02T16:46:55.966000+00:00",
+        "attachments": [
+            {
+                "type": "text/plain; charset=utf-8",
+                "origin_name": "message.txt",
+                "content": "e87e27ed295f988d3c80b95cf4306cc76b87dc906e15edee59e0049149a34612"
+            }
+        ]
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "291 fns, fail:",
+        "created_at": "2023-01-02T16:47:21.059000+00:00",
+        "attachments": [
+            {
+                "type": "text/plain; charset=utf-8",
+                "origin_name": "message.txt",
+                "content": "88f98e2e2431c7fb291ddaf9def992cf3e71bce3c449d9030906a5eba227985a"
+            }
+        ]
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "are you running latest changes? the second one passes for me",
+        "created_at": "2023-01-02T16:54:57.285000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I will pull",
+        "created_at": "2023-01-02T16:56:09.187000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It's time to merge https://github.com/ethereum/EIPs/pull/5993 so please give it a final round of review.",
+        "created_at": "2023-01-02T17:04:44.598000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Afk now, perhaps file a ticket for inputs to add",
+        "created_at": "2023-01-02T17:09:03.861000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Should be 1024. Although we now have 1023 and 1024 limits in different places.",
+        "created_at": "2023-01-02T17:21:04.162000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "https://github.com/ethereum/EIPs/pull/6251",
+        "created_at": "2023-01-02T17:21:26.778000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bird___.",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Is there a good way to compile LLL these days? I'd like to make use of https://github.com/ethereum/tests without directly using retesteth, but a lot of the test code is in LLL and the LLL compiler was removed from solidity. It seems like there is an LLL compiler within retesteth now but I'm not sure there's a direct way to call it",
+        "created_at": "2023-01-02T18:05:00.495000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gumb00",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "testing team maintains fork of solidity that still has LLL for this https://github.com/winsvega/solidity",
+        "created_at": "2023-01-02T18:23:04.871000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bird___.",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Awesome, thanks! I'm guessing it has to be built from source to use?",
+        "created_at": "2023-01-02T18:25:00.853000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Current status: https://gist.github.com/holiman/f58f5831381981b0c9394bc127358c4f?permalink_comment_id=4421451#gistcomment-4421451 TLDR one bug in js, one in besu",
+        "created_at": "2023-01-02T18:28:07.196000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hi, yes the JS error is because I check if code sections \u003c= 0xFFFF, should be \u003c= 1024 (I was not aware of right spec since EIPs noted two different ones, but now there is a PR open clarifying the limit i.e. 1024)",
+        "created_at": "2023-01-02T18:31:53.061000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And the other checks seems to be that nethermind uses uppercase and others do not?",
+        "created_at": "2023-01-02T18:33:01.086000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hi all, some random comments regarding EOF.\n\n(1). Currently if I CALLF function N then I should first loop over all functions 1..(1-N) in order to figure out the offset of code section N. This is thus **non-constant** lookup time at runtime. Could we consider changing the EOF container format such that we now have a constant-time lookup (i.e. instead of using code sizes, report the offset, except the last code-size, this is the size of the final container)\n(2) For Solidity in order to compile EOF contracts at runtime, would it make sense to move the data section to the second header part? Now, the data section size is at a constant position. In case that solidity has constructor arguments with dynamic size (i.e. `bytes`) then it can \"just\" write the constructor data (+ possible overhead) to a constant position in the header. (Otherwise, it needs to figure out where the data section is located) (cc \u003c@425274498732916736\u003e ?)",
+        "created_at": "2023-01-02T18:53:44.552000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Fixed (`git submodule update --remote`)",
+        "created_at": "2023-01-02T18:56:16.123000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "re 1): not sure i understand this, you already need to read the header - once you've read that, you know where the section contents start so function N would be at header_size+types_size+sum(code_sizes[:N])?\n\n2): this makes sense to me and might be a nice middle ground between doing nothing and allowing extra data after init code",
+        "created_at": "2023-01-02T18:58:29.434000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i see now, the sum is the non constant part",
+        "created_at": "2023-01-02T18:59:30.743000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, and to optimize I only need to know the code sections which I `CALLF` (plus first code section)",
+        "created_at": "2023-01-02T18:59:55.875000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "but you should be able to compute the offsets at the end of parsing for all sections",
+        "created_at": "2023-01-02T19:00:22.920000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Changing from section size to section position would solve the fixed-size-data issue as the data section can be unbounded.  But we would still need to add logic to ensure the container is \"packed\"",
+        "created_at": "2023-01-02T19:01:16.650000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "and that only the data is at the tail.",
+        "created_at": "2023-01-02T19:01:33.039000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "What if we change the code section header to offsets?\n\nThen: \n\nChange code section header to: `0x02` + code_offsets (2 bytes) + `code_info`\n\nThere exists `code_offsets + 1` `code_info` fields of 2 bytes.\n\nAll of these code offset fields are the exact code offset where this code section starts. Except the final one: this is the size of the final code section. (So, if we have at most 1024 functions then we thus have at most 1025 `code_info` fields)\n\nWhat if I want to read code section `N`?\n\nWe know that the first `code_info` starts at byte 9 (previous `EF0001 01 \u003ctype section (2 bytes) 02 \u003ccode_offsets\u003e (2 bytes)` (1-indexed)\n\nI thus have to read 2 `uint16`s: \n\nAt byte `9 + 2*N` (call this `start`) and at byte `9 + (2 * (N+1))` (call this `end`)\n\nNow if `N` \u003c `code_offsets - 1` then the code section is located between bytes `start` and `end`\nOtherwise (N is the final code offset, so `end` is actually the final size). Then the code section is located between `start` and `start+end`\n\nIt is now possible to validate that the entire container is contained within the header",
+        "created_at": "2023-01-02T19:09:58.203000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So this changes figuring out where a code section is located to constant time, and it is not necessary to calculate the sum of these sizes",
+        "created_at": "2023-01-02T19:11:09.952000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Otherwise with these code sizes we introduce this non-constant-time runtime check to figure out where code section N starts",
+        "created_at": "2023-01-02T19:11:27.573000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Given we are supposed to have interoperating clients in 3 days I think it's too late to go too deep down this rabbit hole.  What exists may not be ideal but I would need to see it being net-negative before I could get behind changes.  The expediency of having something done (of high quality) to me is more important than making it perfect.",
+        "created_at": "2023-01-02T19:13:28.168000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Sure, but one of the motivation points of the EIPs is that it removes JUMPDEST validation each time you call a contract, but now we re-introduce something similar with how the code section is currently defined",
+        "created_at": "2023-01-02T19:14:36.045000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But I agree lets do an interop and then lets see how it goes",
+        "created_at": "2023-01-02T19:15:08.412000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I would argue though that if we want to fork this in we should also ensure that tools like solidity are ready, and give us a thumbs-up that all looks OK and is workable with",
+        "created_at": "2023-01-02T19:15:30.868000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I don't think we can feasibly skip a validation step, so really we are changing what the jumpdest step looks like.",
+        "created_at": "2023-01-02T19:15:51.766000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Not sure which validation step is skipped here? For EOF we do not have any jumpdest analysis (and in fact, for optimization, jumpdest analysis should only be done if contract execution runs into a JUMP(I) opcode)",
+        "created_at": "2023-01-02T19:25:09.380000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Right, \"legacy\" code gets jumpdest analysis and EOF1 gets the code and stack analysis.  EOF checks can be optimized away (only at deploy and contract create transactions) but the same can almost be done for legacy if you cache jumpdests on-disk (and do jumpdest analysis on sync).",
+        "created_at": "2023-01-02T19:28:35.757000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I agree, but I think we can also agree that for EOF v1 it is not necessary to do this caching stuff, because it can be put into the EOF container directly",
+        "created_at": "2023-01-02T19:30:29.094000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Down to two known issues: https://gist.github.com/holiman/f58f5831381981b0c9394bc127358c4f?permalink_comment_id=4421547#gistcomment-4421547",
+        "created_at": "2023-01-02T20:36:31.819000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I will manually check the first one. Nethermind seems very wrong, they report a very high max stack item count so I am rather sure that they are at least wrong",
+        "created_at": "2023-01-02T20:55:27.020000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Did you update Besu? We found a problem with stack items for EXTCODECOPY and ISZERO",
+        "created_at": "2023-01-02T20:55:58.625000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Fixed the code table issues, and pushed to the branch. Besu remaining issue has to do with the RETF not cleaning up the code heights.",
+        "created_at": "2023-01-02T20:56:33.505000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "`0xef000101000402000100ab030000000000001d6000600060006000600060006000865291a060004260004360006000600060006000600060006000600060006000600060006000600060008f2060007785600036406000fe996000446000b060004560007360005e3c08a16000480360007b203e100a60006000600060006000600060006000600060008960005d0260003660007c12081560006000600060006000600060006000600060006000600060006000600060009e8460004200`\n\n I think Geth and JS are correct here, manually just checked and 29 is the correct stack height.",
+        "created_at": "2023-01-02T20:59:00.681000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Besu is now also agreeing on `413`. So Nethermind is off on `413`, besu off on `417`.",
+        "created_at": "2023-01-02T21:38:10.557000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "fixes pushed",
+        "created_at": "2023-01-02T21:43:40.351000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Fixes Pushed for Nethermind as well (Pushx output count was wrong)",
+        "created_at": "2023-01-02T22:00:45.739000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@211091239112671234\u003e This is the evmone eofparse: https://github.com/ethereum/evmone/blob/eof/test/eofparse/eofparse.cpp",
+        "created_at": "2023-01-02T22:14:57.113000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bobsummerwill",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hey everyone!   \u003c@683653554631868440\u003e had some nice examples here for EIP-2315.\nAre there similar code examples for EOF?\nhttps://eips.ethereum.org/EIPS/eip-2315#efficiency",
+        "created_at": "2023-01-02T22:22:33.237000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This works the same in EOF. Even gas costs are the same.",
+        "created_at": "2023-01-02T22:26:02.207000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bobsummerwill",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Just different OPCODE names?",
+        "created_at": "2023-01-02T22:27:30.678000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yes",
+        "created_at": "2023-01-02T22:29:56.253000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Oh wow, I had not realized 2315 is updated. If the semantics are the same, what is the motivation of having these 2 EIPs active? I would really like to see that one of them (most likely 2315) is withdrawn.",
+        "created_at": "2023-01-02T22:34:16.366000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bobsummerwill",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "2315 is not an active proposal anymore.\nWe are on the third round of efforts at getting similar functionality into the EVM, starting in 2016 with https://eips.ethereum.org/EIPS/eip-615, then in 2019 with https://eips.ethereum.org/EIPS/eip-2315 and now in 2021-2023 with EOFs.",
+        "created_at": "2023-01-02T22:42:04.260000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bobsummerwill",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But EOF is clearly building in similar areas to the earlier ideas.",
+        "created_at": "2023-01-02T22:42:29.447000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bobsummerwill",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And on https://eips.ethereum.org/EIPS/eip-1702 \"EIP-1702: Generalized Account Versioning Scheme\"",
+        "created_at": "2023-01-02T22:42:38.888000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ah right I see that 2315 requires EOF",
+        "created_at": "2023-01-02T22:43:58.704000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bobsummerwill",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I guess Greg started rewriting 2315 (subroutines) as an alternative to 4750 (functions), but 4750 has won out.",
+        "created_at": "2023-01-02T22:45:24.461000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bobsummerwill",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And now he is typing, so I will leave him to explain 🙂",
+        "created_at": "2023-01-02T22:48:38.965000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "EIP-2315 goes way back before EIP-4750.  It's in Review phase again, and is still open to critique.  Going forward, this amounts to the core mechanism behind functions, and I think it would be worth exposing in a constrained way within code sections.  I have a PR for discussion purposes going on that.  So no, I'm not withdrawing it, I'm idling, waiting to see what happens.",
+        "created_at": "2023-01-02T22:53:19.590000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So that's that.",
+        "created_at": "2023-01-02T22:54:16.559000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "What are the current differences between 2315 / 4750, and what would make 2315 a better candidate than current 4750 in your eyes?",
+        "created_at": "2023-01-02T22:56:21.420000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I am reading the EIP but I am not seeing super big differences against 4750 at this point (but I am most likely missing something 🙂 )",
+        "created_at": "2023-01-02T22:57:02.008000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think maybe the removal of `JUMPF` from 4750..?",
+        "created_at": "2023-01-02T22:57:53.314000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "demiurgos_23",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "isn't this just a \"backtracking\" RJUMP, in a way CALLF and RETF are similar but bytecode sections make them more easy to reason about, IMO I prefer EIP4750",
+        "created_at": "2023-01-02T23:16:44.705000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "4750 offers makes more interesting optimizations easier than 2315, such as precompiling code sections (but not the whole contract) not just the sectioning, but the stack implications as well (inputs, outputs, and no underflow)",
+        "created_at": "2023-01-02T23:28:23.651000+00:00",
+        "attachments": null
+    }
+]

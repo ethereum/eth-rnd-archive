@@ -1,0 +1,330 @@
+[
+    {
+        "author": "yperbasis",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Or require that JUMPSUB must be immediately preceded by PUSHx",
+        "created_at": "2021-03-05T17:29:51.411000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hm, but my answer was to the question from V which I interpreted as _not_ preceded by pushx, but immediately followed by the arg",
+        "created_at": "2021-03-05T17:43:25.308000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I mean if we require that JUMPSUB must be immediately preceded by PUSHx, that achieves static JUMPSUB w/o a need for JUMPSUB to be a multi-byte instruction like PUSHx.",
+        "created_at": "2021-03-05T17:49:25.126000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pauld.9606",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Another way to have an immediates is `JUMPSUB PUSHx\u003coffset\u003e`. Note that PUSHx is never executed, just a guard to prevent clobbering something. `JUMPSUB` semantics will consume `PUSHx\u003coffset\u003e` and increment the return dest past the `PUSHx\u003coffset\u003e`.",
+        "created_at": "2021-03-05T17:56:23.877000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think multibyte opcodes having the form of `0xnn 0x6i \u003cdata\u003e` is a great clever way to go around it. At the same time I would also say it is a hack, and should be investigated. Personally if we can avoid such hacks, that would lead to a cleaner EVM.",
+        "created_at": "2021-03-05T18:01:52.821000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pauld.9606",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I like that it solves the immediate problem with immediates. I think that this is elegant.",
+        "created_at": "2021-03-05T18:13:57.687000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This looks much better than the other way around at least from the EVM implementation perspective.",
+        "created_at": "2021-03-05T19:14:12.047000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!211091239112671234\u003e why is 1 byte immediate value better than 2 bytes immediate value?",
+        "created_at": "2021-03-05T19:24:46.903000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think in the past there were some discussions why don’t we have a “multibyte opcode” prefix, like x86 has. That could have saved this problem too. Perhaps it is still possible to introduce that by analyzing contracts on mainnet for such a new given opcode, as we did it for the eip-2315 opcodes iirc.\n\nIn regarding to this form mentioned, I wonder if mnemonic wise these would be individual opcodes, i.e. JUMPSUB1: `0x5c 0x60 0xnn`, JUMPSUB2: `0x5c 0x61 0xnn 0xnn`, etc. Isn’t this what Martin asked?\n\nWould opcodes have the opportunity to restrict their immediate size, i.e. `0x5c 0x70` is not valid? Is that then an extra codepath for interpreters to take? Would they just accept any immediate size and then truncate or reject later? Would interpreters in general just look for `0x5c`, then check what push instructions follows, or would they just consider opcodes now 16-bits which can be encoded in two different forms?\n\nWhen I say “should be investigated” I meant all these subtleties which nobody ever mentions.",
+        "created_at": "2021-03-05T20:07:17.402000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And if `0x5c 0x70` can be an invalid opcode, would that mean it can be assigned later to a new multibyte instruction?",
+        "created_at": "2021-03-05T20:10:45.963000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Good questions.",
+        "created_at": "2021-03-05T20:14:38.015000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "1. I would restrict allowed size. E.g. 2 bytes max for `JUMPSUB`. It is always easy to relax the restriction.\n2. For basic interpreter dispatch (`switch`, computed `goto`) it still should be based by single byte. Then in `case 0x5c` the immediates are validated and processed.\n\nThat's just quick napkin design.",
+        "created_at": "2021-03-05T20:14:56.230000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I see a little issue with invalid `5c 70`: is the bytes after `70` still pushdata or not?",
+        "created_at": "2021-03-05T20:17:01.873000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "As of now, I think this still should be pushdata not to complicate JUMPDEST analysis more...",
+        "created_at": "2021-03-05T20:18:19.242000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "What I meant is that initially we only want to support jumpsub with up 8-bit and 16-bit immediates, which would be encoded as `0x5c 0x60 0xnn` and `0x5c 0x61 0xnn 0xnn`.\n\nLet's say we want to keep the multibyte opcodes `0x5c 0x6n` where `n \u003e 1` unused. Can we do that? They are just invalid. Or in every single such multibyte opcode case we have to support the full range of push in the interpreter, and just reject the value in a second pass (i.e. after it has been read).",
+        "created_at": "2021-03-05T20:19:59.270000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It can be rejected during exec, yes, but still 'counts' as pushdata during jumpdest analysis",
+        "created_at": "2021-03-05T20:25:10.125000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Using different leading byte for other instructions would be preferable. Otherwise we may be a big subdispatch under `5c`...",
+        "created_at": "2021-03-05T20:27:32.808000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Because this is backward compatible, we can use any free single byte. And complicate this with the last one available 🙂",
+        "created_at": "2021-03-05T20:33:44.861000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So thinking about this problem of how one would upgrade from 20 byte addresses to 32 byte addresses (trying to black box the problem; the method is the same regardless of whether we upgrade for sharding or state expiry or security)",
+        "created_at": "2021-03-05T22:36:32.540000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "First of all, to establish clear separation, we make a rule that new-style addresses *must* be \u003e= 2**160",
+        "created_at": "2021-03-05T22:36:54.655000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So they cannot be mistaken from old-style ones",
+        "created_at": "2021-03-05T22:37:01.865000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Now, there are simpler approaches and less simple approaches",
+        "created_at": "2021-03-05T22:37:34.683000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "One example of a simple approach is: the `ADDRESS` opcode throws an exception if the caller is new-style; we instead add a `NEWSTYLEADDRESS` opcode that returns addresses of both styles",
+        "created_at": "2021-03-05T22:38:39.212000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So new-style accounts can't even call into old-style contracts that demand to know their address",
+        "created_at": "2021-03-05T22:39:17.398000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "A less simple approach is: if the caller is new-style, the `ADDRESS` opcode returns a \"compatibility-friendly compressed address\": `sha3(\"blahblahblah\" + full_address)[12:]`",
+        "created_at": "2021-03-05T22:40:13.322000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "(the blahblahblah at the beginning can be replaced with some appropriate domain separation)",
+        "created_at": "2021-03-05T22:40:23.720000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "As soon as this happens, we also add the mapping `compressed_address -\u003e full_address` to a contract that stores a translation table",
+        "created_at": "2021-03-05T22:41:14.471000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The CALL and EXT* opcodes have new rules: if the address is old-style, it first checks if it's in the translation table; if it is, then it uses that address, otherwise it uses the old-style address as is",
+        "created_at": "2021-03-05T22:42:26.752000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "For forward-compatibility, the new-style addresses would be 32 bytes long (I'm confident we'll never need to go higher), and we add a format scheme:\n```\n[byte 0: version number] [bytes 1-2: MUST BE 00 00] [byte 3-5: epoch number] [byte 6-31: 26 byte hash]\n```",
+        "created_at": "2021-03-05T22:44:23.322000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So if we need future version numbers, we can increment the version number",
+        "created_at": "2021-03-05T22:44:36.726000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Though even in this format, bytes 1-2 open the door for up to 65536 shards",
+        "created_at": "2021-03-05T22:44:58.835000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If I understand the above correctly, that would mean contracts with and old style address **must remain** under their old-style address. They can not be executed elsewhere.",
+        "created_at": "2021-03-05T23:15:33.936000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "right, contracts can't jump addresses",
+        "created_at": "2021-03-05T23:26:05.098000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So how would all this play into the epoch based state expiry where revived contracts have a new epoch based address?",
+        "created_at": "2021-03-05T23:26:33.044000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Oh revived contracts don't have a new epoch based address",
+        "created_at": "2021-03-05T23:26:45.356000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "They keep the same address",
+        "created_at": "2021-03-05T23:26:48.383000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Address spaces and epochs are not the same thing",
+        "created_at": "2021-03-05T23:26:53.713000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If you get revived and you're now in the epoch 5 state tree, you're still an epoch 0 address, just an epoch 0 address in the epoch 5 state tree",
+        "created_at": "2021-03-05T23:27:14.060000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ah right I actually concluded that yesterday. These discussions are post-midnight here 😕",
+        "created_at": "2021-03-05T23:27:35.276000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "With the translation table I would be wondering about growth during an epoch or even on if these were to happen without state expiry on today's mainnet. According to etherscan there are 140 million known addresses by today. If hypothetically all of them would be migrated to new-style addresses and people making a single transaction with old-style addresses, only counting the leaves that is ~4Gb new data. More curious about effect on processing power.",
+        "created_at": "2021-03-05T23:36:31.775000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "axic3354",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "As a simple example, a token transfer on an old-style contract with a new-style recipient: ADDRESS returns translated address of the contract (inserts into table), the same with SENDER. At this point we safely can do `balances[msg.sender] -= value`.  However currently existing contracts must receive the new-style recipient in the translated format. So that means there must be some other means populating that table from the outside. Potentially just having a “poke precompile” which does CALL(sender, 0) to trigger the translation?",
+        "created_at": "2021-03-05T23:44:06.465000+00:00",
+        "attachments": null
+    }
+]

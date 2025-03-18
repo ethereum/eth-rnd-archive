@@ -5,7 +5,7 @@
         "parent": "",
         "content": "Depends on who \"we\" is referring to. For Ethereum itself, the specific SSZ tree structure doesn't matter. For applications built on top of it (wallets, contracts etc) it does.\n\nRegarding `IndexedTransaction`, any proofs for a partial `Transaction` (specific fields, etc.) need to include a commitment for the `transaction_hash` to allow the caller to verify that response pertains to the same `Transaction` as they originally requested. There are two situations where I think placing the `transaction_hash` into the `Transaction` tree is beneficial:\n\n(1) The consensus `ExecutionPayload` contains all the `IndexedTransaction` objects, but does not contain `IndexedReceipt` objects. In a design where the consensus layer wants to provide transaction proofs, it wouldn't be able to serve those proofs if the only copy of `transaction_hash` is inside `IndexedReceipt`.\n\n(2) SSZ merkle proofs consist of all the sibling nodes on the path from the proven index to the root. Placing the `transaction_hash` at that location means that any proof about data within `signed_tx` will automatically include the `transaction_hash` into the merkle proof, at no extra cost, because `transaction_hash` is the sibling of `signed_tx`.\n\nI'm still debating the relevance of these two use cases. For (1) I'd like to explore whether it would restrict MEV-boost designs that include transaction inclusion proofs for censorship resistance. For (2) I'd like to see whether such use cases also usually need to know whether the TX was successful or was reverted (which is part of the receipt, which already has the tx hash).\n\n```\n        indexed\n         /  \\\n        /    \\\n     signed  hash\n      /  \\\n     /    \\  \n   typed  sig\n   /   \\   \n  .     .  \n / \\   / \\ \nty st pl 00\n     / \\\n    /\\ /\\\n   . . . . (tx fields)\n```",
         "created_at": "2023-02-07T00:38:48.600000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "Yes \"we\" -\u003e likely applications.  Forgot that consensus layer doesn't have the receipts so (1) sounds like it could be quite relevant. Though I guess the question then is is the txhash really needed in the receipt if you have in in the transaction tree.  Granted you might need an extra proof for some use cases e.g. prove that a tx was included from its hash, and that it was successfully executed (or some other attribute from its receipt structure).",
         "created_at": "2023-02-07T01:15:43.143000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "~~\u003c@881905303011086387\u003e \u003c@898563924440543283\u003e Why are you trying to encode `v` in a new encoding format?~~ Just read the spec, looks like you aren't.  🎉",
         "created_at": "2023-02-07T03:12:09.952000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -29,7 +29,7 @@
         "parent": "",
         "content": "The *only* reason why we haven't gotten rid of `v` is because it would result in an incompatible transaction hash.  SSZ encoding will *definitely* result in an incompatible transaction hash, so there is no reason to retain `v`.",
         "created_at": "2023-02-07T03:12:57.687000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -37,7 +37,7 @@
         "parent": "",
         "content": "~~In the spec there is `def encode_signed_transaction(signed_tx: SignedTransaction) -\u003e bytes:`.  Just make it so SSZ encoded legacy transactions store `chainId` (optional/nil allowed) and `yParity`.  the `v` necessary for RLP encoding can be calculated from that.~~",
         "created_at": "2023-02-07T03:14:36.622000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -45,7 +45,7 @@
         "parent": "",
         "content": "~~Perhaps the issue is that SSZ doesn't support optional/nullable properties?~~ This isn't a problem since you have subtypes for legacy and EIP155 transactions.",
         "created_at": "2023-02-07T03:15:43.047000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -53,7 +53,7 @@
         "parent": "",
         "content": "Unrelated: Recommend renaming `TRANSACTION_SUBTYPE_POST_EIP155` to `TRANSACTION_SUBTYPE_EIP155` for consistency with other transaction type naming.",
         "created_at": "2023-02-07T03:16:44.909000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -61,7 +61,7 @@
         "parent": "",
         "content": "Another option is to just make 155 transactions type 0 when SSZ encoded and legacy type `6` or something.  No need for a separate subtyping system that way.",
         "created_at": "2023-02-07T03:18:13.953000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -69,7 +69,7 @@
         "parent": "",
         "content": "Or perhaps better yet, have them be type `0xc0` and `0xc1`, which is in the range of leading bytes for legacy transactions and therefore functionally \"reserved\" for legacy transactions as the type byte.",
         "created_at": "2023-02-07T03:19:30.186000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -77,7 +77,7 @@
         "parent": "",
         "content": "\u003e Is that check only for the v=35/36 transactions (EIP-155 legacy tx), or is chain_id=0 also filtered out in Geth for post-EIP2930 transactions?\n\nLooks like for post-eip2930 transactions as well. They all compare chainid from the tx to the chainid of the signer and it must match.",
         "created_at": "2023-02-07T03:29:00.588000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -85,7 +85,7 @@
         "parent": "",
         "content": "There is no `v` in any 2718 transactions.",
         "created_at": "2023-02-07T03:35:20.665000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -93,7 +93,7 @@
         "parent": "",
         "content": "ChainID 0 isn't disallowed, but I'm not sure if there are any networks with a chain ID of 0.  Maybe some private testnets?",
         "created_at": "2023-02-07T03:36:06.085000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -101,7 +101,7 @@
         "parent": "",
         "content": "right, it's technically only disallowed if one assumes chainid is never 0.",
         "created_at": "2023-02-07T03:39:34.662000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -109,7 +109,7 @@
         "parent": "",
         "content": "Perhaps you mean, \"we could create a specification that disallows Chain ID 0\"?",
         "created_at": "2023-02-07T03:40:53.130000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -117,7 +117,7 @@
         "parent": "",
         "content": "At the moment it isn't disallowed by any specification nor client implementation that I know of.",
         "created_at": "2023-02-07T03:41:10.486000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -125,7 +125,7 @@
         "parent": "",
         "content": "It is just a number, nothing special/magic about 0.",
         "created_at": "2023-02-07T03:41:22.329000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -133,7 +133,7 @@
         "parent": "",
         "content": "I think confusion is coming from https://eips.ethereum.org/EIPS/eip-3788: \"Per EIP-155 a transaction with a chainId = 0 is considered to be a valid transaction. This was a feature to offer developers the ability to sumbit replayable transactions across different chains.\"",
         "created_at": "2023-02-07T03:42:21.434000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -141,7 +141,7 @@
         "parent": "",
         "content": "That EIP is Stagnant.  Not an EIP that anyone should consider for anything.",
         "created_at": "2023-02-07T03:42:42.782000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -149,7 +149,7 @@
         "parent": "",
         "content": "It was a *proposal* for a standard that has been abandoned.",
         "created_at": "2023-02-07T03:43:01.710000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -157,7 +157,7 @@
         "parent": "",
         "content": "It is not a standard.",
         "created_at": "2023-02-07T03:43:04.080000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -165,7 +165,7 @@
         "parent": "",
         "content": "If you want to resurrect it you can, either reach out to the author or create a new copy of it with you as the author.",
         "created_at": "2023-02-07T03:43:43.268000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -173,7 +173,7 @@
         "parent": "",
         "content": "Yes got that, but nevertheless it implied something about EIP-155 which seems ... false.",
         "created_at": "2023-02-07T03:43:47.818000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -181,7 +181,7 @@
         "parent": "",
         "content": "You shouldn't assume that Stagnant/Withdrawn/Draft/Review EIPs have gone through any significant review.",
         "created_at": "2023-02-07T03:44:12.924000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -189,7 +189,7 @@
         "parent": "",
         "content": "Often they are just an idea that someone types up without anyone looking deeply into it.",
         "created_at": "2023-02-07T03:44:25.064000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -197,7 +197,7 @@
         "parent": "",
         "content": "Right, so to confirm, the claim that one can submit a transaction with chainID of 0 and have it \"be replayable across different chains\" is false.  It would only be replayable across chains with chainid of 0.",
         "created_at": "2023-02-07T03:45:52.023000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -205,7 +205,7 @@
         "parent": "",
         "content": "Correct.  I think what they meant was `chainId = nil/missing`.",
         "created_at": "2023-02-07T03:46:18.442000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -213,7 +213,7 @@
         "parent": "",
         "content": "~~So to summarize: the tx subtype is unnecessary.  Post EIP-155 transactions always have non-nil chain-ids that get checked against the signer chainid (with 0 not being special in any way).~~",
         "created_at": "2023-02-07T03:55:51.848000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -221,7 +221,7 @@
         "parent": "",
         "content": "If you are OK with having an `Optional\u003cuint256\u003e` for the `chainId`.",
         "created_at": "2023-02-07T03:58:57.478000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -229,7 +229,7 @@
         "parent": "",
         "content": "If you want to avoid the optional, then you need 155 and legacy to have two different types.",
         "created_at": "2023-02-07T03:59:12.462000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -237,7 +237,7 @@
         "parent": "",
         "content": "Right, still need some differentiator in the ssz encoding don't we.",
         "created_at": "2023-02-07T04:00:24.242000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -245,7 +245,7 @@
         "parent": "",
         "content": "I recommend just having type 0xc0 and 0xc1 transaction types for legacy.",
         "created_at": "2023-02-07T04:00:57.381000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -253,7 +253,7 @@
         "parent": "",
         "content": "Yeah that sounds cleanest.",
         "created_at": "2023-02-07T04:01:16.097000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -261,7 +261,7 @@
         "parent": "",
         "content": "We can assert that those type IDs are reserved for legacy transactions already because the first byte of an RLP encoded transaction starts with `[0xc0-0xfe]`.",
         "created_at": "2023-02-07T04:01:35.842000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -269,7 +269,7 @@
         "parent": "",
         "content": "(it is worth double checking that, I forget exactly what leading byte is possible with RLP encoded transactions, I think it is 0xc0 as the first one)",
         "created_at": "2023-02-07T04:01:55.712000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -277,7 +277,7 @@
         "parent": "",
         "content": "I see that Geth checks that the first byte in the encoding is \u003e 0x7f to identify legacy txs so 0xc0/c1 should work.",
         "created_at": "2023-02-07T04:05:42.180000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -285,7 +285,7 @@
         "parent": "",
         "content": "Hmm, that is incorrect.",
         "created_at": "2023-02-07T04:06:01.826000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -293,7 +293,7 @@
         "parent": "",
         "content": "Someone should fix that bug.  😬",
         "created_at": "2023-02-07T04:06:08.571000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -301,7 +301,7 @@
         "parent": "",
         "content": "Not critical today, but could potentially lead to a consensus failure in the future.",
         "created_at": "2023-02-07T04:06:24.806000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -309,7 +309,7 @@
         "parent": "",
         "content": "Valid 2718 transaction types are `[0x0, 0x7f]`, but that doesn't mean that `[0x80, 0xff]` are all legacy transactions.",
         "created_at": "2023-02-07T04:07:02.968000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -317,7 +317,7 @@
         "parent": "",
         "content": "According to the EIP, `[0xc0, 0xfe]` is the range of possible leading bytes for a legacy transaction.",
         "created_at": "2023-02-07T04:07:54.542000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -325,7 +325,7 @@
         "parent": "",
         "content": "(it may be smaller than that in reality since there is a minimum and maximum transaction length possible on the network today)",
         "created_at": "2023-02-07T04:08:25.302000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -333,7 +333,7 @@
         "parent": "",
         "content": "Hah. it's possible it barfs out later in the decoding.",
         "created_at": "2023-02-07T04:08:25.684000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -341,7 +341,7 @@
         "parent": "",
         "content": "Yeah, my guess is that it \"works fine and passes tests\" but it is one of those things that could easily get overlooked later when someone changes code further down the stack.",
         "created_at": "2023-02-07T04:08:58.426000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -349,7 +349,7 @@
         "parent": "",
         "content": "line in question: https://github.com/ethereum/go-ethereum/blob/91cb6f863a965481e51d5d9c0e5ccd54796fd967/core/types/transaction.go#L154",
         "created_at": "2023-02-07T04:11:11.198000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": ".vbuterin",
@@ -357,7 +357,7 @@
         "parent": "",
         "content": "I'd argue we should avoid over-complexifying, especially since this is all backwards-compatibility logic for old-style txs that people will eventually stop using",
         "created_at": "2023-02-07T09:20:46.563000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": ".vbuterin",
@@ -365,7 +365,7 @@
         "parent": "",
         "content": "So we _could_ convert `v` values into `(yParity, chainid)` pairs, but that adds extra complexity to the conversion and deconversion functions, and it's not like we're making any good long-term gain",
         "created_at": "2023-02-07T09:21:24.303000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": ".vbuterin",
@@ -373,7 +373,7 @@
         "parent": "",
         "content": "Though perhaps the case is stronger if we adopt this \"one transaction type\" approach",
         "created_at": "2023-02-07T09:21:34.868000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": ".vbuterin",
@@ -381,7 +381,7 @@
         "parent": "",
         "content": "----",
         "created_at": "2023-02-07T09:21:37.108000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": ".vbuterin",
@@ -389,7 +389,7 @@
         "parent": "",
         "content": "That said, I personally am really not convinced that this \"one transaction type\" style is a good idea",
         "created_at": "2023-02-07T09:21:51.858000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": ".vbuterin",
@@ -397,7 +397,7 @@
         "parent": "",
         "content": "It has nice properties with generalized indices, but it bleeds complexity in all kinds of other ways",
         "created_at": "2023-02-07T09:22:04.495000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": ".vbuterin",
@@ -405,7 +405,7 @@
         "parent": "",
         "content": "should have a more detailed discussion specifically on that topic imo",
         "created_at": "2023-02-07T09:22:22.892000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -413,7 +413,7 @@
         "parent": "",
         "content": "It gently nudges people away from Legacy transactions, which could be seen as a positive.",
         "created_at": "2023-02-07T09:22:38.146000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -421,7 +421,7 @@
         "parent": "",
         "content": "\"You can still use legacy transactions, but they are marginally more annoying to work with now because you have to convert `chainId,yParity` to `v` before RLP encoding.\"",
         "created_at": "2023-02-07T09:23:09.202000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -429,7 +429,7 @@
         "parent": "",
         "content": "Or something along those lines.",
         "created_at": "2023-02-07T09:23:18.175000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -437,7 +437,7 @@
         "parent": "",
         "content": "Regarding the two alternatives to `tx_subtype` being discussed (0xc0 / 0xc1, and the `Optional` chain_i):\n\n- For `Transaction` structures, I tried 0x03 / 0x04 (in the way you propose 0xc0 / 0xc1), but that doesn't work for `Receipt` structures which do not contain the `v` value. This means that the receipt type would be less specific than the transaction type. The `tx_subtype` makes this disparity explicit and allows sharing the main `tx_type` across both `Transaction` and `Receipt`.\n\n - Using an `Optional` for the `chain_id` would allow distinguishing the `0` case from the `None` case, but suggests more weight than necessary. In EIP-6404, `chain_id` is reported as `0` in both cases, and the extra `tx_subtype` indicates whether a `0` or `None` value is used to compute the transaction signature's `v` value.",
         "created_at": "2023-02-07T10:53:01.846000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -445,7 +445,7 @@
         "parent": "",
         "content": "Well, if we zoom out, the complexity exists regardless of approach. The question is whether the complexity is addressed before forming the consensus `ExecutionPayload`, or whether every client application should have to deal with it.\n\nThe long-term gain of a normalized transaction type is that any smart contract / IoT device / light wallet only has to support a single tx format. If that is the latest one, great. If it is an older one, it ignores later, optional features from newer tx types. This allows immutable client applications.\n\nOn the other hand, I understand that the normalized transaction type restricts future design space for new transaction types to add optional features. However, in the entire history of Ethereum, this restriction was sufficient (`chain_id` --\u003e `access_list` --\u003e `max_priority_fee_per_gas` --\u003e `blob`). Whenever it was not sufficient (EIP-4895 `withdrawals`, EIP-6110 `deposits`), this was never modeled as a transaction type, but instead modeled as an entirely new concept. Seeing whether other Ethereum-based chains (and L2) actually defined custom transaction types that are difficult to normalize would reveal whether the design space restriction is real, or only theoretical.",
         "created_at": "2023-02-07T11:22:30.780000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -453,7 +453,7 @@
         "parent": "",
         "content": "Yes! Where are those typically held? TG group? Scheduled meeting? Just here in a Discord thread?",
         "created_at": "2023-02-07T11:23:16.139000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -461,7 +461,7 @@
         "parent": "",
         "content": "Hmm, I don't understand why this doesn't work for receipt structures?",
         "created_at": "2023-02-07T11:24:26.452000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -469,7 +469,7 @@
         "parent": "",
         "content": "```\ntyped-receipt = tx-type || receipt-data\nreceipt-data = [\n    post-state-or-status: {B_32, {0, 1}},\n    cumulative-gas: P,\n    bloom: B_256,\n    logs: [log₁, log₂, ...]\n]\nlog = [\n    contract-address: B_20,\n    topics: [topic₁: B, topic₂: B, ...],\n    data: B\n]\n```\nhttps://github.com/ethereum/devp2p/blob/master/caps/eth.md#getreceipts-0x0f\n\nWhen backfilling receipts, there is no `v` value, so you don't know whether the `TypedReceipt.tx_type` should be 0xc0 or 0xc1. This means, that the transaction must be backfilled before its receipt.\nIn practice, I think Geth has a parallel sync, and Nethermind syncs tx before receipts. Both are valid approaches, so I'm not sure if enforcing such a strict ordering is a good idea. Same actually goes for the `transaction_hash` inside the `Receipt`, but that one at least has client application benefits (although, admittedly, rather marginal ones).",
         "created_at": "2023-02-07T11:34:19.456000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -477,7 +477,7 @@
         "parent": "",
         "content": "Hmm, why do we need to backfill?",
         "created_at": "2023-02-07T11:36:13.629000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -485,7 +485,7 @@
         "parent": "",
         "content": "Is the idea to make it so all of history is SSZ served?",
         "created_at": "2023-02-07T11:36:34.787000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -493,7 +493,7 @@
         "parent": "",
         "content": "(I haven't been paying close attention)",
         "created_at": "2023-02-07T11:36:41.968000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -501,7 +501,7 @@
         "parent": "",
         "content": "When you snap sync an execution node, it fetches a recent state, but then also downloads the last x months / years of history, and provides it to other nodes via devp2p.\nFor the purpose of history sync, the execution block headers are downloaded, which contain `txs-root` and `receipts-root`. Then, transactions and receipts are downloaded and compared against that known root. For any post-Cancun block, that would be relative to a SSZ `txs-root/receipts-root`. For any older block, it would be relative to a MPT `txs-root/receipts-root`. The devp2p network format itself does not change.",
         "created_at": "2023-02-07T11:39:53.178000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -509,7 +509,7 @@
         "parent": "",
         "content": "Lets say I have no transactions downloaded yet and I am fetching receipts.  Why do I need to care about the transaction signature to process an incoming receipt?",
         "created_at": "2023-02-07T11:54:44.718000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -517,7 +517,7 @@
         "parent": "",
         "content": "To fill `TypedReceipt.tx_type` with the same value as the corresponding `TypedTransaction.tx_type`. \nIf you don't have the `TypedTransaction` available, you don't know if the `TypedReceipt.tx_type` needs to be set to 0xc0 or 0xc1.",
         "created_at": "2023-02-07T11:59:07.681000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -525,7 +525,7 @@
         "parent": "",
         "content": "Are the receipts gossipped as RLP and then converted to SSZ by the receiving client?",
         "created_at": "2023-02-07T12:01:18.443000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -533,7 +533,7 @@
         "parent": "",
         "content": "Yes, `Transaction`/`Receipt`/`Withdrawal` are mostly RLP encoded on the network. \nThe only exception are type `0x05` `Transaction` which are SSZ encoded on the network (but the corresponding receipts are RLP).\n\nFor the purpose of computing `transactions_root`/`receipts_root`/`withdrawals_root` in the execution block header, currently an MPT is formed based on their original network encoding. With EIP-6404, all objects would be converted to SSZ and embedded into an SSZ merkle tree, for the purpose of computing those roots.\nThose SSZ objects do not hit the devp2p network.\n\nFor the purposes of forming the consensus `ExecutionPayload`.\n– For `Receipt`, only `receipts_root` is included. In EIP-6404, this changes from the MPT root to the SSZ root.\n– For `Withdrawal`, individual SSZ `Withdrawal` objects are included. This is not changed in EIP-6404.\n– For `Transaction`, the individual network encoded transactions are represented as SSZ `ByteVector`. With EIP-6404, this `ByteVector` is replaced with the same SSZ structure used to compute `transactions_root`.",
         "created_at": "2023-02-07T12:38:32.544000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "sky.cactus",
@@ -541,7 +541,7 @@
         "parent": "",
         "content": "\u003e Yes, Transaction/Receipt/Withdrawal are mostly RLP encoded on the network.\nCan we fix this instead of working around it?",
         "created_at": "2023-02-07T12:40:38.441000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -549,7 +549,7 @@
         "parent": "",
         "content": "Updating execution network formats is out of scope for 6404.\n\n`Transaction`\n– Old-style tx are still being freshly created, even on smaller testnets such as Sepolia.\n– EIP4844 uses custom network logic for type `0x05` transactions. They are not gossiped, but instead need to be actively requested from peers, using a network wrapper type that also bundles the temporary blobs. Likewise, the mempool has custom logic to not re-broadcast them on a reorg. Any new networking scheme needs to take account of those special needs for blob transactions.\n– There is no current tx type that encodes as SSZ and supports 0 blobs, so a new tx type may be necessary.\n\n`Receipt`\n– Currently, receipts are represented in a similar style as transactions on the network, except for the special snowflake type `0x05`\n– There is no signature, so a new SSZ based network encoding of these would be relatively straight-forward to define.\n\n`Withdrawal`\n– Currently, there is no spec for exchanging withdrawals via devp2p, but somehow ELs tend to work fine on Shanghai testnets. Maybe I'm missing something here.\n– If they practically lack a version prefix, these may be annoying to upgrade on the devp2p network.\n\nOverall, given that any network format changes introduce backwards compatibility questions, and given some trends to replace devp2p with libp2p over time, I'm not sure if it makes sense to introduce SSZ to devp2p networking at this time.",
         "created_at": "2023-02-07T13:01:56.500000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -557,7 +557,7 @@
         "parent": "",
         "content": "\u003c@881905303011086387\u003e are you on the client devs call?  We could use an update on all this.",
         "created_at": "2023-02-07T15:48:45.717000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -565,7 +565,7 @@
         "parent": "",
         "content": "EIP-4844 call?",
         "created_at": "2023-02-07T15:51:12.870000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -573,7 +573,7 @@
         "parent": "",
         "content": "yes",
         "created_at": "2023-02-07T15:51:28.544000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -581,7 +581,7 @@
         "parent": "",
         "content": "Joining",
         "created_at": "2023-02-07T15:51:33.169000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -589,7 +589,7 @@
         "parent": "",
         "content": "thanks!",
         "created_at": "2023-02-07T15:51:39.734000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -597,7 +597,7 @@
         "parent": "",
         "content": "the topic is coming up in a bit.",
         "created_at": "2023-02-07T15:51:48.618000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -605,7 +605,7 @@
         "parent": "",
         "content": "on it now",
         "created_at": "2023-02-07T15:53:02.061000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -613,7 +613,7 @@
         "parent": "",
         "content": "re: ssz \u0026 0 blob txs.  The existing type-5 4844 tx type can have 0 blobs, though there has been discussions around forbidding it.  Vitalik's proposal introduces a new tx type that is basically the 1559 tx only fully SSZ.  If we were to add such a type here it would involve just hashing a subset of the fields of the current 4844 tx. \n\nI'm not sure adding a new type to this proposal adds much value over just allowing 0-blob type-5 transactions for 1559-equivalent txs though.",
         "created_at": "2023-02-07T15:57:47.967000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -621,7 +621,7 @@
         "parent": "",
         "content": "Yeah, supporting 0-blob type-5 transactions would remove the need to convert back and forth between the normalized tx and the type-5 tx, and would also avoid introducing a special tx type for 0-blob transactions.\n\nOne special case is that the EL network layer and mempool behave totally different in EIP-4844 than other tx. \n4844 logic would have to distinguish between the 0-blob and \u003e0-blob cases, to decide, for example, whether the tx is propagated through gossip or via req/resp network wrapper structure.",
         "created_at": "2023-02-07T16:08:22.810000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -629,7 +629,7 @@
         "parent": "",
         "content": "e.g., type-5 tx that contain blobs would be rejected on gossip (as they require req/resp). and the type-5 tx without blobs would be allowed.\nthe if statement would essentially be on `len(tx.payload.blob_versioned_hashes) != 0` instead of on `tx.tx_type == 5`.\n\nBut, when a tx is exchanged over the network, and you just see the leading byte (`0x05`), there needs to be something that says whether there is a EIP-4844 `BlobTransactionNetworkWrapper`, or just the plain `SignedTransaction`",
         "created_at": "2023-02-07T16:12:17.397000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -637,7 +637,7 @@
         "parent": "",
         "content": "Oh right, I forgot about the type-based gossip specialization.   Perhaps a new type is justified then, so that we have a clear path to eliminating the legacy RLP types.",
         "created_at": "2023-02-07T16:15:06.796000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -645,7 +645,7 @@
         "parent": "",
         "content": "Eth/68 announces the types \u0026 sizes, but not explicilty whether it contains blobs.",
         "created_at": "2023-02-07T16:16:21.598000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -653,7 +653,7 @@
         "parent": "",
         "content": "RLP does not matter here. The weird thing is that the type-based gossip specialization is entirely specific to devp2p, and leaks into the consensus",
         "created_at": "2023-02-07T16:16:46.140000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -661,7 +661,7 @@
         "parent": "",
         "content": "I thought one goal was to have a clear path to deprecating these legacy tx types entirely, hence the 0-blob \"pure SSZ\" tx in Vitalik's proposal.",
         "created_at": "2023-02-07T16:22:22.030000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -669,7 +669,7 @@
         "parent": "",
         "content": "Though I think I see what you mean the type here isn't important at the CL layer outside of how we might compute the tx hash.",
         "created_at": "2023-02-07T16:25:21.558000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -677,7 +677,7 @@
         "parent": "",
         "content": "Exactly. The CL doesn't need special tx type specific meanings. If there are transactions with blobs, CL can verify the proofs against the blob sidecar, irrespective of special tx type numbers.",
         "created_at": "2023-02-07T16:27:52.641000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -685,7 +685,7 @@
         "parent": "",
         "content": "\u003c@301186049323958275\u003e \u003c@273808422753796097\u003e (and anyone else interestedin this topic): At the 4844-implementors call today \u003c@552133098075193354\u003e suggested we have a call Wednesday next week to discuss. I think at 7:00am PST (usual time of the EOF call).",
         "created_at": "2023-02-07T16:55:13.579000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "roberto.bayardo",
@@ -693,6 +693,6 @@
         "parent": "",
         "content": "It would perhaps be better if eth/68 explicitly announced whether a tx has blobs (perhaps # of blobs) if that's what's important for a client determining whether to download.  Is eth/68 already set in stone?",
         "created_at": "2023-02-07T16:57:33.150000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

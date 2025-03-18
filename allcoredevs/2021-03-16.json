@@ -1,0 +1,466 @@
+[
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Ok, thanks. But now I don't see why you need `AUTH` opcode. If you instead had `AUTHCALL` to have 1 extra argument which is `authorizedAccount`, then you could use `ecrecover` precompile instead of `AUTH`",
+        "created_at": "2021-03-16T00:13:05.665000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "The reason to separate the two is nearly every invoker will need to check that a authcall msg is replay protected. It should recover the address from the signature before calling authcall to verify this.\n\nCalling ecrecover in the contract then doing the same operation to recover the address in authcall is just duplicated effort. It also doesn’t allow for 1 ecrecover per batch of user calls as each call will incur the cost of recovering the address.",
+        "created_at": "2021-03-16T00:29:23.961000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "It’s also not quite as simple as adding authorizedAccount to the call args, you’d need to pass the signature (either as individual stack elements or as a memory offset) and the commit so that the instruction can recover the sender address itself",
+        "created_at": "2021-03-16T00:33:34.079000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "general",
+        "parent": "",
+        "content": "I appreciate your perspective and hard work in all of this, Martin -- I hope you know that.  But I do think there needs to be a lot less risk and disorder in our process.  It shouldn't take years of many people's work to discover in the end that those doing the work had never actually been convinced that the work was worth doing -- or at least can be so easily persuaded that it wasn't.  The earlier such doubts are brought to the fore the better.",
+        "created_at": "2021-03-16T01:04:19.075000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samwilsn",
+        "category": "general",
+        "parent": "",
+        "content": "If the invoker is allowed to just set `authorizedAccount` arbitrarily, what's to stop the invoker from just emptying every account? Setting `authorizedAccount` needs to be a privileged operation.",
+        "created_at": "2021-03-16T01:07:56.364000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "I was not suggesting separating the two. I was not suggesting to make EC recovery part of `AUTHCALL`. But I thought - since you are assuming that the user of this construction will need to audit/verify the invoker contract, then it does not really matter how the `authorizedAccount` is recovered and passed to `AUTHCALL`. I can replace the code snippet \u003c@!689161464829050960\u003e showed above with the one that uses `ecrecover` precompile, and passes it to the `AUTHCALL` (which takes 8 args instead 7) in a correct way. Then users will audit/verify that this is \"safe\" and use it.  \u003c@!689161464829050960\u003e I also don't understand what is a \"priviledged operation\" in this context.",
+        "created_at": "2021-03-16T08:29:37.323000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "To be clear, \"Alexey and Martin want to see more work on validation\" - at least I personally didn't intend to demand any extra work as a \"condition for acceptance\". My position is more broad - such changes need better cooperation rather than being forced through the process for the sake of it. I seriously think this needs an attitude reset",
+        "created_at": "2021-03-16T08:35:32.942000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "I would also be happy if no extra work on EIP-2315 is done until we figure out the context better - which is what we definitely intend to do, and this was missing before",
+        "created_at": "2021-03-16T08:37:14.123000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "I agree. I think the current reasoning behind 2315 is more or less \"we need subroutines (and a future version of this can be even better)\". But it should be \"subroutines enable xx and yy, and can be useful for zz\".",
+        "created_at": "2021-03-16T08:40:53.848000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "general",
+        "parent": "",
+        "content": "Does anyone know why https://www.ethernodes.org/history lost 50% nodes in a week?",
+        "created_at": "2021-03-16T09:51:38.938000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "general",
+        "parent": "",
+        "content": "This is unfortunately not possible. If `AUTHCALL` was to take in an `authorizedAccount` simply from the stack, anyone could write a contract impersonating any EOA. This is why in the EIP the signature for `AUTH` is not only over `commit`, but also over `invokerAddress`. This is the one thing we need to enforce in-protocol, to only ever allow an `AUTHCALL` from a contract the user has explicitly authorized. It would be possible to combine both into one opcode (that would take in the call parameters as well as the signature) - in fact, this is how the EIP was previously designed. However, splitting it brings several efficiency gains, e.g. around batched calls (now only one overall signature check necessary) and signer address recovery. It also makes the opcodes cleaner.",
+        "created_at": "2021-03-16T11:26:30.426000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ansgar.eth",
+        "category": "general",
+        "parent": "",
+        "content": "So the purpose of `AUTH` is not to return the signer address, which is only a side effect (and could be replaced via ecrecover). The purpose is to enforce the existence of a valid signature over the invoker address, and only under this condition internally save the signing account as the authorized sender for future  `AUTHCALL`s.",
+        "created_at": "2021-03-16T11:30:51.531000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "this is either too subtle for me to understand so far, or I am right 🙂",
+        "created_at": "2021-03-16T12:52:32.790000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm, that's very weird! The date is the same as the Ropsten fork, so perhaps the notes that are not upgraded for Berlin are not counted anymore 🤔 ?",
+        "created_at": "2021-03-16T14:27:20.892000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kvbik",
+        "category": "general",
+        "parent": "",
+        "content": "We are open for your Goerli nodes to publish on https://testnet.forkmon.ethdevops.io/ - let me know, thanks!",
+        "created_at": "2021-03-16T14:39:59.924000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "general",
+        "parent": "",
+        "content": "Those are mainnet stats not Ropsten... ?",
+        "created_at": "2021-03-16T14:41:49.548000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, I know, but I wonder if Ethernodes possibly only counts \"berlin ready\" nodes, and stops counting the ones with a version that doesn't support Berlin as \"valid\"? That would make sense if ~half the nodes did not update. Perhaps \u003c@!97774605351010304\u003e would know.",
+        "created_at": "2021-03-16T14:44:55.917000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "butta",
+        "category": "general",
+        "parent": "",
+        "content": "hmm, must be a bug on our end, these downward spikes happened in the past as well. I'll ping Peter about it 🙂 \nAs for berling we have a separate subpage , \u003chttps://www.ethernodes.org/berlin\u003e",
+        "created_at": "2021-03-16T14:49:59.873000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samwilsn",
+        "category": "general",
+        "parent": "",
+        "content": "Imagine what would happen if we did pass `authorizedAddress` as a stack argument.\n\nThe normal flow would be the same: `ecrecover` to get the signer address, then pass the signer address into `AUTHCALL`.\n\nThe key difference is that there's nothing forcing the invoker to actually use `ecrecover`. The invoker could, instead, pass in anyone's address without a signature. Now the invoker can impersonate anyone, even people who haven't given it permission.\n\nThat's why `AUTH` is a separate opcode. `AUTH` checks a signature, and sets `authorizedAddress` safely, so there's no way for a malicious invoker to impersonate an account for which it doesn't have a signature.",
+        "created_at": "2021-03-16T15:48:17.114000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chriseth8375",
+        "category": "general",
+        "parent": "",
+        "content": "I would like to have a distinction between code and data enforced by the EVM as soon as possible, but people convinced me that a more general solution than the BEGINDATA opcode is better.",
+        "created_at": "2021-03-16T15:59:09.630000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "p_bitfly",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@!552133098075193354\u003e we had to update our crawler to use the eth64 protocol (forkid) hence it is dropping all nodes that only speak eth63 and lower or have a different fork id",
+        "created_at": "2021-03-16T16:13:57.694000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "p_bitfly",
+        "category": "general",
+        "parent": "",
+        "content": "essentially the crawler got rid of all the junk nodes in the network (useless nodes that are also on network id 1 or run an hopelessly outdated client version)",
+        "created_at": "2021-03-16T16:15:02.904000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "p_bitfly",
+        "category": "general",
+        "parent": "",
+        "content": "it should stabilize at around 5000 nodes",
+        "created_at": "2021-03-16T16:15:16.965000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "general",
+        "parent": "",
+        "content": "Got it, thanks for the info \u003c@!471975503859810316\u003e 😄",
+        "created_at": "2021-03-16T16:34:47.149000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "general",
+        "parent": "",
+        "content": "👍 I think forkid is a better indicator of fork readiness than trying to decode version strings.",
+        "created_at": "2021-03-16T16:58:37.603000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "madeof_tin7509",
+        "category": "general",
+        "parent": "",
+        "content": "",
+        "created_at": "2021-03-16T18:00:20.666000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "madeof_tin7509",
+        "category": "general",
+        "parent": "",
+        "content": "",
+        "created_at": "2021-03-16T18:00:45.968000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "I understand that invoker can do whatever. But you told me yesterday, that user will have to check the invoker code to trust it anyway. So if users see invoker does not check signature, they won't trust it. That is why I do not think `AUTH` opcode is actually needed",
+        "created_at": "2021-03-16T19:38:13.491000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "what you really need is to be able to \"fake\" `msg.sender`",
+        "created_at": "2021-03-16T19:39:14.752000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "which I also disagree with, BTW 🙂",
+        "created_at": "2021-03-16T19:39:46.757000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samwilsn",
+        "category": "general",
+        "parent": "",
+        "content": "I deploy a contract:\n\n```\nfunction exploit(address victim, address target, bytes calldata) {\n    authcall{gas: gas(), value: 0, addr: target, sender: victim}()\n}\n```\n\nThen I, as the attacker, set:\n\n - `target` to the address of the Dai token contract\n - `victim` to your address (or any address)\n - `calldata` to the correct calldata to call  `transfer(MY_ADDRESS, YOUR_BALANCE)`",
+        "created_at": "2021-03-16T19:47:34.624000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samwilsn",
+        "category": "general",
+        "parent": "",
+        "content": "Now I've stolen all of your dai, without any interaction on your part.",
+        "created_at": "2021-03-16T19:47:52.835000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samwilsn",
+        "category": "general",
+        "parent": "",
+        "content": "`AUTH` is a secure way to set the `addr` parameter, based on an ECDSA signature.",
+        "created_at": "2021-03-16T19:49:05.862000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Ok, I see your point now",
+        "created_at": "2021-03-16T19:49:36.569000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "`AUTHCALL` is a dangerous opcode",
+        "created_at": "2021-03-16T19:49:46.995000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "because it breaks the guarantees that `msg.sender` is actually the sender of the call",
+        "created_at": "2021-03-16T19:50:18.344000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "so in order to make it less dangerous, it needs to be coupled with `AUTH` opcode",
+        "created_at": "2021-03-16T19:50:39.462000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samwilsn",
+        "category": "general",
+        "parent": "",
+        "content": "Yep!",
+        "created_at": "2021-03-16T19:50:57.450000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samwilsn",
+        "category": "general",
+        "parent": "",
+        "content": "Whether it's a good idea or not, everyone uses `msg.sender` for authorization.",
+        "created_at": "2021-03-16T19:51:14.316000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Ok, I think I now understand, and the point I still disagree with is that we can start messing with the meaning of `msg.sender` now, after the fact, for the sake of making existing token contracts work with sponsored transactions. I would rather have a more \"honest\" mechanism that needs to be explicitly supported by the token contracts. For example, something I suggested earlier with multi-sig transactions",
+        "created_at": "2021-03-16T19:53:10.269000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samwilsn",
+        "category": "general",
+        "parent": "",
+        "content": "How is setting `msg.sender` based on an EOA any different than just calling into that contract _from_ an EOA?",
+        "created_at": "2021-03-16T19:55:44.605000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "Fwiw, this EIP provides a lot more functionality than just making it easier to call into token contracts. It will simplify smart contracts since contracts won’t need to support meta-txs, allow EOAs to send atomic tx packages, authorize txs that expire, send unordered sequences of txs (e.g. non-sequential nonce increments) and more",
+        "created_at": "2021-03-16T19:59:33.072000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "I am going to leave it for a while, because my goal was to understand this EIP properly (thanks for explanations), because I felt bad about just saying \"precompiles are ugly\". Now I understand, and I think this EIP is still not very elegant, and could be replaced with an alternative. But I won't be debating the merits, because I am risking spending way too much time on this.",
+        "created_at": "2021-03-16T20:02:42.353000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks for your feedback \u003c@456226577798135808\u003e!",
+        "created_at": "2021-03-16T20:04:22.967000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "🙂",
+        "created_at": "2021-03-16T20:04:25.804000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samwilsn",
+        "category": "general",
+        "parent": "",
+        "content": "Certainly open to a more elegant approach, if you come across one 😄",
+        "created_at": "2021-03-16T20:05:39.956000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "I will see if you are open to a more elegant approach when you remove the requirement that the sponsored transaction mechanism HAS to work with already deployed contracts. I think this is what likely will make all solutions ugly",
+        "created_at": "2021-03-16T20:06:48.299000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "once you drop that requirement, we can talk again 🙂",
+        "created_at": "2021-03-16T20:07:01.890000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samwilsn",
+        "category": "general",
+        "parent": "",
+        "content": "You can get that without protocol changes with something like: https://eips.ethereum.org/EIPS/eip-2771",
+        "created_at": "2021-03-16T20:13:15.858000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Actually, I might have found a security flaw",
+        "created_at": "2021-03-16T21:05:26.117000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "If someone deployed an honest invoker, like the one you showed me yesterday, and properly computes `commit` value from tx details, and then invokes `AUTH` and then `AUTHCALL`, I can then observe transactions sent to this honest invoker, learn some values of `commit` and corresponding signatures, and then deploy a contract that will just use those commit values and signatures to allow me to impersonate any users that have already used the honest invoker. Would this work?",
+        "created_at": "2021-03-16T21:07:16.577000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, I was aware of this",
+        "created_at": "2021-03-16T21:07:47.955000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "I think the exploit above (if it works) uses the fact that the mechanism that restricts `AUTHCALL`'s dangerous nature only requires an existence of some signature produced in a valid format. But instead, it needs to require specific signature for that call. But this might not be possible anyway, because it still would require the co-opperation of the callee",
+        "created_at": "2021-03-16T21:10:27.577000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samwilsn",
+        "category": "general",
+        "parent": "",
+        "content": "That exploit would indeed work, and is why the address of the invoker is included in the signed bytes",
+        "created_at": "2021-03-16T21:14:18.462000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Oh, I see. That's why it is there",
+        "created_at": "2021-03-16T21:15:16.866000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@456226577798135808\u003e if it helps, I wrote a thread that’s more about the high level usage of the EIP: https://twitter.com/lightclients/status/1371911246702800897?s=21",
+        "created_at": "2021-03-16T21:17:35.939000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "no, I think I am fine at the moment, it turns out that this EIP is just way too subtle for me. I'll pass 🙂",
+        "created_at": "2021-03-16T21:18:33.435000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samwilsn",
+        "category": "general",
+        "parent": "",
+        "content": "In any case, we'll be around for any 3074 related questions",
+        "created_at": "2021-03-16T22:35:52.795000+00:00",
+        "attachments": null
+    }
+]

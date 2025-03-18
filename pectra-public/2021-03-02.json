@@ -1,0 +1,490 @@
+[
+    {
+        "author": "holgerd77",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@!291925846556540928\u003e thanks a lot, that's really a great explanation! 😄 To confirm that I got this right: so in this simplest minimal form - as targeted for the specs - the state is actually stored twice? Once within `application_payload` by the eth2 client and then again by the eth1 client who is still maintaining its own state database?",
+        "created_at": "2021-03-02T08:16:08.710000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "benjaminion",
+        "category": "general",
+        "parent": "",
+        "content": "There are two parts to the overall state: the beacon state, managed by the beacon node (the Eth2/consensus client), and the application state managed by the Eth1 client. The beacon state is relatively small and well bounded. The application state is basically the Eth1 state as we know it today. None of this state is duplicated, just managed by the appropriate side. The `application_payload` is essentially an Eth1 block - the Eth2 client does not process this, and does not keep any significant state related to it.",
+        "created_at": "2021-03-02T08:54:21.401000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "The mainnet state is stored by the application side only. In the purest form blocks are carrying duplicated information as `application_payload` in beacon block and application block constructed out of has the same fields. I guess beyond weak subjectivity period beacon block bodies could be dropped by the client making the redundancy bounded to the length of the WS period.",
+        "created_at": "2021-03-02T08:58:13.695000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holgerd77",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks guys, sorry, I guess I was a bit imprecise here, with \"state\" I was rather referring to \"the information needed to create the state\" - so the Eth1 block transactions. If I would want to recreate the state from the Eth1 client side, would I then request every single block from the Eth2 client via an RPC method? What happens with the blocks *before* the merge? Would these still be synced from Eth1 archive nodes which would work until the merge transition block and then stop?",
+        "created_at": "2021-03-02T09:18:28.116000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "In the pure form the merge consists of only one change, that is consensus upgrade. After this change application layer as it is today looses its capability of tracking the head of the chain and recognising the canonical chain. These two responsibilities is taken by the new consensus layer, i.e. the beacon chain, which keeps track of block gossip, applies state transition (including the execution which is deferred to the application layer) and then tells the application layer what is the head of the chain according to the new fork choice rule. There are implications on the EVM side but let's not touch them for now.\n\nIn the meaning of downloading the application state and the application chain history via ETH63 there will be no changes at all, except for consensus layer to bootstrap such a sync with the head of the chain and to keep it up to date upon new blocks are coming from the wire.\n\nRegular sync that is used to build archive node will have to undergo changes to keep retained. But there is a way to keep it working in general which means that after consensus upgrade it will be still possible to maintain archive nodes on the application layer.",
+        "created_at": "2021-03-02T10:06:02.329000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "If we go further down the road and accompany consensus upgrade with getting rid of a notion of application chain it will have much more implications on chain history management and potentially UX. My preference is to treat consensus upgrade separately from other changes which could also be a subject of the Merge.",
+        "created_at": "2021-03-02T10:08:26.661000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Re: regular sync. There are two potential ways that I can see for syncing the application chain starting from the point of merge towards the head. i) requires proofs for each application block linked to the corresponding value of `beacon_state.historical_roots` list to verify that the block is a part of the canonical chain. ii) optimistic forward sync of block headers which could be verified once it reaches the head of the chain. The other way would be downloading chain headers in reverse order starting from the head and ending up with the merge block but that is more significant change of the full sync.",
+        "created_at": "2021-03-02T10:16:07.340000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Nethermind fast sync already works in the latter way I believe, syncing from near head to head, along with syncing state simultaneously, and then also syncing backward from there toward genesis.",
+        "created_at": "2021-03-02T11:30:08.792000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@489256758989029405\u003e could go into more detail.",
+        "created_at": "2021-03-02T11:30:21.926000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "IIUC, this is how fast sync works on mainnet today, the state root is a moving target, otherwise, if it's static then most of the nodes will prune the state much faster than someone download it.",
+        "created_at": "2021-03-02T11:32:43.898000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holgerd77",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@!425572898787426305\u003e thanks a lot, I like this term \"consensus upgrade\", this seems to bring it more to the point",
+        "created_at": "2021-03-02T11:56:54.742000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mrabino1",
+        "category": "general",
+        "parent": "",
+        "content": "For the community consider, I put together an elementary NPV scneario analysis (as viewed from the economic lens of a miner as (s)he approaches the merge). The idea embodied in the below model is that we can either pay miners post-merge or we can synthetically accomplish the same by discounting the equivalent future daily income streams into elevated rewards prior to the merge. \n\nCore assumption being that the merge would occur on a certain block. While basic, the model contemplates elevating the rewards 30d prior to the merge (based on that block), then again 7d prior, and then significantly the 24 hours before the merge.\n\nLogic behind the above is that to furter secure the ETH PoW chain, overpaying for security albeit temporarily will retain and maintain the economic incentives of miners to complete the PoS merge without contention. \n\nThe actual merge data should be net neutral in the model. Thus changing the 4 fundamental variables, (X days equivalent of post-merge mining compensation, 30d prior reward, 7d prior reward, 1d prior reward), outputs different NPVs. We can also change the discount rate. From the lens of the miner, (s)he is going to want options A and C to be as close as possible. \n\nFeel free to comment in the google sheet or DM me. \n\nhttps://docs.google.com/spreadsheets/d/1YDXUiaOWRwlu8ft5DKFhWIuu3EQ6kubIOQgUR-EDixE/edit?usp=sharing",
+        "created_at": "2021-03-02T17:33:02.429000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mrabino1",
+        "category": "general",
+        "parent": "",
+        "content": "(I claim no authority on this other than to say it is worth considering)",
+        "created_at": "2021-03-02T17:33:45.555000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "What is NPV?",
+        "created_at": "2021-03-02T17:35:12.137000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I *think* we want the ETH reward to basically all be handed out on the merge block (or later).  Any ETH we give away sufficiently in advance of the merge is ETH that is no longer \"future ETH\" for the miner, but instead \"past ETH\".",
+        "created_at": "2021-03-02T17:37:00.638000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mrabino1",
+        "category": "general",
+        "parent": "",
+        "content": "net present value",
+        "created_at": "2021-03-02T17:37:47.284000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "We would *probably* be okay with handing out some of it in the block before the merge block, because a miner won't have be able to do a deep reorg double spend attack in one block, but if we hand out a bunch of extra 30 days prior, that is plenty of time to do a deep reorg attack before the merge.",
+        "created_at": "2021-03-02T17:38:48.484000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mrabino1",
+        "category": "general",
+        "parent": "",
+        "content": "in my eyes, that is why it is important to ramp-up the rewards as we approach the merge.",
+        "created_at": "2021-03-02T17:38:51.561000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I think the ramp up should be like 24 hours, maybe even an hour.",
+        "created_at": "2021-03-02T17:39:12.075000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "From a purely game theoretic standpoint (spherical cows) I think one giant lump sum reward in the last block is ideal.",
+        "created_at": "2021-03-02T17:39:53.592000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mrabino1",
+        "category": "general",
+        "parent": "",
+        "content": "i thought about that also.. but if you look at the NPV equivalent, if we did it only the day before, the rewards for that one day to have the equivalent NPV would incredibly large.",
+        "created_at": "2021-03-02T17:40:07.382000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "All miners have incentive to prop up Ethereum until that last block because they have an expected value of last block reward * hashrate_share.",
+        "created_at": "2021-03-02T17:40:36.409000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "From a spherical cows standpoint, I think that is ideal.",
+        "created_at": "2021-03-02T17:41:02.756000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mrabino1",
+        "category": "general",
+        "parent": "",
+        "content": "errr.. lump-nut vs. a ramp-up... in my eyes, it is very much like keeping someone on the hook during poker.. you dont want to go \"all-in\" too soon or too late.. you want them on the hook the entire time..",
+        "created_at": "2021-03-02T17:41:07.502000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "400,000 ETH for the merge block.  :)",
+        "created_at": "2021-03-02T17:41:14.701000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "They don't attack Ethereum because doing so destroys the future ETH value of their hardware.  If we want them to have 100,000 future ETH value in their hardware 1 hour before the merge, then the last hour of blocks need to be worth 100,000 ETH.",
+        "created_at": "2021-03-02T17:43:53.752000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "If we want them to have 100k ETH 10 minutes before the merge, then the last 10 minutes of blocks need to be worth 100k ETH, etc.",
+        "created_at": "2021-03-02T17:44:20.280000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Presumably, we want them to have `x` future ETH value in their hardware at all blocks up to the merge block.  There isn't a point close to the merge where we start wanting less future ETH.",
+        "created_at": "2021-03-02T17:45:10.331000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "That being said, if we do want miners to have future ETH value without a lump sum payment we can change the block coinbases to have to be a timelock contract.",
+        "created_at": "2021-03-02T17:46:29.483000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "This would allow us to smooth out the bonus rewards across a year of blocks but all be time locked until post-merge.",
+        "created_at": "2021-03-02T17:47:08.457000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Disadvantage of this strategy is it is more ETH1 engineering.",
+        "created_at": "2021-03-02T17:47:26.178000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "On the surface, this seems like it wouldn't work because a miner could earn timelocked ETH leading up to the merge, and then sell/rent their hardware to an attacker.  However, I think in this case they are incentivized not to do that because they don't want anyone to attack ETH prior to merge due to the capital they have locked up.",
+        "created_at": "2021-03-02T17:50:35.070000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Timelocks may cause problems for pools though.",
+        "created_at": "2021-03-02T17:51:00.417000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "And miners may not trust their pools to pay out so we would want a timelock contract that allows transfers, but we can't do that because if the timelocked jeTH is transferable it can be sold.",
+        "created_at": "2021-03-02T17:51:55.938000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Even themtimelock is fraught with peril since we can't know if the timelock owner is a counterfactual address or not.",
+        "created_at": "2021-03-02T17:52:52.426000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mrabino1",
+        "category": "general",
+        "parent": "",
+        "content": "(forgive the ignorance on this next part).. similar to PoS with finality, is there something similar that can be implemented in PoW leading up to the month of the merge to minimize the re-org challenges?",
+        "created_at": "2021-03-02T17:53:34.315000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "We could require an ECDSA signature to unlock the timelocked funds (or maybe BLS), but even then we don't know who the owner of those keys are.",
+        "created_at": "2021-03-02T17:53:41.367000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "One option discussed was to have PoS start doing finality leading up to the merge.  This would limit the range of 51% reorg attacks (but ant censorship attacks).",
+        "created_at": "2021-03-02T17:54:46.077000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I think there are constraints on how close we can easily get finality to head though.  Maybe like an hour away?",
+        "created_at": "2021-03-02T17:55:20.580000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mrabino1",
+        "category": "general",
+        "parent": "",
+        "content": "the biggest challege I can see for the lotto model (of the last block get a huge reward) is that non-pool miners (the avg joe) is basically almost certainly excluded.. and I would think those are presently the miners we want to retain and not have them start to look for alternatives until after the merge..",
+        "created_at": "2021-03-02T17:55:53.809000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I think such a strategy would greatly reduced the cost of security toward the end (how much future ETH we need mining hardware to be worth), but I think we would still need a lump sum at the end.",
+        "created_at": "2021-03-02T17:56:09.018000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm, due to pool mistrust?",
+        "created_at": "2021-03-02T17:56:31.291000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mrabino1",
+        "category": "general",
+        "parent": "",
+        "content": "sure for one..",
+        "created_at": "2021-03-02T17:56:53.706000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mrabino1",
+        "category": "general",
+        "parent": "",
+        "content": "some just want to mine to be the last honest miner...",
+        "created_at": "2021-03-02T17:57:08.878000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "If you trust your pool, then you want to keep pool mining so your EV for that last block is smoother.",
+        "created_at": "2021-03-02T17:57:43.622000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "However, if you don't trust your pool to pay out honestly at the end things get way more complicated.",
+        "created_at": "2021-03-02T17:58:01.458000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Maybe we just suggest that all miners mine individually or in trusted groups for the last block?  This is probably too much operational overhead for home miners though.",
+        "created_at": "2021-03-02T17:58:48.010000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mrabino1",
+        "category": "general",
+        "parent": "",
+        "content": "while not referenced we should also discuss the implications of a ramp-up (or a one-time nut) on other chains.. as with either approach, it should cause a vacuum effect of hashpower (which is intentional) which could reduce the security on other chains... (and we should decide if we care or not... )",
+        "created_at": "2021-03-02T17:59:52.053000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mrabino1",
+        "category": "general",
+        "parent": "",
+        "content": "personally speaking, i would greatly prefer to have that 400k ETH spread over the day(s)  with an ever-increasing amount up until the merge to net adjust for what should otherwise be reducing hashpower as each minute until the merge occurs.",
+        "created_at": "2021-03-02T18:01:38.605000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Do you mean to keep saying \"nut\" or do you mean \"sum\"?",
+        "created_at": "2021-03-02T18:03:13.293000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Why would we expect a reduction of hashpower leading up to the merge?",
+        "created_at": "2021-03-02T18:04:05.988000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mrabino1",
+        "category": "general",
+        "parent": "",
+        "content": "y",
+        "created_at": "2021-03-02T18:06:26.108000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mrabino1",
+        "category": "general",
+        "parent": "",
+        "content": "(meaning without an increase in rewards).. each day that goes by, their return will start to decline (net present value)",
+        "created_at": "2021-03-02T18:06:59.575000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Their opportunity per watt doesn't decline with each day closer to the merge.",
+        "created_at": "2021-03-02T18:07:29.912000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Does \"nut\" have a meaning I'm not familiar with?",
+        "created_at": "2021-03-02T18:07:51.132000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mrabino1",
+        "category": "general",
+        "parent": "",
+        "content": "implying a lump sum payment.",
+        "created_at": "2021-03-02T18:08:07.259000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I would be surprised to see a significant decrease in hashing power leading up to the merge.  What worries me is who is in control of that hashing power leading up to the merge.",
+        "created_at": "2021-03-02T18:09:30.425000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Right now, the hardware owners have incentive to keep their hashing power used by people who care about the long term benefits of Ethereum because their hardware has high future ETH value they don't want to lose.",
+        "created_at": "2021-03-02T18:10:58.027000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "With only 2 ETH left to distribute, miners no longer have a desire to not collaborate with a bad actor.",
+        "created_at": "2021-03-02T18:11:37.835000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "So a bad actor could show up with an attack pool and advertise it as such and miners have an incentive to join that attack pool.",
+        "created_at": "2021-03-02T18:12:08.158000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mrabino1",
+        "category": "general",
+        "parent": "",
+        "content": "precisely.. to rephrase.. constructive hashpower vs. (possibly) destructive hashpower... I am not so much concerned about the reduction of hashpower in aggregate.. rather, i am concerned about the reduction of constructive hashpower as the merge approaches.. we should want to incentivize (e.g. friendly bribe) the miners to maintain constructive hashpower up until the merge.. the question is not really if (in my eyes) but how and in what amounts that have the align interests.",
+        "created_at": "2021-03-02T19:17:23.707000+00:00",
+        "attachments": null
+    }
+]

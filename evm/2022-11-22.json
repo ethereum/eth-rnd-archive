@@ -1,0 +1,114 @@
+[
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "What is the more precise term for what Stack Validation is doing?\n1️⃣ data-flow analysis\n2️⃣ control-flow analysis",
+        "created_at": "2022-11-22T10:45:03.842000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "We are doing control-flow analysis.  My understanding is that the old Java method used data-flow analysis to track data types on the stack.  The new (post 7) Java uses stack maps to allow for one-pass validation.  Wasm uses structured control- flow for the same reason . We only we have one data type and don't need to track data flow.  So Java, Wasm, and Ethereum can all do validation with one-pass control-flow analysis.",
+        "created_at": "2022-11-22T13:37:50.365000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Does this mean dataflow ⊃ control-flow?",
+        "created_at": "2022-11-22T13:40:36.459000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm not sure.",
+        "created_at": "2022-11-22T13:41:09.423000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think you have to track control flow in order to track data flow if that's what you mean.",
+        "created_at": "2022-11-22T13:42:07.668000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If we ever have multiple data types we can use EOF to implement stack maps.",
+        "created_at": "2022-11-22T13:42:56.463000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "No kidding. I'm retiring after EOFv1 spec is finished.",
+        "created_at": "2022-11-22T13:49:25.939000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "To change the subject, the performance and simplicity advantages of `CALLF` aren't just a matter of gas costs.  Compare:\n\n Subroutine call, using `CALLF`:\n```\nSQUARE:\n    dup1            ; 3 gas\n    mul             ; 5 gas\n    return          ; 3 gas\n\nCALL_SQUARE:\n    push 0x02       ; 3 gas\n    callf SQUARE    ; 5 gas\n```\n_Total gas: 19_\n\nSubroutine call, using `JUMP`:\n```\nSQUARE:\n    jumpdest        ; 1 gas\n    swap1           ; 3 gas\n    dup1            ; 3 gas\n    mul             ; 5 gas\n    swap1           ; 3 gas\n    jump            ; 8 gas\n\nCALL_SQUARE:\n    jumpdest        ; 1 gas\n    push 0x02       ; 3 gas\n    push RTN_CALL:  ; 3 gas\n    push SQUARE     ; 3 gas\n    jump            ; 8 gas\nRTN_CALL:\n    jumpdest        ; 1 gas\n```\n_Total: 41 gas_.  Note that we could reprice `JUMP`  to be the same as `CALLF` and still get _38_  gas.  So substantial gas savings and simpler code regardless.",
+        "created_at": "2022-11-22T13:53:57.828000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I took a stab at implementing parsers for the two main approaches for simplifying the type and code section headers: https://notes.ethereum.org/@lightclient/rJ0nTvKIj",
+        "created_at": "2022-11-22T21:26:27.753000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "tldr; it seems like making the code section a list of code sizes and deducing the number of sections based on a mandatory type size header is the best path forward",
+        "created_at": "2022-11-22T21:27:25.785000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "curious to hear other's thoughts",
+        "created_at": "2022-11-22T21:27:37.916000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jlokier",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Almost, as they are closely related, but technically no. Optimistic dataflow iterates over a data flow graph or the control flow graph, but if it's a kind looking for narrow value ranges, it may visit nodes more than once as it expands the type or range (same thing really) associated with possible values at each assignment in the graph.  If using a data flow graph (e.g. SSA), that's derived from traversing the control flow graph.  But there's a twist, which is some control flow edges may be excluded until the type or range causes them to be included, e.g. `if (x)` won't include the true branch if non-zero/truthy isn't yet a possible value.  So some kinds of dataflow analysis skip parts of the control flow graph which they prove are never reached, making dataflow ⊅ control-flow.  An extreme version used in some decompilation software even makes the program counter just another variable, and there is no initial control flow graph at all, it grows as the \"type\" of possible pc values expands.",
+        "created_at": "2022-11-22T21:55:23.125000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e Consider create transaction with invalid EOF initcode invalid (cannot be included in a block)\nI'm curious what the motivation here is. It seems better to just fail the tx and charge whatever the intrinsic is + standard create costs are before accounting for the trie",
+        "created_at": "2022-11-22T22:19:09.178000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "it's not a blocker, but will require modification to the txpool that i think would be better to avoid unless it is very important",
+        "created_at": "2022-11-22T22:19:53.145000+00:00",
+        "attachments": null
+    }
+]

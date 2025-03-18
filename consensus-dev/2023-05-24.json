@@ -1,0 +1,378 @@
+[
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvdWijden\u003e But having all nodes trying to resync at the same time might also break stuff",
+        "created_at": "2023-05-24T07:36:59.538000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks for the comments. Obviously, I don't want to turn it into a political discussion, so also thanks for keeping it technical. The thing that still is veiled in mist for me is how to handle it CL side. \n\n\u003c@291925846556540928\u003e mentioned the possibility of doing the kind of \"hop\" across fork numbers, and thereby achieving some sort of impunity. As a technical solution. \n\n\u003e If we aren't prepared to do irregular state transitions to bail out buggy smart contracts we also shouldn't bail out buggy validators.\n\nGiven the scenario, where somewhere around 80% of the locked funds of the network is on a wrong fork, do you mean that there is no recourse? \n\n\u003e CL can simply start from a socially accepted checkpoint, but we cannot \"jump\" to it while running.\n\nWhat does that mean, in practice -- does that mean to go back in time to an earlier checkpoint? Would it blacklist certain things, or how would that work?",
+        "created_at": "2023-05-24T08:25:53.270000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "Anyway, perhaps it might make sense to try to schedule a call about it",
+        "created_at": "2023-05-24T10:27:58.402000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "CL generally are able to start fine from earlier checkpoints, and would also just checkpoint-sync fine if the usual checkpoint sync servers were set up to point to this new chain",
+        "created_at": "2023-05-24T10:29:39.007000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "To address \"does that mean to go back in time to an earlier checkpoint? Would it blacklist certain things, or how would that work?\" from a Nimbus perspective: nothing about Nimbus is set to switch away from a finalized checkpoint. Finalized is finalized is finalized. It handles reorgs fine (well, hopefully, and in cases it hypothetically might not, it's a bug). But through and through Nimbus's design assumes (CL-finalized) finalized checkpoints are forever",
+        "created_at": "2023-05-24T10:31:48.929000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "there's no \"send Nimbus some REST API call and just say, oops, this finalized checkpoint isn't so finalized\" mechanism",
+        "created_at": "2023-05-24T10:33:39.360000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "Also, https://github.com/ethereum/consensus-specs/blob/dev/sync/optimistic.md#transitioning-from-valid---invalidated-or-invalidated---valid explicitly states\n\u003e Such a scenario requires manual intervention.\n\nso this was already anticipated",
+        "created_at": "2023-05-24T10:53:56.918000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "This would be implementation-dependant and I suppose less invasive in some clients. In prysm I suspect it would be catastrophic so I'll stick to what I know. The beacon node keeps all blocks, final or not, canonical or not, in it's dbase, but it only keeps a tree in memory starting from the finalized root. Whatever descends from it is kept and is considered for future finalization, canonical candidates are considered from the tips of these tree (except one exception from this rule is honest reorgs).  When you finalize a new root, all of the ancestry of this root is removed from the tree. When you have a tree with root `R` and some internal node `F` and you remove all of the ancestry of `F`, that is, the path from `R` to `F`, the remaining graph is a forest, we also prune all the trees from this forest that do not contain `F`. Thus, after finalizing `F`, we now have a tree again, but `F`is it's root. \n```\nR \u003c--- 1 \u003c--- F \u003c--- 2 \u003c---- 3\n        \\      \\_____4\n         \\\n           ---- 5 ---- 6\n                 \\_____7\n```\nIn this scenario, after removing the ancestry `R` and `1`, we're left with two trees, we remove also the three containing 5,6,7 and are left with the tree containing F, 2, 3, 4. \nThis is important so that even in a situation where there is a \u003e 66% attacker that is willing to slash himself more than 33% of the stake, we will not accept another contending fork after finalization. That is, once we have finalized `F`, any block that builds on top of `7`will not be included and will be rejected as invalid. Thus, 7 will never be finalized from our perspective, and there is never a case where \"contending branches are finalized\". This simply cannot happen on an honest node because it will simply reject anything that does not descend from `F`.  One thing we can always do is wipe the database and start again, and pass `7` as the starting point. As Adrian points out this has us ready in a couple of minutes ready to work. But as Marius also points",
+        "created_at": "2023-05-24T11:01:25.374000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "this may have its own dangers if enough validators are syncing at the same time. I am not sure about these dangers     since from the point of view of the chain that finalized `7` and continued, the validators that were on `F` and are    now resyncing to catch up with the good chain, were anyway offline. At any rate, one mechanism is to stop the node,    and restart telling it to start from 7. By not being able to \"jump to it while running\", I mean that it would be very  difficult to implement a logic that will allow blocks descending from `7` even after a coordinated hardfork. First of  all the nodes on the bad branch `F` will not even have the blocks descending from `7` to start with. So in the first   of the two forks we need to change logic so that these blocks are accepted, synced and still not considered canonical, and in the second fork we should signal that there's a reorg to that branch. At least this lets nodes on the `F`       branch to resync and update their nodes at any time instead of all of them doing it at the same time. So the changes   required are pretty invasive: you need to a) allow insertion of blocks that are contending with finalization, b)       verify them with state transition, accordingly changed to discard the requirements on finalization/justification. c)   Discard any updates to forkchoice's finalization/justification coming from these blocks, until the second hard fork    that is. You also need to keep separate LMD weighing so that you only consider `F` desendants until the fork, and `7`  descendants after it. And you need to relax all of the hardened code that assumes that the root of forkchoice is       finalized in a way that an attacker during this period cannot exploit this relaxation. I find this last point very     difficult to fix.",
+        "created_at": "2023-05-24T11:01:41.592000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Finally, assuming we do deal with all the technical complication that would entail allowing our node to jump at        runtime to a different finalized checkpoint, and that we find a safe way of doing so. There's the second issue of the  slashing impunity that Danny hints in your quote. I do believe that we can grant impunity to the validators that were  on `F` until the second hard fork. This is not that problematic. My biggest concern is that this impunity can be used  to also attack the network between the first and the second hardfork and I don't see any way to prevent this.",
+        "created_at": "2023-05-24T11:01:48.246000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "Also, the existence of any such mechanism, even latently, just-in-case, amounts to attack surface I'm unconvinced is worthwhile, since I think the safest recovery mechanism in practice is (1) coordinate some checkpoint sync nodes to deliver states from the new chain, (2) simultaneously arrange for instructions for how to \"truncate\" databases in clients for people who want to keep their history, back to last-good-finalized, and then tell people to update \u0026 restart clients and pick either (1) or (2)",
+        "created_at": "2023-05-24T11:04:31.361000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "This attack surface would, of course, be present during the first and second hardfork, but anything undermining finality in a general way is a dangerous mechanism to exist at all in clients",
+        "created_at": "2023-05-24T11:05:20.007000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "Anything like \"And you need to relax all of the hardened code that assumes that the root of forkchoice is       finalized in a way that an attacker during this period cannot exploit this relaxation\". Having a big-red-button press-me-in-case-if-EL-malfunction button sitting in CLs would have to be carefully checked, and, for it to be trusted, it'd have to be tested too, which means it couldn't be that thoroughly turned off.\n\nI'd prefer to just use checkpoint sync or truncate databases, in an offline way, rather than adding any intrinsic ability for CLs to self-correct in this scenario.",
+        "created_at": "2023-05-24T11:09:24.551000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "Wow, lots of info to digest. Clarification: I did not expect there to exist finished api-endpoints to undo finalization. Nor am I pushing for any particular features in this regard. Just trying to explore the problemspace.",
+        "created_at": "2023-05-24T12:20:10.262000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "we can definitely do something, but I honestly think that the easiest on the CL side would be to do something along the lines of \n1- At hard fork 1 release clients so that they have a feature that allow them to mark a branch as INVALID and prune those blocks from db.\n2- Let checkpoint sync clients from the bad branch (`A` in your gist) from a previous checkpoint with a fixed EL version, they can do this at their leasure, they will be fed blocks from unsynced  nodes in `A` but they will reject these blocks as INVALID, then they will sync up to the \"correct\" branch. They will not be able to attest nor to finalize anything new because of slashing protection that will prevent them from slashing themselves. \n3- When enough time has passed and all nodes of `A` are thought to be synced onto the right branch `B`, we schedule the second hardfork. We somehow magically find a safe way of giving impunity for surround votes to validators in `A` (yeah this is a blackbox that I am less optimistic than \u003c@291925846556540928\u003e that has a solution). And then validators will start attesting on the right branch `B` that will eventually finalize.",
+        "created_at": "2023-05-24T14:10:53.999000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The above has the feature that does not require all nodes being syncing at the same time as \u003c@360491619402776577\u003e was worrying",
+        "created_at": "2023-05-24T14:11:31.119000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "One thing that I may have misunderstood previously... A validator who has, say, 33 eth. After some inactivity, would they leak below 32, or would they become forcibly ejected at 32 eth? If they get forcibly ejected, then the case of \"inactivity leak -\u003e forced ejections -\u003e new finality\" is not as bad as I had thought originally.",
+        "created_at": "2023-05-24T14:20:06.814000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "no, forcibly ejection is at ~16 ETH",
+        "created_at": "2023-05-24T14:20:28.858000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "Ah, so they'd stand to lose roundabout half then.",
+        "created_at": "2023-05-24T14:20:54.623000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, `EJECTION_BALANCE`: https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#validator-cycle",
+        "created_at": "2023-05-24T14:22:09.634000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "another option which is probably simpler to implement is to hardfork the good branch to withdraw the validators from `A`",
+        "created_at": "2023-05-24T14:27:50.702000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "we can have validators from `A` send messages on the chain of `B` for withdrawing",
+        "created_at": "2023-05-24T14:28:26.549000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah ( or: how about bumping the EJECTION_BALANCE to 30 on the good branch?)",
+        "created_at": "2023-05-24T14:28:29.653000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "As in, regardless, or as part of the response to this hypothetical event/scenario?",
+        "created_at": "2023-05-24T14:29:11.283000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "Purely as a step in this scenario",
+        "created_at": "2023-05-24T14:29:34.203000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I know you wanted to keep it technical instead of political but I suspect that we want a solution in which the buggy validators do not lose money.",
+        "created_at": "2023-05-24T14:30:18.229000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "**I** certainly don't want such a thing.  If you don't want to lose money, don't run a majority client.  If you want to engage in dangerous and reckless behavior I won't stop you, but I also will advocate strongly against bailing you out for your mistakes.",
+        "created_at": "2023-05-24T14:32:20.275000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "and I knew that was a bad comment to make above 😄",
+        "created_at": "2023-05-24T14:33:28.048000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I would much rather see engineering effort go into building tools that make it easier to run a minority client like a multi-client launcher, cross-client monitoring systems, consistent configuration systems across clients, cross-client GUIs, etc.",
+        "created_at": "2023-05-24T14:34:11.670000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "We could also devote engineering resources towards building systems for automatically detecting forks such as a proxy server that aggregates world state from many clients and starts sounding alarms when they don't agree.",
+        "created_at": "2023-05-24T14:35:54.641000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "For the scenario: the community wishes to not burn a majority of the stakes providing security for ethereum. Validators losing some money is ok. \n\nYeah \u003c@301186049323958275\u003e I'd also like to see those things.",
+        "created_at": "2023-05-24T14:58:00.202000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I don't think Ethereum should blindly follow the will of the majority.  It should blindly follow the rules that were setup in advance.",
+        "created_at": "2023-05-24T14:58:36.682000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "The rules are extremely clear about what happens when there is a consensus bug in a majority client.  We should not be designing mechanisms to overrule those well defined rules.",
+        "created_at": "2023-05-24T14:59:29.911000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I am still weakly in favor of having contingency plans for handling of rules that the protocol cannot enforce (like malicious reorgs that we can detect out-of-protocol but not in-protocol), but this isn't such a case.  This is a case of a well defined protocol rule executing exactly as designed.",
+        "created_at": "2023-05-24T15:00:18.759000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "note ,that ejections are still subject to the exit queue. so if mass validators reach this balance, most will leak below the 16 (assuming continued non-finality) while still active but in the exit queue",
+        "created_at": "2023-05-24T15:03:10.534000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "Another case is, and I had initially misunderstood https://gist.github.com/holiman/4f6601018a8f559d7ce4cfe4e861cf73 to include this, but seeing that it does not, I'd like to point it out as a something where \"Scenario: geth version X contains a flaw\" is specifically a case where it's a flaw that effectively allows an el-`INVALID` chain to finalize. That would wedge Ethereum, and would need some sort of action. That's worth distinguishing from a scenario where all the chain rules are technically followed, but somehow ended up with a weird/undesirable result.",
+        "created_at": "2023-05-24T15:04:05.389000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "(Again, modulo these inactivity leaks, validator exits, etc. But those take time)",
+        "created_at": "2023-05-24T15:05:00.455000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e specifically a case where it's a flaw that effectively allows an el-INVALID chain to finalize. That would wedge Ethereum, and would need some sort of action\n\nNot sure I see any difference. `geth-x` contains a flaw which results in an invalid state. In addition to it being invalid, it is also deemed unacceptable.",
+        "created_at": "2023-05-24T15:10:55.109000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "What I take from this initiative is that we should indeed have at least some idea on how we should act on different catastrophe scenarios. It would be good to get some time to think about different aspects of it and try to schedule a talk to brainstorm them. In order to avoid the politics of it (risking loosing a majority of the staking funds, having a different fork that bootsapped more security than ETH itself, etc..) I suggest we simply state these issues as: here are the technical problems in avoiding slashing the buggy validators, here are the technical problems in letting them leak, here's a proposal to withdraw them, etc.. After some time to think on the different scenarios we can convene a call",
+        "created_at": "2023-05-24T15:11:40.889000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "well, \"it being invalid\" means that \"We should not be designing mechanisms to overrule those well defined rules.\" doesn't sidestep the issue, whereas \"it is also deemed unacceptable.\" is more subjective",
+        "created_at": "2023-05-24T15:11:51.791000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "If the intent is that both are true in this scenario, then, sure",
+        "created_at": "2023-05-24T15:12:17.075000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "\"it being invalid\" means it was a flaw which affected the stateroot. That could arise e.g. the nonce of account `0x0000..00` was flipped to `1`. Or it could arise due to `100 eth` magically appearing at the address of the first transaction-sender. The former could ostensibly very well be considered \"acceptable\", leading to canonicalization of the bug.",
+        "created_at": "2023-05-24T15:20:05.725000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Although I sympathize with the viewpoint, any time there is a line to be drawn between \"acceptable\" and \"unacceptable\" it becomes rabidly contentious.  Many people may not care about a single transaction sender receiving another 100 ETH, in the context of the costs of avoiding a rollback, but others would.  As such, I think the only line that can be drawn is the absolute one of \"anything that is invalid cannot be accepted as canonical\".",
+        "created_at": "2023-05-24T15:29:26.424000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "While I agree that there does exist some fuzzy line particularly if the same bug shows up in multiple clients, if one client has a bug I don't think it matters what the bug is, that client's fork doesn't get to be canonical.",
+        "created_at": "2023-05-24T15:29:28.335000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "general",
+        "parent": "",
+        "content": "So the scenario I set out explicitly says that it is unacceptable. It cannot/must not become canonical. Having said that, we do have the case of ripemd touch-delete bug that was canonicalized back in the day. Nobody wanted to roll back days/weeks because of a non-consequential flaw",
+        "created_at": "2023-05-24T15:31:49.839000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "A big difference now is that validators will have funds behind two different chains, though.",
+        "created_at": "2023-05-24T15:33:16.514000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I think back in the day with 100 users is quite different from today.  I also think that now that we have 4 of each client type, we will notice such a bug within minutes/hours (because the network will visibly partition).",
+        "created_at": "2023-05-24T15:33:17.921000+00:00",
+        "attachments": null
+    }
+]

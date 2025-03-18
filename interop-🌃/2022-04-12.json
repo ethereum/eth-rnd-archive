@@ -1,0 +1,170 @@
+[
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Where did you get a response from geth? I couldn't find it here. In any case what intrigues me of this PR is that a beacon node could very much know before the long block has finalized executing that it won't be head due to a newer one arriving orphaning it and with a lot of attestations for it.  So timing out execution (or being able to execute in parallel seem like a right decision in this case to me)",
+        "created_at": "2022-04-12T00:30:01.564000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tbenr",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'd like to bring up a question around `fcu` call. On Friday I discovered a minor issue in teku which I just fixed: if we had to propose two blocks crossing an epoch boundary (ie slot 31 and slot 32) we where sending 2 `fcu` for the second, one with an old set of `PayloadAttributes` and just after that a second call with new\\correct `PayloadAttributes`.\nI think Geth had recently introduced a check in timestamp field which verifies that it is strictly higher than the timestamp of the parent block we requested to build atop of.\nSince, per spec, there is no validation on `PayloadAttributes` , there is no semantic space to handle the error messages on that set of attributes and Geth simply generate a json rcp error with like `-32000: invalid timestamp, parent 1649436590 given 1649436590`.\nI think there is room for a discussion here.",
+        "created_at": "2022-04-12T08:56:21.042000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "IIRC, It was on one of ACD or CL calls, cc \u003c@!360491619402776577\u003e to confirm that geth processes `newPayloads` and `fcUs` sequentially and can't process two payloads concurrently.\n\nAborting execution due to timeout is an optimal strategy for short attacks, like when there are one or a few DoS blocks in a row, it aids for faster recovery from this kind of attack. While if there is a long DoS attack, where there are several epochs of DoS blocks in a row, aborting the execution too early in this case may prevent chain from making any progress. I am currently in favour of resilience to long attacks rather than faster recovery from short DoS attacks.",
+        "created_at": "2022-04-12T09:37:16.808000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "An interesting finding! One of the block header validation rules on EL side has a restriction on the timestamp, a timestamp of a block must be strictly greater than the parent timestamp. So, this check seems reasonable and we might want to make it explicit in the Engine API spec.\n\nThe issue with this call is that it has double semantics and it could be the case when forkchoice state is applied but build process can't started due to e.g. timestamp error. The vice versa is impossible, as build process can't be started if forkchoice state can't be updated. There are two ways to do this:\n1) if forkchoice state is correct then apply it disregarding correctness of payload attributes\n2) if payload attributes are incorrect then revert the call entirely and doesn't apply forkchoice state\n\nI am curious what is current behaviour of EL clients?",
+        "created_at": "2022-04-12T09:46:24.339000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes Besu did the same thing, and we respond freeform in the INVALID response. I could see formalizing the response being useful if the CL can behave differently based on the invalidity reason.  Could CLs leverage that?",
+        "created_at": "2022-04-12T13:38:40.009000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "Testing",
+        "parent": "",
+        "content": "Besu does option 2",
+        "created_at": "2022-04-12T13:39:50.073000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "We should really test shutting down the CL client for a day on the mainnet shadow fork and let it sync up to the head again.\nLH needed 30 min to catch up 10 days worth of empty blocks on kiln, 30 slots/sec",
+        "created_at": "2022-04-12T13:52:04.861000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "Testing",
+        "parent": "",
+        "content": "I thought this was configured in the genesis.json files, all of which read 5k for the gasLimit. Did we just override that on the command lines to 8M? Trying to determine if Besu has same problem.",
+        "created_at": "2022-04-12T14:10:21.205000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@827653956955406406\u003e I think Besu may be acting differently than Geth here. IMO it's very important for the default to be ~30m on mainnet otherwise anyone running Besu in \"default\" mode would vote the gas limit down",
+        "created_at": "2022-04-12T21:08:11.487000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "Testing",
+        "parent": "",
+        "content": "Nethermind sets it to \"null\", which means it just follows what the miner of the last block did",
+        "created_at": "2022-04-12T21:10:12.661000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I checked all the currently available clients in hive and this is what they currently do on an invalid payloadAttributes:\n- Geth: Error but forkchoice is applied\n- Nethermind: Error and forkchoice is rolled back\n- Erigon: No error on any timestamp value\n- EthJS: No error on any timestamp value",
+        "created_at": "2022-04-12T22:17:49.452000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "do you think it's possible to test  the scenario above? A long sidebranch where one of the first blocks is a very long block to execute and the next ones are INVALID. And finally  a reorg to this branch?",
+        "created_at": "2022-04-12T22:24:18.660000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "Testing",
+        "parent": "",
+        "content": "Nah, this is just me misunderstanding the gasLimit field in a genesis file. Besu just adapts to the previous block like everyone else since London",
+        "created_at": "2022-04-12T22:40:32.308000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "Testing",
+        "parent": "",
+        "content": "Got it, thanks \u003c@827653956955406406\u003e ! It might be worth clarifying the besu docs because the JSON RPC docs explain it like you thought it worked",
+        "created_at": "2022-04-12T22:42:17.011000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think so, we currently don't have any long block tests, but producing a block that takes a lot to execute would be the only thing missing for this test case 🤔",
+        "created_at": "2022-04-12T22:49:45.706000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "well, it needs to be crafted so that you get a bunch of blocks on a non-canonical chain and then you need to get a bunch of validators to attest for this non-canonical chain so that the rest switches over",
+        "created_at": "2022-04-12T22:51:19.408000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think I am not alone in thinking that we lock in this situation. I think prysm will not recover from this if the LVH is not right.",
+        "created_at": "2022-04-12T22:52:23.469000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "Testing",
+        "parent": "",
+        "content": "if you're referring to https://besu.hyperledger.org/en/stable/Reference/API-Methods/#miner_changetargetgaslimit then that is documented correctly. My mistake was assuming the gasLimit field in the genesis json meant the same thing, it does not.",
+        "created_at": "2022-04-12T23:15:07.215000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "Testing",
+        "parent": "",
+        "content": "I meant this: \n\n\u003e If a value for target-gas-limit is not specified, the block gas limit remains at the value specified in the genesis file.",
+        "created_at": "2022-04-12T23:26:32.035000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "Testing",
+        "parent": "",
+        "content": "From here: https://besu.hyperledger.org/Reference/CLI/CLI-Syntax/",
+        "created_at": "2022-04-12T23:27:04.057000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "Testing",
+        "parent": "",
+        "content": "I will investigate this, seems wrong to me now as well",
+        "created_at": "2022-04-12T23:46:55.667000+00:00",
+        "attachments": null
+    }
+]

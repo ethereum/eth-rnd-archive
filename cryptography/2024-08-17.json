@@ -1,0 +1,98 @@
+[
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "In the KZG proof verification (aka point evaluation precompile) the G1 subgroup check is not needed.",
+        "created_at": "2024-08-17T16:54:03.224000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This has been one of the issues where lack of understanding in implementers has lead to a lot of unnecessary cycles. Prysm aggregation got divided by 10  because of finding this bug  essentially. I'm sure there's many more places where we're verifying subgroup belonging when we shouldn't",
+        "created_at": "2024-08-17T17:45:19.303000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So confirmed? I wasn't sure. Is there any write up about it?",
+        "created_at": "2024-08-17T18:50:42.257000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Is this enough? https://github.com/ethereum/consensus-specs/blob/dev/tests/core/pyspec/eth2spec/utils/bls.py#L341",
+        "created_at": "2024-08-17T18:53:52.773000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I remember discussions in the C-KZG channel a year ago about this. I think it was  Herold Gottfried arguing that it was unnecessary. Don't know his handle to tag here",
+        "created_at": "2024-08-17T19:19:13.751000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "why?",
+        "created_at": "2024-08-17T20:22:21.295000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm not sure about the case for the bls API, but with the 4844 precompile, the API was pretty hard to get wrong imo because the \"bulk\" of the work was being abstracted away into the crypto library. \n\nThe subgroup check is not seen by the implementor of the precompile",
+        "created_at": "2024-08-17T20:23:41.467000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "For reference:\n\n```python\n\ndef kzg_to_versioned_hash(commitment: KZGCommitment) -\u003e VersionedHash:\n    return VERSIONED_HASH_VERSION_KZG + sha256(commitment)[1:]\n\ndef point_evaluation_precompile(input: Bytes) -\u003e Bytes:\n    \"\"\"\n    Verify p(z) = y given commitment that corresponds to the polynomial p(x) and a KZG proof.\n    Also verify that the provided commitment matches the provided versioned_hash.\n    \"\"\"\n    # The data is encoded as follows: versioned_hash | z | y | commitment | proof | with z and y being padded 32 byte big endian values\n    assert len(input) == 192\n    versioned_hash = input[:32]\n    z = input[32:64]\n    y = input[64:96]\n    commitment = input[96:144]\n    proof = input[144:192]\n\n    # Verify commitment matches versioned_hash\n    assert kzg_to_versioned_hash(commitment) == versioned_hash\n\n    # Verify KZG proof with z and y in big endian format\n    assert cryptolibrary.verify_kzg_proof(commitment, z, y, proof)\n\n    # Return FIELD_ELEMENTS_PER_BLOB and BLS_MODULUS as padded 32 byte big endian values\n    return Bytes(U256(FIELD_ELEMENTS_PER_BLOB).to_be_bytes32() + U256(BLS_MODULUS).to_be_bytes32())\n```",
+        "created_at": "2024-08-17T20:25:14.230000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Still not sure I understand why it would need to be removed though I would be against removing subgroup checks for a few reasons:\n\n- They should cost about 200microseconds for both subgroup checks vs the pairings which costs 1ms (So I don't think its a major bottleneck?)\n- I've been strongly for cryptography APIs to always sanity check user input at the beginning of the function call, so there is no way for the user to mess it up. \n\n\u003e There is one exception which I think is what Potuz may have been referring to in c-kzg",
+        "created_at": "2024-08-17T20:35:26.538000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think this was me (?)\n\nGo-kzg does not do subgroup checks when loading the trusted setup because its a static file that doesn't change. Instead, there is a recommendation which is to add a test in their codebase that does the subgroup check on the static file.\n\nEDIT: I don't see this in downstream codebases, but go-kzg does have this test on the static file",
+        "created_at": "2024-08-17T20:38:43.494000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Oh I wasn't referring to Kzg itself: in Prysm there were plenty of subgroup checks for keys that were previously verified to be valid. Seemed like the rationale pre merge was: if in doubt, check, better safe than sorry. Two years later and  1M validators more, the story is different",
+        "created_at": "2024-08-17T20:46:29.231000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Oh right, I think the bls api could be improved in that regard. If it becomes an issue in the future, feel free to ping me with a Prysm issue and I'll take a look",
+        "created_at": "2024-08-17T21:05:05.788000+00:00",
+        "attachments": null
+    }
+]

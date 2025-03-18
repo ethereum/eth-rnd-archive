@@ -1,0 +1,66 @@
+[
+    {
+        "author": "jens4601",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Not sure if this is the right place, but I'd like to propose a new EVM opcode: SDELETE or SRESET\nIt takes a storage slot (uint256) and a prefix length (0-32) as input and deletes (resets to zero) all storage slots that have the same prefix as the input storage slot.\nIt ideally returns the number of storage slots that has been reset.\nAlternatively (more flexible): Instead of taking in a prefix: Use a start and end slot as inputs, thus allowing more flexibility.\nIdeally it would have a fixed gas cost and would be free (e.g. through a refund) if more than X storage slots have been reset.\n\nThis would allow contracts to efficiently clean up after themselves if they know data (or a storage slot) will not be used again. It'd be cheaper than individual SSTORE calls because its implementation would likely be cheaper. Combined with restricting mapping keys and list start indicies in solidity to a given prefix it would allow to efficiently empty a list or mapping (though that can result in extra costs later due to having to set the storage slot from zero to non-zero.\n\nProblems:\n- This only works as long as node implementations can easily get/reset a list of storage slots starting with an index, but that should always be possible using binary search on the merkle tree (would even get more efficient with verkle trees unless I'm mistaken).\n- Contracts may not want to use it due to the above mentioned extra cost should the slot ever be reused.",
+        "created_at": "2025-01-29T09:48:51.149000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "You could propose it as EIP 🙂 https://github.com/ethereum/EIPs\n\nI'd have some problems with this proposal though. It is not possible to get a map of the keys used in the storage. This might sound counter-intuitive, but when you write to a slot (for instance slot 1) the key you are writing to is actually `keccak256(1)`. Thus if you have a storage layout, you would need a preimage database to figure out what key was actually being used. This thus also means you can't do binary search on the input keys in the MPT. For each key in the range you would have to first calculate the hash, then read the storage, and then reset the storage if its non-empty. Note that state reading is slow and expensive, so this will also be included in the gas costs. Writing 256 values to cold non-empty slots costs 256 * 5000 = 1_280_000 gas so this is rather expensive.\n\nAnyways some other side notes:\n\n- \"Emptying\" an array, I think if you set the length of the array to 0 then Solidity will treat the array as empty. (However in the underlying contract storage the old values are thus still there, but they should not be able to be read by the EVM)\n- \"Emptying\" a map, this would use a similar trick as above (setting length to 0), however in here we first check how the maps work in Solidity. What's done is, the actual contract key is calculated as `keccak256(concat(MAP_KEY, key))` (order might be different). To \"empty\" the map (it can not be read by EVM anymore but it's still in the actual contract/trie storage), one changes the `MAP_KEY` to an unused value. This thus also means that when reading from the map, first the `MAP_KEY` needs to be read in order to get the actual key to query. This approach would also help resetting a map to an old version by re-using the previous `MAP_KEY`. \n\nThe goal of this proposal, is it to clean up the storage in the state trie, or is it to ensure it \"looks\" cleaned up in the EVM?",
+        "created_at": "2025-01-29T10:08:37.344000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jens4601",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e but when you write to a slot (for instance slot 1) the key you are writing to is actually keccak256(1)\n\nAh, that makes this proposal indeed impossible/useless. So far I thought that `slot_index == mpt_leaf_index`, but `keccak(slot_index) == mpt_leaf_index` would make this binary search impossible. TIL. No wonder that there are no RPC calls to get a list of storage slots used.\n\nThe goal was to actually clean up the state trie. Making it \"look\" cleaned up is relatively easy (as you've shown).\nAs an aside: The fact that you have to change `MAP_KEY` (as in the storage slot used for the map) to \"empty\" a map is what brought me to this idea in the first place.",
+        "created_at": "2025-01-29T10:36:03.548000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "What is the main motivation of cleaning storage here? To lower the storage size of the chain? (Would make a lot of sense 🙂 )\n\nThere are proposals to switch to a different trie structure, such as the Verkle tree https://eips.ethereum.org/EIPS/eip-6800. I don't think this proposal works there either (because its not possible to easily find the storage keys), but it's worth to know that the entire storage data structure might thus be swapped out in the future 🙂",
+        "created_at": "2025-01-29T10:48:01.836000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jens4601",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I was trying to figure out the optimal way to store data for a limited period of time (the end of which isn't known in advance) after which the data becomes unusable (via contract logic at least). The result of that was that since London it seems (for understandable reasons) more efficient to waste storage slots (see the \"emptying\" suggestions above) and thus increase the size of the chain for no reason than to do proper cleanup. Especially when mappings are involved anywhere in the data. Which is definitely the wrong incentive in my opinion.\n\nverkle trees would even make the binary search more efficient (still can't do it with `keccak(slot_index) == mpt_leaf_index` though - I can see the benefits against malicious attackers in not having `slot_index == mpt_leaf_index`)\n\nRandom thought I just had: What if the slot_index to leaf_index would be the following: `mpt_leaf_index = (slot_index \u0026 mask) | (keccak(slot_index) \u0026 ~mask)` with `mask=0xffffffff00...00`?\n- That would work for MPTs and it should work for verkle tries, too.\n- It would allow separating regions of storage to allow SDELETE/SRESET with up to 32 bits of prefix (more than likely ever needed, could be further reduced).\n- It would still prevent the attacks the use of `keccak(slot_index)` tries to solve (by only giving direct choice to the upper leyers of the merkle trie, which an attacker can already get by finding hashes that start with this prefix)\n- But migrating the current/old storage is problematic because slot_index is unknown, so old contracts would likely need mask to be `0x00..00`",
+        "created_at": "2025-01-29T11:07:13.519000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jens4601",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Might be worth doing together with the verkle change, if the ability to delete (large) sections of storage is a desired property.\n\nI think it is because it effectively allows you to efficiently reuse a contract with a completely reset state without having to call the no longer existing selfdestruct or deploy another (proxy) contract. It effectively allows a contract to say \"please delete part of my state\" (even though more precise start-end selections wouldn't work.",
+        "created_at": "2025-01-29T11:10:46.215000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "FYI for Verkle the preimages of the trie actually have to be known. There is extensive research to figure out how to handle the MPT -\u003e Verkle transition see for instance this approach https://docs.google.com/presentation/d/1bSiz9Y32_loeyWzGoSRbanNvFd5vLgH5PlK2QXY90JA/edit#slide=id.g1ec44dccf71_0_61 (also lots of info here: https://verkle.info/) \n\n\nYour point about preventing the attacks regarding `keccak(slot_index)`, I disagree because you now get the power to choose the upper layers of the MPT. It is indeed possible to \"calculate\" these upper keys in the current configuration, but notice that this scals quadratically depending on what top keys you want to actually calculate a valid input. So this approach would still somewhat solve it, but it will weaken the security, because only the bottom half of the slot is hashed. \n\nI need to check something because I think in Verkle if you delete a key, it still leaves something on-disk (not sure) so this would not help reducing the state size",
+        "created_at": "2025-01-29T11:19:34.575000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jens4601",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e but it will weaken the security, because only the bottom half of the slot is hashed. \nTrue, though complexity doesn't matter that much the smaller prefix is. With a 8-bit prefix you'd only need 256 hashes to find a value in the desired top half of the slot. With a 16-bit prefix 65535 tries (on average). With 32-bit you're starting to get into the range where you may feel the effect of it, though finding the desired slot_index to go into that top part is likely still doable.\n\nSo for a small prefix you'd only marginally weaken the security.",
+        "created_at": "2025-01-29T11:20:46.681000+00:00",
+        "attachments": null
+    }
+]

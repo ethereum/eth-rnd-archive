@@ -1,0 +1,368 @@
+[
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I just stumbled on the \"EVM384 – Can we do Fast Crypto in EVM?\" article (https://notes.ethereum.org/@axic/evm384)\n\nIf EIP1962 (https://github.com/jwasinger/eip1962/tree/f472efd5911f395352594bfee13f9fedf14dce1f) is derived from the same code as https://github.com/kobigurk/wasm_proof it is missing a significant amount of optimizations. State of the art pairing on BLS12-381 should be between 0.650ms to 0.9ms  on 3.0+GHz CPUs from the past 6 years with either MCL https://github.com/herumi/mcl or BLST https://github.com/supranational/blst or even Consensys Goff/Gnark/Gurvy https://github.com/ConsenSys/gurvy or Kilic's Go implementation https://github.com/kilic/bls12-381\n\nKilic's EVMBLS might be worth looking at as well (but BN254 https://github.com/kilic/evmbls)\n\nHere is a short review of wasm_proof algorithms: https://github.com/vacp2p/research/issues/7#issuecomment-690083000\nwith items worth 10% to 2200% performance boost that are applicable at a high-level (i.e. no assembly).",
+        "created_at": "2020-09-24T07:43:17.344000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Also I would be interested to know if you can inline wasm assembly in C/C++ for a wasm backend.\nI'm writing a generic optimized pairing library that supports multiple curves with state-of-the-art performance as a target at https://github.com/mratsim/constantine\nI would be interested to support all EIP1962 curves, however for the highest perf, assembly is needed because compilers struggle at bigint and modular arithmetic. For instance 384x384 -\u003e 768 multiplication is 100 cycles with GCC, 62 cycles with Clang and 47 cycles with inline assembly",
+        "created_at": "2020-09-24T07:51:50.334000+00:00",
+        "attachments": [
+            {
+                "type": "",
+                "origin_name": "unknown.png",
+                "content": "9edc55784dd1ae5e32e7bcd2bd864fda618b8c13290373b11f0d1d279ac408ec"
+            }
+        ]
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "",
+        "created_at": "2020-09-24T07:52:06.564000+00:00",
+        "attachments": [
+            {
+                "type": "",
+                "origin_name": "unknown.png",
+                "content": "90c056b4e0d6526cc150c751874603d03799f286b1dd5568755e1d749c755409"
+            }
+        ]
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So would you agree that the modular arithmetics IS the place where you would want to have assembly and other tricks, but not necessarily other places? As far as I understand, the reason it works much better in assembly is that you can gain a lot from careful use of the fact that CPU does actually do full multiplication of, say 64x64 =\u003e 128bits, but most languages only allow you do see the lowest 64bit, or force you to use 128bit operands. Is this correct?",
+        "created_at": "2020-09-24T07:56:23.452000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "ARM also has 64x64-\u003e128",
+        "created_at": "2020-09-24T08:03:53.849000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It is also worthwhile to do assembly for Fp2 arithmetic i.e. `a+ib (mod p²)` operations but otherwise everything else is high-level optimizations that are portable to any language",
+        "created_at": "2020-09-24T08:04:59.544000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "There are a couple of bigint but non-modular assembly that might help gain 5% but those are not the bulk of assembly optimizations you want",
+        "created_at": "2020-09-24T08:07:24.506000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If you had 3 things you could implement in assembly, it's modular addition, modular substraction and modular multiplication.",
+        "created_at": "2020-09-24T08:08:25.967000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "so what is your practical conclusion from these observations? Do you think the path of evm384 is worthwhile? (I think it is)",
+        "created_at": "2020-09-24T08:08:59.920000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If you had one thing, you would implement modular multiplication and use the add with carry / sub with borrow intrinsics.",
+        "created_at": "2020-09-24T08:09:32.250000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes i think it is",
+        "created_at": "2020-09-24T08:09:36.532000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If you look at the graph here",
+        "created_at": "2020-09-24T08:10:06.161000+00:00",
+        "attachments": [
+            {
+                "type": "",
+                "origin_name": "evm384-vs-native-wasm.png",
+                "content": "a73dbcceda0789ee8263fa815f221a39831fb42ece241a0e272a0ef747daa042"
+            }
+        ]
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "You're already at 5.5ms",
+        "created_at": "2020-09-24T08:10:14.506000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "so you can get pairing down to 1ms with the high-level optimization (without assembly) I mentioned",
+        "created_at": "2020-09-24T08:10:38.093000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "but we can have assembly in the implementation of evm384 opcodes, of course 🙂",
+        "created_at": "2020-09-24T08:11:47.654000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If you want I can make a thorough review of the algorithms used and note the potential perf improvement like I did for wasm_proof, or this https://notes.status.im/nim-bls-curve-backends#",
+        "created_at": "2020-09-24T08:11:57.077000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think what we would like to arrive at is the conclusion whether the path of evm384 (or similar) is a preferred path to the introduction of the curve-arithmetics precompiles",
+        "created_at": "2020-09-24T08:13:07.446000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think it is a preferred path, personally, because it would lead to a quicker roll-out",
+        "created_at": "2020-09-24T08:13:45.038000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "and will be more robust",
+        "created_at": "2020-09-24T08:13:55.446000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "As noted in the document, you might need EVM768 as well (because BW6-761 is becoming a companion curve to BLS12-377 for newer ZKP schemes - https://eprint.iacr.org/2020/351.pdf)",
+        "created_at": "2020-09-24T08:15:44.864000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "",
+        "created_at": "2020-09-24T08:16:52.429000+00:00",
+        "attachments": [
+            {
+                "type": "",
+                "origin_name": "unknown.png",
+                "content": "32958fd4890c43a4a433a4ae7b74af97dc74032e26d9ae6aeeb33b924bec11d3"
+            }
+        ]
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm not sure how that works yet since I was working on the lower level but seems like you jump from one curve to the other.",
+        "created_at": "2020-09-24T08:17:31.303000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "as noted by someone before, as the number of bits increases, the difference between curve-precompiles and EVM-code based on modular arithmetics implemented in opcodes, decreases",
+        "created_at": "2020-09-24T08:19:34.360000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "because the bottleneck moves squarely into the modular arithmetics",
+        "created_at": "2020-09-24T08:19:52.783000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think EVM784 is manageable as 2x384 elements while 256-\u003e384 is more awkward anyway",
+        "created_at": "2020-09-24T08:20:22.273000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "if we have 256 and 384 we may be able to handle any relevant size for crypto by composing the primitives (though the composition might get complex)",
+        "created_at": "2020-09-24T08:21:20.620000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "What is the benchmarking tool used?",
+        "created_at": "2020-09-24T09:57:53.927000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "My own code, FYI I added pairings + pairings benchmark to my own library (for BLS12-381 only for now): https://github.com/mratsim/constantine/pull/85\n\nStill missing plenty of optimizations",
+        "created_at": "2020-09-24T11:40:49.401000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the benchmark code is something like this: https://github.com/mratsim/constantine/pull/85/files#diff-b84b7bdca019291f2ecaaddc87cf76d2R110-R124\n\ngetMonotimes is the OS defined monotonic clock and getTicks uses rdtsc",
+        "created_at": "2020-09-24T11:41:53.577000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!570268431522201601\u003e Do you maybe have asm code for 256x256-\u003e256 or 256x256-\u003e512 multiplication?",
+        "created_at": "2020-09-24T16:43:13.267000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I have a code generator for any size ~~below 384~~ actually, it can even be a x b -\u003e c, pick any a, b, c. Edit, below 384 will use MULX/ADOX/ADCX",
+        "created_at": "2020-09-24T16:45:01.120000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm happy to see the generator then.",
+        "created_at": "2020-09-24T16:45:33.655000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "https://github.com/mratsim/constantine/blob/master/constantine/arithmetic/limbs_asm_mul_x86.nim#L112-L141",
+        "created_at": "2020-09-24T16:46:18.328000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "with mulx: https://github.com/mratsim/constantine/blob/master/constantine/arithmetic/limbs_asm_mul_x86_adx_bmi2.nim#L36-L192",
+        "created_at": "2020-09-24T16:46:43.751000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "and the \"normal\" code is here: https://github.com/mratsim/constantine/blob/master/constantine/arithmetic/limbs.nim#L310-L345",
+        "created_at": "2020-09-24T16:47:14.324000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I use product scanning / comba multiplication",
+        "created_at": "2020-09-24T16:47:27.563000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the definition of mulAcc is here: https://github.com/mratsim/constantine/blob/master/constantine/primitives/extended_precision.nim#L133-L140",
+        "created_at": "2020-09-24T16:58:24.439000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And this is the C/inline assembly code generated",
+        "created_at": "2020-09-24T18:26:32.900000+00:00",
+        "attachments": [
+            {
+                "type": "",
+                "origin_name": "message.txt",
+                "content": "237fc966bd533343ef4756ed78f18acd806c96598a009e5be378d9dae89ff81b"
+            }
+        ]
+    },
+    {
+        "author": "pauld.9606",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@!570268431522201601\u003e your generated code looks very close to my fastest code for mul:u256*u256-\u003eu512. https://github.com/poemm/assembles/blob/master/mul256x256_512_64bitlimbs_adc.x86_64.s",
+        "created_at": "2020-09-24T23:34:59.818000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm curious about the clc before add\n```\n    # a0*b1\n    mov    %r8, %rax\n    mul    %r13\n    clc\n    add    %rax, %rbx\n    adc    %rdx, %rcx\n    adc    $0, %rsi\n```\n\nadd would set the carry flag anyway, and if you were worried about carried dependencies that might trigger latency delays, isn't xor better?",
+        "created_at": "2020-09-24T23:38:29.154000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pauld.9606",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e ﻿add would set the carry flag anyway\nYou are right. I should remove it.",
+        "created_at": "2020-09-24T23:46:12.169000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pauld.9606",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Actually, what is fastest depends on the hardware, which, as you know, is often proprietary. Yes, I am worried about dependence between instructions, maybe xor is better for this. I would have to measure it on each proprietary hardware to see.",
+        "created_at": "2020-09-24T23:53:45.597000+00:00",
+        "attachments": null
+    }
+]

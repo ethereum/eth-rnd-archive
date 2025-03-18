@@ -1,0 +1,970 @@
+[
+    {
+        "author": "benjaminion",
+        "category": "general",
+        "parent": "",
+        "content": "The correlated slashing penalty is currently reduced by a factor of three from the value it ought to be. So that's planned to do what you suggest. Imho, an initial penalty of zero alongside the correlated slashing penalty restored to its previous value (and with its current rounding error fixed up) would achieve the goals of slashing just fine. I think we should also remove the long tail of attestation penalties for slashed validators that have been exited - they are pointlessly vindictive. In short: simplify everything to just the (fixed) correlated slashing penalty.",
+        "created_at": "2021-01-06T06:41:25.351000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "benjaminion",
+        "category": "general",
+        "parent": "",
+        "content": "Or maybe make the initial penalty just the proposer reward for reporting the slashing.",
+        "created_at": "2021-01-06T06:43:38.725000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I believe the reason for the long tail slashing is because you do not know up front whether the person being slashed was part of a larger attack against the network or not.  By slashing over a long period of time, you can monitor the chain and keep an eye out to see if this was an isolated event (likely a mistake by a validator) or part of some larger problem (likely either a consensus failure or coordinated attack).",
+        "created_at": "2021-01-06T06:45:12.883000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "If we only had the up front slashing, then we would have to treat *everyone* as though they were part of a coordinated attack which means much higher slashes for honest mistakes.",
+        "created_at": "2021-01-06T06:46:03.140000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "benjaminion",
+        "category": "general",
+        "parent": "",
+        "content": "That's independent. The slashed validator's withdrawal epoch is set 36 days into the future (only needs to be 18, but whatever) to allow the correlated slashing to be handled. However, in addition, the slashed validator receives continuous penalties for not attesting throughout this whole 36 day period, even after its exit epoch - these penalties currently (a) make up the majority of the penalty for being slashed, (b) are pointless, and (c) unnecessarily complicate the spec.",
+        "created_at": "2021-01-06T08:04:40.736000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Totally agree with this, it adds complexity to the spec and makes the protocol look somewhat shifty when there are all of these different components to a slashing that make it complicated for people to understand.  I'd get rid of the long tail, make the up-front fine a bit larger (or just go back to the original spec value for the slashing penalty) and take the correlation fine after 18 days and be done with it.",
+        "created_at": "2021-01-06T08:28:46.034000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Does it simplify implementations to have them \"miss\" for that period?",
+        "created_at": "2021-01-06T08:29:30.782000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "That way you don't have to have any special case logic during the period for validators that are present but slashed.",
+        "created_at": "2021-01-06T08:30:04.037000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "It does remove some calculation, not that it's a massive effort.  The special case logic isn't much more than a tweak in the helper that decides if a validator is \"active\" or not.  At current a slashed-but-not-yet-withdrawable validator is considered active (and hence punished if it doesn't attest, which is always the case as attestations by slashed validators are rejected by the protocol).",
+        "created_at": "2021-01-06T08:33:50.932000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "So not a massive difference techincally (a _minor_ simplification, you could say), but much better clarity in terms of end users understanding what happens if they are slashed.",
+        "created_at": "2021-01-06T08:34:37.368000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I can only speak for myself but I indeed mistakenly read many times the implementation code because of the issue of existing validators that are both exited and active",
+        "created_at": "2021-01-06T09:15:50.624000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "benjaminion",
+        "category": "general",
+        "parent": "",
+        "content": "Yes. One of our guiding principles in the spec repo is \"simplicity\". These little bumps in the road add up, and make things harder to reason about cryptoeconomically as well. This very issue was the source of a consensus failure on one of the testnets iirc - little things matter 🙂",
+        "created_at": "2021-01-06T09:18:22.505000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "But adding a bigger correlation penalty to make up for this one would be complicated, as the leaking penalty changes a lot if an attack managed to kick 33% of active validators offline for example. A slashing validator would leak quadratically for 36 days. So even to be on the same order of magnitude an extra logic would need to be added when applying the correlation penalty to check if we've been finalizing or not",
+        "created_at": "2021-01-06T09:25:26.341000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "benjaminion",
+        "category": "general",
+        "parent": "",
+        "content": "Here's the consensus issue - it would not have occurred if exited slashed validators were not still eligible for penalties. Complexity =\u003e danger https://github.com/prysmaticlabs/prysm/issues/5897",
+        "created_at": "2021-01-06T09:27:31.684000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "There's certainly an argument that slashed validators shouldn't be considered any part of the network regarding participation, not sure if there are reasons that has been looked at and discarded, though.",
+        "created_at": "2021-01-06T09:28:10.792000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "benjaminion",
+        "category": "general",
+        "parent": "",
+        "content": "No, I think all that needs to happen is that slashed validators that have been exited just don't participate in attestation rewards and penalties calculations. Exactly the same as any other exited validator. They can still receive the correlated slashing penalty before they become withdrawable, just as now.",
+        "created_at": "2021-01-06T09:29:52.585000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I understand, I'm just saying that by just increasing the penalty received at the 18 days mark we would not make up for the other penalties being reduced",
+        "created_at": "2021-01-06T09:32:08.219000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "benjaminion",
+        "category": "general",
+        "parent": "",
+        "content": "Ok. But the correlation penalty is designed to appropriately punish offenders (once it has been reset to its proper value): if a third of the total stake is slashed, offenders will lose all their stake.  This makes sense in the context of what we want to achieve and is easy to reason about. I don't understand why we are adding two further penalties on top of this (the initial one - except as the proposer reward, and the non-attesting penalty). They just serve to hurt innocents who mess up.",
+        "created_at": "2021-01-06T09:36:32.367000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I take the position that I don't know (nor anyone knows) what are the possible consequences of an attack. In particular, there may be a correlated attack by just 1% of validators that somehow manages to kick offline 33% of validators and paralyze finalization. In this situation the current rule will heavily penalize the offending validators, even though the correlation penalty won't be too much",
+        "created_at": "2021-01-06T09:40:48.345000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "benjaminion",
+        "category": "general",
+        "parent": "",
+        "content": "`s/heavily/lightly/` About 0.6 ETH per validator at current rates. Hardly any punishment at all for a chain-killing attack. But a big hit for a botched configuration by a solo staker.",
+        "created_at": "2021-01-06T09:43:46.971000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "No, if you are a solo staker getting slashed you will not leak quadratically,",
+        "created_at": "2021-01-06T09:44:38.942000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "It is much much less than if you are slashed in a period of non-finality",
+        "created_at": "2021-01-06T09:45:03.687000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "benjaminion",
+        "category": "general",
+        "parent": "",
+        "content": "Ah, ok. Non-finality does change things.",
+        "created_at": "2021-01-06T09:45:51.481000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e there may be a correlated attack by just 1% of validators that somehow manages to kick offline 33% of validators and paralyze finalization\n\nThat's a pretty big leap.  If such a situation existed in the protocol it should be considered a bug, and fixed accordingly.",
+        "created_at": "2021-01-06T09:47:45.853000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The point is that we just do not know, and the network is more vulnerable at periods of non finality when it's highly forked. So I'd advocate that the slashing penalties in these periods should be accordingly higher. The current leaking penalty achieves this",
+        "created_at": "2021-01-06T09:49:55.133000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "benjaminion",
+        "category": "general",
+        "parent": "",
+        "content": "It's basically this attack: https://ethresear.ch/t/a-balancing-attack-on-gasper-the-current-candidate-for-eth2s-beacon-chain/8079?u=benjaminion (which I classify into the \"consider a spherical cow\" range of feasibility).",
+        "created_at": "2021-01-06T09:49:56.608000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Wasn't that addressed by adding a random variance to the attestation time?",
+        "created_at": "2021-01-06T09:53:51.748000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "I'd say that was orthogonal to a slashing penalty, as the attack would take nodes offline but not slash them.\n\nI'm in favour of the quadratic leak applying at all times to all inactive validators.  It's another simplification, and also removes the dead wood faster (whilst penalising active validators with shorter offline periods less).",
+        "created_at": "2021-01-06T09:57:21.266000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Oh perhaps I'm misunderstanding, you mean even when finalizing apply a quadratic leaking penalty to inactive validators?",
+        "created_at": "2021-01-06T09:59:26.494000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "In that case, implementing this might not be trivial since you'll have a different computation per validator",
+        "created_at": "2021-01-06T10:00:14.663000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "And keep track of each one last attestations",
+        "created_at": "2021-01-06T10:00:30.940000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, that's the idea.  You'd only need to keep track of the single \"last epoch attested\" value per validator to be able to calculate it.  And you'd end up with the same calculation for all validators at all times, which would remove the \"finalizing/not finalizing\" mode that the specs have at current.\n\nThere are various options flying around in the eth2.0-specs issues list, may be worth a look if you are interested.",
+        "created_at": "2021-01-06T10:02:24.047000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah I can see how this may end up being actually simpler than the current logic",
+        "created_at": "2021-01-06T10:03:03.349000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "benjaminion",
+        "category": "general",
+        "parent": "",
+        "content": "No, this is unresolved at present. The random variance in attestation time was not pursued (rightly, imo). I heard another approach with modifications to fork choice is in the works, but I haven't been keeping up.",
+        "created_at": "2021-01-06T10:03:13.977000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Anyway validators need to keep track of last attestations because of fork choice",
+        "created_at": "2021-01-06T10:03:32.843000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Before we get too carried away simplifying things in the spec, we need to get to a point where we always sync from a snapshot state.  If we still have to support blocks all the way back to genesis (as is currently the case) any simplifications to the spec actually increase complexity because now we have to support both the old and new versions.",
+        "created_at": "2021-01-06T10:28:51.398000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "So a lot of these ideas which change the algorithm are good but probably need to wait until we can actually drop code that supports old forks. \n\nWhich is why I was thinking along the lines of keeping the algorithm unchanged but just change constants.",
+        "created_at": "2021-01-06T10:31:27.588000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "benjaminion",
+        "category": "general",
+        "parent": "",
+        "content": "You live in hope 😃 I've just been reviewing some of the proposed changes for HF1 (hard fork 1), and they go far beyond changes to constants...",
+        "created_at": "2021-01-06T10:45:48.256000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah I’ve read some of the proposals. There will be “code” changes required and that’s fine but no point in making those changes for simplification at this point. \n\nAnd also need to prioritise things well - we can tweak a lot of things around the edges but should be sceptical of anything that uses up our capacity and isn’t either solving pressing problems or moving us towards the merge in whatever form it winds up taking.",
+        "created_at": "2021-01-06T10:51:54.631000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I am however a big fan of everyone using snapshot sync and only having to store blocks in the weak subjectivity period (or there abouts). Then these simplifications will let us actually simplify the code.",
+        "created_at": "2021-01-06T10:53:43.056000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "There's certainly an argument that every change from now on should be put against some sort of \"is this an overall simplification/improvement _given where we are now_\" test.  As you say, simplification is great but multiple versions of something, even if the later one is simpler, is not.",
+        "created_at": "2021-01-06T10:55:10.713000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "benjaminion",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e no point in making those changes for simplification at this point. \nActually, I disagree. Any unnecessary complexity that we inherited through the spec's byzantine development process ought to be ruthlessly removed, and asap imo. We're going to be building on this thing for years, and should be in the habit of relentlessly weeding out technical debt for the long term, even if it's harder in the short. Granted, I'm not actually writing the code, but I bear a degree of responsibility, and there's always a bigger picture. Simplicity is one of our design goals, and ought to have teeth.",
+        "created_at": "2021-01-06T11:05:53.915000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Problem with that is that any change to the spec will be of the form \"if before epoch _x_ do this, otherwise do that\" so simplifications always come with additional complications.",
+        "created_at": "2021-01-06T11:21:10.194000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "benjaminion",
+        "category": "general",
+        "parent": "",
+        "content": "We need good ways to handle this anyway, since there are going to be code changes of one sort or another, so it's no extra burden.",
+        "created_at": "2021-01-06T11:24:33.962000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Not convinced it's \"no extra burden\", but this is the general discussion that everyone has around technical debt and the pros and cons of updating codebases and protocols.  After 30-odd years in the industry I'm still not where I am on the \"keep tidying\" / \"leave it alone\" spectrum.",
+        "created_at": "2021-01-06T11:29:58.560000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "benjaminion",
+        "category": "general",
+        "parent": "",
+        "content": "Totally 😂 My view is influenced by this not being some internal burden hidden inside a codebase that only the devs need to care about. Protocol-level complexity is an ongoing burden for understanding the protocol, reasoning about the protocol, proving things about the protocol, securing the protocol. It's just noise that builds up over time. Eth1 has accrued a bunch of this, largely because you are not allowed to break existing contracts (mostly) so always need to find cunning workarounds for issues. While we remain free of having to support a tower of things built on top of the beacon chain, I definitely favour doing the work to simplify where possible. Not that there are too many candidates for this that I see right now, but let's do the ones that are there.",
+        "created_at": "2021-01-06T11:53:18.204000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Can we add a 2 week delay between last attestation and exit?  I feel like there is significant value in the delay between starting to exit and actually exiting should be long enough that a it would be *possible* to initiate an emergency irregular state change hard fork that slashes an attacking set of validators.",
+        "created_at": "2021-01-06T14:54:00.751000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Talking to \u003c@291925846556540928\u003e over in \u003c#692078615269212180\u003e, it seems that currently a 1/3 attacker set could exit *entirely* in about 20 days, which means they could exit for half in 10 days, etc.",
+        "created_at": "2021-01-06T14:54:54.219000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "right now, it's the exit queue + MIN_WITHDRAWABILITY_DELAY -- ~27 hours",
+        "created_at": "2021-01-06T14:55:02.005000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "the params are tuned more for the 10M ETH validating target",
+        "created_at": "2021-01-06T14:55:25.243000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "they are reasonable today but get more so in the next ~year. in my estimate",
+        "created_at": "2021-01-06T14:55:54.019000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "2 weeks is already *really* pushing it for being able to deploy an emergency hard fork, but I feel like between the exit queue and a hard coded base delay of 2 weeks we would have enough time to get an emergency fork out the door.",
+        "created_at": "2021-01-06T14:56:22.643000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "but yes, this is the number you would want to target if you make the argument -- `MIN_VALIDATOR_WITHDRAWABILITY_DELAY`",
+        "created_at": "2021-01-06T14:56:28.467000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "yeah, I see that",
+        "created_at": "2021-01-06T14:56:46.297000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, I think that is the number I want to see be higher.",
+        "created_at": "2021-01-06T14:56:46.797000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "the main thing you mess with is UX around validator liquidity",
+        "created_at": "2021-01-06T14:57:06.594000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "(obviously)",
+        "created_at": "2021-01-06T14:57:15.357000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I want a strong guarantee that the community can almost entirely slash an attacker validator coalition.",
+        "created_at": "2021-01-06T14:57:17.343000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Right now validators are willing to have a multi-year delay.  😄",
+        "created_at": "2021-01-06T14:57:32.431000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I'm hopeful they'll be willing to accept a 2 week delay in the future.  😉",
+        "created_at": "2021-01-06T14:57:45.627000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "so set it to ~2 years. should be fine and safe 😅",
+        "created_at": "2021-01-06T14:57:49.666000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "I'd be more comfortable with a longer exit delay if we have the ability to transfer excess balance from one validator to another.  Otherwise the queue is going to be totally stuffed with validators trying to exit and re-enter as part of their rewards redistribution system.",
+        "created_at": "2021-01-06T15:06:06.354000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "The queue length will be the same in either case I think, just worse UX due to the extra 2 week delay.",
+        "created_at": "2021-01-06T15:20:37.107000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "People will need some way to retrieve their staking rewards.  If the only way to do that is to withdraw they will have to do that to some sort of schedule, withdrawing and re-entering over time.  Obviously I don't know the motives of all users, but we took 1 Ether of rewards as a sample point where users may want to go through this loop then some quick maths suggests that with 70,000 validators they would all want to exit (and hopefully re-enter) once every ~4 months.  That would create a baseline number of validators in the queue of 70,000 over  4 months, or 583 per day.  That's already sitting close to the 900 per day limit, and that gets worse as more validators come on line.\n\nAll the time they are exited but not withdrawable the Ether is not being used to secure the chain, so the period from starting an exit to being able to re-enter should not be any longer than necessary.  The amount of inactive Ether in a the world of churn as above would be a direct function of the number of the duration of this period.  If exiting was an infrequent, and commonly final, action then I'd be okay with it but if it becomes an operational action I'd be much more concerned.",
+        "created_at": "2021-01-06T15:33:11.742000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Would it suffice to have a mechanism to \"create a new validator from rewards of an array of other validators\"?",
+        "created_at": "2021-01-06T16:26:21.584000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Rather than enabling transfers between validators, which creates problems when we want to slash bad actors, specifically allowing for the creation of new validators from validator excess makes it so we always have 32 ETH we can slash for a bad actor.",
+        "created_at": "2021-01-06T16:27:11.707000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, that's pretty much what I suggested in https://ethresear.ch/t/simple-transfers-of-excess-balance/8263/1",
+        "created_at": "2021-01-06T16:29:45.191000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "howd2333",
+        "category": "general",
+        "parent": "",
+        "content": "Any PR on emergency hardfork please .",
+        "created_at": "2021-01-06T16:40:07.650000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pietjepuk",
+        "category": "general",
+        "parent": "",
+        "content": "Does a snapshot sync imply that e.g. transaction history (assuming that will become part of blocks) will eventually be lost?",
+        "created_at": "2021-01-06T19:03:14.395000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "And so began the age of block archaeology.",
+        "created_at": "2021-01-06T19:08:42.385000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pietjepuk",
+        "category": "general",
+        "parent": "",
+        "content": "\"I'm looking for block 16645, does anyone still have it?\"",
+        "created_at": "2021-01-06T19:09:14.827000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Yes historic blocks would not be kept by clients. Further I’m arguing that we want clients to be able to drop support for handling that blocks at all so even if you had the blocks the latest client versions wouldn’t be able them. \n\nIf we want to be able to simplify implementations then this is essential. Otherwise every change is additional complexity in terms of the implementation.",
+        "created_at": "2021-01-06T19:20:44.138000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pietjepuk",
+        "category": "general",
+        "parent": "",
+        "content": "Oh, I definitely agree with that. I just wanted to make sure I understood the consequences correctly. \"Losing\" transactions is rather iffy as far as legal systems are concerned, if not outright illegal (iirc minimum requirement of 7 years is common). So if blocks are not kept, it will probably be(come) necessary to archive the transactions of your account(s) and prove their correctness",
+        "created_at": "2021-01-06T19:34:09.985000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I got it \n```\nEpoch      Slot  Proposer    Att  Dep Slsh  Exits           Graffiti                    root\n520       16645    2312      11     0  0/0     0                                       0x9c23067e9\n```",
+        "created_at": "2021-01-06T20:16:16.761000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "🙂",
+        "created_at": "2021-01-06T20:16:41.370000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I think the key question is around why we're doing it.  Simplifying the protocol is good, but at the moment that means making implementations more complex so we have to weigh that up.  If the argument is that the protocol complexity is a higher risk of bugs causing chain split then simplifying it won't help because both versions still have to be maintained so the chance of chain split bugs actually increases.  Simplifications would have to be aimed at making it easier for people to understand, easier to monitor network behaviour/performance or easier to build stuff on top - anything outside of the actual client implementations basically.  And those benefits would have to outweigh the cost of additional complexity in clients (plus be higher priority than other things client teams could be working on).\n\nBut I think ultimately this is a strong argument for pushing hard towards not having to support old forks - then we can simplify the protocol and client implementations will wind up simpler as well.",
+        "created_at": "2021-01-06T20:57:10.178000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "benjaminion",
+        "category": "general",
+        "parent": "",
+        "content": "I wouldn't advocate doing a hardfork simply to adopt a simplification, if it weren't super-compelling. But since the plan appears to be to radically rework the rewards handling anyway, including a further simplification to rewards handling comes at almost zero additional short-term cost, and good long-term benefit. That's all.",
+        "created_at": "2021-01-06T21:02:09.182000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "True, once you have to support two versions anyway, you may as well make the second version as simple as possible.",
+        "created_at": "2021-01-06T21:49:12.947000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I do like the sound of a lot of the suggestions btw.  My ideal situation is to be able to make these kinds of tweaks and drop support for the old versions after a while.",
+        "created_at": "2021-01-06T21:50:21.577000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "What I'd love is a central place to read  about the proposed changes and in a timely fashion. I am not from this community and it seems to me that most people that are not following closely will have missed the PRs regarding accounting reforms. Even though that is something that will affect everyone staking currently, it is my belief that it is currently in the minds of either devs or very curious people. There are some topics that I believe the whole community should have a saying or at least have time to absorb the proposals and discuss about their implications. As an example I am very passionate against excess changes unless withdrawals have been implemented. And one of the reasons that keeps me lurking in the repos is that I get the feeling that changes get proposed and are being vetted by a very reduced set of people while a lot of the people that will be affected by these changes have not been consulted nor properly informed that these changes are being proposed.",
+        "created_at": "2021-01-06T22:17:50.417000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "The proposed changes are just that -- proposals. Spec writers have recently solicited engineering input from client teams and we welcome input from all.\nI expect we discuss this some on the eth2 call next week and figure out a good format to get it packaged for consumption (another \"informational\" EIP?)\n\nAs for the micro-incentives of stakers -- unlike bitcoin, the perfect incentivization scheme was not immaculately conceived and handed down from a higher power. These incentives today are not perfect and *iterative* work on them is certainly expected prior to a merge. This will not be done in a vacuum but will almost certainly be done. For example, the amount a proposer receives is simply incorrect (whoops.) and will be adjusted.\n\nNote that \"accounting reforms\"  in the current PR are almost entirely aimed at simplified state management and simplified accounting that more easily supports *extension* of incentives to include additional duties such as shard block proposal.\nCurrently in this reform, there is the proposer reward fix (needed imo), and an adjustment to the way timeliness is rewarded and considered. The latter is likely the most impactful for stakers today.\n\nAdditionally, there are a couple of security updates coming in the fork choice, but these are *not* hard forks and I don't suspect contentious. One such security fix in this fork choice would actually eliminate the issue of late block proposals at the epoch transition negatively affecting stakers if the majority in that slot thought the slot was empty (will write more about this soon) (instead would negatively affect the late proposer -- incentive for clients to speed this up!)",
+        "created_at": "2021-01-06T22:56:12.829000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": ".\nAs for technical debt, I've been considering this. If I were a client team, I would consider deprecating old code paths after 4 to 12 months after any forks prior to the merge and/or sharding. Due to PoS finality and the lack of user level functionality before the merge/sharding, historic block sync and archive nodes are not quite as critical as it might become in the future. This will also not create an increasingly high technical barrier for new clients to join the party prior to the merge.\n\nYes, there are some applications for which this isn't a great idea -- namely block explorers that want to show beacon chain since genesis. For such an application, they can stitch together prior releases and index the data and drop the old clients. Even for such an application, showing historic data prior to the merge might end up not providing immense value anyway.\n\n^ yes, you can debate the hell out of this. It is ultimately a client's decision. I just want to point out that it is a *reasonable* choice to make given the circumstances of the eth2 network in the next 12 to 18 months. Such a choice might make accounting reforms a bit easier to swallow and actually be welcomed",
+        "created_at": "2021-01-06T22:56:16.539000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "I think one of the underlying questions is should it be possible to sync the chain from genesis, for all time (or at least until it a situation forces this to be impossible).  On the one hand you have the practical point that as changes occur codebases can end up being very crufty and hard to maintain, on the other you have the philosophical question of if this is really a blockchain any more if it relies on social consensus checkpoints rather than building state block-by-block from genesis.\n\nFor me, I worry that having checkpoints would could make it too easy to tinker with the protocol and as a result lose some of the benefits for it being a known quantity.  But having an unmaintainable blockchain doesn't help anyone.\n\nGiven the lack of clarity, I think it would make sense to have at least one protocol-change hardfork (_i.e._ not just parameter changes) bed in before the discussion begins in earnest.  That would give everyone a better view of the feasibility of retaining the ability to sync from genesis, complete with protocol changes along the way, and inform the debate.",
+        "created_at": "2021-01-06T23:11:40.638000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "we have already made that trade-off though w/ the move to proof-of-stake (and before we get carried away you have very similar assumptions baked into pow client software)",
+        "created_at": "2021-01-06T23:14:37.575000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "once we are past the weak subjectivity window from \"now\", clients could really just drop the entire prefix of the chain",
+        "created_at": "2021-01-06T23:15:05.821000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "some other service/network can be responsible for serving chain history",
+        "created_at": "2021-01-06T23:15:20.974000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pietjepuk",
+        "category": "general",
+        "parent": "",
+        "content": "There's already social consensus currently for all PoW chains right? Like what the genesis block is and what client/hard fork to run...",
+        "created_at": "2021-01-06T23:17:27.619000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Sure, but the questions is more should clients be able to sync the chain (regardless of from where they obtain the blocks), or should they drop support for older versions of the protocol after some time.",
+        "created_at": "2021-01-06T23:17:42.878000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "We also have a lot of experience of the cost of preserving this compatibility from Eth1 clients and should learn from that.  Both in terms of what cost it brings but also how to minimise that cost.  Besu for example, with the benefit of being developed after most of the forks so knowing what was coming, has a really nice system for handling different behaviours without having to scatter if statements all through the code.\n\nRegardless of whether we drop support for older forks, clients will need to be able to handle multiple forks at once just to get through the fork itself, so I suspect they'll always support at least current and previous, just a question of whether they continue supporting forks prior to the previous one.",
+        "created_at": "2021-01-06T23:17:54.217000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Agreed. Actually resolving this is one of the key things I'm keen to do early on.  Once someone finds a way to leverage data in old blocks it gets baked in as a requirement for backwards compatibility and becomes very hard to remove.  Setting expectations now can save us a lot of trouble in the future.",
+        "created_at": "2021-01-06T23:19:36.672000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "consensus on genesis block and a lot of non-obvious trust on part of the client team(s) -- lots of protocols have many client impls",
+        "created_at": "2021-01-06T23:20:27.064000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "last time i looked there are even \"checkpoints\" in bitcoin core",
+        "created_at": "2021-01-06T23:20:44.087000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pietjepuk",
+        "category": "general",
+        "parent": "",
+        "content": "Yeh, so in that sense not much is changed on that front. But indeed the important part is the ability to rebuild from genesis (which would be the one different thing)",
+        "created_at": "2021-01-06T23:21:19.594000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "that question in particular imo is up to client teams",
+        "created_at": "2021-01-06T23:21:28.975000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "There is also a difference between checkpoints being _a_ way to sync and checkpoints being _the_ way to sync.",
+        "created_at": "2021-01-06T23:21:44.478000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "they could even have different modes of execution/distributions that do different things while requiring  different amounts of resources",
+        "created_at": "2021-01-06T23:21:57.842000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm... I would say that the specs should have a baseline that clients implement.",
+        "created_at": "2021-01-06T23:22:49.728000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "depends on which specs 😅",
+        "created_at": "2021-01-06T23:23:06.164000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "i'm just talking about consensus",
+        "created_at": "2021-01-06T23:23:14.045000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "in the sense of \"how do we manufacture a finalized state hash every so often\"",
+        "created_at": "2021-01-06T23:23:30.185000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "and once a given finalized hash falls outside the weak subjectivity window a \"consensus client\" doesn't really need to care about the chain then",
+        "created_at": "2021-01-06T23:24:03.684000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Perhaps a different way of putting the question is \"does history matter?\"  Of course, that leads to follow-on question such as \"to whom?\" and \"which bit of the history?\".",
+        "created_at": "2021-01-06T23:24:38.311000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pietjepuk",
+        "category": "general",
+        "parent": "",
+        "content": "Not syncing from genesis but being able to prove that (historical) blocks are part of the chain that lead from genesis to the current head would be some kind of middle ground. The blocks would just be blobs of binary data at that point though, except for those that build chain explorers supporting all old forks and other block chain archeologists",
+        "created_at": "2021-01-06T23:25:29.980000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pietjepuk",
+        "category": "general",
+        "parent": "",
+        "content": "(not sure if such a proof is actually possible though, probably not xD)",
+        "created_at": "2021-01-06T23:25:46.506000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "One thing to note is that currently if clients decided not to download historical blocks prior to the snapshot they sync from, they may be disconnected by other clients, which is part of the reason why Teku always downloads those blocks even though it doesn't need them.  The other part is that we want to be good network citizens and support clients that are syncing from genesis since that's still very common.  So it's at least in part a collective decision required, not just up to each client individually because of the network impacts involved.",
+        "created_at": "2021-01-06T23:25:51.079000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "we can do this today w/ the way the beacon state is constructed!",
+        "created_at": "2021-01-06T23:28:12.184000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Without all intermediate blocks?",
+        "created_at": "2021-01-06T23:28:39.312000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "check out the `historical_roots` in the `BeaconState`",
+        "created_at": "2021-01-06T23:28:42.493000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Is there anything written about the mentioned security reforms to fork choice re: slot zero delay?",
+        "created_at": "2021-01-06T23:29:00.170000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "wait which intermediate blocks?",
+        "created_at": "2021-01-06T23:29:01.595000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "there is an (unbounded) accumulator in the beacon state containing commitments to the block and state roots for every slot",
+        "created_at": "2021-01-06T23:30:42.068000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "so you just need a trusted beacon state root and then can verify proofs about any part of the chain history",
+        "created_at": "2021-01-06T23:31:05.399000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "In general, if you have a block b and an historical state s for the slot at b, can you reach the current state?",
+        "created_at": "2021-01-06T23:31:17.183000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "ah can't go forward",
+        "created_at": "2021-01-06T23:31:50.510000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "w/o something like the light client design",
+        "created_at": "2021-01-06T23:31:55.757000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Think https://github.com/ethereum/eth2.0-specs/issues/2174 is what you are looking for",
+        "created_at": "2021-01-06T23:34:33.702000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Currently yes, but in my ideal world not if b is more than a couple of hard forks old.  But that ideal world is based on keeping client code as simple as possible and not accruing permanent debt with every hard fork.  There may be good use cases to value being able to process old blocks over keeping client code as simple as possible - it just means that the cost of any changes will be higher because of the extra complexity it adds to client codebases.  That's the case with Eth1 today - it doesn't prevent making changes.",
+        "created_at": "2021-01-06T23:34:53.451000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Ah thanks I suppose is also the last comment on that issue that I'm interested about",
+        "created_at": "2021-01-06T23:37:34.537000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah that's the only reference so far, I believe.",
+        "created_at": "2021-01-06T23:37:54.127000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "(BTW your best bet is to subscribe to https://github.com/ethereum/eth2.0-specs if you want to keep up with what is going on.  Pretty much everything seems to surface there relatively early on as either an issue or PR)",
+        "created_at": "2021-01-06T23:38:33.144000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "So I just convinced Preston on testing waiting 6 seconds on pyrmont before submitting an attestation on slot 0. But if we're going to be waiting 12 seconds soon anyway, that may be a better solution :)",
+        "created_at": "2021-01-06T23:42:39.172000+00:00",
+        "attachments": null
+    }
+]

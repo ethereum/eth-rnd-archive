@@ -1,0 +1,210 @@
+[
+    {
+        "author": ".luozhu",
+        "category": "general",
+        "parent": "",
+        "content": "I wonder if the consensus team will focus on in-protocol PBS after Shanghai (withdrawals) and Cancun (4844)?",
+        "created_at": "2023-01-07T09:15:18.130000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "general",
+        "parent": "",
+        "content": "I'm currently trying to implement the proposed SSZ changes to txroot receipts root and withdrawal root and I need some help",
+        "created_at": "2023-01-07T12:04:00.754000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "general",
+        "parent": "",
+        "content": "Am I correct in assuming that a single transaction is encoded as rlp, the rlp is encoded as a SSZ byte array and the root of that is a leaf for the overall txroot?",
+        "created_at": "2023-01-07T12:05:34.682000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "general",
+        "parent": "",
+        "content": "(I'm trying to go by prysm's implementation atm)",
+        "created_at": "2023-01-07T12:06:11.014000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "general",
+        "parent": "",
+        "content": "https://github.com/prysmaticlabs/prysm/blob/cb02a6897dc6166c4816e45c8a0b6296466bb2f3/encoding/ssz/htrutils.go#L146",
+        "created_at": "2023-01-07T12:06:51.938000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I know the transaction is still RLP encoded.  I'll let others comment on where exactly the SSZification is introduced above that.",
+        "created_at": "2023-01-07T12:14:06.083000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Each transaction is just an opaque list of bytes. You chunkify that in 32 bytes chunks padding with zeroes the last one if necessary. You hash that list of chunks as if they were Merkle leaves of a tree with the given limit. After that you get a single chunk, you mix in the actual length of the array. You have now the single transaction root. You do this for every transaction. You get a list of chunks, the length is how many transactions in the block. You hash this list of chunks exactly as above, mixing in the length in the end.",
+        "created_at": "2023-01-07T12:18:59.086000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "general",
+        "parent": "",
+        "content": "Oh then I'm almost done :D",
+        "created_at": "2023-01-07T12:22:57.416000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "general",
+        "parent": "",
+        "content": "I don't have the length mixin yet, but the rest kinda works",
+        "created_at": "2023-01-07T12:23:15.641000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "general",
+        "parent": "",
+        "content": "Well works is a bit strong, it kinda looks okayish",
+        "created_at": "2023-01-07T12:24:09.550000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Testing hashing sucks, either it works or you get an unrelated 32 bytes",
+        "created_at": "2023-01-07T12:24:22.180000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "general",
+        "parent": "",
+        "content": "https://github.com/ethereum/go-ethereum/pull/26448/files Here's my draft PR, comments welcome. No idea if I actually compute the correct things. Will test tomorrow or on monday",
+        "created_at": "2023-01-07T12:36:51.577000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Drinking heavily today on a bday BBQ but if you want I can review your PR and if you're not using gohashtree peer pressure you into doing so 🤣",
+        "created_at": "2023-01-07T13:22:22.025000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "cc \u003c@881905303011086387\u003e",
+        "created_at": "2023-01-07T20:11:48.153000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "we've all been there",
+        "created_at": "2023-01-07T20:12:07.806000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "For transactions:\n\nOld RLP world:\n– `Transaction` is RLP encoded\n– `transactions` is `patriciaTrie(rlp(Index) =\u003e Transaction`\n– `transactions_root` is `transactions.root_hash`\n\nNew SSZ world:\n– Each individual `Transaction` still contains the RLP-serialized bytes. However, the byte list itself is represented as a variable-length SSZ `ByteList`.\n– `Transaction` is `ByteList[MAX_BYTES_PER_TRANSACTION]`, with `MAX_BYTES_PER_TRANSACTION := uint64(2**30)` (= 1,073,741,824)\n– `transactions` is `List[Transaction, MAX_TRANSACTIONS_PER_PAYLOAD]`, with `MAX_TRANSACTIONS_PER_PAYLOAD := uint64(2**20)` (= 1,048,576)\n– `transactions_root` is `hash_tree_root(transactions)`.\n\n-----------------------------------------------------\n\nFor `Withdrawal`:\n\nOld RLP world:\n– `Withdrawal` is RLP encoded\n– `withdrawals` is `patriciaTrie(rlp(Index) =\u003e Withdrawal`\n– `withdrawals_root` is `withdrawals.root_hash`\n\nNew SSZ world:\n– Contrary to the `Transaction` (where the RLP encoding is preserved), the individual `Withdrawal` need to be represented as SSZ objects:\n   ```python\n class Withdrawal(Container):\n    index: WithdrawalIndex\n    validator_index: ValidatorIndex\n    address: ExecutionAddress\n    amount: Gwei\n ```\n– `withdrawals` is `List[Withdrawal, MAX_WITHDRAWALS_PER_PAYLOAD]`, with `MAX_WITHDRAWALS_PER_PAYLOAD := uint64(2**4)` (= 16)\n– `withdrawals_root` is `hash_tree_root(withdrawals)`.",
+        "created_at": "2023-01-07T20:37:10.072000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "SSZ is a binary tree. Whether you use the tx SSZ byte array itself, or its root, leads to the same overall root hash for the list.",
+        "created_at": "2023-01-07T20:40:00.030000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "```\n                        H (`hash_tree_root(Transaction)`)\n                 ____---^---___\n                /              \\              \n         ___---^---___          L (actual byte length of `RLP(Transaction)`, see `mix_in_length` in SSZ specs)\n        /             \\\n     __.__           __.__\n    /     \\         /     \\\n   .       .       .       .\n  / \\     / \\     / \\     / \\\n .   .   .   .   .   .   .   .\n/ \\ / \\ / \\ / \\ / \\ / \\ / \\ / \\\n0 1 2 3 4 5 6 7 8 9 A B C D E F (contains `RLP(Transaction)` in chunks of 32 bytes, 0-padded to `MAX_BYTES_PER_TRANSACTION`)\n```",
+        "created_at": "2023-01-07T20:45:59.256000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "Note that the SSZ library internally optimizes the 0-padding, so you don't need to do that manually",
+        "created_at": "2023-01-07T20:46:25.360000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "so, just copying the RLP bytes into a `ByteList[MAX_BYTES_PER_TRANSACTION]` and then `hash_tree_root()` on it gives you the hash for an individual tx",
+        "created_at": "2023-01-07T20:47:20.744000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "```\n                        H (`hash_tree_root(transactions)`, this is the `transactions_root`)\n                 ____---^---___\n                /              \\              \n         ___---^---___          L (actual number of transactions, see `mix_in_length` in SSZ specs)\n        /             \\\n     __.__           __.__\n    /     \\         /     \\\n   .       .       .       .\n  / \\     / \\     / \\     / \\\n .   .   .   .   .   .   .   .\n/ \\ / \\ / \\ / \\ / \\ / \\ / \\ / \\\n0 1 2 3 4 5 6 7 8 9 A B C D E F (each node is a `hash_tree_root(Transaction)`, 0-padded to `MAX_TRANSACTIONS_PER_PAYLOAD`)\n```",
+        "created_at": "2023-01-07T20:48:43.433000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "The `List[Transaction, MAX_TRANSACTIONS_PER_PAYLOAD]` works in the same way, except here each node in the bottom is a `hash_tree_root(Transaction)`, and the L value is the number of transactions.",
+        "created_at": "2023-01-07T20:49:21.836000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "Whether you do `List[Transaction, MAX_TRANSACTIONS_PER_PAYLOAD]` or `List[hash_tree_root(Transaction), MAX_TRANSACTIONS_PER_PAYLOAD]` is the same result. You can either just let the SSZ library deal with the nested structure, or compute the individual transaction hashes first, then create the second list across them",
+        "created_at": "2023-01-07T20:50:13.823000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "For `Withdrawal`, each `Withdrawal` object will look like this:\n```\n   H (`hash_tree_root(Withdrawal)`)\n  / \\\n .   .\n/ \\ / \\\n0 1 2 3  (0 = `index`; 1 = `validator_index`; 2 = `address`; 3 = `amount`)\n```\nagain, each of the 4 bottom chunks is internally padded to 32-byte each. and then going up it is just `sha256(left || right)` until top is reached.\nSSZ library will take care of it 🙂",
+        "created_at": "2023-01-07T20:54:07.941000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "https://github.com/ethereum/consensus-specs/blob/dev/ssz/simple-serialize.md",
+        "created_at": "2023-01-07T20:54:30.039000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "And, `amount` in `Withdrawal` SSZ is in `Gwei`  (in RLP it is in `Wei`)",
+        "created_at": "2023-01-07T21:11:56.168000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,706 @@
+[
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I see, currently we have two ways of crafting test scenarios:\n- The hive CL Mocker, which involves testing only the EL clients using the Engine API from a simulated CL.\n- The testnets on hive/kurtosis, which involve both CLs and ELs, but this is more like starting the testnet and observe the results, and where inserting payloads in-between the CL/EL is not possible.\n\nI think this specific scenario requires a third option, which could be an EL mocker, where we could fabricate specific responses from the Eth RPC/Engine API to make deterministic reproducible scenarios like the one you describe involving the CL clients...",
+        "created_at": "2022-04-13T01:15:17.872000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "yeah it doesn't seem trivial, we can actually test these things in unit tests, but the reason I ask this is because I suspect the current status of both CL and EL clients here is murky to say the least. I know for certain that prysm will just not import anything unless we switch out of this branch in this situation. It will be good to know if EC can even return `INVALID` in this situation. From what I gathered above some clients just stop executing and ditch a block as soon as it's invalid. So I don't even see how is it that they can respond `INVALID` for a descendant. So I suspect this test will provide with lots of new failures to check around.",
+        "created_at": "2022-04-13T01:19:21.475000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "A good starting point could be creating the test case in the hive CL Mocker, I think with that we can at least be sure that all ELs respond in the exact same way...",
+        "created_at": "2022-04-13T01:24:25.202000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "yeah this is the most important point, but I think EL's already said they don't respond the same way, some are able to start validating the sidechain, others are not",
+        "created_at": "2022-04-13T01:25:48.397000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "what we do want to check is whether or not they are able to respond with `INVALID` on the first call to FCU into that branch",
+        "created_at": "2022-04-13T01:26:40.133000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think we shouldn't return INVALID in this case. It could be dangerous because CL could mark HeadBlockHash as INVALID. HeadBlockHash may be VALID, but only the timestamp from payload attributes is wrong. We're returning an RPC error.",
+        "created_at": "2022-04-13T06:30:09.033000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think geth is \"correct\" in this case, we only check the payloadAttributes after applying the fork choice and imo the chain should continue even if we get slightly wrong payloadAttributes. \nProducing a block with invalid attributes is wrong though (as it will be rejected during import by all other nodes)",
+        "created_at": "2022-04-13T06:36:01.536000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "On the other hand, you return an error not VALID/INVALID, so it is not standard fcU. I am not sure which behavior is correct. It would be good to have something in spec, I think",
+        "created_at": "2022-04-13T06:46:00.081000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thanks a lot for this investigation!",
+        "created_at": "2022-04-13T07:46:48.808000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Based on these findings I am pretty confident that we should specify this part. There are two options:\n**Option 1**\n0) Check `headBlock` is known and there is no missing data, if not respond with `SYNCING` \n1) Check `headBlock` is `VALID`, if not respond with `INVALID`\n2) Apply `forkchoiceState`\n3) Check `payloadAttributes`, if invalid respond with error: `code: Invalid payload attributes`\n4) Start payload build process and respond with `VALID`\n\n**Option 2**\n0) Check `headBlock` is known and there is no missing data, if not respond with `SYNCING` \n1) Check `payloadAttributes` (requires a lookup to database to get a timestamp of yet to be applied `headBlock`), if invalid respond with error: `code: Invalid payload attributes`\n2) Check `headBlock` is `VALID`, if not respond with `INVALID`\n3) Start payload build process and respond with `VALID`\n\nI don't see a big difference between the two. There seem to be a small value in applying forkchoice state, but if any of these cases causes much more engineering efforts than the other, then I'd prefer the one with the lower engineering cost",
+        "created_at": "2022-04-13T07:55:42.300000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Any preference whether JWT secret should be prepended with 0x or not? At the moment Erigon prepends it with 0x, but we could stop doing so.",
+        "created_at": "2022-04-13T09:17:35.832000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "There is an issue on this topic https://github.com/ethereum/execution-apis/issues/208",
+        "created_at": "2022-04-13T09:33:08.915000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think clients can do `jwt = SHA256(password)` and let the user be happy",
+        "created_at": "2022-04-13T09:38:38.716000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, but in this case the password may be `123`. The client may check the length of the password, and check it against dictionary and do other common password checks.",
+        "created_at": "2022-04-13T09:41:47.813000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "that seems like overkill, shouldn't the job of having a strong jwt secret be up to the user ?",
+        "created_at": "2022-04-13T09:43:43.004000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "All clients already deal with passwords, adding one more would not be a problem",
+        "created_at": "2022-04-13T09:43:54.879000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I also tend to agree that in general baby sitting our users is even against the ethos of Ethereum",
+        "created_at": "2022-04-13T09:44:46.887000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I would rather print a warning than force a stronger password",
+        "created_at": "2022-04-13T09:45:18.926000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "But this is in a different place, all clients deal with passwords at the validator client's end . While something like this would have to be enforced if we use the engine api",
+        "created_at": "2022-04-13T09:45:48.846000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "so far, the JWT is only specified in terms of the hex aspect",
+        "created_at": "2022-04-13T09:45:56.947000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "the obvious next step people would ask for in this scenario is standardizing the password hash",
+        "created_at": "2022-04-13T09:46:12.259000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "this is a trojan horse",
+        "created_at": "2022-04-13T09:46:35.519000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "That's a fair point, but if the 32hex string is a hard requirement I think it's fair game to hash a password to avoid bigger UX problems",
+        "created_at": "2022-04-13T09:47:39.340000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "so unless one wants to go full-bore, standardize JWT-as-generated-password-in-engine-API, it's important for the spec to say precisely nothing on this point",
+        "created_at": "2022-04-13T09:47:46.834000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "and/or specify explicitly that the JWT token is just a byte sequence",
+        "created_at": "2022-04-13T09:48:14.807000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "what individual clients do is up to them",
+        "created_at": "2022-04-13T09:48:29.374000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I have updated `latestValidHash` analysis with my recent thoughts on a couple of attack vectors on nodes that doesn't support `latestValidHash`, https://hackmd.io/GDc0maGsQeKfP8o2C7L52w?view#Do-not-support-during-SYNCING\n\nBased on the analysis, I think it's important to have this supported by all EL clients as it is currently stated in the spec.",
+        "created_at": "2022-04-13T11:01:10.789000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "A related question - how EL clients deal with syncing a day worth of chain in such a scenario currently? Does it simply apply all the blocks one by one on the 1-day-old state or does it automatically switch to fast-sync or something like that in order to get faster to the head?",
+        "created_at": "2022-04-13T15:57:49.180000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "We apply the blocks one by one (in batches)",
+        "created_at": "2022-04-13T15:58:34.511000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "would CL send them 1 by 1 or just send the head?",
+        "created_at": "2022-04-13T16:12:52.291000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "if jump to head then Nethermind has a config value to check how many blocks behind it is, if we should switch to FastSync, if 1 by 1 then we will apply them 1 by 1",
+        "created_at": "2022-04-13T16:14:18.018000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think CL will send it 1 by 1",
+        "created_at": "2022-04-13T17:13:20.090000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Well, CL could optimistically sync to the head without validating the payload and only then trigger EL. But then the question is how long the chain need to be out-of-sync so that fast-sync is faster than 1-by-1?",
+        "created_at": "2022-04-13T18:21:36.448000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Could you tell very roughly what is that config value (how many blocks) on the mainnet so that it’s faster to sync via fast-sync compared to 1-by-1?",
+        "created_at": "2022-04-13T18:23:46.823000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "Nimbus can do this -- find some near-head blocks, give them to the EL. It doesn't use them itself when it does so, but it helps the EL sync efficiently",
+        "created_at": "2022-04-13T18:24:53.842000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Does it try to do it always? I mean whenever it’s out-of-sync?",
+        "created_at": "2022-04-13T18:27:16.404000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "It respects the fork choice poisoning 128 block (or setting, etc) buffer, of course",
+        "created_at": "2022-04-13T18:27:38.661000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "by default yes, if it's more than a few epochs back, and the head is within the bellatrix fork and with a non-empty payload (i.e. post merge)",
+        "created_at": "2022-04-13T18:28:30.117000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "I've considered making it less eager to do this, because it's kind of a waste at that point -- a few epochs just doesn't take long to sync",
+        "created_at": "2022-04-13T18:29:02.200000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "I’m just wondering does it really help EL.",
+        "created_at": "2022-04-13T18:29:11.759000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Exactly, I think a few epochs is easy to sync 1-by-1",
+        "created_at": "2022-04-13T18:29:41.466000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "But the case when client is up after a day down is more interesting",
+        "created_at": "2022-04-13T18:30:19.718000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "It does, yeah. Needs fcU too, but a few epochs or so into doing this during a from-genesis sync, for example, geth shows its already-saw-payload messages consistently",
+        "created_at": "2022-04-13T18:30:22.271000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "If you mean, does it help if it just falls a little behind, probably not practically. The plan currently is to have that not kick in after the initial sync, for resource consumption (RAM, peers, etc) reasons, and just let it catch up 1-by-1 at that point",
+        "created_at": "2022-04-13T18:35:50.482000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "if it goes offline for a little while",
+        "created_at": "2022-04-13T18:36:00.611000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "By initial sync do you mean initial sync on every startup?",
+        "created_at": "2022-04-13T18:38:29.653000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "probably, but because of the fork choice poisoning slot offset, it will just not kick in if it's down for 10 or 20 minutes",
+        "created_at": "2022-04-13T18:39:24.862000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "a normal restart, etc",
+        "created_at": "2022-04-13T18:39:30.979000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "it currently doesn't really bother with it even for 256 slots by default, so ~an hour",
+        "created_at": "2022-04-13T18:40:59.433000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "How exactly does it get those near-head blocks? Are they optimistically imported and verified?",
+        "created_at": "2022-04-13T18:42:44.343000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "they're never imported, and verified in a cursory way. this is the main tradeoff",
+        "created_at": "2022-04-13T18:43:04.972000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "so, upside: there's nothing they can do to negatively affect the core CL state",
+        "created_at": "2022-04-13T18:43:22.016000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "downside: there's a higher likelihood of the EL seeing garbage blocks",
+        "created_at": "2022-04-13T18:43:44.742000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "(but that was possible anyway)",
+        "created_at": "2022-04-13T18:43:52.139000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "But they can trigger EL into syncing some garbage state",
+        "created_at": "2022-04-13T18:44:00.219000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "sure, but it's self-recovering even if that happens",
+        "created_at": "2022-04-13T18:44:22.894000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "the worst case is the EL just keeps getting garbage states, wastes resources syncing, but nothing could happen anyway until the CL was synced (can't attest/propose/participate in sync commitee/etc, optimistically, per spec), so it's kind of an inefficient wheel-spinning, but as the CL catches up, the blocks become not-garbage",
+        "created_at": "2022-04-13T18:45:29.694000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "It also never marks anything \"finalized\" unless it's fully verified by the CL (payload included)",
+        "created_at": "2022-04-13T18:46:22.025000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "there are some approaches to increase amount of verification, but those aren't yet implemented",
+        "created_at": "2022-04-13T18:48:16.037000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "The fork choice poisoning problem seems to be relevant only around the transition? Or do I miss something?",
+        "created_at": "2022-04-13T18:50:36.768000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "sure, that particular issue",
+        "created_at": "2022-04-13T18:50:45.684000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "but there are a lot of other invalidation edge cases",
+        "created_at": "2022-04-13T18:51:00.859000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "I see. Well, 1-by-1 doesn’t look that bad overall 🙂",
+        "created_at": "2022-04-13T18:52:12.304000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "I mean for catching up the chain that is not crazy out-of-sync",
+        "created_at": "2022-04-13T18:54:51.455000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "yeah, agree",
+        "created_at": "2022-04-13T18:55:46.308000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "It took the lh-geth mainnet node 10 hours to sync 1 day worth of blocks and this is with blocks in batches",
+        "created_at": "2022-04-13T18:57:50.300000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Well see how long the 1-by-1 import will take once I've hit post-merge blocks",
+        "created_at": "2022-04-13T18:58:25.416000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "isn't this in general why people are looking to checkpoint sync, weak subjectivity sync, light client sync, etc?",
+        "created_at": "2022-04-13T19:00:57.532000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "The node is only 5 days behind",
+        "created_at": "2022-04-13T19:01:18.707000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "that sync-from-genesis will become infeasible at some point except as some kind of trust/bootstrap exercise, regardless how microoptimized it is",
+        "created_at": "2022-04-13T19:01:19.355000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Where can I read about this “block in batches”?",
+        "created_at": "2022-04-13T19:02:05.181000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Well its called import in chain segments, which allows us to be a bit faster than starting the import sequence one by one (especially with the rtt between EL and CL)",
+        "created_at": "2022-04-13T19:03:36.483000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pawandhananjay",
+        "category": "Testing",
+        "parent": "",
+        "content": "this seems excessively slow, curious what machine this was running on",
+        "created_at": "2022-04-13T19:03:51.150000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "16 core 32 GB machine\nIntel(R) Xeon(R) Platinum 8280 CPU @ 2.70GHz",
+        "created_at": "2022-04-13T19:05:04.673000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pawandhananjay",
+        "category": "Testing",
+        "parent": "",
+        "content": "can i check the node? it definitely shouldn't be this slow",
+        "created_at": "2022-04-13T19:05:48.097000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Its geth-lh-3",
+        "created_at": "2022-04-13T19:06:07.566000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "We're not even post merge with the blocks. It is that slow, we can execute ~100 Mgas/sec with 30Mgas blocks it is incredibly slow to catch up",
+        "created_at": "2022-04-13T19:06:55.452000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "If you do the same check with prysm I'd be interested in knowing if it's faster with --dev flag on.",
+        "created_at": "2022-04-13T19:10:30.179000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Will try tomorrow",
+        "created_at": "2022-04-13T19:10:54.302000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ah sorry that node is also running the explorer which uses a lot of I/O which makes all of this a pain",
+        "created_at": "2022-04-13T19:16:13.689000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "I will do some real benchmarks tomorrow",
+        "created_at": "2022-04-13T19:16:39.741000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "In our case, our algorithms somewhat is simplified if LVH is guaranteed to be an ancestor. We were hesitant to assume this since I had understood that this would be a complication in the EL side. But now that all these scenarios have been laid out, would it be safe to assume that the EL will follow the spec and assume that LVH is both present and it's an ancestor?",
+        "created_at": "2022-04-13T19:24:44.391000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "For Nethermind we by default set this to 10k blocks in front of current best state",
+        "created_at": "2022-04-13T21:33:58.835000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "And I would consider about 100k blocks to be the max sensible limit here",
+        "created_at": "2022-04-13T21:35:57.354000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "10k blocks is 1.5 days",
+        "created_at": "2022-04-13T21:38:48.913000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "But there might be overhead now with json RPC calls",
+        "created_at": "2022-04-13T21:39:33.283000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "And this might also be better for state syncing when we have snap sync",
+        "created_at": "2022-04-13T21:39:58.819000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "Checking latest blocks Nethermind does around ~90Mgas/sec now, but we don't have snapshots or anything similar yet, we expect it to increase performance, we also have an interesting project for the future but not enough bandwith to pursue with it yet: https://github.com/NethermindEth/nethermind/pull/3888",
+        "created_at": "2022-04-13T23:25:39.002000+00:00",
+        "attachments": null
+    }
+]

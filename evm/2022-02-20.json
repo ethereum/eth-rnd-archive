@@ -1,0 +1,250 @@
+[
+    {
+        "author": "controlcthenv",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If this is the wrong place for this let me know, but I am working on a `MUL` operation that is EVM compatible however the VM that needs to achieve compatibility is zk based, so it has some key differences. One of them being that it is a 16 visible stack 2 billion tall (so it can go 2 billion deep but only the top 16 elements are accessible), with each stack element being 32 bits wide\n\nSo as I work for compatibility I checked out the Go Library for uint256 bit numbers to get an idea of how to make 256 big numbers from lower denominations, so right now handling 256 bit numbers as 8 stack elements in big endian order\n\nhttps://github.com/holiman/uint256/blob/master/uint256.go#L349 Getting hung up on this part though\n```go\nfunc (z *Int) Mul(x, y *Int) *Int {\n    var (\n        res              Int\n        carry            uint64\n        res1, res2, res3 uint64\n    )\n\n    carry, res[0] = bits.Mul64(x[0], y[0])\n    carry, res1 = umulHop(carry, x[1], y[0])\n    carry, res2 = umulHop(carry, x[2], y[0])\n    res3 = x[3]*y[0] + carry\n\n    carry, res[1] = umulHop(res1, x[0], y[1])\n    carry, res2 = umulStep(res2, x[1], y[1], carry)\n    res3 = res3 + x[2]*y[1] + carry\n\n    carry, res[2] = umulHop(res2, x[0], y[2])\n    res3 = res3 + x[1]*y[2] + carry\n\n    res[3] = res3 + x[0]*y[3]\n\n    return z.Set(\u0026res)\n}\n```\nI've got a working umulHop function and umulStep, but each segment of this function is different and I am having trouble figuring out which part I need to replicate to account for my 256 bit numbers being 8 slots wide instead of 4",
+        "created_at": "2022-02-20T17:59:11.755000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "controlcthenv",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I get the carry to handle any potential overflow, and multiple x[n] by y[0] through y[3], but I am confused on how results are being combined into the result",
+        "created_at": "2022-02-20T18:00:47.563000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "controlcthenv",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Knowing what this looks like in Go would be hugely helpful, or even just understanding how results are handled, I know how to work with stack management to fix the rest for compatbility",
+        "created_at": "2022-02-20T18:01:53.763000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Cc \u003c@425274498732916736\u003e ^",
+        "created_at": "2022-02-20T20:24:02.082000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The 256x256-\u003e256 multiplication here is nothing special except we were probably fighting with Go compiler to inline the computations in a better way. This implements \"school book\" multiplication. If you need help with algo I can point you to C++ implementation or write simpler one in Go. If I should understand the ZK part of your question let me know.",
+        "created_at": "2022-02-20T21:30:23.189000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "controlcthenv",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Zk part is just context of why I am not just doing x instead. \n\nA simpler Go example would be helpful as it provides a baseline I can then improve upon (as more compiler tricks are implemented etc). You mention schoolbook multiplication, so I assume you mean all its really doing is for something like 15 * 21 would be summing (5 * 20) (5 * 1) (1* 20) (1*1)?",
+        "created_at": "2022-02-20T21:35:10.762000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "ok, I understand your \"ZK layout\". The Go implementation of uint256 uses arrays of uint64 in little-endian order (little-endian order is more natural for multiprecision integers). You can implement the same algorithm for uint32 integers.",
+        "created_at": "2022-02-20T21:35:18.734000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "controlcthenv",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ok, so starting from little endian then all the algorithm really needs to do is if you have 2 numbers x[0..7] and y[0..7] you just need to find the sum of x[n] * [y0..7] ?",
+        "created_at": "2022-02-20T21:37:28.476000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "controlcthenv",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Or is that an oversimplication?",
+        "created_at": "2022-02-20T21:37:41.083000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes, this is it (mostly 2 for loops). https://github.com/chfast/intx/blob/master/include/intx/intx.hpp#L1465-L1483",
+        "created_at": "2022-02-20T21:38:03.486000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "but you need the basic operation of 32x32 -\u003e 64. Does your ZK env have it?",
+        "created_at": "2022-02-20T21:39:05.051000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "controlcthenv",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes .. atleast partially it has `u32mul.full` which returns c and d being\n```\nc←(a⋅b)mod2^32\nd←⌊(a⋅b)/2^32⌋\n```",
+        "created_at": "2022-02-20T21:40:51.237000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "controlcthenv",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "C++ is actually pretty helpful given I am writing in asm atm",
+        "created_at": "2022-02-20T21:42:35.191000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That's great. This is exactly what it needed. In the example this is `umul()` operation which returns 128-bit value: `t[0]` is the lower part (your `c`), the `t[1]` is the higher part (your `d`).",
+        "created_at": "2022-02-20T21:43:08.005000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "1. `num_words` is 8 in your case, and types are `uint32` 🙂\n2. One optimization is that you don't always do 8 loop count because you don't need full 512-bit product. So you compute `x[0..7] * y[0]; x[0..6] * y[1]; ... x[0..0] * y[7]`.\n3. Second optimization is not visible (because C++ compiler is doing this for us): in the very first iteration the `p[i + j]` is always 0 so you don't need to load and add it. You can implement this first iteration separately and the start double loop from `i = 1`.",
+        "created_at": "2022-02-20T21:48:14.230000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "4. You can use `u32mul` \"not-full\" in the last step of the internal loop if this matters for you ZK context.",
+        "created_at": "2022-02-20T21:50:48.511000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "controlcthenv",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Wow, thank you very much. That is definitely very helpful as optimization is something I am trying to ensure. One last thing on the result collection\n```\np[num_words - 1] += x[num_words - j - 1] * y[j] + k;\n```\nSo essentially here is this the carry being added to the result of the next operation?",
+        "created_at": "2022-02-20T21:56:52.461000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "No, this is the 4. optimization. The inner loop runs up to index 6. And the index 7 is done with this line.",
+        "created_at": "2022-02-20T21:58:49.420000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "controlcthenv",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Oh ok, that makes a lot more sense",
+        "created_at": "2022-02-20T21:59:33.412000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "There is also important detail in `umul(x[i], y[j]) + p[i + j] + k`. All is done with 128-bit precision. You will need to handle addition carry bits in your case.",
+        "created_at": "2022-02-20T22:00:28.042000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "controlcthenv",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So I will have to modify umul as in addition to just increasing the number of words (ie iterations)?",
+        "created_at": "2022-02-20T22:01:31.751000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Not exactly.\n```\n    d, c = umul(x[i], y[j]);\n    p[i + j] += c;\n    carry1 = p[i + j] \u003c c;\n    p[i + j] += k;\n    carry2 = p[i + j] \u003c k;\n    k = d + carry1 + carry2;\n```",
+        "created_at": "2022-02-20T22:05:44.396000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "controlcthenv",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "And that would be replacing \n```\n const auto t = umul(x[i], y[j]) + p[i + j] + k;\n p[i + j] = t[0];\n k = t[1];\n``` \ncorrect?",
+        "created_at": "2022-02-20T22:07:41.650000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes",
+        "created_at": "2022-02-20T22:07:53.872000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "controlcthenv",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "That clears things up a lot for me, never knew something as simple as multiplication could be so difficult 😆 . Thanks so much for your help!",
+        "created_at": "2022-02-20T22:08:38.338000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The longer version only uses 32-bit addition while the short one uses 64-bit addition (not obviously because types are not visible)",
+        "created_at": "2022-02-20T22:09:23.714000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Oh boy, I can't wait when you discover division.",
+        "created_at": "2022-02-20T22:11:30.046000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "controlcthenv",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Typing really is the hardest part here, as the VM I am working in only has 16 stack visibility. So I am going to have to use some creative management to deal with all the carry values",
+        "created_at": "2022-02-20T22:11:31.140000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "controlcthenv",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I saw that part of the uint256 library and decided it'd be best to start with Multiplication",
+        "created_at": "2022-02-20T22:12:24.402000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hey does the EVM stack allow over/underflow?",
+        "created_at": "2022-02-20T23:49:43.365000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "No",
+        "created_at": "2022-02-20T23:55:05.558000+00:00",
+        "attachments": null
+    }
+]

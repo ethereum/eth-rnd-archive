@@ -1,0 +1,330 @@
+[
+    {
+        "author": "siladu",
+        "category": "Testing",
+        "parent": "",
+        "content": "We ended up fixing this on the besu side: https://github.com/hyperledger/besu/pull/5321\nCurrently trying to decide the potential impact and considering whether to do a last minute release.\n\nI am pretty sure nimbus-**nethermind** combinations will suffer the same problem resulting in missed block proposals.\nGeth is ok because it includes withdrawals in the payloadId calculation.\nNot sure about erigon.\n\nDo any other CLs sometimes replay engine_forkchoiceUpdatedV2 with identical payload parameters _except_ for withdrawals?",
+        "created_at": "2023-04-11T08:25:59.943000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "Lighthouse won't do this, the expected withdrawals should be uniquely identified by `(timestamp, prevRandao)` because that fixes the slot of the block being proposed and the parent to build upon",
+        "created_at": "2023-04-11T08:36:20.762000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@892053833121923094\u003e we should have a test for that, build two payloads with identical params, different withdrawals and verify that the payload ids differ",
+        "created_at": "2023-04-11T08:44:29.455000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "siladu",
+        "category": "Testing",
+        "parent": "",
+        "content": "Definitely. Even if CLs shouldn’t do this, it seems reasonable behaviour for the payloadId. I couldn’t see anything about this in the engine api spec, maybe could clarify there too?\n\nIn this case, it was just the withdrawal amounts that differed by a small amount (I guess they had increased rewards within the seconds between FCUs)",
+        "created_at": "2023-04-11T08:51:11.204000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Cc \u003c@425572898787426305\u003e",
+        "created_at": "2023-04-11T08:52:26.919000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "siladu",
+        "category": "Testing",
+        "parent": "",
+        "content": "That’s interesting, so the withdrawal amounts are fixed/cached until getPayload is returned?",
+        "created_at": "2023-04-11T08:52:59.876000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "siladu",
+        "category": "Testing",
+        "parent": "",
+        "content": "^ Cc \u003c@654267572107083777\u003e",
+        "created_at": "2023-04-11T08:53:34.018000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah, we advance the state to the slot of the proposal so that the withdrawal amounts are fixed and can be cached",
+        "created_at": "2023-04-11T08:54:47.593000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "siladu",
+        "category": "Testing",
+        "parent": "",
+        "content": "Is this specced or could differ for each client?",
+        "created_at": "2023-04-11T08:55:18.879000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "This cannot happen afaik, withrawals are deterministic to the beacon state",
+        "created_at": "2023-04-11T08:56:31.037000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah it's implied by the spec and the definition of `get_expected_withdrawals`. If a CL client doesn't advance the state to compute the withdrawals then they're computing invalid withdrawals that can't ever be included in a block",
+        "created_at": "2023-04-11T08:58:08.074000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "siladu",
+        "category": "Testing",
+        "parent": "",
+        "content": "Credit to \u003c@741651225576996935\u003e for spotting this on our canary node btw",
+        "created_at": "2023-04-11T09:01:41.911000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah, I suspect there is an issue here in Nimbus. It also advances to the proposal slot, so something else is presumably happening",
+        "created_at": "2023-04-11T10:01:01.914000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@341574016160497665\u003e \u003c@654267572107083777\u003e do you guys have the withdrawals when this happened?",
+        "created_at": "2023-04-11T10:49:39.695000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah, see \u003c#1093963476948496455\u003ethread for some examples",
+        "created_at": "2023-04-11T10:50:18.607000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ah thanks, those look like they are all slightly reduced balances, this would happen on a skip slot if they were all in a sync committee",
+        "created_at": "2023-04-11T10:55:18.611000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, all same validator indices, for example",
+        "created_at": "2023-04-11T10:56:03.196000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes, so the only difference is in ammounts and they are all slightly reduced by (the same?) amount, so this would point to a sync committee handling of sorts?",
+        "created_at": "2023-04-11T10:56:52.389000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "is this a devnet?",
+        "created_at": "2023-04-11T10:56:59.293000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "sepolia I believe -- \u003c@341574016160497665\u003e could verify",
+        "created_at": "2023-04-11T10:57:12.056000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "hmm, nvm, those indices are very high, perhaps it's at an epoch transition",
+        "created_at": "2023-04-11T10:57:50.435000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "yeah that's it",
+        "created_at": "2023-04-11T10:58:17.577000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "the example posted first is precisely at an epoch transition, so this may be a skipped slot right before the epoch transition",
+        "created_at": "2023-04-11T10:58:43.537000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "it can't be sepolia though",
+        "created_at": "2023-04-11T10:59:33.953000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "because of the slot numbers",
+        "created_at": "2023-04-11T10:59:38.531000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "alright the Besu people have done most of the investigation so far on this -- I added some logging and they found the rest",
+        "created_at": "2023-04-11T11:00:13.681000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "so I'm not familiar with all the details of where",
+        "created_at": "2023-04-11T11:00:27.955000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm guessing goerli, cause the slot was missed by Besu",
+        "created_at": "2023-04-11T11:00:31.163000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "can anyone with a goerli node post the result for `curl localhost:port/eth/v1/states/5374496/validators/351739`",
+        "created_at": "2023-04-11T11:02:06.441000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "and the same with `5374495` instead?",
+        "created_at": "2023-04-11T11:02:23.807000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "siladu",
+        "category": "Testing",
+        "parent": "",
+        "content": "It was goerli yes",
+        "created_at": "2023-04-11T11:03:29.475000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "The spec is agnostic to the algorithm EL uses to obtain `payloadId`, I would not make the algorithm into the spec unless we understand that this is absolutely necessary and sure that a certain algorithm works for all potential cases.\n\nWe can add a constraint that returned `payloadId` should uniquely reflect values of *all* payload attribute fields if that would help to avoid such issues",
+        "created_at": "2023-04-11T11:08:10.853000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "siladu",
+        "category": "Testing",
+        "parent": "",
+        "content": "The geth commit for this fix \nhttps://github.com/ethereum/go-ethereum/commit/2f73f4f028e4bce5e804583d8ccd0cf5ecaf27be\n\nmentions\n\u003e According to the spec the payloadID needs to be random or dependent on all arguments, to prevent two payloads from clashing\n\nBut I couldn’t find that in the spec",
+        "created_at": "2023-04-11T11:13:11.316000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "In Nimbus, what I think is happening is that when Nimbus looks ahead to fcU for the next slot and calls `get_expected_withdrawals` (https://github.com/status-im/nimbus-eth2/blob/6c0d756d54998cf30edd1678cbf121c8052a378a/beacon_chain/consensus_object_pools/consensus_manager.nim#L334) it's doing so at the head state known at the time, which is usually, but not always, the proposal state for the next slot. As the comment notes:\n```nim\n  # Approximately lines up with validator_duties version. Used optimistically/\n  # opportunistically, so mismatches are fine if not too frequent.\n```\nMeanwhile, if when it tries to actually propose a block, it notices things have changed, it uses the rigorously correct proposal state, exactly as \u003c@602753420033785856\u003e describes (https://github.com/status-im/nimbus-eth2/blob/6c0d756d54998cf30edd1678cbf121c8052a378a/beacon_chain/validators/validator_duties.nim#L332).",
+        "created_at": "2023-04-11T11:18:13.008000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "So Nimbus currently relies on getting different payload IDs when these two mismatch.",
+        "created_at": "2023-04-11T11:18:39.455000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "One obvious example of when it will mismatch is a head reorg later in the slot. In that case, every EL I think already assigns a different payload ID, but a skipped slot under the right circumstances results in slightly different withdrawal calculations but the same head.",
+        "created_at": "2023-04-11T11:21:12.765000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "But this doesn't really explain Nimbus behavior: if the remaining of the payloadAttributes are correct, that means that RANDAO and the head block is the right one, you should get the exact same withdrawals",
+        "created_at": "2023-04-11T11:22:01.478000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "if you don't it means that one of the beacon states you are using does not match the remaining of the attributes, and in particular it can't have the right last blockroot",
+        "created_at": "2023-04-11T11:22:35.568000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "Evidently it matched everything Besu constructed a payload id from",
+        "created_at": "2023-04-11T11:23:25.006000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I've opened a PR, please, review https://github.com/ethereum/execution-apis/pull/401",
+        "created_at": "2023-04-11T11:47:22.475000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I am going to work on Engine API spec for Deneb, and before that I would like to engage EL and CL client devs attention to https://github.com/ethereum/execution-apis/issues/376. If more ppl support it then it makes sense to make it into the spec, otherwise, I would probably leave everything as is for simplicity.\n\nShortly: when introducing `ExecutionPayloadV3` is the only change to `newPayload`, should we spec out `newPayloadV3` or simply modify `newPayloadV2`.",
+        "created_at": "2023-04-11T11:53:23.455000+00:00",
+        "attachments": null
+    }
+]

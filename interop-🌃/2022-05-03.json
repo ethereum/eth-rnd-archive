@@ -1,0 +1,442 @@
+[
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Right, I don't think aggressive polling is valuable, at least it would be a pre-mature optimisation unless we see a real use case that it can be used with. Separate `SYNCING` status has been kept for potential future use case when distinguishing between EL is doing some work and is doing nothing (if `ACCEPTED` was returned) will matter.",
+        "created_at": "2022-05-03T07:06:53.845000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "In my opinion `ACCEPTED` is a useful status because it gives insight into the behavior of the EL, especially when the things go wrong. So even if CLs treat it the same way, it signifies quite a different behavior on ELs",
+        "created_at": "2022-05-03T08:00:25.445000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "I am curios if any CL client uses `-32001` error *code* (returned when `getPayload` attempts to query non-existing build process) or clients have the same code branch disregarding which error code it is? The question caused by this PR https://github.com/ethereum/execution-apis/pull/214",
+        "created_at": "2022-05-03T08:12:34.054000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Not sure I agree with this. https://discord.com/channels/595666850260713488/892088344438255616/970618332535463956 is the case when EL returns `ACCEPTED` . Seems `ACCEPTED` is more about the cases when EL can't validate the payload fully without action from the CL. Seems that in non-optimistic sync case it's even a deadlock. So I would say that extra information from EL with the reason why it returned `ACCEPTED` would be helpful for CL. With such information, CL would be able to act accordingly. However, without such information CL simply considers it the same as `SYNCING` , because the only other way to deal with `ACCEPTED` (when no extra information is provided) is to play a troubleshooting game with EL trying to figure out what was the real reason why it returned `ACCEPTED`. Apparently, no CLs are willing to play this game.",
+        "created_at": "2022-05-03T09:57:16.991000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "What kind of extra information is on your mind?",
+        "created_at": "2022-05-03T10:12:12.126000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Erigon returns ACCEPTED for all blocks on a side chain for which there are no missing ancestors (in case of missing ancestors it returns SYNCING). The reason Erigon does that because we have only one state; and that state is reserved for the canonical chain. So we can accept (and save into the DB) blocks from a side chain, but not easily execute and fully verify them.",
+        "created_at": "2022-05-03T10:12:13.375000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "EL should give information that makes conclusions on CL side, for example:\n1) `NON_CANONICAL_CHAIN`  - EL has all the ancestors, but simply waits for fcu. CL can decide is it worth to fcu to this chain without verified payloads.\n2) `ANCESTOR_MISSING` with a particular ancestor that is missing. CL can decide should it fcu to this chain and trigger EL to sync payloads itself or CL feed the missing payloads to EL.",
+        "created_at": "2022-05-03T10:34:06.885000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hmm.. I think that's a bit different how I image `SYNCING`. I thought it's more about the situations where EL is actually processing something and there is no show stoppers.",
+        "created_at": "2022-05-03T10:38:20.176000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "1) This may turn into `SYNCING` upon `fcU` call because there could be a hundred payloads need to be executed",
+        "created_at": "2022-05-03T10:38:36.485000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Erigon always returns SYNCING if it doesn't have some ancestors of the block. It then tries to download the missing ancestors from its peers.",
+        "created_at": "2022-05-03T10:39:15.786000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yperbasis",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes, that as well",
+        "created_at": "2022-05-03T10:39:50.824000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "AFAIK geth even doesn't try to download missing payloads if it's not on the canonical chain.",
+        "created_at": "2022-05-03T10:40:27.386000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm not sure is it any other way to verify those payloads than actually verifying it with fcu.",
+        "created_at": "2022-05-03T10:42:41.032000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "There are two options\n1) if there is a few payloads and all of them may be verified in a sub-second interval, then it makes sense to verify them synchronously (if EL client does implement this behaviour)\n2) there are much more to verify, then `SYNCING` should be responded and EL may execute and apply those payloads asynchronously",
+        "created_at": "2022-05-03T10:58:27.167000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "well, there are more edge cases, for example in the case of 1) those payloads may be on the non-canonical chain and even with some ancestors missing...\n\nBTW, it really starts to feel that its a very fast-moving target and I'm not sure it's possible to handle all the cases especially when different ELs returns different responses for the same situation. So it probably makes sense to have something like optimistic sync as a mandatory (not optional) that resolves various edge cases. Then it probably doesn't make much sense to have variations such as `ACCEPTED` and `SYNCING`, because CLs would anyway do nothing with that and instead hope that optimistic sync eventually will resolve it.",
+        "created_at": "2022-05-03T11:08:44.546000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "This I think is the correct behavior or at least what I had in mind cause the EL should request the missing blocks and therefore by definition be syncing. In my head we receive SYNCING in two circumstances: EL is actively looking for blocks and/or validating/executing the chain",
+        "created_at": "2022-05-03T12:28:17.245000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I also feel for \u003c@777935002263617576\u003e, on prysm we thought for about 30 seconds wether or not to implement optimistic sync. It's a no brainer that the difficultly in not doing so is larger and for a much worse UX",
+        "created_at": "2022-05-03T12:31:51.266000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Even if  you manage to solve those edge cases, I'm not convinced any EL can sync mainnet on lockstep just after a few hours down",
+        "created_at": "2022-05-03T12:33:12.810000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulj",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hi all, at Prysm we created a proxy server that sits in between the CL and EL engine API and can help mock responses or requests",
+        "created_at": "2022-05-03T15:15:43.957000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulj",
+        "category": "Testing",
+        "parent": "",
+        "content": "We are using it internally to trigger optimistic sync in our end-to-end test suite. Would other folks find it useful if we make this available to run anywhere?",
+        "created_at": "2022-05-03T15:16:16.037000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "Cc \u003c@892053833121923094\u003e",
+        "created_at": "2022-05-03T15:18:39.490000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hey, I think \u003c@360491619402776577\u003e started working on this",
+        "created_at": "2022-05-03T15:19:31.686000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "The only thing ACCEPTED can mean is that it's non-canonical chain, the chain is well-formed, but the EL is not executing it",
+        "created_at": "2022-05-03T20:35:59.064000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "If some blocks are missing on that non canonical chain then it also returns ACCEPTED, so in such case that non canonical chain isn’t that well-formed.",
+        "created_at": "2022-05-03T21:07:09.719000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "This is against the spec",
+        "created_at": "2022-05-03T22:37:25.925000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md#specification",
+        "created_at": "2022-05-03T22:38:22.135000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "```\n{status: ACCEPTED, latestValidHash: null, validationError: null} if the following conditions are met:\n\n    * the blockHash of the payload is valid\n    * the payload doesn't extend the canonical chain\n    * the payload hasn't been fully validated.\n\n```",
+        "created_at": "2022-05-03T22:39:34.501000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think there might be an unintended ambiguity in the spec in that a block cannot be \"ACCEPTED\" on a side-branch unless the entirety of that side branch exists",
+        "created_at": "2022-05-03T22:40:59.079000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah, that doesn't actually say you have to have the full chain.  If you follow the chain back far enough to get to the block number of your canonical head slot and it's not the same block then you would satisfy all three of those conditions but may not have the entire chain.",
+        "created_at": "2022-05-03T22:41:15.395000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "that is the intent of the spec and the general understanding of the implementers but the spec might not be 100% clear on that",
+        "created_at": "2022-05-03T22:41:16.431000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "ah, I read this as \"canonical\"",
+        "created_at": "2022-05-03T22:41:42.691000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "I am very confident in the intention of the spec and relatively confident in how things have been implemented. but I do think the spec needs a clarification",
+        "created_at": "2022-05-03T22:42:52.347000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "SYNCING is for when data is missing for validation or even acceptance of a main or side branch\nACCEPTED is for branches that are non-canonical that are well-formed chains but have not been deemed crypto-economically valuable enough (by EL) to execute",
+        "created_at": "2022-05-03T22:44:07.905000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "https://github.com/ethereum/execution-apis/pull/215",
+        "created_at": "2022-05-03T22:50:14.642000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Since the consumer of this API is the CL, I would want to ask if there is any client that actually differentiates these two. If there is zero usage for a difference I do not understand why the over-specification here.",
+        "created_at": "2022-05-03T22:51:04.829000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "But as I stated above, I agree with Danny and Erigon's behavior is the right one here.",
+        "created_at": "2022-05-03T22:51:39.101000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah my expectations aligned with Danny's too. Just that I can easily see how I'd implement those rules and wind up with the wrong behaviour because you inevitably need to walk backwards and it's pretty natural to want to bail out of that as soon as you find it's non-canonical.",
+        "created_at": "2022-05-03T22:55:53.415000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "so it either is extending some branch in your block tree",
+        "created_at": "2022-05-03T22:56:22.736000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "or you don't know about it's parent",
+        "created_at": "2022-05-03T22:56:26.939000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "I don't think you need to really walk back",
+        "created_at": "2022-05-03T22:56:32.403000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "I see how you could *not* use this info",
+        "created_at": "2022-05-03T22:57:00.324000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "but it is certainly not semantically the same, and I could see the info being leveraged",
+        "created_at": "2022-05-03T22:57:11.161000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "\"I don't have the info to process this but will try to get it\"\nvs\n\"I have this in my block tree but haven't executed\"",
+        "created_at": "2022-05-03T22:57:35.724000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'd like to know if this actually happens cause this would mean we didn't see it and may want to use it as well",
+        "created_at": "2022-05-03T22:57:41.021000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "I suppoese your argument is that a fcu will prioritize either scneario",
+        "created_at": "2022-05-03T22:57:46.494000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I understand that semantically these two statements are different, the question here is whether the extra complexity in the protocol is used at all.",
+        "created_at": "2022-05-03T22:58:25.926000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah, even if I knew the status of the engine, I would not want to act right now, I would rather send fcu later on that branch and eventually the EL will catch up",
+        "created_at": "2022-05-03T22:59:14.280000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "Teku doesn't use any of this. I didn't even know about some of the statuses because our gateway code simplifies things down so the internal code only deals with VALID/INVALID/SYNCING.",
+        "created_at": "2022-05-03T23:01:05.097000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "tbh, ACCEPTED was introduced to allow EL not to execute side branches",
+        "created_at": "2022-05-03T23:02:55.216000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "because previously it was \"well, I do have enough info on this branch... so I guess I have to validate it when newPayload is called\"",
+        "created_at": "2022-05-03T23:03:17.004000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "so it gives EL an semantically meaningful way to say it didn't execute",
+        "created_at": "2022-05-03T23:03:43.333000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "because on their end ACCEPTED and SYNCING are very different",
+        "created_at": "2022-05-03T23:03:54.487000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "you could cram it into DIDNT_EXECUTE",
+        "created_at": "2022-05-03T23:04:17.452000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "but I don't see the value in removing the granularity and using SYNCING for both cases isn't semantically correct, imo",
+        "created_at": "2022-05-03T23:04:45.627000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "but yes, this was primarily to give EL an out on MUST execute side-branches",
+        "created_at": "2022-05-03T23:05:36.855000+00:00",
+        "attachments": null
+    }
+]

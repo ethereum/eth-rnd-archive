@@ -1,0 +1,162 @@
+[
+    {
+        "author": "agemanning",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@!777935002263617576\u003e - Hey mate. Congrats on the first release! I've had a quick look at this too and have a few points. \n\nOn a preliminary review, it looks to me like a lot of code from Lighthouse is used in `grandine` and I think it would be nice to acknowledge that `grandine` is based on Lighthouse. \n\nAs an example, `grandine` on the network identifies itself as a `Lighthouse v1.4.0` node. It would be nice to change this code from the Lighthouse code as it makes debugging issues much easier. I'm currently looking at some gossipsub scoring issues, and some lighthouse nodes aren't behaving as expected, I'm now not sure if they are in-fact Lighthouse nodes or potentially they could be `grandine` nodes. It would be helpful to have these nodes identify themselves not as Lighthouse nodes. \n\nI also noticed that you appear to get gossipsub blocks without being synced. In this case, I would imagine you can't verify the blocks you are receiving as you don't have the chain. \nDoes this mean that `grandine` does not do gossipsub verification on blocks when it's syncing?\n\nI'm in the process of testing a bit of networking on clients and can add `grandine` to the mix and will let you know if I find anything useful, going forward. 🙂",
+        "created_at": "2021-07-01T08:18:00.297000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "Hey Rust mate 😉 Thanks for trying and your comments! Back then when we started to work on Grandine in 2019 we implemented Hobbits protocol for interop. However client teams didn't accept it, so it was our first rough experience that the network layer development will be complicated while we are still in stealth mode. For this reason, we made a decision to use Lighthouse's eth2_libp2p for compatibility as it didn't make much sense to follow networking layer progression as significant portions of such progress are achieved in private working groups. As you know eth2_libp2p is heavily coupled with Lighthouse, so that's the reason why it pulls so much of Lighthouse crates that we don't use in Grandine, inflates the binary size, and makes you think that Grandine is based on Lighthouse 🙂 It's not. You can find it out by comparing the full sync performance between Grandine and Lighthouse. When the merge specs are clear we will replace eth2_libp2p with our own implementation, the network spec should be pretty stable then. Frankly speaking, dealing with the bloat that eth2_libp2p brings isn't an easy task because of Rust specifics, so we will replace it as soon as possible. The Readme mentions the networking layer, maybe we need to extend it, but I'm not sure that it's a great idea to claim that Grandine is based on the many projects that developed the crates we share. But I agree that we should definitely change the client version 🙂 BTW, what is the best public place to discuss the different behavior of libp2p layer implementations?\n\nThe log message you see is printed when the block is received from the network (not when the head changes). I found it very useful for debugging attestation head misses as sometimes the block arrives late for most of the network and that's the problem of the block producer (not attester). Full block verification is completed only when the parent block is fully processed.\n\nHappy testing and let me know if find anything else interesting 🙂",
+        "created_at": "2021-07-01T09:36:29.413000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agemanning",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks for the info! Obviously I can't comment on how much similarities we have as grandine is closed source. \nThe eth2_libp2p crate definitely pulls a lot of other sub crates and it represents essentially our entire networking stack (as you know), I'd imagine it would save you a bit of compile time replacing it. \n\nUsually a lot of the libp2p behaviour discussion we have is in the rust-libp2p repo where we maintain the gossipsub implementation. Also the `libp2p` channel on this discord is very handy for incompatibilities across clients. \n\n\"The log message you see is printed when the block is received from the network\" - Yep, I'm assuming it gets received via gossipsub in this case. For example, if you subscribe to the block topic when you start your client, you may see block 100,000 on gossipsub. The potential issue I'm pointing at, is how does your client know that the block 100,000 is a valid block if it doesn't know blocks 0-100,000. By subscribing to the block topic on gossipsub, your client has to make a decision about whether to propagate that block on to others or not. If it doesn't it can be scored down, if it does, it could be forwarding bad blocks. Perhaps this isn't the channel for this discussion, perhaps either dm's or the libp2p channel is better.",
+        "created_at": "2021-07-01T09:48:11.748000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "I would say the only similarity is that both clients use eth2_lip2p (great work on this crate, except the coupling 🙂 ) Everything else is very different. We use a different fork choice implementation unlike other clients that uses protoarray. Storage, caching and other techniques are also different. We focus a lot on parallelisation, that's why one may experience ~1000% state transition performance under certain conditions compared to other clients and we expect to even double it. And we would love better compile time too 🙂\n\nRegarding gossipsub comment, yes, we should get downvoted as we do not propagate blocks that we 'delay' (we use this term for blocks that have unknown parent).",
+        "created_at": "2021-07-01T10:08:22.029000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "We could do a badass move and propagate \"delayed\" blocks as suicidal conflicting blocks are just way too rare 😛",
+        "created_at": "2021-07-01T10:12:29.106000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agemanning",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks for the kind words. In an earlier version the `eth2_libp2p` was decoupled entirely.. mainly to be used outside Lighthouse, but as things got more complicated we were forced to integrate more lighthouse types in and give it more coupling the consensus land. \nAs I said I'll add `grandine` into the mix in the testing that we're currently doing and let you know if we find anything interesting 🙂",
+        "created_at": "2021-07-01T10:12:56.437000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "That's the reason we decided to use `eth2_libp2p` back then! I actually even had the feeling that it was intentionally decoupled in order to be shared across the clients (there was Shasper back then), because `rust-libp2p` obviously should be shared, so maybe `eth2_libp2p`  should be too, but is in the grey area. If you actually still think that even under the current situation it would make sense to have a shared `eth2_libp2p` library - we are more than happy to collaborate on it.",
+        "created_at": "2021-07-01T10:18:38.422000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agemanning",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah that was the original idea. Then we ended up putting in a whole heap of lighthouse-specific things like peer scoring, subnet discovery queries, and this custom libp2p management for managing connections (which we're in the process of changing). \nIt made sense to add these things close to the network to avoid overhead of sending things through all the channels.",
+        "created_at": "2021-07-01T10:21:20.142000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "I think we will try to fork `eth2_libp2p` and port it to Grandine type system and libs. This probably will tell us that a shared library is too hard 🙂 But at least it will cut the compile time by roughly half 🙂",
+        "created_at": "2021-07-01T10:28:24.303000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chopsueyiscool",
+        "category": "general",
+        "parent": "",
+        "content": "So with eth 2.0 and sharding, will it match the gas prices of something like polygon?",
+        "created_at": "2021-07-01T12:20:43.744000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "merge call in 10\ngeneral pos-consensus (eth2) call in hour and 10",
+        "created_at": "2021-07-01T12:49:04.347000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "https://github.com/ethereum/eth2.0-pm/issues/224",
+        "created_at": "2021-07-01T12:50:20.976000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ethzed",
+        "category": "general",
+        "parent": "",
+        "content": "FWIW \u003c@!777935002263617576\u003e , I do believe that your \"networking\" mention in your README is misleading at best. As you know and have experienced, building a tailored networking stack was/is one of the hardest parts of building an eth2 client. Gradine uses the Lighthouse networking stack entirely, a clear mention of that in your repository would help clarify any misunderstandings.",
+        "created_at": "2021-07-01T12:50:42.694000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks \u003c@!593002087923843074\u003e , so in my view networking stack consists of three main parts - `rust-libp2p`, `eth2_libp2p` and various services between those two and other parts of the client. If I understand correctly `rust-libp2p` \"is not Lighthouse's\"?  So I'm not sure that \"Gradine uses the Lighthouse networking stack entirely\" is correct either. Would you be happy if we tell that we use `eth2_libp2p` crate? This is probably most correct, but it would exclude all the other \"hard\" software we use. For example, an embeddable cross-platform database is probably even more complex than `eth2_libp2p`.",
+        "created_at": "2021-07-01T13:07:24.666000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ethzed",
+        "category": "general",
+        "parent": "",
+        "content": "My point is not around complexity per se, but rather domain-specific frameworks and protocols. All the eth2 specific networking is contained within our `eth2_libp2p` crate (Discovery, RPC, Peer scoring, client identification, etc), which literally took years to build out. \n\nI'm an advocate for client diversity, so I'm definitely happy to see one more implementation in town 🙂 . But claiming that you're 1000% faster, while being closed source, and not transparent about the parts of your clients that are directly copied from Lighthouse is, again, imho, misleading at best.",
+        "created_at": "2021-07-01T13:27:08.176000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks, great comments. I'm happy we decided to do a soft-launch first 🙂 I added https://github.com/sifraitech/grandine/blob/master/Cargo.lock so everyone can see the crates we use. BTW, I do not agree with your wording \"directly copied from Lighthouse\", I'm not sure you can use this wording when you add open source dependencies to your Cargo.toml. I'll also think about how to mention \"complex\" software in readme without excluding anyone.",
+        "created_at": "2021-07-01T13:44:32.649000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "trent_vanepps",
+        "category": "general",
+        "parent": "",
+        "content": "do you have a timeline on when you expect to open the code up?",
+        "created_at": "2021-07-01T13:45:15.053000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "We expected to be opensource already, there is a paragraph in the readme about that and these things not always come as fast as one would desire.",
+        "created_at": "2021-07-01T13:50:49.787000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "vaibhav0207.",
+        "category": "general",
+        "parent": "",
+        "content": "Hey guys",
+        "created_at": "2021-07-01T14:07:04.200000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "benjaminion",
+        "category": "general",
+        "parent": "",
+        "content": "Brief notes from the call: https://hackmd.io/@benjaminion/BJSvvGs2O",
+        "created_at": "2021-07-01T14:45:25.044000+00:00",
+        "attachments": null
+    }
+]

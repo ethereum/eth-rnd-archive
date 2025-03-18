@@ -1,0 +1,394 @@
+[
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Anyone with knowledge about (or connections to) wallet providers: by how much do wallets bump the gas estimation returned by eth_estimateGas, before having it signed by the user?",
+        "created_at": "2023-11-21T10:25:12.583000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "We bump by 20%.  Enough to cover refunds.",
+        "created_at": "2023-11-21T10:30:19.195000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Very naive strategy.",
+        "created_at": "2023-11-21T10:30:47.706000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Doesn't `eth_estimateGas` return the gas you need to send to complete the transaction (i.e. the gas used before refunds)?  It used to...\n\n`ethereal` just accepts the value from `eth_estimateGas` and uses it.",
+        "created_at": "2023-11-21T10:35:31.600000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "eth_estimateGas (at least in Geth) returns the \"perfect\" amount you need, given the state during execution. But if state changes, you might need a bit more, so wallets tend to round/bump it upwards by some percentage",
+        "created_at": "2023-11-21T10:37:20.729000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "In which case however, Geth estimating it perfectly is a bit of a wasted computation. We definitely don't want to under-estimate, but overestimating by say 0.1% could save 50% of the computation (for a 1M gas tx)",
+        "created_at": "2023-11-21T10:38:14.862000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Is the estimation particularly onerous?  Last time I looked it was a binary search with the block gas limit as the upper bound.  Biggest thing that could have been done to improve it, from my recollection, was to leave the search early if the tx actively failed (as opposed to ran out of gas).  But then, I'm several years out of date.\n\nBut I don't think that overestimating by a small amount would be a significant issue, if it saves a chunk of resources to do so.",
+        "created_at": "2023-11-21T10:40:42.819000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "It is binary search still, we did add an early exit if it always fails. The overestimation would be a small optimization that providers could use to save a chunk of cpu",
+        "created_at": "2023-11-21T10:41:36.303000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Personally, I don't think that the client should be doing the binary search.  Set gas limit to block gas limit, run the transaction, report back gas used before refunds.",
+        "created_at": "2023-11-21T10:50:48.424000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "If an application wants to be `if (GAS \u003c x) ...` then they can deal with gas estimation on their end.  I think the binary search is significant complexity that just encourages application developers to build apps that have complex gas costs.  By forcing them to deal with the problem, it encourages them to have more sane contracts.",
+        "created_at": "2023-11-21T10:52:03.831000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "In most cases, the application developer can know the difference between minimum and maximum gas required and just pad every transaction with that amount (e.g., Uniswap could do this I believe).",
+        "created_at": "2023-11-21T10:52:29.478000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Unfortunately there are EVM quirks and refunds that make things messy",
+        "created_at": "2023-11-21T10:52:32.022000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "E.g. when ytou do an eth_call, onlt 63/64th of the gas gets forwarded",
+        "created_at": "2023-11-21T10:52:43.402000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "That 1/64th may remain unused, but you need it not to revert",
+        "created_at": "2023-11-21T10:53:00.798000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm... you should be able to calculate the amount required for this at the deepest depth though right?",
+        "created_at": "2023-11-21T10:53:24.829000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Without a binary search?",
+        "created_at": "2023-11-21T10:53:27.321000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "It's weird crap like this why it's just safer to binary search and be future proof vs randomly fail on an evm upgrade",
+        "created_at": "2023-11-21T10:53:27.620000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I guess the deepest depth may change depending on state at execution time?",
+        "created_at": "2023-11-21T10:54:00.999000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "If execution time influences it then it would do the same for binary search too, so no diff there",
+        "created_at": "2023-11-21T10:54:47.635000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Can we calculate the worst case scenario for the 1/64 thing?  ~~Is it `1-(63/64)^64` or something~~ probably not?",
+        "created_at": "2023-11-21T10:55:26.263000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "I do think it would be possible to do a very high eprformant estimation by a tight integration with execution, just it feels very brittle and not worth it because of that",
+        "created_at": "2023-11-21T10:55:27.651000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Geth originally did have that approach and we got so amny corner case reports that just dumped it in favor of binary search 🙂",
+        "created_at": "2023-11-21T10:56:21.498000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Binary search just seems like such massive waste of computational resources in aggregate.",
+        "created_at": "2023-11-21T10:56:41.403000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "tru dat",
+        "created_at": "2023-11-21T10:56:48.565000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Running every transaction that is heading for the chain ~8 times...",
+        "created_at": "2023-11-21T10:57:06.191000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Heh, more like 25x",
+        "created_at": "2023-11-21T10:57:17.084000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm, really that many on average?",
+        "created_at": "2023-11-21T10:57:52.787000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "log2(30M), maybe I'm off?",
+        "created_at": "2023-11-21T10:58:15.764000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "These edge cases you ran into, are they things that a well designed contract would run into, or just weird edge cases that someone can design their way into (like doing `if (GAS \u003c x) ...`?",
+        "created_at": "2023-11-21T10:58:19.121000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Ah, you try to get down to *exactly* the amount?  Feels like it would be reasonable to stop once you get \"close enough\".",
+        "created_at": "2023-11-21T10:58:44.091000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Especially since gas limit isn't actually spent, you just need to be able to afford it as a max.",
+        "created_at": "2023-11-21T10:58:59.154000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, that's the point of this suggestion 😄",
+        "created_at": "2023-11-21T10:59:03.670000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Geth does go down to the last gas currently",
+        "created_at": "2023-11-21T10:59:17.085000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "We can make it do something else, but might as well make it configurable if someone needs to precise behavior",
+        "created_at": "2023-11-21T10:59:35.724000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "At least as a transition a configuration option makes sense.  My recommendation is start optional to do \"cheap estimates\", then switch the default to cheap estimates, then add warning on non-cheap estimate use, then eventually (years down the road) remove expensive-estimates so you can delete the code.  This assumes, of course, that you find a different strategy and it isn't just binary search with early exit.",
+        "created_at": "2023-11-21T11:00:52.241000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "My gut suggestion would be to go down to a 0.5-1% (overestimation) error rate by default and let callers specify if they need more precision or want less. I guess nobody would bother apart from very specific power user cases",
+        "created_at": "2023-11-21T11:01:15.890000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Switching the estimation algo is a different can of worms",
+        "created_at": "2023-11-21T11:02:20.223000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I would be interested in revisiting the 1/64 issue.  We do gas estimation naively and haven't run into problems as long as we pad 20% for the refund (since we are getting post-refund numbers).",
+        "created_at": "2023-11-21T11:02:26.739000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "And we have a special case for simple ETH transfers (so sweeping still \"works\").",
+        "created_at": "2023-11-21T11:03:16.267000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "karalabe",
+        "category": "general",
+        "parent": "",
+        "content": "Well, 20% is larger than 1/64, so that should always cover it too",
+        "created_at": "2023-11-21T11:03:38.133000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I think you can have both at the same time though, right?  You can have a deep callstack *plus* max out refunds?",
+        "created_at": "2023-11-21T11:04:04.995000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Or are they independent of each other?  Essentially `max(refunds, depth_excess)`?",
+        "created_at": "2023-11-21T11:04:33.103000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "You could cut it down to 15 iterations rather than 25, that would give you an overestimate of only 1024 gas at max and I doubt anyone would care.\n\nAnd I know that we don't really want special cases, but the \"transfer without data to an EOA\" could be an obvious one that then gives the correct gas without jumping through the iterations.",
+        "created_at": "2023-11-21T11:07:28.676000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "`(63/64)^0/64 + (63/64)^1/64 + (63/64)^2/64 ... + (63/64)^64/64` I think is the formula?  I'm sure you could simplify that.",
+        "created_at": "2023-11-21T11:09:15.202000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Assuming the above is correct, Wolfram alpha claims it is ~0.635, or ~64% of gas is \"left behind\" in previous call frames up to the 64th.",
+        "created_at": "2023-11-21T11:13:35.964000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "So in the worst case scenario, where you have 64 free call frames, then the 64th frame burns all of the gas, you need to supply ~64% extra gas to the transaction.  That is an unfortunately large number.  😖",
+        "created_at": "2023-11-21T11:14:36.651000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "The real formula would account for the cost of calls, and constraints on how much gas you can spend in the 64th call frame before having to pop out and spend in the 63rd call frame, etc.  I suspect the reality is much lower than 64%.",
+        "created_at": "2023-11-21T11:19:18.584000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Importantly, I think we can precisely calculate (as a function of opcode gas costs and block gas limit) exactly how much padding you would need, and I suspect it is a number that is reasonable for most use cases (e.g., 20% excess).",
+        "created_at": "2023-11-21T11:20:29.842000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Seems like a worthwhile project to have some math person spend a week on when weighed against the operating expense of the binary search that every transaction hitting the chain incurs.",
+        "created_at": "2023-11-21T11:21:12.243000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,146 @@
+[
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "Given a simple merkle partials setup (for example, a `List` merkle tree of maximum length 100, containing number from `0` to `99`, generating the proofs for two leaves `5` and `7`), what's the shortest possible length of bytes for the merkle partials encoding we can currently generate? Trying the see how much we still need to improve on our current approach.",
+        "created_at": "2019-07-21T03:40:42.476000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "Max length of 100 would be a binary tree with 128 leaves (last 28 zeroed and optimized). For two leaves, total proof depends on their location. Adjacent leaves, a, a+1, when aligned to a multiple of 2, are the easiest case. Just 1 branch to proof then. 5 and 7 would mean: (4,5),(6,7),(4\u00265, 6\u00267), and then a branch to root. So that's: 2 sibling chunks at deepest level, 0 siblings at 64 width level (already 2 nodes, aligned), 1 at 32, 1 at 16, ... 1 at 2. So 2 + 5 chunks in proof (excl root and target nodes 5 and 7).\nShould be super familiar ;)\nAnd don't forget one extra for the length mix in node.\nTo encode the proof, we need to standardize either the order of proof data, or add generalized indices in there as keys. The order thing is difficult, due to the mixed depth and different partials to make. And one may need to communicate what the target nodes to proof are. But it's easy enough to add those separately. See https://github.com/ethereum/eth2.0-specs/issues/1303\nSo `(2+2+5+1)*32= 10*32= 320` bytes (incl leaf nodes here)\n\u003c@242032644232183808\u003e",
+        "created_at": "2019-07-21T07:26:59.467000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "Sorry, edit, 1 less chunk.",
+        "created_at": "2019-07-21T07:33:58.279000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@203220829473996800\u003e I don’t think you can go to raw 320 bytes because there needs to be metadata for the decoder to understand the interactions between those chunks? We need around 1 bit per chunk / per 2 chunks (depending on whether a value is end or intermediate), so I believe the shortest possible lies between somewhere 321 bytes and 330 bytes.",
+        "created_at": "2019-07-21T12:27:29.698000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "If there's a well defined order and an expectation of a set of leafs (or encoded before chunks), I don't think we need that. The issue by Vitalik explains it well",
+        "created_at": "2019-07-21T12:35:31.631000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@203220829473996800\u003e but this will mean you’d need to let the receiver know the index of the leaves, right? I think that might be more bytes.",
+        "created_at": "2019-07-21T12:41:29.099000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "(Also I think it might only work for known structures like vectors or lists. We cannot generalise that partials encoding to arbitrary (potentially with unknown structures) binary tree)",
+        "created_at": "2019-07-21T12:44:59.562000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, was also thinking of compressing the indices. But we can get chunk order right first, then essentially put that in a struct, and add the indices (compressed or not) as a separate thing.",
+        "created_at": "2019-07-21T12:45:08.336000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "We don't want to encode extra things if both sides know which data is communicated. Just need to proof what in such case",
+        "created_at": "2019-07-21T12:46:43.695000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "Afaik current issue I linked covers how contents are ideally laid out. We can add the information on which contents are there as an optional thing",
+        "created_at": "2019-07-21T12:47:54.570000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "Understood. I think we’ll just keep our current encoding scheme for now, and see how the discussions develop. Handling potentially unknown merkle structures is something we want to support. Plus I think encoding the compressed indices might require similar byte count compared with 1 or 2 metadata bits per chunk.",
+        "created_at": "2019-07-21T12:54:00.747000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, compressed would be similar yes. But like chunks just being aligned to 32 bytes. That identifying metadata, in some compressed form or another, can (and should be imho) be separated. Also important to keep it compositional. Don't want to implement separate partials logic for the different ways you identify the chunks being communicated",
+        "created_at": "2019-07-21T12:59:27.278000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**vbuterin**\nCompressing the indices is something that can be done in a bunch of context specific ways",
+        "created_at": "2019-07-21T13:32:13.678000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**vbuterin**\nAs mentioned in the issue, for example, if you know ahead of time that you're looking for a Validator record but you don't know which one",
+        "created_at": "2019-07-21T13:32:32.240000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**vbuterin**\nThen you can calculate the g-indices from just one index",
+        "created_at": "2019-07-21T13:32:39.976000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**cem_ozer**\nhttps://github.com/ethereum/eth2.0-specs/blob/v0.8.1/specs/core/0_fork-choice.md#on_block I think the state_transition() function call should include a true variable as the third argument here to validate the beacon state root, because the default argument for validate_state_root is false",
+        "created_at": "2019-07-21T21:56:04.674000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**protolambda**\n@cem_ozer yup, looks like it. Thanks 👍",
+        "created_at": "2019-07-21T21:59:29.801000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**cem_ozer**\n👌",
+        "created_at": "2019-07-21T22:01:00.938000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,106 @@
+[
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "It can if a payload extends the canonical chain",
+        "created_at": "2022-01-28T10:48:36.601000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, it's tricky. If EL client is able to synchronously validate a few payloads in a row hence do short-range re-orgs synchronously then if CL previously received `ACCEPTED` in response to `newPayload` will resolve this by receiving `VALID/INVALID` in response to `forkchoiceUpdated`.\n\nAlso, if EL supports instance validation of payloads from side branches then CL will not even go optimistic as `newPayload` will be responded with `VALID/INVALID` on a side branch and CL may or may not apply a block containing this payload to the fork choice, and if applied CL will not have to do this optimistically as it has the validation status.\n\nIf EL isn't able to do short-rage re-orgs synchronously and isn't able to instantly validate payloads from side branches then CL will optimistically apply a block and will have to check for status updates from EL. In the case when this is a short-range re-org it makes sense for CL to poll the status by sending `forkchoiceUpdated`. The caveat here is that an asynchronous short-range re-org is indistinguishable from long-rage re-org or a sync process that involves pulling data from the network. But probably CL doing poll in a 1-second interval isn't a bad strategy, but definitely an optimisation.",
+        "created_at": "2022-01-28T10:57:07.116000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "It's understandable that EL may not immediately return `VALID/INVALID`. I'm focusing more on what CL should do in order to vote on the latest valid block in such cases. https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/validator.md#attesting says that attesting for a valid block should happen as early as possible. So one way to implement this spec correctly would be to have a blocking call to EL that returns either `VALID/INVALID` or timeouts at +4s in the slot. So technically it's not an optimization, it's about correct spec implementation.",
+        "created_at": "2022-01-28T15:58:15.229000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "Here are the CL specs for the release of the updated engine API semantics, optimistic sync, and some other minor changes\nhttps://github.com/ethereum/consensus-specs/releases/tag/v1.1.9\n\nEngine API release coming soon. \nMeta-spec pointing to all the components will be released on Monday",
+        "created_at": "2022-01-28T16:51:17.661000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "general",
+        "parent": "",
+        "content": "Great release name 😄",
+        "created_at": "2022-01-28T16:51:46.739000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "and the engine api release\nhttps://github.com/ethereum/execution-apis/releases/tag/v1.0.0-alpha.6\n\nThanks \u003c@!543900561460822016\u003e!",
+        "created_at": "2022-01-28T18:02:12.686000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "The rest of the specs are stable. Meta-spec available on monday",
+        "created_at": "2022-01-28T18:02:22.957000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "general",
+        "parent": "",
+        "content": "Hi, I'm working on the the test changes for the updated spec, and found a thing that's bothering me but I'm not sure if i'm misreading the new spec...\nThe spec states that forkchoiceUpdatedV1 must return payloadStatus.status==INVALID if the payload is not valid, I have a test that sends an invalid payload using newPayload and I expect to receive INVALID in the subsequent fcU with the invalid payload hash... I'm getting SYNCING from geth at the moment... \nIs this a valid test case?\nWho keeps track of the invalid payloads after newPayload returned INVALID, EL or CL client ?",
+        "created_at": "2022-01-28T20:19:19.514000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "EL should keep track generally\n\nbut it is not really guaranteed that it would keep around a branch that it told CL was INVALID. Thus at the fcu call, it is like \"hmm, don't have that\"",
+        "created_at": "2022-01-28T20:21:07.318000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "this seems like an error case in some sense. For CL to try to fcu something it saw as INVALID",
+        "created_at": "2022-01-28T20:21:31.160000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "CL might try to fcu something that was ACCEPTED (and not fully validated). that is likely a more reasonable expected case",
+        "created_at": "2022-01-28T20:21:49.527000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "I think for this test case in general, you might expect one of two things \n\nsteps:\n1. newPayload -- INVALID\n2. fcu(same_payload)\n     a. INVALID (if the result was cached)\n     b. SYNCING (if not enough info around about the prviously invalidated branch\n\nIn both cases, if CL knew something was INVALID, it wouldn't then fcu to it. So it is okay that EL is confused. But it just needs to no be irreparably  so. which it shouldn't be with eithr return",
+        "created_at": "2022-01-28T20:22:16.396000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "general",
+        "parent": "",
+        "content": "Got it, will make the changes to:\n- accept either INVALID/SYNCING\n- afterwards, send a new valid payload to try to continue the process and verify the EL does not error out for some reason...",
+        "created_at": "2022-01-28T20:28:56.853000+00:00",
+        "attachments": null
+    }
+]

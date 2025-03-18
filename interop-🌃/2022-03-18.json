@@ -1,0 +1,186 @@
+[
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "If the EC does not reply at all then the CL may keep the block, even do signature validation and the such, but may not sync them optimistically, so their weights is not updated and the CL would not even know what the optimistic head is",
+        "created_at": "2022-03-18T00:15:59.812000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@!755590043632140352\u003e Thank you for clarifications",
+        "created_at": "2022-03-18T07:06:04.532000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "This is true but if block is finalized by the network it's very likely to be valid. Finalized block is irreversible and could be used as a stable backbone of a chain of headers by the sync process -- this was my idea, probably it's impractical and if EL would know the head of the chain it could reverse download everything else.\n\nI suppose that comparing `block.timestamp` with local node time may be used by EL to know how far given payload is from the actual head. And if it's too far yet then hold off batch sync process. Suppose a node has been rebooted and have to catch up a 1000 blocks to be at the head. My mental model for the batch sync process in this case:\n1) EL receives `newPayload` from CL, EL may either store payloads or discard them and respond with `SYNCING`\n2) EL checks if `block.timestamp` is less than e.g. 10 slots behind the current slot, and if it is\n3) EL reverse downloads missed block data and starts batch syncing this 1000 blocks\n4) After EL has batch synced a 1000 blocks it catch ups with the head in a lock-step and responds `VALID/INVALID` to CL in the response to a subsequent `newPayload/forkchoiceUpdated` call\n\nI don't see any edge cases when relying on the timestamp is unsafe or doesn't work at all. One scenario is when we have empty slots and no payloads are receiving from the network to check if they are close enough to the head or not; in this case the sync process may get stuck. But this would mean that the network is experiencing a liveness failure which is more severe than local liveness failure and needs to be resolved first",
+        "created_at": "2022-03-18T07:58:14.209000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@!425572898787426305\u003e was thinking about about the block content redundancy, and the best thing I can come up with actually is that we specify both by-root and by-slot requests between CL and EL, with the latter always referring to the \"canonical\" chain and being optional to implement (returning a well defined \"unsupported\" error code)",
+        "created_at": "2022-03-18T12:54:50.368000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "the above gives EL:s time to support the faster request while at the same time giving the community a way to implement the standard efficiently that can be agreed upon from day 0, even if it's implemented \"later\" - this exactly mirrors the setup that exists in the eth2 protocol already, which has been working well so far",
+        "created_at": "2022-03-18T12:57:35.188000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "by-root means by beacon block root?",
+        "created_at": "2022-03-18T13:03:20.167000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "in the eth2 protocol, it's the beacon root, but I think the json-rpc request would go by block hash like your PR",
+        "created_at": "2022-03-18T13:04:13.803000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "just like it would be block number and not slot number (the el will have to translate which is fine)",
+        "created_at": "2022-03-18T13:04:44.487000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "whatever we can do to make it \"cheaper\" for the beacon node to serve block data, the better for the general user experience, also because it makes it harder to DoS the client with requests - this is simply one way in which we avoid a lot of work - there are millions of blocks and serving them one by by by root is .. not fun",
+        "created_at": "2022-03-18T13:07:01.613000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "EL block may start including a `slot` at some point which could be indexed by EL",
+        "created_at": "2022-03-18T13:07:52.359000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "that's certainly easier from a math perspective given that the slot number is a simple linear relation rooted in the genesis time, but it's less .. critical certainly than having access to any linear-range request in the first place",
+        "created_at": "2022-03-18T13:09:39.219000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Do you want to submit a PR into Engine API?",
+        "created_at": "2022-03-18T13:12:10.856000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "And did I get it right that you suggest to keep the \"by-root\" (a by-block-hash actually) request as it is proposed?",
+        "created_at": "2022-03-18T13:13:03.366000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes - you have a good point that a linear request has no way to express requests for non-canonical blocks, and we need to be able to fetch these as well from non-finalized history when fork choice says so",
+        "created_at": "2022-03-18T13:14:19.562000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "what about `beacon block root` - probably not, right?",
+        "created_at": "2022-03-18T13:14:47.979000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Actually, I am not sure about both, a beacon block root and a slot. In the previous designs they were gonna be needed by withdrawals and sharding, needed to be exposed in the EVM. But these fields aren't used in the most recent withdrawal and sharding proposals.",
+        "created_at": "2022-03-18T13:18:40.480000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "One of beacon block root (or state root) would be useful for proofs against beacon chain information (most immediately, validator state).  Can't think of any use for `slot` inside the EL, offhand.",
+        "created_at": "2022-03-18T13:21:25.122000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "If beacon block/state root will be added to EVM and used by apps to read beacon state securely then likely a slot will be needed as well to process txes that use slightly old block/state root. They will use something like `verify_proof(beacon_block_root(slot), proof)`, where `proof` and `slot` are passed into a function call",
+        "created_at": "2022-03-18T13:25:07.003000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "Wouldn't you use the EL block number rather than the CL slot, though?",
+        "created_at": "2022-03-18T13:28:11.388000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "It may seem a little unintuitive to do it this way, but there will be CL slots without corresponding EL blocks, whereas the reverse won't be true so it seems to make more sense to me.",
+        "created_at": "2022-03-18T13:29:58.860000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Then `execution_payload.block_number -\u003e slot` translation will need to happen somewhere. There is a comment about that https://github.com/ethereum/EIPs/pull/4788#issuecomment-1035715715",
+        "created_at": "2022-03-18T13:33:41.773000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "Not totally convinced I follow Vitaliks's reasoning on that comment, 1) argues that block numbers don't have a relationship to the CL but I don't see that being a stronger argument than slot numbers not having a relationship to the EL.  The other two items are tidy-ups at best.\n\nUltimately I think this comes down to a question of primacy.  I think that keeping the EL prime where possible makes sense, as that's closest to end users, but I can see arguments the other way around.  Worst solution would be to pick each one individually, though, as we'd end up with a mix of both.",
+        "created_at": "2022-03-18T13:40:46.589000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "As for me it looks like app reads data from beacon block/state at a certain slot, this is why slot fits naturally here. As there is no EL block number that points to a beacon chain data.",
+        "created_at": "2022-03-18T13:46:48.984000+00:00",
+        "attachments": null
+    }
+]

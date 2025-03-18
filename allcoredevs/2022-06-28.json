@@ -1,0 +1,1386 @@
+[
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "I'm looping back on the discussion in ACD regarding \"checkpoint sync\". The sentiment among a few execution devs was \"bake it into releases and be done with it\". I didn't want to get into the details in the call, but I think it's worth noting that in PoW starting from a recent checkpoint is a nice-to-have, whilst in PoS it's a *must have*.\n\nDue to weak subjectivity attacks (TL;DR, exited validators have no stake and can create conflicting histories without the risk of slashing) it's unsafe to sync from anything outside the \"weak subjectivity period\" (\u003c2 weeks). So, if checkpoints were baked into releases then those releases would \"expire\" and no longer be safe to sync with.\n\nI'm not saying the current approach is perfect (the implicit reliance on centralized providers is undesirable), however we can't approach checkpoints in the same way that we do in PoW. If we were to go to the \"bake it into releases\" route then we'd need users to understand that releases expire at a much faster rate than they currently do due to hard-forks/bug-fixes/etc. I find it hard to get users to update their software and I'm wary of any assumption that they'll never go more than a couple of weeks between updates. A \u003c2 week release cycle will be onerous on devs, too.\n\nSo, that's why CL clients dynamically require checkpoint information at startup. In Lighthouse you can either:\n\n1. Use another beacon node HTTP API to download the block/state (local or third-party service).\n2. Manually enter a trusted `(block_root, epoch)` and then abort sync if it disagrees with those values.\n\nMore details on weak-subjectivity: https://notes.ethereum.org/@adiasg/weak-subjectvity-eth2",
+        "created_at": "2022-06-28T01:30:04.088000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Definitely agree with this.  Baking the checkpoint into releases adds quite a few challenges because of the need to keep it so up to date.\nI'm also nervous about client releases becoming such a strong arbiter of what the right chain is (vs just implementing the state transition accurately and letting that decide). It's not such a big deal if you can pick a checkpoint a reasonable way back that you know there's no contention about, but having to keep it up to date makes it a much more political decision and one I'd rather be in the hands of node operators so that it's decentralised.",
+        "created_at": "2022-06-28T01:37:31.849000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "There is definitely a need to have more places users can get the checkpoint state from though. While I understand the challenges that are involved, I'd love to see more clients support starting from just a state rather than requiring the full REST API as that's much simpler and safer for providers to expose (it's easy to execute some quite expensive queries against the full REST API).\nIt may be that we need to hit a middle ground and define a single file format for a state and block combination (which then could potentially include the deposit tree snapshot too). Having a single file makes it easy to leverage HTTP caching but still ensure the data is consistent.",
+        "created_at": "2022-06-28T01:40:51.527000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Would there perhaps be value in creating a standardized HTTP payload for delivering `(block_root, epoch)`?  We could then write some very simple tool that connects to an Ethereum client of their choice (JSON-RPC) and exposes that API.  People can self-host/deploy that and share a simple HTTP link which can be added as a startup parameter to any CL/EL deployment?",
+        "created_at": "2022-06-28T04:43:41.252000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "For example, the API may just be HTTP GET returns `{ \"block_root\": \"0xabcd1234...\", \"epoch\": 1234 }`.",
+        "created_at": "2022-06-28T04:44:21.652000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "And if all EL/CLs can take that in as a startup parameter, users won't need to manually acquire the data every time they want to start syncing a new client or after 2 weeks of downtime.",
+        "created_at": "2022-06-28T04:44:49.250000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "The problem with only specifying (block_root, epoch) is that you wind up syncing from genesis and checking after the fact whether you got the right chain. If not, abort and try again (and possibly fail again).  It's *way* better to distribute the checkpoint state and as a bonus the beacon node is in sync in a couple of minutes instead of a couple of days.",
+        "created_at": "2022-06-28T04:45:47.921000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "That *feels* like a separate problem to me (though one that certainly should be addressed).",
+        "created_at": "2022-06-28T04:46:21.548000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Problem 1: How do you acquire the root of trust.\nProblem 2: How do you skip ahead to something recent (that can be validated against your root of trust).",
+        "created_at": "2022-06-28T04:46:44.992000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I disagree.  We have a working solution that solves both the security and usability problems. Why we would insist on using an inferior solution to the security problem and not solving the usability issue?",
+        "created_at": "2022-06-28T04:47:07.569000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I think we should keep the solutions separate, because solving the root of trust issue is much more important to be sufficiently decentralized while solving the \"how do I get data\" doesn't need to be decentralized at all.",
+        "created_at": "2022-06-28T04:47:26.257000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "So we want the solution to problem 1 to be as simple as possible, which means removing any unnecessary pieces from it (like data acquisition).",
+        "created_at": "2022-06-28T04:47:35.342000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "But requesting the block root requires the same centralisation as requesting the state.  Just get what you actually need in the first place.",
+        "created_at": "2022-06-28T04:47:58.482000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "It's worth pointing out that providing the checkpoint state means that client devs don't need to spend so much time trying to optimise sync from genesis. That's a *huge* saving from a development and project management perspective.",
+        "created_at": "2022-06-28T04:48:08.167000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I don't follow this.  Why do they \"require the same centralization\"?",
+        "created_at": "2022-06-28T04:48:37.997000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "And for the record, we've had the idea of using block_root,epoch since prior to the beacon chain MainNet genesis. It's received effectively no usage.  Checkpoint on the other hand has seen widespread adoption.",
+        "created_at": "2022-06-28T04:48:56.659000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "It is far far far easier to host and serve ~64 bytes of data than it is to host and serve 100s of GB of data (EL state, I don't know what CL state is like but I assume orders of magnitude more than 64 bytes).",
+        "created_at": "2022-06-28T04:49:38.536000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "In both cases you're making a HTTP request to get something that identifies the canonical chain.  Just that the state is actually what you need to get syncing.",
+        "created_at": "2022-06-28T04:49:44.498000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Beacon state is about 50Mb and grows very slowly based on number of validators.",
+        "created_at": "2022-06-28T04:50:01.799000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "It's trivial to serve over http and fits extremely well with http caching.",
+        "created_at": "2022-06-28T04:50:10.282000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "While I agree that hosting 50MB (100MB in a year?) isn't particularly challenging, I still contend that it is notably different from hosting 64 bytes.",
+        "created_at": "2022-06-28T04:52:01.317000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Optimising a PoS sync algorithm is harder than serving 100mb",
+        "created_at": "2022-06-28T04:52:27.696000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I'm not suggesting that we change the sync algorithm, only that source of root of trust be separated from source of data.",
+        "created_at": "2022-06-28T04:52:59.996000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "For example, I may go to Joe Six Pack hardcore anti-government nutjob for my root of trust, and then ask Google for the data.",
+        "created_at": "2022-06-28T04:53:39.386000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "You can still do that by verifying the state root.",
+        "created_at": "2022-06-28T04:54:00.461000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Currently, requires manual verification IIUC.  I'm saying that this should be automatic so I only have to give the CL a URL that complies to a very simple standard for acquiring data from my root of trust.",
+        "created_at": "2022-06-28T04:54:33.856000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Availability of the data is the problem - the state is trivial to get from lots of places already. I've written a bit about this before: https://www.symphonious.net/2022/05/21/checkpoint-sync-safety/",
+        "created_at": "2022-06-28T04:55:02.061000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "And also https://www.symphonious.net/2022/05/17/weak-subjectivity-checkpoints-have-failed/ and https://www.symphonious.net/2022/05/23/checkpoint-sync-what-if-infura-is-hacked/",
+        "created_at": "2022-06-28T04:55:19.217000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Syncing the mainnet beacon chain already takes more than a day for most (all?) clients. That will need to be addressed.",
+        "created_at": "2022-06-28T04:57:00.141000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "And it's worth stressing that we've had a standard for specifying the block root and epoch since before mainnet genesis. There was one block explorer that made it available via a URL for a while and nobody used it. It's an idea that works on paper but has been shown to flop in the real world.",
+        "created_at": "2022-06-28T04:57:04.548000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "How do users specify their trusted URL to the client?  CLI parameter?",
+        "created_at": "2022-06-28T04:57:40.891000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Specifically that will need to be addressed *if* we don't just start from a recent state and have a sync time that isn't a function of the length of the chain.",
+        "created_at": "2022-06-28T04:57:42.335000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "```\nlighthouse bn --http --checkpoint-sync-url https://my-provider.com\nJun 28 04:54:24.764 INFO Lighthouse started                      version: Lighthouse/v2.3.0-e9f324d+\nJun 28 04:54:24.764 INFO Configured for network                  name: mainnet\nJun 28 04:54:24.774 INFO Data directory initialised              datadir: /home/paul/.lighthouse/mainnet\nJun 28 04:54:24.776 INFO Deposit contract                        address: 0x00000000219ab540356cbb839cbe05303d7705fa, deploy_block: 11184524\nJun 28 04:54:24.831 INFO Starting checkpoint sync                remote_url: https://my-provider.com\n/, service: beacon\nJun 28 04:54:40.067 INFO Loaded checkpoint block and state       state_root: 0xd2803a6bdf56807d77f50dabc78b8c0f0b7370f87bca63d6cddb0e5290062120, block_root: 0x9083a54dadbf77c4c7ad4ae9312bc387e7cfb843f536d59148eead4af6b2bdf0, slot: 4130592, service: beacon\n```",
+        "created_at": "2022-06-28T04:58:23.821000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Yes.  Teku accepts a URL for either block,epoch via --ws-checkpoint or a checkpoint state via --initial-state.  It also supports loading state from a local file or specifying the block root on the CLI.",
+        "created_at": "2022-06-28T04:58:27.827000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "If clients already support this (new information for me), then I'm generally satisfied and it sounds like we just need better user education.",
+        "created_at": "2022-06-28T04:59:03.569000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Better education for what? Users are adopting checkpoint sync in droves because it improves security and usability.  But you're arguing for decoupling the solutions which complicates things for users and moves us back towards what wasn't working.",
+        "created_at": "2022-06-28T04:59:53.590000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "What I'm imagining is: `my-client --trusted-root https://trusted.com/block_root/and/epoch --optional-untrusted-data-provider https://untrusted.com/bulk/data/download` or `my-client --trusted-data-provider https://trusted.com/bulk/data/download`.",
+        "created_at": "2022-06-28T05:01:28.986000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "The user can either provide a trusted block root + epoch and an untrusted data provider, or they can provide a trusted data provider.",
+        "created_at": "2022-06-28T05:02:09.725000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Perhaps that is already what we have?",
+        "created_at": "2022-06-28T05:02:13.751000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "That makes life more complicated for users who now have to find two URLs, and for providers who now need to provide two endpoints which need to be in sync.  You also make state distribution significantly more expensive - it's *really* cheap to grab the latest finalized state and it naturally works with HTTP caching and CDNs, but getting an arbitrary state may require replaying blocks to regenerate it and no longer benefits from caching.",
+        "created_at": "2022-06-28T05:03:38.525000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "And again, the problem is the limited availability of the state.",
+        "created_at": "2022-06-28T05:04:04.942000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "(note: edited my comment above to provide an option for single URL while you were typing your reply, sorry)",
+        "created_at": "2022-06-28T05:04:06.105000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "https://www.symphonious.net/2022/05/21/checkpoint-sync-safety/ goes into some detail on the beacon node verifying the state it gets btw. It's doable, but it's not the problem we have currently - the issue is that there's only one place to get the state.",
+        "created_at": "2022-06-28T05:07:11.371000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "And it makes far more sense to get the latest finalized state first, then verify the state root from multiple sources (if the user specifies them) as getting an arbitrary state is expensive but getting an arbitrary block root is cheap.",
+        "created_at": "2022-06-28T05:07:52.479000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Is there a tool I could download today and point at my CL that would allow me to publish the block_root/epoch API?  Or would I have to build that tool myself?",
+        "created_at": "2022-06-28T05:08:13.637000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Users will almost certainly not do this manually, but I think it is reasonable that they may include multiple sources of trust that they would want the client to aggregate.",
+        "created_at": "2022-06-28T05:08:59.851000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "The standard rest API allows you to request a block root for a specific slot which is what you'd want.",
+        "created_at": "2022-06-28T05:09:03.927000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I don't want to expose my EL/CL to the internet.",
+        "created_at": "2022-06-28T05:09:19.928000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I'm not a fan of client teams deciding what the points of trust are and building them in to the client.",
+        "created_at": "2022-06-28T05:09:36.613000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I agree with this 100%.",
+        "created_at": "2022-06-28T05:09:50.315000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "You could easily run a reverse proxy setup.  But for arbitrary lookup it's going to have to be backed by a node.",
+        "created_at": "2022-06-28T05:10:01.900000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I'm suggesting the problem here is ☝️ is non-trivial.",
+        "created_at": "2022-06-28T05:10:20.938000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "And part of the reason why no one runs these except the aforementioned block explorer.",
+        "created_at": "2022-06-28T05:10:43.167000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I could just call you and verify the block root that way.  Individuals probably shouldn't be exposing services to the internet - it ends in tears regularly.",
+        "created_at": "2022-06-28T05:10:48.666000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "For Lighthouse, checkpoint sync goes something like this:\n\n1. HTTP GET the finalized checkpoint.\n2. HTTP GET the finalized beacon block.\n3 HTTP GET the finalized beacon state.\n\nMy HTTP skills are shaky, but I *think* the `trusted.com` server could do some forwarding magic such that they'll forward the requests for the block and state to `untrusted.com` whilst remaining the source of truth for the finalized checkpoint (the roots).",
+        "created_at": "2022-06-28T05:10:59.605000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "This is what I keep saying - we have lots of places to get the block root and verify it already.  That's not the issue - we could improve it further, but it's not the key issue.  The issue is there is only one place making the state available.",
+        "created_at": "2022-06-28T05:11:31.296000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "If I'm hosting something from my home, I may not want people regularly downloading 100s of MB from me all the time, but I would be perfectly willing to expose an API where users can fetch 64 bytes of data.",
+        "created_at": "2022-06-28T05:11:52.626000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "But why would you be considered trusted?",
+        "created_at": "2022-06-28T05:12:06.062000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Why is it a problem that there is only one place to get the data if we can verify it?",
+        "created_at": "2022-06-28T05:12:13.778000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Is it just a data availability problem that you are concerned about (the source goes down, no one can sync anymore)?",
+        "created_at": "2022-06-28T05:12:26.384000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Because you have to sign up for an Infura account and we want to be able to sync without being dependent on Infura.",
+        "created_at": "2022-06-28T05:12:47.227000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "And you know, we like decentralising in Ethereum. 🙂",
+        "created_at": "2022-06-28T05:13:05.820000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I certainly wouldn't by many people!  But my friends and family may trust me, and my other computers (not on the same private network) would trust it.",
+        "created_at": "2022-06-28T05:13:08.806000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "This feels like an obscure corner case that's not likely to be used very often and would be better solved by a phone call or manual method of verification (you only need it when syncing your first node)",
+        "created_at": "2022-06-28T05:14:01.543000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Decentralization is a means to an end (censorship resistance and trustless).  If we can achieve censorship resistance and trustlessness via semi-centralized solutions I think that is fine.  I do agree that we should advocate for more data providers, I don't feel like we need decentralized necessarily though.",
+        "created_at": "2022-06-28T05:14:18.372000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah I'm not saying there need to be hundreds, but we need more than 1 and preferably more than 1 that doesn't require a sign up process.",
+        "created_at": "2022-06-28T05:14:53.785000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I have a node that I often resync from scratch for various reasons.  Currently, I shut it down and delete the volume and start it up.  I would much prefer to be able to just provide it with an array of endpoints and have it fail to boot if one of them disagrees.",
+        "created_at": "2022-06-28T05:15:15.818000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I don't have a second node that I own that is accessible from that node, and I don't want to have to manually verify things when I trigger a resync.  I want to be able to just shutdown, delete volume, startup.",
+        "created_at": "2022-06-28T05:15:53.995000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "That's doable, but again not really the common case I'd be optimising for.  I'm all for people building tools to make this possible but clients don't necessarily need to have built in solutions for these niche requirements.  Since teku only requires an initial state you could easily build what you need with a simple shell script.",
+        "created_at": "2022-06-28T05:17:05.231000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "What is the case you want to build for?",
+        "created_at": "2022-06-28T05:17:32.116000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "The 99.999% case where people are syncing a node once and keeping it running from there (it may be on a laptop that goes offline for a time but something that's spun up every couple of weeks or so).",
+        "created_at": "2022-06-28T05:18:39.956000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I'm skeptical that this is the 99.999% case, but I can accept that this is an idealized common case that we should optimize for.",
+        "created_at": "2022-06-28T05:19:14.748000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "And your proposed solution for this is for the user to manually verify the chain (block_root/epoch) on first boot, after sync is complete but before they start using the node?",
+        "created_at": "2022-06-28T05:19:38.801000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Currently that's the most effective solution yes.  I'm not against having a way for users to specify extra URLs to grab a block root from to automate that verification.  I've been doing an awful lot of support for people running beacon nodes for a while now and I'm pretty confident you're going to have exceptionally few people actually use that though.",
+        "created_at": "2022-06-28T05:21:11.367000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "My suspicion is that the number of people who actually do the \"verify\" step is exceptionally small.",
+        "created_at": "2022-06-28T05:22:15.999000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "You are indeed correct.  They are the same people who would specify a URL because actually finding the URL to specify is harder than the manual verification.",
+        "created_at": "2022-06-28T05:22:44.852000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Can you specify block_root + epoch on the CLI prior to initial sync?",
+        "created_at": "2022-06-28T05:23:10.279000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I think something that will improve the rate of *actual* verification is making it so everything is provided up front, and the user doesn't have to do a second step during their setup process (verify step, after sync is complete).",
+        "created_at": "2022-06-28T05:23:53.447000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Whether that means the user provides a root/epoch as a CLI parameter or a URL to a root/epoch I'm OK with either, but I think it is important that the user doesn't have to come back and take action after their initial setup (when they click start).",
+        "created_at": "2022-06-28T05:24:39.209000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "You can verify the initial state you have, it's just much harder than verifying the final block root (you have to calculate the state root from the state you get which requires SSZ parsing)",
+        "created_at": "2022-06-28T05:24:40.785000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I think you can specify both --ws-checkpoint and --initial-state and they'll work out.  There could likely be more polish applied to the way it works.  But it's surprisingly hard to get a block_root,epoch pair (as opposed to a block_root at a specific slot)",
+        "created_at": "2022-06-28T05:26:14.860000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "And I think the only way we will get high rates of adoption of actual verification is if the clients provide *no* help to the user and they are *forced* to find a root of trust before they can proceed.  If we are unwilling to halt users who trust but don't verify (e.g., they just run with whatever Infura gives them), then I think we will always suffer from low verification rates.",
+        "created_at": "2022-06-28T05:26:15.073000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I'm not convinced low verification rates are a big issue.  (See the \"What if Infura is hacked\" post I linked earlier).",
+        "created_at": "2022-06-28T05:26:51.915000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "As long as we keep the current checkpoint sync functionality split into two requests:\n\n1. Get the root.\n2. Download the block/state/whatever.\n\nI don't see why someone can't setup a server that just provides (1) and then uses HTTP redirect to get another server to deal with (2).\n\nThat way there is *only one URL*, the trusted URL. Surely users are way more likely to use that?",
+        "created_at": "2022-06-28T05:27:12.882000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e it's surprisingly hard to get a block_root,epoch pair\nThis is the piece I feel like could be alleviated by *someone* writing and publishing tooling that makes it easy for anyone to expose.  e.g., a little API service that talks to your private backend and publishes a public root/epoch pair.",
+        "created_at": "2022-06-28T05:27:15.496000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "It would be _better_ if people verified but the risk is actually very low because the incentive to attack is very low.",
+        "created_at": "2022-06-28T05:27:18.699000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Or just use block_root,slot which exists today, is simpler and more flexible....",
+        "created_at": "2022-06-28T05:27:33.823000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Sure, I don't know enough to know what the right information that needs to be exposed is.",
+        "created_at": "2022-06-28T05:27:51.997000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "If I was King of Ethereum I would tell CL devs to decide on what the right minimal API was that needs to be exposed (draft a standard), and then I would fund some third party to build a tiny little tool that makes it easy to make that API available.",
+        "created_at": "2022-06-28T05:28:45.746000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "That would work. The only downside with doing it that way is that you're likely to request an arbitrary historic state which is more expensive to serve (sometimes expensive enough to cause timeouts).  Getting the state then verifying it matches the block root is nicer (I'd love to see Lighthouse be able to just used the latest finalized state rather than having to search back for one that wasn't an empty slot)",
+        "created_at": "2022-06-28T05:29:43.521000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, it's something we can do. Priorites, ya know 😅",
+        "created_at": "2022-06-28T05:30:53.529000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Which requests does Teku do to get the checkpoint sync state? Do you get the finalized checkpoint?",
+        "created_at": "2022-06-28T05:31:39.404000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "We literally send a HTTP request for whatever URL you give us.  So typically people point it at `/eth/v2/debug/states/finalized` but it works just as well pointing to a state in GitHub (which is how we do testnet genesis files).",
+        "created_at": "2022-06-28T05:32:24.136000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@340345049063882753\u003e Re: https://www.symphonious.net/2022/05/23/checkpoint-sync-what-if-infura-is-hacked/#fn:1 (the footnote specifically), I weakly disagree with this claim.  Being able to force people to resync their nodes is certainly a problem, but it becomes a *far* bigger problem if you have the ability to trick resyncing nodes into syncing the wrong chain.  It escalates a denial of service attack (force node resync) into a chain takeover attack.",
+        "created_at": "2022-06-28T05:32:37.333000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "https://github.com/ajsutton/eth2-states was the old school way to distribution checkpoint states. 🙂",
+        "created_at": "2022-06-28T05:33:01.590000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "My point is more that an attack that can destroy your database is the really big problem. Yes if on resync it could trick you into syncing a different chain that compounds the problem, but we'd be focussing on not letting them DOS your node as the primary issue.",
+        "created_at": "2022-06-28T05:34:00.077000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "And yes I fully understand the priorities.  I'm very grateful to all the work Meredith put in to get Teku working the way it does.",
+        "created_at": "2022-06-28T05:34:57.256000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm, interesting about providing a direct URL. There's an odd case where someone might encourage someone to use `https://trusted.com/very_old_state` and then the user thinks they're safe because they're using `trusted.com` but they're outside the WS period. Kinda abstract, not sure it's a deal breaker.",
+        "created_at": "2022-06-28T05:35:01.280000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I agree that we should try to avoid writing DOS vectors into our clients.  I disagree that we should ignore the compounding nature of these two problems.  The compounded attack is far higher severity than either of the individual attacks.",
+        "created_at": "2022-06-28T05:35:05.849000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "In the real world, the worst problems are almost always compounded, so I think it is a bad idea to ignore the compounded problem because the individual problems exist.",
+        "created_at": "2022-06-28T05:36:04.839000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "For example, a DOS vector alone isn't worth it for some well funded attacker to throw huge amount of resources into triggering, but if you can rewrite Ethereum or otherwise force a rollback past finality suddenly this becomes a profitable attack and worth the resources to compromise infura and develop a resync DOS attack.",
+        "created_at": "2022-06-28T05:37:16.397000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "But again, this only applies to people running a single node so the potential upside is always fairly limited. Once you have more than one node you'd get the initial state from the other one.  And if they're both knocked offline at the same time you'd have to manually intervene and would be paying a far bit of attention to what's going on there.",
+        "created_at": "2022-06-28T05:38:42.819000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "But as I've said a couple of times, I'm not against providing automated ways to verify the state, just that it's not the biggest problem currently - getting the state is.  And I'm skeptical that it will get much use.  It's also simple for people to build tools to do it today without needing client support (at least for Teku, probably slightly harder for other clients but likely doable based on Paul's suggestions)",
+        "created_at": "2022-06-28T05:39:59.295000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I *think* (could be wrong) that part of the reason people don't host the state is because currently it is trusted by most people.",
+        "created_at": "2022-06-28T05:41:11.670000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "People trust Infura, they don't trust zoltu.io.  So if I hosted the state at zoltu.io, no one would use it because they don't trust me.",
+        "created_at": "2022-06-28T05:41:28.116000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Which is why I am lobbying to make it so you *don't* have to trust your state provider.",
+        "created_at": "2022-06-28T05:42:26.793000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "It seems to me that having one request [get the state] rather than two requests [get the state root, get the state] somewhat reduces the room we have to do interesting things. For example, ask multiple servers for the root and then download from one if they all agree.",
+        "created_at": "2022-06-28T05:43:12.640000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Not really.  You could just get the state and then check with multiple sources before you use it.  Same effect - much simpler on the service providing the state.",
+        "created_at": "2022-06-28T05:43:52.051000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "There's no reason to believe that the state you get from `/some/url/\u003cstate-root\u003e` is actually a state with the specified root, so you have to verify after you get it anyway.",
+        "created_at": "2022-06-28T05:44:25.321000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Oh yeah, also works. Not sure if it's necessarily simpler though. I'd probably want to delay the download until all servers agree. I don't think it's a deal breaker though.",
+        "created_at": "2022-06-28T05:44:56.021000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "You *should* verify it after you get it.  Instead, people just pick a place they trust because they *don't* verify it after they get it.",
+        "created_at": "2022-06-28T05:45:15.279000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "I guess it's simpler since you don't have a state change between getting the root and getting the state.",
+        "created_at": "2022-06-28T05:45:16.534000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Keeping two states cached would probably solve that, though.",
+        "created_at": "2022-06-28T05:45:31.999000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "It's simpler for the state provider.  In particular it allows me to grab a finalized state periodically and shove it on a static webserver fronted by a CDN and fairly long http cache times. Now I have essentially no load on my beacon node and a much smaller bandwidth bill.",
+        "created_at": "2022-06-28T05:45:58.606000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "I think Adrian is talking about the client software validating it. Which I assume all would do.",
+        "created_at": "2022-06-28T05:46:03.803000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Whereas once you move to requesting a particular state, you get much less control over how recent it is and what caching is used etc.",
+        "created_at": "2022-06-28T05:46:26.998000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, I agree that's easier. But in that scenario how could we check if there's consensus between, say, your server and my server?",
+        "created_at": "2022-06-28T05:46:36.753000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "1. Fetch state from untrusted source.\n2. Ask `n` semi-trusted providers if the block_root/slot from (1) is valid.\n3. If `m` (`0 \u003c m \u003c= n`) say it isn't valid, halt until user intervention.",
+        "created_at": "2022-06-28T05:47:19.170000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "So my thinking is that we make things as simple as possible for state providers since that's what we're struggling to get, and it's the more expensive thing to serve.\n\nSo yeah, you request the state which can be from a fairly arbitrary slot (needs to be finalized, reasonably recent etc but doesn't matter if it's latest finalized or a few epochs old now).  Then as Micah says, you specify a way to request block root (or state root, either works) for a specific slot from multiple sources and check they match the state you have.  That's a dynamic api but block roots in particular are cheap to find even for arbitrary slots.",
+        "created_at": "2022-06-28T05:49:46.170000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Basically one of the get state or the get root calls has to be dynamic.  I'm arguing we should support fairly static approaches to serving the state, and the block root service has to be the more dynamic one.",
+        "created_at": "2022-06-28T05:50:45.186000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "What if the state provider served `state.ssz` and `state_root.txt`? I expect that's still very simple and it opens us up to `m of n` schemes.",
+        "created_at": "2022-06-28T05:51:23.599000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Having more than one file makes it much harder to leverage HTTP caching because you can't easily guarantee they'll be in sync.",
+        "created_at": "2022-06-28T05:52:12.709000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Possibly not a deal breaker, but I'm going all in on the making it as simple as possible for the state providers at the moment because we need more of them.",
+        "created_at": "2022-06-28T05:53:25.668000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "It's quite nice that I can just shove a state in a github repo as a means of distribution (and I've used that even recently for things like kiln that have not other state providers)",
+        "created_at": "2022-06-28T05:54:10.016000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Do clients support the initial state in local disk format?  Would be nice if one could just setup a rotating torrent for it.",
+        "created_at": "2022-06-28T05:55:19.750000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Or one could use `git` directly, without needing GitHub hosting.",
+        "created_at": "2022-06-28T05:55:34.839000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm yeah, I see your point. I'm not sure I'm completely sold on absolute minimum server complexity at the expense of consensus-based schemes for users. I suspect there's a happy medium in there somewhere, but I could be wrong.",
+        "created_at": "2022-06-28T05:56:15.155000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Teku does. I don't think any other client can work off just a state currently. I think some can use just a block and state so that would work as a flat file.  Lighthouse has some extra requirements currently.",
+        "created_at": "2022-06-28T05:56:20.307000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I should say \"at least Lighthouse\".",
+        "created_at": "2022-06-28T05:56:52.924000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Prysm requires the state and a block to start. Or a single URL",
+        "created_at": "2022-06-28T05:59:42.813000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I think we can have both minimal complexity and consensus-based schemes.  I'd basically just say that state providers are required to provide some recent state at the URL they specify (must be finalized etc).  Then we basically say that \"trust providers\" are required to support the `/eth/v1/beacon/blocks/\u003cslot\u003e/root` endpoint (standard rest api includes this already). And I think you have everything you need to get a state and verify it against multiple sources with a lot of flexibility.  Most state providers would probably also be trust providers and that would certainly be encouraged, but I could see some services opting to just be a trust provider.",
+        "created_at": "2022-06-28T05:59:54.767000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Personally I'd like to see no distinction between \"trust providers\" and \"state providers\". I'd like to see:\n\n`--checkpoint-sync-urls http://one.com,http://two.com`\n\nI just think that would be way easier for users. Perhaps it's unattainable.",
+        "created_at": "2022-06-28T06:01:17.317000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I'd love that. I think the way to achieve it is to make state distribution as simple as possible. Then if you're going to the effort of being a trust provider you may as well provide a state as well since you already have a beacon node running and a web service in front of it etc.",
+        "created_at": "2022-06-28T06:02:44.567000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "But in that case you couldn't be a state provider without being a trust provider as well, right?",
+        "created_at": "2022-06-28T06:04:14.340000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "It feels like there should be a handshake, so the user just provides a list of URLs and *some* may provide trust only, and some may provide trust and data.",
+        "created_at": "2022-06-28T06:05:00.523000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "That way the user doesn't need to differentiate, but we can support some people hosting *only* trust.",
+        "created_at": "2022-06-28T06:05:14.348000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah if we just specified `--checkpoint-sync-urls` then you'd have to be both (or clients would have to be smart enough to handle 404 responses as meaning \"I don't provide trust/state\".",
+        "created_at": "2022-06-28T06:05:27.513000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Every provider will *claim* to be a trust provider, its just that some users don't actually trust them.  🙂",
+        "created_at": "2022-06-28T06:05:47.351000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Actually, that I think causes me to dislike a single array.",
+        "created_at": "2022-06-28T06:05:57.573000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I don't trust infura, but I'm happy to download state from them.",
+        "created_at": "2022-06-28T06:06:04.975000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "But I'd certainly be happy to take a swing at saying everyone is a state and trust provider if we make state providers as simple as possible.",
+        "created_at": "2022-06-28T06:06:08.031000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I don't want infura in my `m of n` trust set, but I definitely want them in my data availability set.",
+        "created_at": "2022-06-28T06:06:19.028000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "You can be a trust-only provider by HTTP redirecting the request for the state to another server (infura, whatever)",
+        "created_at": "2022-06-28T06:06:29.647000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "That requires trust providers maintain an up-to-date set of data providers, which means being a trust provider is now more onerous.",
+        "created_at": "2022-06-28T06:07:07.854000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I'm fine with the latter suggestion here (that 404 to the data request means not a data provider, and clients can handle this gracefully).",
+        "created_at": "2022-06-28T06:09:36.622000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, separate trust and data providers in the CLI just sounds like a recipe for \"too hard, didn't bother\" to me",
+        "created_at": "2022-06-28T06:09:48.292000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Though, I still think users should be able to differentiate between \"I trust this\" and \"I am willing to download data from this\".",
+        "created_at": "2022-06-28T06:09:56.854000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I am willing to download data from basically anywhere.  I trust an incredibly small set of actors, and even those I would want `m of n` consensus with large value of `m`.",
+        "created_at": "2022-06-28T06:10:22.057000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I agree, but I could see it may be useful to support either a single list or have some way of differentiating for more advanced users. Not sure I can design the CLI option right now but I'm sure it's doable.",
+        "created_at": "2022-06-28T06:10:39.547000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, agreed. Advanced CLI option is possible. Ability to have a simple CLI option is the most interesting thing for me.",
+        "created_at": "2022-06-28T06:11:34.524000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I think the big question, and likely a source of disagreement, is whether we should *support* users running nodes in unsafe ways, or if we should essentially tell users \"either do this right or don't do it at all\".",
+        "created_at": "2022-06-28T06:12:26.687000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I tend to lean toward the latter, I would rather have fewer nodes on the network overall but higher confidence that those nodes are being operated \"properly\" than having more nodes on the network where most of them are likely operated poorly.",
+        "created_at": "2022-06-28T06:12:57.421000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "I think I've had enough sources of disagreement for this afternoon, I might get back to some reviews 😅",
+        "created_at": "2022-06-28T06:13:07.236000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "And then doing everything we can to make it easy to operate a node properly.",
+        "created_at": "2022-06-28T06:13:09.559000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I consider being unwilling to take the time to think through \"who do I trust?\" to be operating a node \"improperly\".",
+        "created_at": "2022-06-28T06:14:45.190000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "I'm just going to bump this before I go 🙏  I believe it was \u003c@206016661470314496\u003e and \u003c@628018527470616606\u003e who were talking about this in the ACD. Sorry if I got the names wrong, I'm still getting used to some people's voices.",
+        "created_at": "2022-06-28T06:14:54.009000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I’m going to have to bail as well. I think decisions on what nodes allow users to do are up to individual client devs.",
+        "created_at": "2022-06-28T06:15:42.465000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@833706406699073536\u003e (you're in for a long reading when you wake up)",
+        "created_at": "2022-06-28T06:27:35.506000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "__kasey__",
+        "category": "general",
+        "parent": "",
+        "content": "reading is my passion",
+        "created_at": "2022-06-28T14:25:28.554000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "__kasey__",
+        "category": "general",
+        "parent": "",
+        "content": "IMO the distinction between data and trust is not super strong when considering a list of Beacon API endpoints because either the state and block values concur with the roots from the others, or they don't. As long as some trusted sources are in the list and all agree, you should be fine. When I changed checkpoint sync to use finalized blocks (originally I started from the weak subjectivity checkpoint), I did consider automating verification of the block root, which we could do without any new APIs. Our url flags specify the url up to the base path of the beacon API. I like the idea of allowing the url flag value to be a list, and when a list is provided, ensuring that `/eth/v1/beacon/blocks/{block_id}/root` using the slot of the checkpoint block as `{block_id}` matches across all APIs in the list.",
+        "created_at": "2022-06-28T14:57:33.936000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "If you are requiring complete consensus this can work, but that struggles if one node is offline/unavailable.  You could make it so that offline/unavailable is treated differently from returns a different answer, but lets say I have 10 sources, 2 of which I trust.  If the two I trust are offline, then what I *want* is a failure, not to say \"everyone who was online agreed\".",
+        "created_at": "2022-06-28T15:41:54.752000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "__kasey__",
+        "category": "general",
+        "parent": "",
+        "content": "`If the two I trust are offline, then what I want is a failure, not to say \"everyone who was online agreed\".` that's what i meant by \"all apis in the list\"",
+        "created_at": "2022-06-28T15:43:16.624000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "What one would ideally want to express to the client is \"none of these `n` sources I semi-trust must disagree, and at least `n` must be online/available\".  If you mix in nodes you *don't* trust into that list (places that may be reasonable for untrusted data acquisition), expressing that becomes much more challenging.",
+        "created_at": "2022-06-28T15:43:32.949000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I don't necessarily trust all of the places that can serve me data.",
+        "created_at": "2022-06-28T15:44:07.622000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Google can serve data like a boss, but I don't trust them at all.",
+        "created_at": "2022-06-28T15:44:15.011000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "__kasey__",
+        "category": "general",
+        "parent": "",
+        "content": "You don't have to as long as you include some trusted sources. Your trusted sources will be used for confirmation.",
+        "created_at": "2022-06-28T15:44:36.984000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Lets say I have a source that I trust which is dog slow and/or doesn't provide state sync data at all.  I also have two blazingly fast data providers that I suspect may be actively malicious.  If I put both sources into one list and don't differentiate, then I end up in one of these scenarios:\n1. All sources are online, all agree.  Everything is fine.\n2. All sources are online, one of the two untrusted source disagrees.  **System incorrectly fails to sync**, it should have used the other data source.\n3. The trusted source is online, a data source is offline, I have configured \"treat offline as in agreement\".  I download from the online source.\n4. The trusted source is offline, one data source is online, I have configured \"treat offline as in agreement\".  **I incorrectly trust the untrusted data source.**\n5. The trusted source is offline, one data source is offline, I have configured \"treat offline as in disagreement\".  **I incorrectly fail to sync.**",
+        "created_at": "2022-06-28T15:50:01.562000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "__kasey__",
+        "category": "general",
+        "parent": "",
+        "content": "`I have configured \"treat offline as in agreement\"` I don't think it makes sense to design this complex configuration scheme. Assume \"all are in agreement\" is the only option. If your node fails to start because some remote system is unavailable, it's fine to require a human in the loop to edit flags and try again.",
+        "created_at": "2022-06-28T15:51:35.783000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gcolvin",
+        "category": "general",
+        "parent": "",
+        "content": "EVM Summit Questionnaire",
+        "created_at": "2022-06-28T19:05:07.668000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "general",
+        "parent": "",
+        "content": "FYI: looking at the average block times since the last bomb period kicked in (~15.8s) and blocks left, it seems like Gray Glacier should happen around \u003ct:1656583200:F\u003e",
+        "created_at": "2022-06-28T20:47:35.050000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I know it's off-topic, but am I the only one that distrusts the bot and goes and checks the timezone anyway?",
+        "created_at": "2022-06-28T21:45:59.772000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "general",
+        "parent": "",
+        "content": "I can go back to posting UTC times if people prefer that, but I like the bot 🙂",
+        "created_at": "2022-06-28T21:56:08.472000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "general",
+        "parent": "",
+        "content": "Although ~everyone ends up having to check the timezones with UTC anyways 😅",
+        "created_at": "2022-06-28T21:56:35.499000+00:00",
+        "attachments": null
+    }
+]

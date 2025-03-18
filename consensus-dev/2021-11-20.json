@@ -1,0 +1,298 @@
+[
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Hey, sorry again for the large tagging, but I got already a couple of confirmations and I would like to find out if I found what I think is a flaw in all implementations of merkleization in the CL or just in Prysm (and what I think is in Lodestar as well from talking to \u003c@!792822129019584562\u003e and Lighthouse from reading the code). Depending on this \u003c@!311971895828283393\u003e may want to write a blog post. The bottom line is this: when computing the hash tree root of a Merkle tree, what is the signature of the call to the low level assembly that actually does the hashing? is it something like `Hash([]byte) [32]byte` or something like `std::array\u003cuint8, 32\u003e Hash(std::vector\u003cuint8\u003e)` or similar? namely something that takes in a buffer and then returns one root? If that's the case I think this is the wrong thing to do.  \ncc. \u003c@!602753420033785856\u003e \u003c@!340345049063882753\u003e \u003c@!449019668296892420\u003e",
+        "created_at": "2021-11-20T20:20:49.396000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "Not sure about the assembly version, but Go exposes all hash functions as an object, with a Write and a Sum function. You first load the input, and then finalize and get the output. The idea is that you can reuse the allocated memory for the next call by resetting this hasher. And the Sum() takes a slice argument, to write the output to if there's space.",
+        "created_at": "2021-11-20T22:27:53.665000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "Then to abstract that hash input concatenation etc., in my Go code it only uses `H(a, b) y`, which is some allocated function that does the reuse-memory thing internally",
+        "created_at": "2021-11-20T22:28:55.693000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "Could be more optimal if you want to dig in the assembly, but assuming the Go SSA compiler steps do their work, it should reduce the variable copies where possible",
+        "created_at": "2021-11-20T22:29:43.085000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "When you say \"wrong\" do you mean, may not be the most efficient approach or do you mean \"gives the wrong answer\"?\nTeku uses the MessageDigest api which has an update(byte[]) (potentially multiple times but in our case just once) then getDigest().  What it does from there may differ depending on the implementation - our default of bouncy castle is a pure java implementation.",
+        "created_at": "2021-11-20T22:30:25.920000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "obviously we have the right answer, I mean is the wrong approach computationally. And I'm not talking small percentages, here's my latest benchmarks against the current branch of Prysm running on very different CPUs\n```\ngoos: linux\ngoarch: amd64\ncpu: AMD Ryzen 5 3600 6-Core Processor\nBenchmarkHashBalanceShani-12                  160       7629704 ns/op\nBenchmarkHashBalanceShaniPrysm-12              15      74012328 ns/op\nPASS\n\ngoos: linux\ngoarch: amd64\ncpu: Intel(R) Core(TM) i5-3570 CPU @ 3.40GHz\nBenchmarkHashBalanceAVX-4               68      26677965 ns/op\nBenchmarkHashBalancePrysm-4              7     165434686 ns/op\nPASS\n\ngoos: linux\ngoarch: amd64\ncpu: Intel(R) Core(TM) i5-7200U CPU @ 2.50GHz\nBenchmarkHashBalanceAVX2-4             121       9711482 ns/op\nBenchmarkHashBalancePrysm-4             10     103716714 ns/op\nPASS\n```",
+        "created_at": "2021-11-20T22:32:23.463000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "That's a 10 fold improvement on a list of `uint64`",
+        "created_at": "2021-11-20T22:32:38.993000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "https://github.com/protolambda/ztyp/blob/a2f03d38615213476666839593d7e7818bedc892/tree/hashing.go#L168\nHere's an example of reusing the hasher thing of Go by wrapping it, hiding the hash function behind a simple `H(a, b) y`. Relying on compiler there, Go is probably not really zero-cost abstraction though, maybe rust does it well 😓",
+        "created_at": "2021-11-20T22:32:45.740000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, that is the flaw that I am pointing at, and it seems to me that we are all using that sort of approach",
+        "created_at": "2021-11-20T22:33:15.401000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "my very naive implementation beat a production one by 10 times in the (admitedly most beneficial for my implementation) case of a large list",
+        "created_at": "2021-11-20T22:33:44.512000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "can you share your benchmark code?",
+        "created_at": "2021-11-20T22:34:04.334000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "sure",
+        "created_at": "2021-11-20T22:34:08.647000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "Also, yes, hashing balances is slow if the compiler can't abstract `[8]uint64` slices into `[64]uint8` hash inputs (at least it's little-endian so someone can optimize it on most common platforms :P)",
+        "created_at": "2021-11-20T22:36:22.660000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "in C++ is the implementation I used in mammon a few months ago, I didn't change anything to it, that's the main loop \u003chttps://github.com/potuz/mammon/blob/main/ssz/hashtree.cpp#L77-L100\u003e\nIn Go, here's the branch in prysm's repo, it's much worse than the C++ code because I just wanted to prove that it was something we wanted to pursue, but has the code for those benchmarks up there: \n\u003chttps://github.com/prysmaticlabs/prysm/tree/custom_hasher\u003e",
+        "created_at": "2021-11-20T22:36:44.874000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "no, the problem is much more basic than that",
+        "created_at": "2021-11-20T22:36:59.843000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The problem is literally the fact that if you call 8 times to hash 2 chunks of 32 bytes, you can do much better if you call 1 time to hash the 16 chunks",
+        "created_at": "2021-11-20T22:37:36.991000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "and take advantage of vectorization on the CPU",
+        "created_at": "2021-11-20T22:37:49.766000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I have written a small document explaining the problems and the solution, with a simple implementation, but I wasn't sure if I had to share it because I wasn't sure if other clients were implementing this already",
+        "created_at": "2021-11-20T22:38:43.244000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "but the right signature for a hasher should be like this one:",
+        "created_at": "2021-11-20T22:38:54.706000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "```\nextern \"C\" void sha256_8_avx2(unsigned char* output, const unsigned char* input, std::size_t blocks);\n```",
+        "created_at": "2021-11-20T22:39:23.676000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "input: blocks you want to hash: output : roots you get out, blocks:  number of blocks you want to hash",
+        "created_at": "2021-11-20T22:40:00.805000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "you can do 8 at a time on AVX2",
+        "created_at": "2021-11-20T22:40:14.355000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "instead of calling 8 times OpenSSL for example",
+        "created_at": "2021-11-20T22:40:25.522000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "Sounds great, but will require some non-standard hasher calls. Worthwhile, but don't think any client went there yet (maybe nimbus?)",
+        "created_at": "2021-11-20T22:43:08.567000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Certainly not Nimbus, \u003c@!449019668296892420\u003e has an open ticket in which I am called, I'm franky surprised this wasn't caught before. I'm waiting for Michael Sproul's reply cause I had the impression that his algo beat mine, and I thought that my improvement was only on hardcoding the padding block, but the custom assembly seems to have been the largest difference",
+        "created_at": "2021-11-20T22:44:51.397000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "And I want to stress something: this has nothing to do with assembly in principle: if you have a hasher with the signature above you can just send every height in the Merkle tree at a time",
+        "created_at": "2021-11-20T22:45:52.759000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "My assembly is a copy of Intel's one,. but I changed the signature of the functions",
+        "created_at": "2021-11-20T22:46:07.882000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "off-topic: I just realized you are in your own category in this Server!",
+        "created_at": "2021-11-20T22:51:01.954000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "ok, so the signature should be `out: [][32]byte, in: [][64]byte`, to run multiple hashes efficiently, by just using this AVX2 optimization? And I suppose you can still do `log(N)` memory thing during merkleization, since the same stack-like representation works well for an 8-ary tree like overlaid on the binary tree here?",
+        "created_at": "2021-11-20T22:51:02.101000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "exactly!",
+        "created_at": "2021-11-20T22:51:30.325000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "what I am using is a flat array in my C++ code worked better, but I think this is just as fine on a `[][][32]byte` implementation of the tree",
+        "created_at": "2021-11-20T22:52:34.362000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "Ha yes, Micah too. I dont officially work for the EF anymore, but I'm not a stranger either.",
+        "created_at": "2021-11-20T22:52:51.268000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "but do you know someone at Intel? someone involved in maintaining \u003chttps://github.com/intel/intel-ipsec-mb\u003e? I mean I have some of the assembly ready, but it feels ridiculous to not have one of the main libraries like Intel's or OpenSSL providing a simple variation of their algorithms adapted to Merkle Trees.  I feel such a library is something we could all use, instead of having each write our own custom hashers without the years that went into those repo's research",
+        "created_at": "2021-11-20T23:04:17.005000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "protolambda",
+        "category": "general",
+        "parent": "",
+        "content": "Don't know, but I know others who might, I'll ask around",
+        "created_at": "2021-11-20T23:06:38.548000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "Hey 👋 I’ll need to check if our underlying lib uses AVX, but we feed at most 2x 32-byte values in at a time, so we’re probably not taking full advantage. See `hash32_concat` here:  https://github.com/sigp/lighthouse/blob/stable/crypto/eth2_hashing/src/lib.rs\n\nIf I understand correctly you’re proposing hashing 16 internal nodes at once (i.e. 16x 32-byte values producing 8 roots)? Is there a trade-off against re-hashing parts of the tree unnecessarily? Most of Lighthouse’s speed comes from caching, and some more from thread parallelism, which might be why we’re already competitive, particularly with a primed cache (I know our from-scratch hashing could be a lot faster)",
+        "created_at": "2021-11-20T23:40:01.820000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Hi thanks for confirming, all decent libraries use all CPU capabilities, my point is that by calling 8 times to hash 2 chunks instead of 1 time to hash 16,  you **are not using** the codepath of those libraries that actually do vectorization. This also explains why there's a huge difference between the performances we saw at that time of benchmarking a few months ago, between implementations that used Sha extensions vs those that didn't. Essentially because it doesn't matter if your CPU supports AVX512, you'll be performing like SSE3. But SHA-ni is a completely different story.",
+        "created_at": "2021-11-20T23:54:21.176000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "But yes, this mostly applies for large lists at slot 0 where you do have them changed and you need to rehash the entire list.",
+        "created_at": "2021-11-20T23:55:31.981000+00:00",
+        "attachments": null
+    }
+]

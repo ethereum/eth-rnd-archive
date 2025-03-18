@@ -5,7 +5,7 @@
         "parent": "",
         "content": "Would it be possible to verify a Verkle proof on chain? Ie to just prove a node exists in a Verkle Tree",
         "created_at": "2022-11-20T02:18:57.700000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "There was a related discussion some weeks ago about that: https://discord.com/channels/595666850260713488/824798757618188339/1037050920644653066\n\nTL;DR: There might be a generic precompile to verify state proofs. \"Generic\" in the sense of possibly prepending the state root with a version number that can tell the precompile which kind of proof it should verify (e.g: MPT, VKT, VKT_v2 (if there's a future breaking change in VKTs) ,etc).\nThat would have some benefits:\n1) You don't have to code the cryptography verifications in solidity (or assembly?) to make it efficient. So.. avoid people reinventing the wheel, or implementation risks since it can have bugs, it'd be easy to use, and the usual benefits of precompiles.\n2) You can keep evolving the state trie without breaking existing contracts which aren't upgradable. (e.g: if someone wrote a concrete verifying code in solidity as mentioned in point 1, they might break in the future)\n3) You can be a bit more friendly with external bridges that might be relying on proofs for things... but I'd guess they always have the option to \"fix things\".\n\nAlso, I think at some point you could also create an SNARK to do the verifications. I think part of the idea of the underlying cryptographic primitives in the design was making them snark-friendly... so I think in that case it can make them more succinct (less data for verification).\nI'm not an expert so take this with a grain of salt, other might correct me.",
         "created_at": "2022-11-20T14:35:26.813000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "controlcthenv",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "Very interesting, I had originally thought of this since I know a lot of Fraud Proofs as I understand rely on Merkle Proofs for intermediate state (which is loosely derived from Ethereum's use of Merkle Proofs IIRC), and since I was wondering both 1) How the Verge will impact Optimism's re-use of Geth and Ethereum Block Format, and 2) What the benefits of Verkle Proofs would be for Fraud Proofs",
         "created_at": "2022-11-20T15:16:14.321000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -29,7 +29,7 @@
         "parent": "",
         "content": "Yes. This switch from MPT and VKT could (and probably will) break some existing stuff. \nBut as I mentioned before, I'd put each case in two buckets:\n1) People that can't do nothing about it (i.e: a non-upgradable smart-contract that assumed that a MPT proof will always be possible for proving internal chain state. Not sure yet how many since you can always directly access your storage slots... but maybe for historical state, or other contract state?)\n2) Pepole that can do something about it\n\nI think L2s are in the second bucket. Also, L2s doing fraud proofs or zkProofs mostly rely on their assumptions on which trie they're using. Some of them I'd guess are using the MPT as the L1, but for example zkEVMs are using other tries that aren't MPT.. mostly for the same reasons the VKT design is using snark friendly primitives. (i.e: keccak isn't zk-friendly).\nSo.. at the end of the day, I think L2 will be fine. Whatever they're doing probably:\n1) They've already changed MPTs to something else (e.g: zkEVMs)\n2) If they're using MPTs, is up to them to keep using it in their layer... they could still use MPTs even after Ethereum switches to VKTs. Feels to me they might leap frog it directly to snarks eventually, I don't know.",
         "created_at": "2022-11-20T15:25:30.554000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -37,7 +37,7 @@
         "parent": "",
         "content": "Agree on your point that last 2) can create a tension on the strategy of having a \"geth fork with the least amount of line code changes\". I think that's an excellent strategy for a fork, but definitely there's a tension there.",
         "created_at": "2022-11-20T15:28:07.487000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "controlcthenv",
@@ -45,7 +45,7 @@
         "parent": "",
         "content": "Yeah I don't think it will be breaking to existing rollups but rather just rely on l2geth staying on a version of Geth which uses Merkle Trees and diverging, but I think that creates an interesting challenge to the entire reason they used Geth to begin with",
         "created_at": "2022-11-20T15:37:47.222000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "controlcthenv",
@@ -53,7 +53,7 @@
         "parent": "",
         "content": "Although I've always been biased and of the idea that l2's shouldn't re-use the EVM and should instead move to novel execution environments where possible",
         "created_at": "2022-11-20T15:38:12.559000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -61,7 +61,7 @@
         "parent": "",
         "content": "\u003c@353136597522448385\u003e , I was looking at this EIP section (https://notes.ethereum.org/@vbuterin/verkle_tree_eip#Header-values), and it seems our implementation isn’t matching that exactly on some points. \nI want to check if these are bugs or if the EIP isn’t up to date?  (I’ll separate in messages to its easier to reply)",
         "created_at": "2022-11-20T19:06:55.819000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -69,7 +69,7 @@
         "parent": "",
         "content": "Potential bug 1: \nThe EIP defines the first vector entry to `2 + 256 * len(inp)`, but in our case, in `GetTreeKey()` we do `poly[0].SetZero()` (See here: https://github.com/gballet/go-ethereum/blob/beverly-hills-head/trie/utils/verkle.go#L68).  \nIn rust-verkle it seems that it’s done as described in the EIP (https://github.com/crate-crypto/rust-verkle/blob/master/verkle-spec/src/util.rs#L88-L89) (thanks \u003c@427491045308235776\u003e  to point me there!).\n\nIf this needs to be fixed, we can hardcode that first entry to (2+64) since, as you mention in that method comment, this case of pedersen hashing has an expected number of vector entries. \n(We could even cache as a constant the Fr point corresponding to that; but not sure how aggressive we want to be there to avoid recalculating that length and transforming it to Fr so many times)",
         "created_at": "2022-11-20T19:08:09.308000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -77,7 +77,7 @@
         "parent": "",
         "content": "Potential bug 2: \n_I think_ here https://github.com/gballet/go-ethereum/blob/beverly-hills-head/trie/utils/verkle.go#L75-L79, we need to switch from `treeIndex.Bytes()` (L77), to `treeIndex.Bytes32()`. The comment `// 32-byte aligned...` is correct (matching the EIP), but `treeIndex.Bytes()` gives us a truncated byte slice (thus not 32 byte aligned). This makes that loop transform to little-endian to behave incorrectly. If we switch that to `treeIndex.Bytes32()` ,  I think it will do exactly what we want.",
         "created_at": "2022-11-20T19:09:11.293000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -85,7 +85,7 @@
         "parent": "",
         "content": "As a potential performance improvement above, it might be good to change L78 to avoid calling `len(treeIndex.Bytes())` in that loop. I’m not sure the compiler is smart enough to figure out that length is constant… so it might be doing an extra allocation in every iteration of the loop. That length can be assumed to be 32 (since with `treeIndex.Bytes()` we have the 32 byte aligned array we wanted).",
         "created_at": "2022-11-20T19:09:46.262000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -93,7 +93,7 @@
         "parent": "",
         "content": "I've two questions reg this interesting `2 + 256 * len(inp)`  decision, maybe for \u003c@555483069038198827\u003e since it's EIP related. I just want to validate if they make sense (sorry if are obvious questions!)\n\nQ1: The idea there is to make the hash be different on \"empty\" entries vs \"zeroed entries\", right? e.g: if we have the hash of a vector with, say, 20 non-zero entries V be X. If we do `hash(V + [0])` we want the hash to be different.. so we need to pack the `len(..)` in the vector somehow, since the multiscalar multiplication can't really distinguish both cases. \n\nQ2: In the case of computing the hashes of leaf nodes in VKTs, I see we don't have this strategy of inserting the `len(..)` of the vector there. But I think that's because we're doing the \"leaf marker\"s? I think that is already solving the \"intentional zero\", so we don't need to include that length as we do for creating trie keys as in the other case?",
         "created_at": "2022-11-20T19:36:46.445000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "gballet",
@@ -101,7 +101,7 @@
         "parent": "",
         "content": "There's no bug here, check line 87",
         "created_at": "2022-11-20T19:41:54.800000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -109,7 +109,7 @@
         "parent": "",
         "content": "Oh, I\"m sorry 🤦‍♂️",
         "created_at": "2022-11-20T19:42:41.952000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "gballet",
@@ -117,7 +117,7 @@
         "parent": "",
         "content": "You're not the first one to mention that, I'm pretty sure it it correct as it is, because of the endianness of underlying Fr. I might be wrong, I'll check tomorrow",
         "created_at": "2022-11-20T19:43:03.253000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "gballet",
@@ -125,7 +125,7 @@
         "parent": "",
         "content": "I see. Yup, sounds good.",
         "created_at": "2022-11-20T19:43:42.240000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "gballet",
@@ -133,7 +133,7 @@
         "parent": "",
         "content": "But in general, I agree that this loop to reverse byte order is a disgrace and it should be removed if we can",
         "created_at": "2022-11-20T19:44:57.060000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -141,7 +141,7 @@
         "parent": "",
         "content": "I think we could, `FromLEBytes(..)` end up calling go-ipa `SetBytesLE(..)` which does an extra big-endian conversion. (So, we get big-endian from `uint256.Bytes()`, then you transform to little endian, and after go-ipa switches to big-endian again).\nMaybe we could use go-ipa `SetBytes(..)` which looks like the same as `SetBytesLE()` but assumes big-endian ordering. That could avoid the endianness transformation in go-ethereum.\n(See here https://github.com/crate-crypto/go-ipa/blob/master/bandersnatch/fr/element.go#L703-L736)",
         "created_at": "2022-11-20T19:49:48.354000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -149,7 +149,7 @@
         "parent": "",
         "content": "\u003c@427491045308235776\u003e , I'm not sure how, but looks like this nice optimization from holiman got lost after the PR merge? https://github.com/crate-crypto/go-ipa/pull/22/files\nHere's current `master`: https://github.com/crate-crypto/go-ipa/blob/master/bandersnatch/fr/element.go#L749\nWhat looks weird is that I don't see any May 24 merge commit in `master`... so looks like it was never merged. I wonder if there was some force-push at some point there.",
         "created_at": "2022-11-20T20:05:11.587000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "kevaundray",
@@ -157,7 +157,7 @@
         "parent": "",
         "content": "I think guillaume mentioned that breaking something in go-verkle, so it was tentatively rolled back",
         "created_at": "2022-11-20T20:15:47.500000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "kevaundray",
@@ -165,7 +165,7 @@
         "parent": "",
         "content": "The behaviour should be exactly the same since Sign() is just comparing against zero",
         "created_at": "2022-11-20T20:16:59.355000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -173,7 +173,7 @@
         "parent": "",
         "content": "Interesting. I backported that change locally, and go-verkle tests pass... but maybe was a problem elsewhere. That would be surprising!",
         "created_at": "2022-11-20T20:24:03.937000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "kevaundray",
@@ -181,7 +181,7 @@
         "parent": "",
         "content": "Oh I didn't check if the unoptimised code was also in the new goff generated code, as Holiman explained in an issue, we should upstream changes like that to gnark and not modify the go generated files",
         "created_at": "2022-11-20T20:45:56.118000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "jsign",
@@ -189,6 +189,6 @@
         "parent": "",
         "content": "Looks like the gnark-crypto owner attempted to include it https://github.com/ConsenSys/gnark-crypto/pull/248, but was closed after.",
         "created_at": "2022-11-20T20:48:50.716000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

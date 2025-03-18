@@ -5,7 +5,7 @@
         "parent": "",
         "content": "I've done some more thinking on the tx-gossip vs state-gossip and have realized that they are effectively two different problems and thus they definitely don't seem to share the same solution space.\n\nFor tx gossip, the goal is to ensure that all transactions make their way into the \"center\" of the network where the full radius nodes live (miners, front runners).  It is happenstance that the transactions will also flow out towards the edges of the network, but the function of the network is to get transactions from their sender into the visibility of the miners.\n\nFor state gossip, these goals are reversed.  You have nodes that are producing the proofs, and the goal is to distribute the pieces of the proof outwards to the edges of the network (the network is only edge nodes, we assume there are no nodes at the \"center\" because radius values above a certain value don't make any sense).\n\nThis realization that they were definitely not the same problem (and somewhat fundamentally different problems) is leading me towards some different design ideas.",
         "created_at": "2021-03-17T17:23:44.127000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ryanleeschneider",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "I think your analysis is spot on, I feel like at some point the needs to the two gossips will diverge enough that using totally separate protocols/networks for tx and state will make sense.  In fact I feel like _if_ there's a strong reason we don't want that divergence to happen we need to bake it into the protocol itself.  Currently you can join devp2p and only participate in gossip of txs or blocks without any real penalties for ignoring the other.",
         "created_at": "2021-03-17T17:45:29.511000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "Intent currently is for them to be independent gossip protocols.",
         "created_at": "2021-03-17T18:58:52.322000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -29,7 +29,7 @@
         "parent": "",
         "content": "\u003c@!388751025789468672\u003e \n\u003e Currently you can join devp2p and only participate in gossip of txs or blocks without any real penalties for ignoring the other.\nThe only reason that you can do this currently is that it isn't being done broadly (that I'm aware of).\n\nIf a large enough percentage of the DevP2P `ETH` protocol participants did this then we would see various forms of service degredation with both gossip and sync protocols.  It's an unexploited \"weakness\" of the current network and all it would take is an irresponsible client development team building out useful functionality backed by this behavior.",
         "created_at": "2021-03-17T19:01:59.641000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "levi.korg",
@@ -37,7 +37,7 @@
         "parent": "",
         "content": "This resonates with me. In our last conversation, I was idly wondering if some form multicast wasn’t more appropriate for radiating state gossip outward. I didn’t get far enough into that thought to propose a concrete implementation strategy though.",
         "created_at": "2021-03-17T19:09:13.124000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "levi.korg",
@@ -45,7 +45,7 @@
         "parent": "",
         "content": "I added this to my reading list, but haven’t been able to review it properly, so I am not sure it’s directly relevant yet. https://www.cc.gatech.edu/projects/disl/GeoGrid/files/reliable-peer-to-peer.pdf",
         "created_at": "2021-03-17T19:15:39.668000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -53,7 +53,7 @@
         "parent": "",
         "content": "After talking this through (thanks grant) I think we proceed as if this isn't going to be a problem.\n\n1. Data ingress proofs will **only** contain data that was updated or added (reads that don't update can be excluded because that data *should* have already been pushed into the network at whatever block it was previously update/created)\n2. Current blocks touch single-digit \"thousands\" of nodes, 1k-3k. \n3. We can expect to have a \"few\" proof producers who are benevolently pushing new state data into the network.  Those producers can be expected to be randomly distributed around the network.\n4. We expect a new proof every 15 seconds (block time) so blocks need to be gossiped within that time frame.\n\nSo the rough sketch of what I think we need to try out before designing anything more complicated is:\n\nA: Proof producers create their proof, and then decompose it into the individual nodes, sorting the nodes by proximity to their own node id.\nB: For each node, they construct the minimal proof, find the node(s) who should be interested in it, and gossip it into their region of the network.  Once the proof has arrived into the region of the network where it belongs, we can use *normal* gossip rules to spread it among the neighboring peers that may also want it.\n\nThe resulting dynamic is that with *enough* producers all of the new data will be concurrently pushed to the appropriate region of the network.  As proof producers get deeper into the nodes that are far away from them they should start encountering decreased interest in the data they are sending.  They can either worth their way through all of the data which might take a while, or they might use a heuristic to detect that all of the *rest* of the data has probably already been disseminated and that they can move onto the next block.\n\nIt's simple and doesn't add complex behavior or obvious amplification vectors that other approaches I've looked at seem to suffer from.",
         "created_at": "2021-03-17T21:45:20.609000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "pipermerriam",
@@ -61,6 +61,6 @@
         "parent": "",
         "content": "This deserves a more thorough write up, specifically to go over the various dead-end solutions I've been pondering that I think do not work, as well as better lay out the problem statement now that I understand it better.",
         "created_at": "2021-03-17T21:46:01.199000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

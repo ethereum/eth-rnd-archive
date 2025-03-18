@@ -1,0 +1,1210 @@
+[
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "If we round things up this way then we get near the same time to executing a 10k blocks if the execution time is 200ms on average (not sure if this is the case though), it would take about 33 mins. And depending on the depth of the re-org it could be faster to replay blocks starting from the finalized one, so there might be a tradeoff.",
+        "created_at": "2021-09-04T03:00:58.482000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "If this approach is taken then the worst case reverse state depth would be halved and should take 2 - 2.5hrs. And additional 2-2.5hrs to apply blocks from the fork on top of the common ancestor, right?",
+        "created_at": "2021-09-04T03:08:51.373000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "There could also be the forward state diffs if applying these diffs is faster than executing a block. Though, if the I/O is the bottleneck (not CPU) then it should take near the same time as block's execution do.",
+        "created_at": "2021-09-04T03:10:23.516000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "The problem is, we cannot replay blocks from the finalized one because state of this block is not available",
+        "created_at": "2021-09-04T08:53:55.634000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "We only have one state in this model",
+        "created_at": "2021-09-04T08:54:06.398000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "The full reorg time will be larger than just applying reverse diffs because we need to go back to common ancestor (apply rev diffs), then process blocks forward to the fork head. Both operations seem to take approx. equal time in erigon right now.",
+        "created_at": "2021-09-04T08:56:37.525000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "Mostly, what I wanted to confirm is that it can indeed take multiple hours to perform a deep reorg",
+        "created_at": "2021-09-04T09:58:13.552000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "It seems like this is the case, so we need to plan for it",
+        "created_at": "2021-09-04T09:58:31.795000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "Danny also said in ACD that this may be relevant for security. We need to make a decision about how the clients will handle this.",
+        "created_at": "2021-09-04T09:59:27.628000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "One idea was, we make reorgs beyond 512 depth 'manual', i.e. the client won't do it for you automatically. What this means for users is: If there is a network partition, people will need to stand by and put their node on the correct chain but running a command.",
+        "created_at": "2021-09-04T10:01:29.926000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "It's not a great experience",
+        "created_at": "2021-09-04T10:02:14.662000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "yorickdowne",
+        "category": "general",
+        "parent": "",
+        "content": "The wurst experience. People already struggle with \"upgrade client and let it resolve the split\".",
+        "created_at": "2021-09-04T13:25:36.653000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Hey, I can test 80k blocks reorg if you like 🙂 I suspect it won't take 8*21 mins though. I cannot do 90k blocks back currently because my node is pruned to 90k blocks",
+        "created_at": "2021-09-04T15:28:02.780000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "I am reviewing the docs from yesterday's ACD call, and I had couple of questions/comments about the API doc so far",
+        "created_at": "2021-09-04T15:29:18.322000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "1. `egine_preparePayload` and `engine_getPayload` specify `parentHash` and expect the execution engine to compose the block based on that. What is the expectation about `parentHash`? Is it the same as the `head_block` or `confirmed_block`? I am asking because in Erigon we do not store state as trie, which means if you ask Erigon to compose a block from the `parentHash` which is, say, 3 blocks back from the `head_block`, it would need to unwind first (also re-injecting the transactions into the pool), and then compose. Basically, depending on how arbitrary the `parentHash` may be, we might require more complex implementation of the tx pool, which supports \"ephemeral re-injection\". Perhaps it would be best to restrict block composing to the `head_block` that would first need to be set by the fork choice method.",
+        "created_at": "2021-09-04T15:33:23.329000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "2. I saw the comment about a-synchronicity of the API and HTTP/WebSockets. I do support asynchonicity in the protocol, but I am not a big fan of assuming that \"we will just use WebSockets\". Eventually, if this is they way it goes, we would probably create an adapter which will use gRPC at the back end (this is what I suggest using for all APIs), and provide whatever the spec requires on the front-end",
+        "created_at": "2021-09-04T15:35:35.411000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I see. I thought it was a requirement to keep a state of the most recent finalized block.",
+        "created_at": "2021-09-04T15:35:53.915000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "gRPC has streams and asynchonicity without needing to hack around it",
+        "created_at": "2021-09-04T15:35:57.412000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "3. In the method `engine_forkchoiceUpdated` I tried to find out what is the difference between `head_block` and `confirmed_block`, and how should the execution engine react onto `confirmed_block`, where can I find it (or just give me ELI5 🙂 )",
+        "created_at": "2021-09-04T15:38:28.483000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I think we may have options here. We should have options for underlying communication protocol if there is a good alternative. It is more of a question to client devs on both sides of the communication stack will these options be widely supported",
+        "created_at": "2021-09-04T15:39:11.126000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "`confirmed_block` is a block that is it accepted by `2/3` attesters of the network. This is mostly for the user's JSON-RPC. The plan is to have the following identifiers set after the Merge:\n- earliest\n- finalized\n- safe/latest (or confirmed)\n- unsafe (unconfirmed)\n- pending",
+        "created_at": "2021-09-04T15:40:44.995000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "is it even useful for the exec engine to know that some block is \"confirmed\"? I understand that until it is finalised, it can still be reverted? I am just trying to understand if we can ignore this information 🙂",
+        "created_at": "2021-09-04T15:44:22.938000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "general",
+        "parent": "",
+        "content": "Discussion was that this should be exposed to the user in the api as head (as we can be reasonably sure that this will be finalized)",
+        "created_at": "2021-09-04T15:45:26.428000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "This is a good question, this information could be requested from the consensus client and then matched with the corresponding information from execution client to serve JSON-RPC. Confirmed blocks might also be used somehow as they it's pretty likely that they will be eventually included into the canonical chain and get finalized. For this particular use case we decided to propagated this information down to the execution client to make it a single source for these new block identity set. Do you see any potential issue in doing it that way?",
+        "created_at": "2021-09-04T15:48:24.592000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "`ExecutionPayload` also refers to the `parent_hash`. So most nodes (even not composers) will need to be able to run `engine_executePayload` most efficiently, so it makes sense to have the \"head\" to be the block which we expect to appear as `parent_hash` in the next `engine_executePayload`",
+        "created_at": "2021-09-04T15:49:40.764000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "it would be interesting to understand how will consensus engine sequence these calls? Does `engine_executePayload` imply that the next call will build on top of that block, or does it need to explicitely tell the exec engine to \"switch\" to the next head first?",
+        "created_at": "2021-09-04T15:50:37.107000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I see, proposer tries to build on top of the head of the canonical chain. So, it's a head of a fork that is already deemed by the proposer as the canonical chain and it depends on whether `forkchoiceUpdated` method that signifies this block as a new head and the fork as the canonical chain was processed by the execution client or not. If it was then the `parent_hash` is the hash of the head of the canonical chain, otherwise, it would be the head of another fork from the execution client perspective",
+        "created_at": "2021-09-04T15:50:39.635000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "So what I see is the current API is written based on the understanding that exec engine is able to efficiently support multiple heads, and consensus engine can pick any of them, is this true?",
+        "created_at": "2021-09-04T15:51:53.429000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "There is a couple of sequence diagrams in the doc. But I might need to extend them with the `forkchoiceUpdated` in the case of a normal operation and in the case when the message order is messed up",
+        "created_at": "2021-09-04T15:52:27.563000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Multiple heads of multiple forks and the only one is canonical. Proposing on top of the head of the fork that is not canonical would only mean that the execution client hasn't processed the respective `forkchoiceUpdated` message. There is a an order of these messages and in a normal case it will be so that the `forkchoiceUpdated(head)` is sent *before* the `preparePayload(parent=head)` but there is not strict order of these message during delivery and it depends on the execution client implementation whether it processed them in a strict order or not.",
+        "created_at": "2021-09-04T15:55:37.394000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Ok, so I think implementing this API should be possible, just with some more implicit strategies about which state should be chosen as \"best\" at any moment",
+        "created_at": "2021-09-04T15:58:06.836000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Btw, we're in the designing stage of these API and nothing is set in stone yet. And it is really a good time to identify all the corner cases and potential issues that might occur across the client implementations.",
+        "created_at": "2021-09-04T15:58:25.652000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "and also keeping around all the payloads, just in case they will be referred to by some other calls",
+        "created_at": "2021-09-04T15:58:27.107000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I would say that on the consensus client side the order of these messages should be more or less strict but we're not aiming to have this guarantee. It would be great if both type of clients could relax the assumption on message ordering",
+        "created_at": "2021-09-04T16:00:21.802000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, I get that, thank you. We have a similar effort trying to define consensus API that would encompass EtHash, Clique and AuRa, and there are some similar themes. One thing we agree on is that it should be asyncronous 🙂",
+        "created_at": "2021-09-04T16:00:46.469000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "It would be great if you could join the call next Thursday, it will be announced on Monday. The time slot is 13:00 GMT",
+        "created_at": "2021-09-04T16:01:40.432000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "We're going to spend an hour discussing the API and going through this doc",
+        "created_at": "2021-09-04T16:02:15.356000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Ok, I might be able to come",
+        "created_at": "2021-09-04T16:05:04.547000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "it would be great!",
+        "created_at": "2021-09-04T16:05:35.715000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "btw, websockets is mentioned because it is currently supported by all the clients as a part of JSON-RPC implementation. Not sure that gRPC is supported that widely. Websockets could become a default option",
+        "created_at": "2021-09-04T16:09:38.976000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, and `unsafe` head gives less guarantees than the `latest` in the PoW network today. As in the PoW network the `latest` block is deemed acceptable by the network wrt consensus while `unsafe` head doesn't have this property until it becomes confirmed by 2/3 votes and turns into a `safe` one.\n\nOTOH, `safe` has more strong guarantee than the `latest` in the PoW network. As this block is very likely to eventually be finalized and be the part of the canonical chain. In the PoW network the `latest` could be easily re-orged, while in the PoS it would rather be an odd case if confirmed block gets re-orged.",
+        "created_at": "2021-09-04T16:14:28.246000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "I think the interface should avoid bidirectional communication even if it can be supported from a tech point of view",
+        "created_at": "2021-09-04T16:15:49.176000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "Conceptually, the consensus layer is 'driving' and the execution layer is 'executing'",
+        "created_at": "2021-09-04T16:16:14.287000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "So I think it's kind of good to make the requests in one way, from consensus to execution.",
+        "created_at": "2021-09-04T16:16:57.440000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "The discussion right now is that we will change the sync spec to require that clients keep the 'calcified' block state instead of latest finalized block state.",
+        "created_at": "2021-09-04T16:18:21.066000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I would agree but I am thinking in the following way. What if we have the use case that is much easier to be done with execution layer propagating some information to the consensus layer? And its implementation would look ugly if the protocol doesn't support it. I might overcomplicate and if you, client developers, say that his is not necessary I'd be happy to remove this property from the designing surface.",
+        "created_at": "2021-09-04T16:19:30.989000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@456226577798135808\u003e do Erigon store any number of recent state versions to do re-orgs or is it completely relying on reverse state diffs in re-org handling?",
+        "created_at": "2021-09-04T16:21:38.984000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "Re. the calcified block, if we could keep the finalized block state, then this whole thing with the reverse diffs would be optional.",
+        "created_at": "2021-09-04T16:22:39.359000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I get it. Normally, calcified block will also be one of the finalized blocks, and it normally will be behind the most recent finalized block. In normal case it probably doesn't make sense to store state of the calcified block.",
+        "created_at": "2021-09-04T16:22:52.959000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, that was my initial understanding. That in the worst case we will have to replay blocks starting from finalized, that would work without implementing the diffs",
+        "created_at": "2021-09-04T16:23:42.662000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, I thought the same in the beginning",
+        "created_at": "2021-09-04T16:25:04.426000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "But it turns out we cannot keep the finalized block state",
+        "created_at": "2021-09-04T16:25:16.796000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Will it be difficult in terms of implementation to keep the most recent finalized + calcified when there is a gap between these two?",
+        "created_at": "2021-09-04T16:25:55.653000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "At the moment, reverse state diffs have 2 functions - they enable unwinds (hence reorgs), and they also enable querying historical state (but that also requires additional indices). So however many blocks worth of reverse diffs are stored, that far the Erigon can unwind",
+        "created_at": "2021-09-04T16:26:02.857000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "currently, default pruning option keeps at least 90k blocks worth of reverse diffs",
+        "created_at": "2021-09-04T16:26:53.157000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "And pruning in your case is \"not storing reverse diffs\" right?",
+        "created_at": "2021-09-04T16:26:54.357000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "got it",
+        "created_at": "2021-09-04T16:27:00.557000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, reverse diffs are trivial to prune, you just delete them them they get too old",
+        "created_at": "2021-09-04T16:27:23.886000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "I think you still have a misunderstanding here",
+        "created_at": "2021-09-04T16:30:37.343000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "The idea is: in the sync spec, we will define a special block",
+        "created_at": "2021-09-04T16:30:53.307000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "This block is called the calcified block",
+        "created_at": "2021-09-04T16:31:04.652000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "The definition of this block is: it's the finalized block, or, if the finalized is too old, it is a younger block",
+        "created_at": "2021-09-04T16:31:37.182000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "The client will keep one state: the state of the calcified block",
+        "created_at": "2021-09-04T16:31:56.291000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Btw, do you know how much of a gain reverse diffs give in terms of the size of the information needed to be stored comparing to storing N versions of the state?",
+        "created_at": "2021-09-04T16:31:57.065000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks for clarification! Now I get it",
+        "created_at": "2021-09-04T16:32:31.847000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "Cool!",
+        "created_at": "2021-09-04T16:33:16.328000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "So the problem now becomes: since calcified block may be non-final, it is required to be able to reorg below this block.",
+        "created_at": "2021-09-04T16:33:51.338000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "To make this reorg possible, the clients must have the reverse diffs down to latest finalized",
+        "created_at": "2021-09-04T16:34:17.990000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "What is your opinion on the complexity of the diffs implementation?",
+        "created_at": "2021-09-04T16:36:53.845000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Well, as mentioned above, storing reverse diffs for 90k mainnet blocks now takes about 4.5Gb, whereas the state is around 50Gb. We could, of course, store the cache of various recent stares in memory, if there is a strong requirement, and move the \"head\" very conservatively",
+        "created_at": "2021-09-04T16:37:44.625000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "What I am saying is that we can adjust the implementation to be more efficient for multi-head case. But the main complexity I am anticipating there is in tx pool. So at least in the proposers, the head block should match what the next proposed block is based on, otherwise we will have to re-jig the tx pool all the time",
+        "created_at": "2021-09-04T16:39:38.561000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "because importing/unwinding the block is not just an operation on the state, but also on the tx pool",
+        "created_at": "2021-09-04T16:40:12.958000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "In a normal case the parent will match the head. And otherwise should be considered as an edge case. But it would be great if this edge case is handled as well",
+        "created_at": "2021-09-04T16:41:09.524000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I am thinking about storing the state checkpoints and rebase the diffs to them, say every 10k blocks. I don't if it's a huge waste of state storage space or not but it could aid for faster re-orgs of any depth within this 90k boundary.",
+        "created_at": "2021-09-04T16:42:39.582000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "perhaps the API needs to be more explicit about Consensus and Execution engines synchronising their understanding of what the \"head\" block is. And, secondary to that, all the operations are performed when such synchronisation is achieved. Otherwise the API is quite lax in assuming that Consensus and Execution may have different ideas about what the head block is, and it might be much more expensive for Execution engine to switch it around adaptively",
+        "created_at": "2021-09-04T16:44:41.598000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "This is perhaps one of the main challenges of designing this API, because currently, in monolithic eth1 clients, this syncronisation about what the head block is, is implicit",
+        "created_at": "2021-09-04T16:45:56.201000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "when you take two things apart, you either lose it, and let Exec engine jump around to adjust to Consensus Engine, or make them synchronise explicitely",
+        "created_at": "2021-09-04T16:46:37.394000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Then it would require for consensus clients to be strict about the message order, likewise the execution client to be strict in processing them. The latter could be implementation dependent while the former would be required for those execution clients that are relying on a strict message ordering. This should be added to the doc I think",
+        "created_at": "2021-09-04T16:47:34.540000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "This is kind of hard to build on top JSON-RPC if that has been chosen. But if you open this design space a bit wider, it may not be a big problem 🙂",
+        "created_at": "2021-09-04T16:48:52.913000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Trying to build the protocol with strict message ordering based on JSON-RPC is of course harder than even using TCP socket 🙂",
+        "created_at": "2021-09-04T16:49:44.097000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I don't see an issue with JSON-RPC. I am thinking about a sort of parallelisation that might happen on the consensus client side that could result into two causally dependent messages e.g. `forkchoiceUpdated(head)` and `preparePayload(head)`  be messed up. And if we add the causality to the protocol then consensus client will probably have to have a kind of safe net that would handle cases when causality is broken, otherwise, it might lead to the execution client getting stuck. Ofc, this is the worst case scenario",
+        "created_at": "2021-09-04T16:53:22.203000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "And JSON-RPC over HTTP might increase the complexity. This is probably what is on your mind",
+        "created_at": "2021-09-04T16:54:48.867000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "As we also need a guarantee that these messages are delivered according to the same order as they were sent with",
+        "created_at": "2021-09-04T16:55:23.037000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, if you add some conventions on top of how you use JSON-RPC, you can construct what is required. Describing these convention in a way that everyone understands correctly maybe tricky",
+        "created_at": "2021-09-04T16:59:56.498000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "This is all solvable, but will require additional changes to the data model. We are planning to make these changes, but given the history I am not certain how keen are the others on these things 🙂",
+        "created_at": "2021-09-04T17:02:09.015000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I was thinking about the underlying protocol that has the delivery order guarantees. Now I am wondering if the websockets satisfy this",
+        "created_at": "2021-09-04T17:03:14.823000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "all TCP-based protocols have ordered message delivery",
+        "created_at": "2021-09-04T17:04:26.351000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "it's inherent in the TCP model because it is a stream of bytes",
+        "created_at": "2021-09-04T17:04:49.307000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Does it work for HTTP if it re-uses the same TCP session?",
+        "created_at": "2021-09-04T17:04:58.535000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "yes, because WebSocket is just a TCP connection with a framing layer",
+        "created_at": "2021-09-04T17:05:18.388000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "the messages are still delivered one by one",
+        "created_at": "2021-09-04T17:05:27.867000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "WebSocket connection is not HTTP, it's a stream protocol that you can upgrade to from HTTP",
+        "created_at": "2021-09-04T17:05:54.650000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks for clarification! And assuming that websockets guarantees message ordering is helpful",
+        "created_at": "2021-09-04T17:06:34.652000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "re. the state diffs and implementation complexity",
+        "created_at": "2021-09-04T17:07:24.755000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "we will probably not require the state diffs directly in the spec",
+        "created_at": "2021-09-04T17:08:07.545000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "we have the following requirements:",
+        "created_at": "2021-09-04T17:08:17.466000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "- both clients are aware of head block number and latest final block number\n- therefore, both clients are able to compute which block is the calcified block\n- the execution layer will get non-finalized blocks one by one and process\n- for block numbers after calcified block, execution must be able to switch to a different head block almost instantly\n- for block numbers between calcified and latest finalized block, the client doesn't need be able to switch head immediately, it's OK to take longer.\n- the client is not required to reorg below finalized block (but being able to do it anyway is more safe)",
+        "created_at": "2021-09-04T17:11:09.753000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "a state management design that best satisfies these requirements is: \n- keep complete state of calcified block on disk\n- keep reverse diffs from calcified block down to finalized block on disk\n- keep tree of forward diffs from calcified up to all possible head block in memory",
+        "created_at": "2021-09-04T17:14:15.017000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "other state management designs are possible. you could also store complete snapshots if that's somehow easier, but it will for sure take much more disk space.",
+        "created_at": "2021-09-04T17:14:49.041000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "in the end, we cannot dictate how clients implement the state management. but the requirements are so tight, there are very few options that actually work.",
+        "created_at": "2021-09-04T17:15:43.435000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e - the client is not required to reorg below finalized block (but being able to do it anyway is more safe)\nThis is also an interesting case. If nobody holds the state beyond the last finalized block then the network will have to rely on archive nodes to be able to do this kind of re-orgs, right?",
+        "created_at": "2021-09-04T17:16:34.063000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "in general, the consensus protocol does not allow such reorgs",
+        "created_at": "2021-09-04T17:18:20.559000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I am also thinking about what state the execution client have when doing a deep re-org. What should consensus client get in response to regular block processing messages? Probably the same kind of response as with the sync process.",
+        "created_at": "2021-09-04T17:18:35.424000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, but in the very exceptional case it could be needed. When the minority needs to soft fork",
+        "created_at": "2021-09-04T17:19:25.402000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "in the reorg part of my doc, the question of 'manual intervention reorg' is discussed. there we say that clients should probably keep 90k diffs below finalized block for special situations where we have a consensus failure.",
+        "created_at": "2021-09-04T17:19:28.041000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "yeah, it's for the fork recovery",
+        "created_at": "2021-09-04T17:19:42.047000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "---",
+        "created_at": "2021-09-04T17:20:28.826000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "about the interface: I think what you should model it like is: you need to define a state machine for both sides.",
+        "created_at": "2021-09-04T17:20:52.677000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "not all calls make sense at all times",
+        "created_at": "2021-09-04T17:24:07.813000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks for the suggestion. I need to think about it. As it's already a state machine, not clearly defined though.",
+        "created_at": "2021-09-04T17:24:25.911000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "IMHO, when the eth2 client triggers deep reorg, it should kind of know that no other call can be made during this operation.",
+        "created_at": "2021-09-04T17:24:35.742000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "same for the sync.",
+        "created_at": "2021-09-04T17:24:39.810000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "it's not possible for the eth2 client to say: please sync to block x now, and then submit totally unrelated blocks at the same time.",
+        "created_at": "2021-09-04T17:25:03.197000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "so eth2 needs to be aware of the current state of eth1 client, kind of.",
+        "created_at": "2021-09-04T17:25:45.451000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, that is what I also meant when talking about \"syncronisation of what the head state is\"",
+        "created_at": "2021-09-04T17:27:05.346000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I think these are two different states",
+        "created_at": "2021-09-04T17:27:31.132000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "yes, me too",
+        "created_at": "2021-09-04T17:27:55.114000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@456226577798135808\u003e If you want to cache state, I would recommend caching the state for safe, and unsafe blocks.  Unsafe block has a high probability of getting reorged out, but it is the canonical chain at any given moment.  Safe block is very unlikely to get reorged, but it is possible.  You cannot reorg past finalized without user intervention.",
+        "created_at": "2021-09-04T17:29:04.237000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I am about to go to bed. Thanks a lot for this convo, it's been very useful. Let's continue on that later on",
+        "created_at": "2021-09-04T17:29:14.144000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "In the common case, safe and unsafe will be next to each other, with finalized being a bit back, so I assume it wouldn't be too bad to just undo a diff to get from unsafe to safe.",
+        "created_at": "2021-09-04T17:29:53.360000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "And in most cases, there isn't likely to be any reorging beyond that, so probably isn't worth optimizing for.",
+        "created_at": "2021-09-04T17:30:13.433000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, caching state is something we are getting to in a few places (so it seems inevitable). I am thinking about tx pool though, this is a bit tricky if you don't know what you are going to be building upon. Probably needs to make removal/reinjection very efficient",
+        "created_at": "2021-09-04T17:36:28.349000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Why do you need to re-inject into the transaction pool?",
+        "created_at": "2021-09-04T17:37:09.598000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "because when you unwind a block, all transactions in it are eligible to be included into an alternative block",
+        "created_at": "2021-09-04T17:37:34.482000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Ah.",
+        "created_at": "2021-09-04T17:37:47.478000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "There *might* be value in caching the transactions back to finality.",
+        "created_at": "2021-09-04T17:38:12.933000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "Well, tx pool is not a simple cache 🙂 it is quite an elaborate system of canisters and pipes (in our case) 🙂",
+        "created_at": "2021-09-04T17:38:46.678000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "There shouldn't be *that* many.  If we reorg past finality, I don't think there is an expectation that transaction pools will reconstitute.",
+        "created_at": "2021-09-04T17:38:50.944000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "When a transaction shows up in a block, can you just flag the transaction in the pool without removing it?",
+        "created_at": "2021-09-04T17:39:17.808000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I suppose on reorg you would have to unflag it, which I suspect is just as hard as re-injecting it?",
+        "created_at": "2021-09-04T17:39:53.381000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "here is the picture 🙂 https://github.com/ledgerwatch/erigon/raw/devel/docs/Subpools.png",
+        "created_at": "2021-09-04T17:40:04.313000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "so when transaction is re-injected, we need to sort it out to see where it goes in relation to the others",
+        "created_at": "2021-09-04T17:40:36.934000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "equally, when transaction is removed, it gives others priority to be included",
+        "created_at": "2021-09-04T17:40:56.767000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "so yeah, we can design multi-dimensional tx pool probably",
+        "created_at": "2021-09-04T17:41:11.913000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "or simply try to optimise removals and reinjections",
+        "created_at": "2021-09-04T17:41:25.218000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "or introduce an extra sub-pool with transactions that are already included",
+        "created_at": "2021-09-04T17:42:51.151000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "so that they be thrown back and forth 🙂",
+        "created_at": "2021-09-04T17:43:04.713000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "yes, that's what we can do",
+        "created_at": "2021-09-04T17:43:11.806000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "Deleted User",
+        "category": "general",
+        "parent": "",
+        "content": "we can make it blue, which will signify \"frozen\". So far I liked the colours because it was like a traffic lights for transactions",
+        "created_at": "2021-09-04T17:46:04.671000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "How expensive is to store these diffs vs running the blocks? There's a game to play where it may be worth storing the diffs to every justified tip of the consensus layer since a reorg can only happen to a children of those",
+        "created_at": "2021-09-04T18:00:11.794000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I think it's reasonable to expect and defend against non-finalizing periods, but we shouldn't expect too many justified branches even during these periods",
+        "created_at": "2021-09-04T18:01:54.713000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "It is not possible to run the blocks if their ancestor state is not available",
+        "created_at": "2021-09-04T18:02:59.335000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "We cannot keep super old state, let alone multiple super old states, because then we   would need to hold all of the child state diffs also.",
+        "created_at": "2021-09-04T18:03:58.285000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Understood, then you might look into caching the diffs to all justified points instead of finalized. In usual circumstances this will be exactly like finalized (32 less blocks to sync) and in bad cases you'll need a couple of more states",
+        "created_at": "2021-09-04T18:15:16.322000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Also trying to catch up with your doc: \n```\nIf the local database contains a finalized header at height x, but its hash does not match Hx, the client should delete the header and all block data associated with it.\n```\nWhy is this? To me this situation should raise a red flag and require manual intervention",
+        "created_at": "2021-09-04T18:16:24.024000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Apologies if this is not the right channel to comment on the doc",
+        "created_at": "2021-09-04T18:16:44.467000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Regarding the justified/finalized situation: during Medalla incident, the chain managed to justify a few times without finalizing. In these cases, you'd save several days worth of blocks from syncing by caching the justified instead of finalized states",
+        "created_at": "2021-09-04T18:19:00.784000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "It's the right place to discuss the doc here",
+        "created_at": "2021-09-04T18:54:58.134000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "This situation can happen when the client has existing database content but sync is restarted on a different chain.",
+        "created_at": "2021-09-04T18:55:55.894000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "general",
+        "parent": "",
+        "content": "I put in this sentence because it's kind of what we do right now in geth. For blocks before the 90k immutability threshold, we  delete all side block data when we move blocks to the ancient chain store.",
+        "created_at": "2021-09-04T18:58:39.706000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "So if by different chain it's meant an actual different chain id, then I suppose the client will figure out it's being run on a different chain before it hits this situation, right on the very first block. If it's meant a different fork, then still this situation should flag an irrecoverable error rather than silently delete old data and continue syncing I think. By the way thanks for the doc, it explains a bit about execution syncing that I had never imagined would be an issue",
+        "created_at": "2021-09-04T19:29:11.528000+00:00",
+        "attachments": null
+    }
+]

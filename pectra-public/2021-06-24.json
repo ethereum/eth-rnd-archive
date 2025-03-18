@@ -1,0 +1,122 @@
+[
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I've recently finished PoC implementation of the transition process in Teku and tested it with geth implementation from the corresponding branch.\nSpec: https://github.com/ethereum/eth2.0-specs/pull/2462\nCatalyst: https://github.com/ethereum/go-ethereum/pull/22827\nTeku: https://github.com/txrx-research/teku/pull/5\n\nAfter playing with the prototype I'd like to raise a few points for discussion.",
+        "created_at": "2021-06-24T11:14:01.785000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "1) Right after the transition, `SECONDS_PER_ETH1_BLOCK` will start making no sense. But this constant will still be used by redundant `Eth1Data` poll which is gonna be retired after the network upgrade that is next to the Merge. There are three options to handle `SECONDS_PER_ETH1_BLOCK` near the Merge:\n\n- Set `SECONDS_PER_ETH1_BLOCK = SECONDS_PER_SLOT` when the first voting period after the transition process is finished. Requires additional implementation tweaks without signififcant benefits. Not a preferred option.\n\n- Set `SECONDS_PER_ETH1_BLOCK = SECONDS_PER_SLOT` on the Merge fork upgrade. Results in inaccurate voting periods for a week after the Merge fork until finish of transition process. Namely, effective follow distance will be reduced from `2048` to `1890` and `1756` with `13` and `14` seconds per eth1 block respectively. After transition process follow distance will get back to `2048` ~~blocks~~ slots. Being relatively small this temporal reduction shouldn't affect the security of the poll.\n\n- Doesn't do anything. Then there will be status quo before transition process and increased follow distance afterwards. The increase is up to `2219` and `2390` slots with `13` and `14` seconds per eth1 block respectively, which should not affect the voting process that much.\n\nThis analysis also worth considering empty slots. As after the Merge the follow distance becomes slot-based instead of block-based. Currently `SECONDS_PER_ETH1_BLOCK` value is `14`. I am leaning towards doing nothing as the easiest way. The second approach looks reasonable as well.",
+        "created_at": "2021-06-24T11:14:10.155000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "2) Current transition spec relies on JSON-RPC method exposed by the execution client that returns two statuses, whether PoW block has been processed and whether it's valid. Such granularity isn't supported by modern mainnet clients. And I think we don't even need it in the Merge. As from the transition PoV invalid and not yet processed PoW block has a small difference. Invalid terminal PoW block discards the beacon block referenced to it, unprocessed PoW block delays acceptance of the beacon block and sends corresponding message to the execution client to retrieve the block from the network. The proposal is to remove invalid status and always send a retrieval request to the execution client when terminal PoW block is considered as yet unprocessed. It would allow for less changes on the execution client side with negligible impact in the transition process.",
+        "created_at": "2021-06-24T11:14:23.897000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "3) Do we need an explicit retrieval requests for not yet processed PoW block? How often blocks on the Mainnet are getting lost in the block gossip overlay and node has to retrieve them manually?",
+        "created_at": "2021-06-24T11:14:35.237000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Just a quick observation on the first point: rayonism finished without voting consensus on all clients. Even on mainnet we see different voting schemes of clients until a majority is formed and then all start following that vote. It seems to me that this is mostly due to subtle bugs in the follow distance as the one  found in Teku or simply different implementations of the eth1data vote on clients. Since this particular topic is not properly punished/inventivized as per spec and clients can do whatever they want essentially, it becomes harder to debug when there isn't consensus. Hence that's my justification to also vote with you in not doing anything and let the clients continue behaving as they do now that at least is working",
+        "created_at": "2021-06-24T11:30:47.475000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e (1) I’d be pro doing nothing until we entirely overhaul the deposit scheme. SECONDS_PER_ETH1_BLOCK is already somewhat incorrect today and the marginal more incorrectness won’t hurt the security of this mechanism post-merge",
+        "created_at": "2021-06-24T12:00:22.596000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e (2) is there any discussion of moving to restful HTTP for this endpoint or is the sentiment to re-use json rpc? One of the main arguments I liked about restful http was to entirely isolate this endpoint from the common user endpoint\nI need to think a bit more about your proposal hre",
+        "created_at": "2021-06-24T12:02:49.317000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "The sentiment is to re-use what is already implemented. I am not sure that we will have restful HTTP as an underlying protocol for consensus api but we may have this particular request implemented as a part of this api disregarding the underlying protocol we choose.",
+        "created_at": "2021-06-24T12:05:41.882000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Agree with the not doing anything approach.  It'll go in the next tidy-up, and the inaccuracy is more of an internal furball than anything that users of the chain will rely on/miss when it goes/complain about being inaccurate.",
+        "created_at": "2021-06-24T12:16:53.953000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "I am inclined to say just set `SECONDS_PER_ETH1_BLOCK = 12`, and just accept the ~10% inaccuracy that comes as a result",
+        "created_at": "2021-06-24T14:45:24.845000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "That way we don't have to worry about the issue",
+        "created_at": "2021-06-24T14:45:30.445000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "I'm okay setting it to 13 and not doing anything as well",
+        "created_at": "2021-06-24T14:45:50.847000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".vbuterin",
+        "category": "general",
+        "parent": "",
+        "content": "`SECONDS_PER_ETH1_BLOCK` was only ever meant to be an estimate anyway, so if we set it to either 12 or 13 then nothing would seriously break pre or post merge",
+        "created_at": "2021-06-24T14:46:19.898000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Given that the current follow distance is actually time based but expressed as two variables the change in time between blocks doesn’t actually change anything anyway. We’ll still follow the same amount of time behind head as we always have. \n\nI don’t have a problem with shortening that time though unless we think we’re more likely to get a very long reorg if the merge is rocky.",
+        "created_at": "2021-06-24T21:19:02.168000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e My thought here is that a marginally shorter time doesn’t really buy us anything and is just another place for potential configuration / silly problems\nso just save any modifications to the deposit process for later",
+        "created_at": "2021-06-24T21:33:15.973000+00:00",
+        "attachments": null
+    }
+]

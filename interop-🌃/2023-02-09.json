@@ -1,0 +1,378 @@
+[
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "Nimbus is in-memory only",
+        "created_at": "2023-02-09T04:18:32.840000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think I may have identified a small Geth bug. I'm not sure though because my Go-fu is terrible so I haven't even tried to look at the code.\n\nOut of the box, you can't sync Lighthouse+Geth on Zhejiang at the moment. Several users reported this, and I reproduced it just now.\n\nThe error that Geth reports is\n\n```\nERROR[02-09|14:28:02.610] Beacon backfilling failed                err=\"retrieved hash chain is invalid: missing withdrawals in block body\"\nWARN [02-09|14:28:12.188] Marked new chain head as invalid         hash=530ef8..150093 badnumber=42314 badhash=1c5f2c..b07418\n```\n\n(full error: https://gist.github.com/michaelsproul/9082b5763f7cb90044a646f10aefeb38)\n\nMy current guess is that Geth is deserializing `withdrawals: nil` instead of `withdrawals: []` when decoding blocks from devp2p. The block hash check passes (because `nil` and `[]` are RLP-equivalent, right?) but then Geth realises that there are no withdrawals when there _should be_ based on the timestamp. So a valid block hash gets marked invalid and the chain breaks.\n\nNodes following the chain since genesis won't have had this issue because they'll have got a JSON execution payload straight from the CL. The reason it happens more often with Lighthouse is that we have an optimisation that skips the `newPayload` message while syncing, so we don't drip feed every payload to the EL (forcing the EL to download its own payloads). This feature can be turned off with `--disable-optimistic-finalized-sync`, and indeed syncing Lighthouse-Geth with this flag doesn't trigger the issue.",
+        "created_at": "2023-02-09T04:46:13.291000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "Worth noting that the `42314` block is the Capella transition block, so it might just be an off-by-one error",
+        "created_at": "2023-02-09T04:47:10.470000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "cc \u003c@\u0026688090867927482525\u003e ^ 🙏",
+        "created_at": "2023-02-09T04:48:51.032000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thanks, filed a ticket, we'll investigate",
+        "created_at": "2023-02-09T07:14:47.931000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "I investigated yesterday already, did a full, snap and lock step sync with prysm and couldn't repro. I'm going to do another one with lighthouse today",
+        "created_at": "2023-02-09T08:12:15.479000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "holiman",
+        "category": "Testing",
+        "parent": "",
+        "content": "Oh, I meant investigate by serializing/unserializing block bodies and see what happens with the withdrawals being or not being",
+        "created_at": "2023-02-09T08:27:50.546000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Prysm doesn't backfill yet, perhaps you need to backfill to trigger this",
+        "created_at": "2023-02-09T10:34:20.127000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "You should check against LightHouse instead",
+        "created_at": "2023-02-09T10:34:34.519000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "We verified that our decoding/encoding logic works fine. Our thesis is that another clients might have a bug in encoding, so when we get blocks from a certain node we will (correctly) error",
+        "created_at": "2023-02-09T11:09:45.627000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "if that’s the case shouldn’t the error be recoverable? if there’s a block encoded badly shouldn’t the block hash check (ideally) fail so Geth can fetch the correctly-encoded version of the block?",
+        "created_at": "2023-02-09T11:21:58.187000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Kinda yes, we could just say that whenever we get a empty hash for withdrawals, we set withdrawals to [] instead of nil. Still not really our issue imo",
+        "created_at": "2023-02-09T11:38:37.546000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "We can be more lenient, but it would also be good for everyone to be correct",
+        "created_at": "2023-02-09T11:39:15.494000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Didn't you say that you'll start to error out in this case because it's a hive test? It'd be better to at least have an image that does error out so that we catch these bugs right now",
+        "created_at": "2023-02-09T11:41:48.956000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Well it's a hive test via the engine api, not via devp2p",
+        "created_at": "2023-02-09T11:42:38.375000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Oh I see, similar behavior on a different path",
+        "created_at": "2023-02-09T11:44:47.006000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes exactly",
+        "created_at": "2023-02-09T11:45:04.001000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Could this be a hive test then?",
+        "created_at": "2023-02-09T11:45:12.228000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hmmm kinda, I think we would catch it with a sync test cc \u003c@892053833121923094\u003e",
+        "created_at": "2023-02-09T11:45:59.416000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@360491619402776577\u003e but you need to be able to recover. What if someone modifies proper block to remove an empty list of withdrawals?",
+        "created_at": "2023-02-09T14:22:35.758000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Fair, yeah we might relax our rules a bit",
+        "created_at": "2023-02-09T14:23:19.663000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "not sure if that is proper thing to do, but you should get that block from different peer?",
+        "created_at": "2023-02-09T14:24:13.263000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Testing",
+        "parent": "",
+        "content": "which would encode it correctly?",
+        "created_at": "2023-02-09T14:24:39.256000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Well a peer could do that right now, the only difference is that the hash wouldn't match",
+        "created_at": "2023-02-09T14:34:04.787000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "The problem is that currently we only run the sync with the same client type, would it help if we run the sync tests of the Engine API with a different type of client ?",
+        "created_at": "2023-02-09T14:43:23.227000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes 🙂 definitely 🙂 I did it once for Nethermind \u003c\u003e Geth",
+        "created_at": "2023-02-09T14:45:11.485000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ah I just realized we don't test syncing empty withdrawals",
+        "created_at": "2023-02-09T14:45:12.028000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "only empty txs, because that was how we originally found an issue",
+        "created_at": "2023-02-09T14:45:33.020000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'll work on this change",
+        "created_at": "2023-02-09T14:46:03.922000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terence0083",
+        "category": "Testing",
+        "parent": "",
+        "content": "Did we decide on a fork epoch for Shapella for Sepolia? We'd love to cut a Prysm release today based on that fork epoch",
+        "created_at": "2023-02-09T15:15:02.381000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "There were some numbers discussed, but nothing firm. I think \u003c@552133098075193354\u003e or \u003c@291925846556540928\u003e said that they gonna put out a proposal then client teams can vote on it. But I don't think we gonna arrive to consensus about it by end of today.",
+        "created_at": "2023-02-09T15:16:09.453000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think the best we can probably do is put out the epoch today and then merge it in tomorrow. The one thing that wasn't clear to me is whether people prefer to have a \"good time\" for the fork (e.g. 14 UTC) or to have it happen at a specific epoch boundary, either based on sync committees or historic root boundaries.",
+        "created_at": "2023-02-09T15:37:11.366000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Danny mentioned the historic root boundary as something we care about. I didn't get it",
+        "created_at": "2023-02-09T15:38:09.782000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Sync committee boundary I'd prefer if it's not. But the former forces the latter",
+        "created_at": "2023-02-09T15:38:44.125000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "Testing",
+        "parent": "",
+        "content": "Epoch 56832/ Slot 1818624 matches both constraints, I think?",
+        "created_at": "2023-02-09T15:39:24.297000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "Testing",
+        "parent": "",
+        "content": "2/28/2023, 4:04:48 AM    UTC",
+        "created_at": "2023-02-09T15:39:31.217000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "It is convenient to have accumulator values dealing with homogeneous block structure",
+        "created_at": "2023-02-09T15:40:20.901000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Testing",
+        "parent": "",
+        "content": "it does",
+        "created_at": "2023-02-09T15:43:00.853000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Testing",
+        "parent": "",
+        "content": "yeah, e.g. all of the EIP-4444 work is much nicer conceptually if we can align fork boundaries to these protocol accumulator boundaries",
+        "created_at": "2023-02-09T15:44:23.392000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Testing",
+        "parent": "",
+        "content": "not the _end_ of the world but given the history lasts forever, seems fine to me if we have a slightly weird time for forking",
+        "created_at": "2023-02-09T15:44:43.551000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Testing",
+        "parent": "",
+        "content": "fwiw im fine w/ that sepolia fork epoch",
+        "created_at": "2023-02-09T15:47:29.772000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "4AM UTC is perfect for me, will be dead asleep and \u003c@476250636548308992\u003e will be looking over the fork 😄",
+        "created_at": "2023-02-09T15:54:53.314000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "shouldn't we have an EIP about this then? 😄",
+        "created_at": "2023-02-09T16:11:00.445000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "That way future fork time selections will become more straightforward, and less time spent on discussing it. Basically we would select a date, and whichever is slot \u0026 8192 is closest to it would be fork time, and would only allow fork times on these times.",
+        "created_at": "2023-02-09T16:11:21.810000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "Could backfire also, if we need a faster release for some urgent fix...",
+        "created_at": "2023-02-09T16:14:38.081000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "timbeiko",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah, not sure we want to \"enshrine\" it beyond a simple norm",
+        "created_at": "2023-02-09T16:34:41.326000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hmmm kinda I think we would catch it",
+        "created_at": "2023-02-09T22:19:17.395000+00:00",
+        "attachments": null
+    }
+]

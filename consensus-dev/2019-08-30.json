@@ -1,0 +1,154 @@
+[
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**shahankhatch**\nHey @dannyryan For BLS benchmarks, here's what I've done but I'm not sure what the specific requirements are. Any guidance would be appreciated.\nhttps://github.com/PegaSysEng/artemis/pull/839",
+        "created_at": "2019-08-30T15:00:12.910000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "The recent interop survey asked about \"benchmark of verify-aggregate bench speed of 128 participants, same message being signed. Called from client\".\n\nMost performant reported is 9ms on an i5 laptop. Some others in the 20-40ms range. To be a performant client, you'll want to get in this sub 10ms range for this benchmark.\n\nIn terms of what is needed in mainnet...\nWe need to be able to process blocks in sub-slot times. Healthy network, expecting 10M eth validating (300k validators). In the most extreme case, all eth in existence is validating ~130M eth (4M validators). At such numbers, there are SHARD_COUNT (1024) committees per epoch, so 16 committees per slot.\n\nAt 300k validators, that's ~4500 validators split across 16 committees. In the optimal, these can be aggregated into 16 attestations of ~300 validators per slot. In the non-optimal, assume some latency and issues in coming to consensus with each other or aggregation issues, we might see some multiple of 16 attestations but fewer validators per attestation, so maybe 32 (~150 validators per) or 64 attestations (~75 validators per) in a block. These map to number of signatures and number of participants in each signature that we'll need to verify in a block\n\nSo you certainly want to be able to verify that signature load in sub 1s if not faster. Note that each of these attestations is essentially a single `bls_verify`, but in phase 1, they will be a `bls_verify_multiple` as each attestation will be composed of two types of signatures (ones with 0 and ones with 1 custody bit) so each attestation's participants on average gets split in half between two signatures rather than the single.",
+        "created_at": "2019-08-30T19:14:25.280000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "The ultimate target is to be able to perform these same number of signatures  in sub second time but for 4M instead of 300k validators. This looks like 16 signatures with 4000 participants each. To get anywhere near this goal, I expect you'll need to look into  this verification trick that can verify multiple BLS signatures with just one pairing check -- https://ethresear.ch/t/fast-verification-of-multiple-bls-signatures/5407\n\nFor our initial interop exercises, the fastest we'll probably need is to be able to verify ~8 signatures of 16 participants in sub 1s time, and likely much less",
+        "created_at": "2019-08-30T19:14:27.640000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_bridge_bot",
+        "category": "general",
+        "parent": "",
+        "content": "**shahankhatch**\nThanks! I will go through again with this helpful info. Much appreciated.",
+        "created_at": "2019-08-30T20:30:56.033000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_gitter_bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cdangerousfood\u003e the `slots.yaml` in the reference tests don’t appear to be properly formatted YAML. It just contains a number then a newline character and `…`.",
+        "created_at": "2019-08-30T21:07:51.964000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "the ellipsis is valid YAML used to signal the end of a document -- https://yaml.org/spec/1.2/spec.html#id2760395 -- looks like our yaml outputting tool put that in there..\nAs for outputing just a single value rather than a key-value pair, I'm not certain that is valid yaml",
+        "created_at": "2019-08-30T21:20:00.958000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "The intention is to provide a single integer value on the number of slots to transition\nhttps://github.com/ethereum/eth2.0-specs/blob/master/specs/test_formats/sanity/slots.md#slotsyaml",
+        "created_at": "2019-08-30T21:21:08.936000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_gitter_bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cdangerousfood\u003e Thanks @djrtwo. Do you think it is possible to switch to a `meta.yaml` with a `slot` being the key?",
+        "created_at": "2019-08-30T21:32:02.762000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "eth2_gitter_bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cdangerousfood\u003e That’s similar to how the other tests are setup.",
+        "created_at": "2019-08-30T21:32:17.772000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "anyone running the `v0.8.3` mainnet tests?",
+        "created_at": "2019-08-30T23:37:33.821000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "afaict there is a bug here: https://github.com/ethereum/eth2.0-specs/blob/v0.8.3/test_libs/pyspec/eth2spec/test/helpers/genesis.py#L49",
+        "created_at": "2019-08-30T23:37:42.020000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "it is (re)using the active validator indices, instead of computing the initial compact committee root",
+        "created_at": "2019-08-30T23:38:08.182000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@602753420033785856\u003e was working on those specifically, I believe",
+        "created_at": "2019-08-30T23:38:39.121000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "is there a PR then?",
+        "created_at": "2019-08-30T23:39:14.421000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "oh, i think you just mean that he was working on them from your team",
+        "created_at": "2019-08-30T23:39:43.515000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Yep, the latter 🙂",
+        "created_at": "2019-08-30T23:42:38.845000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "😄",
+        "created_at": "2019-08-30T23:42:51.755000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "if anyone can corroborate that my assessment is correct, i can put together a PR to fix it",
+        "created_at": "2019-08-30T23:43:56.904000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "would like to hear from others who have been looking at these tests tho in case i'm missing something",
+        "created_at": "2019-08-30T23:44:21.193000+00:00",
+        "attachments": null
+    }
+]

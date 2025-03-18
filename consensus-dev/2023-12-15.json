@@ -1,0 +1,546 @@
+[
+    {
+        "author": "adiasg",
+        "category": "general",
+        "parent": "",
+        "content": "On a related note, how do execution clients use the safe block hash? Want to make sure that nothing breaks inside execution clients if we change this part of the engine API.",
+        "created_at": "2023-12-15T00:11:33.904000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "From what I've heard at least \u003c@\u0026836981603216654336\u003e uses the safe block as a pivot block in their sync strategy. I don't think that changing safe will affect this strategy, as long as the safe is chasing the head it should be fine to my observation.",
+        "created_at": "2023-12-15T06:21:35.758000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I also feel like the spec shouldn't dictate what is `safe` and give more freedom to implementations. Safe was introduced for `eth_getBlock*` requests, and would be returned there if say `eth_getBlockByNumber(\"safe\")` is passed onto EL. Though I doubt that this tag is utilised by users. \n\nIMO, we should provide a flexibility on the API level and allow users to decide which level of confirmation it is fine to use in their case. I am not sure that JSON-RPC would be the best API to provide such flexibility. For instance, the confirmation rule can give a `safe` block, justified block is also safe enough. And there can be other heuristics providing a safe block that consumers would like to use. JSON-RPC doesn't seem capable of providing the whole spectrum of that information.\n\nGetting back to the spec, there is the place where the spec says that justified block must be sent as the safe block to the EL. I am happy to change this place to something like \"the safe must be at least justified block, but implementation can employ more advanced mechanisms to provide the safe block\". Probably, we can constraint those mechanisms by saying that they should provide a sequence of blocks that is monotonically non-decreasing.",
+        "created_at": "2023-12-15T06:32:38.224000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "cc \u003c@301186049323958275\u003e as we were having conversations around \"safe\" block tag and its utility in JSON-RPC API in the past. \n\nI am now more inclined on users query beacon API to obtain a block with a level of confirmation that is considered safe to them, and after that query JSON-RPC API with a safe block hash.\n\nPotential options for the \"safe\" can be: 1) justified 2) confirmed (according to the new confirmation rule once its implemented) 3) custom strategy",
+        "created_at": "2023-12-15T06:38:32.971000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "This would require beacon clients expose a public facing API, which would require all of the necessary infrastructure for hardening them.  Do they already have this?",
+        "created_at": "2023-12-15T06:39:28.276000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Also, whenever possible I think there is a lot of value in maintaining a single endpoint for external communication.  At the moment this is the execution JSON-RPC API.  I would be very hesitant to force users to maintain two connections.",
+        "created_at": "2023-12-15T06:39:55.950000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Why can't users just query the EL client JSON-RPC API and then under the hood the execution client queries the CL client for whatever it needs to respond to the query?",
+        "created_at": "2023-12-15T06:40:36.506000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "My interpretation of \"safe\", without knowing what justified or confirmed means on a technical level, is a block that would only get reorged out in an intentional and large scale attack on the network.  There is no plausible way for it to be reorged out \"accidentally\", or in a small-scale attack.",
+        "created_at": "2023-12-15T06:42:10.577000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "In other words: if the safe block is reorged there better be a whole lot of ETH burning happening as punishment of some attacker.",
+        "created_at": "2023-12-15T06:42:40.006000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "currently there is no EL -\u003e CL communication channel. So it means that CL will have to push whole spectrum of block confirmation information to EL to make it capable of serving this information. And EL might need to be equipped with a new endpoint to serve it",
+        "created_at": "2023-12-15T06:43:03.301000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Engine API is EL-\u003eCL?",
+        "created_at": "2023-12-15T06:43:15.179000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Oh, I see what you mean.  EL can't ask questions of the CL.",
+        "created_at": "2023-12-15T06:43:25.390000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "it is the opposite, CL -\u003e EL",
+        "created_at": "2023-12-15T06:43:25.454000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I would rather add EL-\u003eCL channel than add user-\u003eCL channel.",
+        "created_at": "2023-12-15T06:43:47.617000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "It is already hard enough to get users to not just use Infura for their JSON-RPC connection.  Asking them to supply two different endpoints, and ensuring those endpoints are in sync with each other, is almost certain to result in even fewer people using their own or a personally paid hosted node.",
+        "created_at": "2023-12-15T06:44:58.676000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Then the safe block of your favour would be the finalized one",
+        "created_at": "2023-12-15T06:45:00.695000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Finalized can *never* be reorged without a UAHF.",
+        "created_at": "2023-12-15T06:45:17.586000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Isn't there something that happens prior to finalized where a block can't be reorged without someone intentionally attcaking the network?",
+        "created_at": "2023-12-15T06:45:35.756000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "It actually can, but then 1/3 of a stake are gonna be slashed. For instance, \"justified\" can be reorged, although under extreme circumstances, but no stake burn will happen",
+        "created_at": "2023-12-15T06:46:30.723000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "For example, `latest` can be reorged just due to network delays and timing, and in fact I believe latest gets reorged from time to time currently.",
+        "created_at": "2023-12-15T06:46:40.641000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm, this was not my understanding of finalized.  My understanding was that once my client saw finalized, it would refuse to reorg past it.  I thought it would require a human to manually intervene to reorg a client past finalization.",
+        "created_at": "2023-12-15T06:47:34.242000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Btw, I forgot to ask \u003c@755590043632140352\u003e of their intention to switch \"safe\" from justification to unrealized justification. What the value do you see in this change? Was it anyone's request?",
+        "created_at": "2023-12-15T06:47:58.481000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "This is true if your node was online and observed canonical finalization first, but if it was syncing it could be fed with maliciously finalized chain, but only in the case when 1) you were syncing from a checkpoint beyond the WS period -- your problem 2) attacker voted on conflicting checkpoints within the WS period frames -- attacker gets slashed",
+        "created_at": "2023-12-15T06:52:18.619000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Ah, right.  For this conversation I'm thinking specifically about online nodes.",
+        "created_at": "2023-12-15T06:53:07.313000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "It sounds like maybe Justified is closest to what I want.  Where reorging past a justified block would require a significant undertaking by a malicious actor.",
+        "created_at": "2023-12-15T06:53:53.380000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I am willing to cave on the \"slashing will occur\" bit.  The key is that safe should basically never get reorged under normal circumstances.",
+        "created_at": "2023-12-15T06:54:16.873000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "If safe is reorged, people should be getting paged and woken up in the middle of the night.  😄",
+        "created_at": "2023-12-15T06:54:36.145000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I am thinking on the way to spec such behavior out... 🤔",
+        "created_at": "2023-12-15T06:55:49.886000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "To add some more color to how serious a safe reorg should be: If \"safe\" is reorged, there should be a post-mortem.  It should be all the talk of ACD until root cause is found.  A war room is probably involved.  Tim misses at least 1 night's sleep.",
+        "created_at": "2023-12-15T06:57:50.318000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "lol, the last point is the most important one I guess 😂",
+        "created_at": "2023-12-15T06:59:08.022000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "It should either be a decent period of asynchrony or dishonest majority (or any in between) to re-org a justified (unrealized justification) block. Such an accident would definitely have consequences that you're describing",
+        "created_at": "2023-12-15T07:02:21.868000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "And \"confirmed\" is something that is more likely to happen than \"justified\"?",
+        "created_at": "2023-12-15T07:02:59.799000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "One option is to just name these \"finalized\", \"justified\", and \"confirmed\" and leave it to users to decide which to use.  The advantage of calling one of them \"safe\" is that it is far more likely people will pick that one over any of the others as a default without reading any documentation.",
+        "created_at": "2023-12-15T07:04:08.295000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "If your options are `latest`, `confirmed`, `justified`, `finalized` and you don't know anything about the protocol, you are likely to pick `latest` or `finalized`, while `justified` is probably the *right* choice for most use cases.",
+        "created_at": "2023-12-15T07:04:46.369000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "What is a normal (healthy network) time delta between each of these?  `latest` being ∆=0",
+        "created_at": "2023-12-15T07:05:46.139000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Confirmed comes with 8s synchrony and honest majority assumptions. Justified is resilient to much larger synchrony parameters",
+        "created_at": "2023-12-15T07:06:59.209000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "8s is good enough to assume for most of the time. Though, during the most recent non-finality accident this parameter was probably violated by nodes struggling with attestation processing",
+        "created_at": "2023-12-15T07:09:24.201000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Under healthy network conditions:\n~0 seconds = latest\n~8 seconds = confirmed\n~? seconds = justified\n~? seconds = finalized",
+        "created_at": "2023-12-15T07:10:28.612000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "We can add `confirmed, justified` and alias `safe` to `justified`",
+        "created_at": "2023-12-15T07:10:31.717000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "~0 seconds = latest\n~8 seconds = confirmed\n~12.6 minutes = justified\n~19 minutes = finalized\n\nNote: finalized and justified depends on the position of the block in question within an epoch. Above numbers are the *worst* case numbers for a healthy network.",
+        "created_at": "2023-12-15T07:13:29.689000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm, I see.  Justified is much further out than I thought then.",
+        "created_at": "2023-12-15T07:13:54.086000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I thought justified trailed head.",
+        "created_at": "2023-12-15T07:14:04.131000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "That complicates things.",
+        "created_at": "2023-12-15T07:14:10.394000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "if you're lucky it can be 6.4 minutes",
+        "created_at": "2023-12-15T07:14:23.298000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "The way I'm thinking about this is:\nWhat would a wallet use?\nWhat would a dapp use?\nWhat would a payment processor use?\nWhat would an exchange use?",
+        "created_at": "2023-12-15T07:14:43.566000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "A wallet generally only presents data for one account, and it is the user's account, so there is no risk of malicious behavior on the part of the user.  Even if there was a reorg, it almost certainly would not result in the user's transaction being reorged since both branches of a reorg will likely include the user's transaction.  Thus, `latest` makes the most sense here.",
+        "created_at": "2023-12-15T07:15:43.026000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "A dapp is showing details from many users (e.g., shared state like liquidity pools) and a reorg may change transaction ordering and thus change current state.  However, when a dapp presents data from the wrong branch a simple refresh of the page fixes it at worst, and nothing really bad happens other than user confusion.  `confirmed` is likely good enough for these.",
+        "created_at": "2023-12-15T07:17:01.953000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "A payment processor may lose money if there is a reorg, especially a malicious one, so they need to be more cautious.  However, the individual payments are likely all small and there is likely limited scope of damage that can be done due to the distributed nature of payment processor flows.  `justified` is what I would think is the right choice here, but with 6.4-12.6 minute wait that is almost certainly too long.  I was hoping for something that is longer and more reliable than `confirmed`, but around a minute or so.",
+        "created_at": "2023-12-15T07:18:41.306000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "An exchange, which may be doing very large sized conversions, wants strong guarantees that payments cannot be reverted, so they would likely use `finalized` before proceeding.",
+        "created_at": "2023-12-15T07:19:13.812000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "That third one (payment processor use case) is the one I would like to be `safe`, but 6-12 minutes is just too long.  At that order of magnitude you might as well wait for `finalized`.",
+        "created_at": "2023-12-15T07:19:47.486000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "That's a great outline of various user stories 👍 \n\nI also think that there are options between `confirmed` and `justified`. An epoch old block that is confirmed would be more resilient to asynchrony than the confirmed block from the previous slot. It is probably too much of granularity for an average user, but for payment processor it can be something to consider. As the cost of re-org (amount of malicious stake) also increases",
+        "created_at": "2023-12-15T07:23:00.940000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "How far behind `latest` Is an epoch old confirmed block?  Does it change every ~12 seconds, or does its changing align with the epoch boundaries?",
+        "created_at": "2023-12-15T07:24:02.573000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "an epoch old is 6.4 minutes behind, but there can half or quarter of an epoch old and confirmed. This is what I meant under the spectrum of block confirmation levels",
+        "created_at": "2023-12-15T07:26:19.999000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Just catching up here: unrealized justified is exactly like justified for the purposes of this discussion",
+        "created_at": "2023-12-15T17:37:57.967000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I am reading the whole discussion above and I read \"safe\" should mean this or that. And I think that should be \"safe by default should mean this or that\" but it's perfectly valid if a user wants to treat head as safe because his application can afford that or if some other decides that justified is not enough and he wants finalized cause he is not willing to accept partial synchrony of the network but is willing to accept \u003c 33% slashable. I will open a PR in the CL spec repo simply changing that comment saying that justified being a stopgag, for a comment that explicitly allows clients to put any block as long as it's canonical and some guidelines by default",
+        "created_at": "2023-12-15T17:43:23.478000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".bfs",
+        "category": "general",
+        "parent": "",
+        "content": "It actually can, but then 1/3 of a stake",
+        "created_at": "2023-12-15T17:48:04.904000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Sure it is, i asked because there is a chance that this change was requested by users. If that was the case then  \"safe\" would have its utility",
+        "created_at": "2023-12-15T17:49:34.464000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Safe has it's utility, I think the Arbitrum sequencer uses safe for the L1 inbox (not really sure of the terminology here but we can ask them) so it translates to better UX for them. But more generally one of the problems I see is that some services still insist in using number of confirmations as a safety measure when that's probably irrelevant in PoS, having them move to safe and then configuring their own beacons to be either justified or finalized is much better, so we need to get into the habit of telling people in the application layer that safe is there to be used and that it is configurable",
+        "created_at": "2023-12-15T17:59:40.360000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "If \"safe\" has its utility already then the spec must be quite strict regarding the safe computation, as if different implementations will expose different levels of block confirmation as to be \"safe\" then it will become not usable. So it means that it is fine to send unrealized justification but nothing weaker than that.\n\nI think that the right path would be to expose different flavour of block confirmations in the API and let application decide which one to use, instead of configuring a client in runtime with what is exposed as safe",
+        "created_at": "2023-12-15T18:08:22.788000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I disagree: usage is up to the user, not up to the spec. It's absolutely fine for a user to consider Head to be safe, it's their problem",
+        "created_at": "2023-12-15T20:00:56.766000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "As long as the default is something reasonable (like justified) then it's fine to have this configurable, the spec is about making the chain robust, not about completely forbidding users of being dumb",
+        "created_at": "2023-12-15T20:01:50.713000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Another one I wanted to clarify: \u003c@301186049323958275\u003e \u003c@218935358878908416\u003e finalized will not be reorged, even if you slash 1/3 of the chain, you need manual intervention, clients will not take any other finalized checkpoint even if you slash everyone on chain.",
+        "created_at": "2023-12-15T20:03:57.496000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "being online or offline and just syncing is irrelevant, as soon as a checkpoint has been finalized in forkchoice, it's not reorgable by clients",
+        "created_at": "2023-12-15T20:05:35.768000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "The spec shouldn't be opinionated on what users treats as safe but it already is and the default behavior can't be changed as some users might already rely on it.\n\nI think a better approach would be in exposing different flavours of confirmations in the API, rather than involving configuration of a node to define what \"safe\" block returns in the runtime",
+        "created_at": "2023-12-15T20:29:17.658000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "That is important clarification! Thanks for that and sorry for confusion \u003c@301186049323958275\u003e \u003c@218935358878908416\u003e\nI messed up reorgs and finalizing conflicting checkpoints",
+        "created_at": "2023-12-15T20:39:08.531000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "\"safe\" was intended to be supplanted but what came from the confirmation rule when initially spec'd",
+        "created_at": "2023-12-15T21:11:24.166000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "essentially to be able to transparently make it better once we had a faster rule than Justified",
+        "created_at": "2023-12-15T21:11:46.028000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "general",
+        "parent": "",
+        "content": "that said, the name was probably poor at the time to be able to shift what is under the hood at this point",
+        "created_at": "2023-12-15T21:12:02.745000+00:00",
+        "attachments": null
+    }
+]

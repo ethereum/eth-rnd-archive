@@ -1,0 +1,250 @@
+[
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hmm, this confused me even more 🙂 Is this specified somewhere in detail? I mean exactly when and what needs to be called? Reexecuting (reinserting the payload) the block should not help as EL doesn’t have parent for the block that is not in the EL’s canonical chain. Non-optimistic mode head should also not change on CL side so fcu to that not-changed head should not make any difference to EL. \nSo I still don’t see how non-optimistic sync can progress in the situation I described previously.",
+        "created_at": "2022-05-02T09:11:57.662000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "In this case `fcU` won't provide any additional information to EL but it will do this for CL, you may think of it as CL polling for the state of particular payload. Once it becomes `VALID` CL may move forward in a non-optimistic sync scenario",
+        "created_at": "2022-05-02T09:14:12.655000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "The problem is that it can not become VALID. So again the situation - EL canonical chain has head with block A. EL goes down. CL reorgs to a different chain with a new head block B. EL doesn’t know all this when it gets up. CL inserts payload of B’s child C. From here it’s a deadlock as EL can not validate any C and it’s descendants because B is not in the EL’s canonical chain and EL doesn’t have it. CL can’t fcu to this new chain as payload is not validated for B and it’s descendants.",
+        "created_at": "2022-05-02T09:30:43.693000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Right, in this case CL won't be able to tell EL that the new head is B without applying B optimistically. Syncing optimistically is required to recover from a situation where there is a gap between CL and EL chains",
+        "created_at": "2022-05-02T09:40:45.274000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hmm I thought optimistic sync was optional",
+        "created_at": "2022-05-02T09:41:59.740000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Opti-sync is optional in its application to catching up with recent head, but making EL's block tree consistent with CL's one (should EL's part go inconsistent) can only be done via optimistic sync. CL may revert a block by block before it finds common ancestor with EL and then move forward in a lock-step but I am not sure how practical this solution is, especially, in the case when justified checkpoint would need to be reverted",
+        "created_at": "2022-05-02T09:45:51.880000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Geth fails one hive test that we should discuss imo \u003c@425572898787426305\u003e \u003c@892053833121923094\u003e  maybe \u003c@758579010027782144\u003e \nInvalid ParentHash NewPayload: This test inverts a byte in the payloads parentHash which means we can not recognize it as the parentHash anymore. Geth will now on receiving this payload start a sync since we don't have the payload and nothing really speaks against us syncing it (it might be a valid payload with a valid parent). \nThe test expects ACCEPTED or INVALID but we return, since we started the sync, SYNCING\nNethermind passes the test, while Erigon also returns SYNCING.\nImo the correct fix would be to modify the test to also accept SYNCING as a return value, since the EL might start a sync",
+        "created_at": "2022-05-02T09:51:28.270000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "Shouldn't we start SYNCING but when we received fcu in this case?",
+        "created_at": "2022-05-02T09:56:27.578000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "You're right and `SYNCING` is totally fine in this case. Engine API spec may be too prescriptive in the response section as it states **MUST** and matches all responses including to a certain EL state, while `SYNCING` may be relevant for several cases",
+        "created_at": "2022-05-02T09:56:41.052000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Starting `SYNCING` without receiving an `fcU` is allowed and is up to EL client implementation",
+        "created_at": "2022-05-02T09:57:20.906000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "okay, agreed. Just thinking about the potential attack scenario. If someone proposed the block with invalidParentHash, it would result with all Erigon/Geth nodes in the syncing mode, and maybe it is not a problem at all. Erigon and Geth would probably ask peers for the parentHash, right?",
+        "created_at": "2022-05-02T10:18:57.323000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes exactly, it should not be a problem for us as the sync is pretty far removed from the operation of the engine api",
+        "created_at": "2022-05-02T10:20:42.529000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "Testing",
+        "parent": "",
+        "content": "An attacker can force that even if we only started the sync on fcu, since CLs might fcu to a previously ACCEPTED payload",
+        "created_at": "2022-05-02T10:21:42.873000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think the key thing is that the CL shouldn’t consider itself syncing if it gets SYNCING back from newPayload for a non canonical block. \nIn teku ACCEPTED and SYNCING mean the same thing. I’m a little surprised the api differentiates between them. Either way the payload wasn’t executed which is all the CL really cares about.",
+        "created_at": "2022-05-02T10:29:21.636000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah I never really understood the need for a different return here: we treat them the same as well.",
+        "created_at": "2022-05-02T10:30:43.364000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marekm3498",
+        "category": "Testing",
+        "parent": "",
+        "content": "Interesting, what about Nimbus, Lodestar and Lighthouse? 🙂",
+        "created_at": "2022-05-02T10:31:27.216000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "same for lodestar, we map it to syncing",
+        "created_at": "2022-05-02T10:43:02.895000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah, `ACCEPTED` could also cover the `SYNCING` case. Essentially, clear distinction between `NOT_VALIDATED/VALID/INVALID[_...]` is the semantics CL needs to operate normally, actually, this semantics is reflected by optimistic sync spec",
+        "created_at": "2022-05-02T11:05:52.658000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think our error is self descriptive 🙂\n```go\n    // ErrAcceptedSyncingPayloadStatus when the status of the payload is syncing or accepted.\n    ErrAcceptedSyncingPayloadStatus = errors.New(\"payload status is SYNCING or ACCEPTED\")\n```",
+        "created_at": "2022-05-02T11:10:07.130000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "`mainnet-shadow-fork-3` configs are out: https://github.com/eth-clients/merge-testnets/tree/main/mainnet-shadow-fork-3\n\nWe plan on hitting TTD on thursday, potentially overriding TTD on wednesday to optimize the time. \n\nIf you have a mainnet node already synced, you can just start it up with the new config (geth/erigon need a re-init - but no resync needed!). \n\nTooling links:\n\nhttps://beaconchain.mainnetshadowfork3.ethdevops.io/\nhttps://explorer.mainnetshadowfork3.ethdevops.io/\nhttps://ethstats.mainnetshadowfork3.ethdevops.io/",
+        "created_at": "2022-05-02T12:38:17.429000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "If your team has an update or bugfix that's in a branch, please let me know. By default I'm using master/develop/client specified.",
+        "created_at": "2022-05-02T12:39:18.193000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Testing",
+        "parent": "",
+        "content": "`SYNCING` vs `ACCEPTED` opens a path to tiny optimisation when CL may poll on `SYNCING` concluding that EL is processing data and its state may be updated, and doing nothing on `ACCEPTED` as EL is likely doing nothing to update its state and is waiting for CL to give it more information",
+        "created_at": "2022-05-02T12:47:26.981000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "ACCEPTED would make more sense on CL side if it comes with extra information - details why it’s ACCEPTED that would give hints for CL how to resolve it. ACCEPTED seems indicates that it’s not a happy case.",
+        "created_at": "2022-05-02T18:18:49.123000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "Accepted can only be on non-canonical branches",
+        "created_at": "2022-05-02T19:06:22.726000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thus it means it is well formed but EL hasn't fully executed",
+        "created_at": "2022-05-02T19:06:36.404000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "In some cases EL will only fully execute if FCU is called to that branch",
+        "created_at": "2022-05-02T19:07:02.189000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "This mirrors how some EL in some cases only execute pow branches when they have enough difficulty to take over the head",
+        "created_at": "2022-05-02T19:07:31.530000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "Point being is that it is a fine case. EL is just not executing until CL says it's really worth it",
+        "created_at": "2022-05-02T19:20:41.996000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "I didn't get this, why would the CL poll on `SYNCING`?  just to update the optimistic status now rather than later? I think this may not be an optimization, since we only care about this status only if we switch to that branch, in which case I would want to know the status of a child, and will be forced to call fcu anyway",
+        "created_at": "2022-05-02T19:48:15.810000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "The only situation where I see our need to poll the EL is if no blocks at all are appearing. We still need to add that, I think Teku already does this",
+        "created_at": "2022-05-02T19:48:46.680000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "djrtwo",
+        "category": "Testing",
+        "parent": "",
+        "content": "Agreed. Sending children accomplishes the \"polling\" on such a branch, in the event that the branch continues to be built on",
+        "created_at": "2022-05-02T19:49:35.012000+00:00",
+        "attachments": null
+    }
+]

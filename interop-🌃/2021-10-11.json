@@ -1,0 +1,114 @@
+[
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cprotolambda\u003e You can find the amphora testnet config details here: https://github.com/parithosh/consensus-deployment-ansible/tree/master/amphora-testnet/custom_config_data\nNote however that we are running the testnet with the \"minimal\" compile-time preset beacon chain. This means that:\n- the minimum committee size is 4 instead of 128.\n- the max committees per slot is 4\n- the slot time is 6 seconds instead of 12\n- the slots / epoch is 8 instead of 32\nAnd it runs 10.000 validators on this test setting (!!!), so that means we have:\n- full-capacity attestation work, with committees of size 10k/8/4 = 312 validators\n- only 6/3=2 seconds to aggregate 10k/8=1250 single-participant attestations into 4 aggregates instead of nearly 64 like mainnet. The execution engine also needs to process the block within a similar time window, before it can be attested.\n- very inefficient usage of gossip topics; with only 4 committees per slot, there are 3x as many attestations per topic than on mainnet (247000/32/64=120 vs 312)\nThe minimal preset was nice during the event for a fast debug feedback loop, but was a poor decision for the testnet in hindsight, as we've put the network in an unnecessarily (and unrealistically) stressful situation. The mainnet preset can handle 250k+ validators like on mainnet, but minimal is meant for testing, with like 1k validators, or commonly \u003c 256.\nThe good news is that the network is still kind of keeping up with this; there are more missed block-proposals, but attestation inclusion and remaining synced nodes are still good enough to hover around the 2/3 participation.\nFeel free to experiment with the network, but let's start a new one soon with mainnet-like preset (Prater and Pyrmont have this too), to properly scale.",
+        "created_at": "2021-10-11T13:32:25.558000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "Are we likely to see a testnet with mainnet presets any time soon?",
+        "created_at": "2021-10-11T13:35:59.434000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cprotolambda\u003e We (@parithoshj primarily) have automated the setup of this one, so yes, I think we can, if every consensus-layer client helps us build docker images of their merge-client prototypes with the mainnet preset.",
+        "created_at": "2021-10-11T13:38:12.585000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cdannyryan\u003e \u003e The execution engine also needs to process the block within a similar time window, before it can be attested.\nalso note that engine_executePayload is done synchronously in this net rather than leveraging parallelism for EL and CL layers",
+        "created_at": "2021-10-11T13:43:56.890000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cprotolambda\u003e And it's still doing the double round-trip, instead of single call, for forkchoice update + block proposals (to be optimized in specs later)",
+        "created_at": "2021-10-11T13:44:50.192000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cprotolambda\u003e Merge interop testnet UPDATE:\n- The Amphora testnet with the current minimal testing preset does not scale as well as the mainnet preset. We are going to deprecate it in favor of a new more stable testnet with the mainnet preset. It will shut down around Thu morning UTC.\n- A new Merge testnet will be started at 12:00 UTC Thursday (noon, == 2pm CET), aimed at providing stability for sync/interop testing, with clients that are running the most stable on the current Amphora network as backbone. We are going for 20.000 validators, mainnet preset (less stress per slot). And with explorer + faucet for deposits + deposit contract in genesis.\n- In a month, we would like to launch a larger Merge devnet with better client distribution, once development stabilizes more.\n- For merge devs: the older alpha devnet is going to shut down later today: please use the amphora testnet instead.",
+        "created_at": "2021-10-11T15:52:19.053000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cvdWijden\u003e Just managed to sync to it, put the instructions for geth+lighthouse here, for anyone listening in who wants to experience it first hand: https://twitter.com/vdWijden/status/1447593175149907969",
+        "created_at": "2021-10-11T16:02:34.456000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cparithoshj\u003e Hey everyone!\nI've sent out the keys to everyone who requested it - Ping me again if you didn't get one. \nI've also added SSH access for users to their client's instances (as specified here: https://hackmd.io/E8YmjPprRie-bSFPEq4nKg?edit#). \nThe IPs to connect to can be found here (ssh user is devops): https://github.com/parithosh/consensus-deployment-ansible/blob/master/amphora-testnet/inventory/inventory.ini\nAll clients are running in docker containers with debug logging. Its quite verbose in some cases, so a handy example search command is docker logs beacon 2\u003e\u00261 | grep \"attested\"",
+        "created_at": "2021-10-11T20:59:29.707000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003csigpaul\u003e Alright, I have a confession to make. Some of you already know this, but it's important for my healing that I share it. Here we go...\nLighthouse presently accepts the TTD override parameter as non-0x-prefixed hex. So, if you do --terminal-total-difficulty-override 16, you're actually passing 22 decimal (not 16) 😬🤢🤮\nI know this wasted some time, so my apologies for this one. I want to fix this so we only accept decimal. To do that, I'm going to merge this PR: https://github.com/sigp/lighthouse/pull/2676\nUnfortunately, I can't do this in a backwards-compatible way. So, after I merge this PR, the merge-f2f branch of Lighthouse will start parsing --terminal-total-difficulty-override 16 as decimal 16 (*not* decimal 22). This is probably going to break some configs. This is relevant to @parithoshj and @protolambda, perhaps others.",
+        "created_at": "2021-10-11T23:03:31.980000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cprotolambda\u003e Thanks for the notice! Feel free to break things like this honestly, aligning it now is better than later. Just share the changes.\nAbout changes: should we all maintain a merge-specific dev changelog per client? Or can clients at least tag issues/PRs in their repository with a label if it affects other Merge devs?",
+        "created_at": "2021-10-11T23:06:34.623000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003cajsutton\u003e Bless you my son.  Publish 5 attestations and 7 memes and your sins will be forgiven.",
+        "created_at": "2021-10-11T23:06:52.693000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003csigpaul\u003e Our Adrian is a forgiving Adrian. (re @ajsutton: Bless you my son.  Publish 5 attestations and 7 memes and your sins will be forgiven.)",
+        "created_at": "2021-10-11T23:07:18.573000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003csigpaul\u003e I could drop a comment in our merge-f2f branch about breaking changes? We have a merge-f2f tag on the repo presently, however it just flags that it's merge-relevant, not necessarily interesting to anyone external. (re @protolambda: Thanks for the notice! Feel free to break things like this honestly, aligning it now is better than later. Just share the changes.\nAbout changes: should we all maintain a merge-specific dev changelog per client? Or can clients at least tag issues/PRs in their repository with a label if it affects other Merge devs?)",
+        "created_at": "2021-10-11T23:08:19.227000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003csigpaul\u003e Also, here's a PR about standardising TTD value: https://github.com/ethereum/consensus-specs/pull/2645",
+        "created_at": "2021-10-11T23:09:11.115000+00:00",
+        "attachments": null
+    }
+]

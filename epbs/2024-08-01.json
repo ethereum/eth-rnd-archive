@@ -5,7 +5,7 @@
         "parent": "",
         "content": "Here's a nuance I noticed when implementing ePBS. Perhaps people that are more used to the engine API (cc \u003c@425572898787426305\u003e ) would weigh. When we call to notify a new payload we add the parent beacon block root. I think for ePBS it's more natural to set the current beacon block root that has already committed the bid and is known to be valid. Is this viable to have this? How does the EL use this parameter? will it change much internally in the EL if we make this change? so far this fork is purely CL without any changes to even the engine API, but actually getting the parent block root is an \"inconvenience\" cause it's not in the envelope (that only commits to the current block root)",
         "created_at": "2024-08-01T20:19:16.701000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "Doesn't that provide the data for the EVM opcode to get the beacon block root?",
         "created_at": "2024-08-01T20:50:15.161000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "potuz",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "So the EVM beacon block root has the parent block root instead of the block root that contained the Payload?",
         "created_at": "2024-08-01T20:52:47.856000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -29,7 +29,7 @@
         "parent": "",
         "content": "Yes, because the block that contains the payload can't be built before the payload itself is.",
         "created_at": "2024-08-01T20:54:17.106000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -37,7 +37,7 @@
         "parent": "",
         "content": "Same reason that BLOCKHASH can't give you the current block hash, only previous ones - you don't know the block hash until after you've executed the transactions to produce the block.",
         "created_at": "2024-08-01T20:54:50.702000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "potuz",
@@ -45,7 +45,7 @@
         "parent": "",
         "content": "Ah but that precisely changes in ePBS, I guess it depends in slot vs block auctions",
         "created_at": "2024-08-01T21:29:37.506000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "potuz",
@@ -53,7 +53,7 @@
         "parent": "",
         "content": "But by the time the Payload is revealed the beacon block is already known. Thanks for this explanation. It seems to me that changing this may be a breaking change for contracts so we will have to deal with this in the CL to get the parent block root, or alternatively include it in the envelope itself",
         "created_at": "2024-08-01T21:31:42.832000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -61,7 +61,7 @@
         "parent": "",
         "content": "It doesn't seem mathematically possible to provide the beacon block root to a transaction that is included in that block, because then the block's execution is dependent on the block itself which includes its execution so it all becomes very self-referential.  You need to know the beacon block root before you can even create the payload - when its revealed is irrelevant.  But that might just be a terminology thing as I'm not familiar with ePBS - if you're including a payload in the \"next\" beacon block then possibly you could know the beacon block root for the payload slot prior to building it because the beaacon block doesn't include the payload anymore.",
         "created_at": "2024-08-01T22:44:07.331000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "potuz",
@@ -69,7 +69,7 @@
         "parent": "",
         "content": "Beacon blocks and payloads are independent in ePBS. In fact the same could be argued today that we could have chosen include the current beacon block root instead of the parent. Regardless of the beacon block being constructed after the Payload itself. But anyway I digress, what I get from this is that the opcode has a specific meaning today and changing it would be a breaking change",
         "created_at": "2024-08-01T22:49:25.923000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "potuz",
@@ -77,7 +77,7 @@
         "parent": "",
         "content": "Hmm I guess if this root itself is part of the blockhash then it is indeed mathematically impossible",
         "created_at": "2024-08-01T23:17:39.561000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "potuz",
@@ -85,7 +85,7 @@
         "parent": "",
         "content": "But that I doubt cause then it's impossible to do MEV boost. I, once more, should learn about execution. I don't think there can't be a cyclic dependency here",
         "created_at": "2024-08-01T23:19:06.790000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -93,7 +93,7 @@
         "parent": "",
         "content": "It currently works because only the parent block root is ever accessible from the EVM (either execution or consensus block root).  If you make that the current block root it definitely becomes an impossible cyclic dependency.",
         "created_at": "2024-08-01T23:29:43.641000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "potuz",
@@ -101,7 +101,7 @@
         "parent": "",
         "content": "I'm not really seeing this but anyway surely it's me that I'm missing something",
         "created_at": "2024-08-01T23:38:19.289000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "potuz",
@@ -109,7 +109,7 @@
         "parent": "",
         "content": "I'll get the parent root from forkchoice in the local implementation, this is not covered today in spec tests, that's why it wasn't caught until I tried to implement it in Prysm",
         "created_at": "2024-08-01T23:40:34.550000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -117,7 +117,7 @@
         "parent": "",
         "content": "Imagine `BEACONBLOCKROOT` returned the current block root and you have a transaction that basically does `SSTORE(BEACONBLOCKROOT())`.  That operation depends on knowing the beacon block root, but the beacon block root depends on the execution payload root, which depends on the world state root which depends on what value that SSTORE wrote. So every time you pick a root to return from `BEACONBLOCKROOT` it changes the final beacon block root and makes the transaction execution incorrect.",
         "created_at": "2024-08-01T23:46:46.009000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "ajsutton",
@@ -125,7 +125,7 @@
         "parent": "",
         "content": "Validators can confirm the block is invalid easily, but you can't produce a valid block without finding a hash collision.",
         "created_at": "2024-08-01T23:47:43.605000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "potuz",
@@ -133,7 +133,7 @@
         "parent": "",
         "content": "That's what I don't get, why the execution Payload root would depend on the post state root of the execution.",
         "created_at": "2024-08-01T23:59:22.965000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "potuz",
@@ -141,7 +141,7 @@
         "parent": "",
         "content": "It definitely is not like that on the CL",
         "created_at": "2024-08-01T23:59:39.319000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "potuz",
@@ -149,6 +149,6 @@
         "parent": "",
         "content": "In which the beacon root does not depend on the post state root of the state transition",
         "created_at": "2024-08-01T23:59:57.898000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

@@ -1,0 +1,90 @@
+[
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Here's a restatement of all.json with the 5 errors. - https://gist.github.com/shemnon/c4483305c57e00c26c6511f201305580\nThere is some room to change some error types, like jump table size or callf immediates.  While they are speced in their respective EIPs I can easily see code that cannot distinguish without contortions between a rjump immediate error and a push immediate error.",
+        "created_at": "2023-01-14T06:41:52.376000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "big_tech_sux",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "there are a lot of cases where it is useful to outline duplicated code",
+        "created_at": "2023-01-14T17:06:05.298000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "big_tech_sux",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the CALLFI idea seems a bit sketchy at first glance, it kind of conflates two complicated things (function call semantics + control flow branch), plus it's just CALLF+RJUMPI which is not super expensive after EOF.",
+        "created_at": "2023-01-14T17:07:21.468000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "big_tech_sux",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yea i have the same issue with stack validation (mentioned earlier in this channel). the code size issue can be slightly addressed by having section headers be more compact, as i have also pushed for elsewhere",
+        "created_at": "2023-01-14T17:08:31.990000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "big_tech_sux",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i think it's worth it for section headers to be more compact. as EOF encourages more function-style code generation (callf heavy instead of jump heavy code), it will pay dividends for functions to be as cheap as possible.",
+        "created_at": "2023-01-14T17:09:22.990000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "daniel.kirchner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The empty revert was merely an example. You can have arbitrarily complex code being deduplicated including reverts with complex revert messages in memory, or even constructing data for a successful return, etc. And as I said, of course outlining into a code section is possible, but it's not equally zero cost as direct deduplication by just collapsing jump targets. You'll end up with at least ``RJUMPI \u003csomewhere\u003e`` and at offset ``\u003csomewhere\u003e`` a ``CALLF \u003chelper\u003e INVALID`` (resp. a ``JUMPF``, if added) which will both induce code size cost *and* runtime gas cost - plus the code size cost of the header of the code section for the helper. If code deduplication was allowed, no additional cost would incur whatsoever. And since it should be possible to relax stack validation to just allow zero-cost direct code deduplication in these cases, without loosing anything (i.e. you can *still* verify up front that there won't be runtime stack over/underflows, etc.), I don't see good reason to go for the more restrictive version. Also note that, yes, for a ``PUSH0 PUSH0 REVERT`` outlining actually doesn't even improve code size here, but code deduplication could *still* save you 3 bytes of cost for any reverting code path in a function, which very quickly adds up.",
+        "created_at": "2023-01-14T19:19:49.489000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "daniel.kirchner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I.e. code deduplication by collapsing jump targets is *always* cheaper and more efficient than outlining.",
+        "created_at": "2023-01-14T19:22:10.233000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "daniel.kirchner",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It would indeed even be nicer if we could still do this even across code sections - but I'm not sure if adding ``CALLFI`` and probably also ``JUMPFI`` instead isn't a bit much and the header cost still remains. But yes, ``JUMPF`` is partly meant for that, s.t. we can do ``RJUMPI`` to a ``JUMPF`` which is reasonably cheap, even though still not zero-cost like collapsing jump targets.",
+        "created_at": "2023-01-14T19:46:32.631000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "big_tech_sux",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Right exactly, in vyper we do actually do this, sharing certain \"routines\", return / cleanup sequences are a good example. As EOF currently stands we need to outline to another function and we get call overhead for what before was just a jump.",
+        "created_at": "2023-01-14T20:04:04.405000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "big_tech_sux",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So the code generation in a code size (and maybe runtime, depending what the final gas schedule is) sense can actually get worse if we are trying to make use of code sharing heavily",
+        "created_at": "2023-01-14T20:10:02.617000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "big_tech_sux",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "In other words, the EOF design currently considers that the main uses for jumps are subroutine calls and control flow branching. The assumption is true in a general sense but the current design is not an improvement for every use case. Maybe some tricks can be pulled on the code generation side? But I think Daniel's analysis here is correct.",
+        "created_at": "2023-01-14T20:17:42.211000+00:00",
+        "attachments": null
+    }
+]

@@ -5,7 +5,7 @@
         "parent": "",
         "content": "Soo, I found some more time to work on the sugar layer on top of `StableContainer` to address the type safety concerns.\n\n```py\n# `StableContainer` determines serialization / merkelization for all variants\nclass Foo(StableContainer[16]):\n    tick: uint64              # Determines version\n    a: Optional[uint32]       # No longer used in V2\n    b: Optional[uint16]       # Truly optional\n    c: ByteList[4]\n    d: Optional[ByteList[4]]  # Added with V2\n\nclass FooV1(StableVariant[Foo]):\n    tick: uint64\n    a: uint32  # Required in V1\n    b: Optional[uint16]\n    c: ByteList[4]\n\nclass FooV2(StableVariant[Foo]):\n    tick: uint64\n    b: Optional[uint16]\n    d: ByteList[4]  # Re-ordering in `StableVariant` possible (sugar)\n    c: ByteList[4]\n\nclass AnyFoo(OneOf[FooV1, FooV2]):\n    @classmethod\n    def determine_variant(cls, value: Foo, v2_tick: uint64) -\u003e Type[StableVariant]:\n        if value.tick \u003e= v2_tick:\n            return FooV2\n        return FooV1\n```\n\nand, usage:\n\n```py\nvalue = FooV1(tick=64, a=32, b=None, c=ByteList[4]([0x42]))\nencoded = value.encode_bytes()\nassert encoded == bytes.fromhex(\"0b004000000000000000200000001000000042\")\n\ndecoded = AnyFoo.decode_bytes(expected_bytes, v2_tick=42)\nassert decoded == value\n\ntry:\n    decoded_2 = AnyFoo.decode_bytes(expected_bytes, v2_tick=1337)\n    assert False\nexcept:\n    assert True\n```\n\nIdea being, that the `StableVariant` all serialize according to the same forward and backward compatible serialization / merkleization scheme of the `StableContainer`.\n\nUse case would be to distinguish `BlobTransaction` from `BasicTransaction`, or in consensus side could be used to share serialization / merkleization across consensus spec forks, e.g., for staking pools, so that their proofs whether a validator got slashed still work even if we add some more totally unrelated fields to `BeaconState` in the future.",
         "created_at": "2023-10-02T09:24:38.118000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "Because `StableVariant` always serializes/merkleizes as the underlying `StableContainer`, also becomes possible to do re-orderings of fields (within the variant)",
         "created_at": "2023-10-02T09:31:42.753000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "etan_status",
@@ -21,6 +21,6 @@
         "parent": "",
         "content": "Will try to build https://notes.ethereum.org/@vbuterin/transaction_ssz_refactoring based on `StableVariant` as well, to see if it feels clunky. \nThe typing overhead is the definition of the `StableContainer` that determines the field order and total number of fields available in the future.",
         "created_at": "2023-10-02T09:35:23.610000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]

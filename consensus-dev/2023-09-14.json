@@ -1,0 +1,402 @@
+[
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "The block being imported isn’t finalised from the point of view of the local node though (otherwise it could be backfilled without any EL check at all). So I don’t actually see a difference in terms of finalised or not here other than around optimisation (you want to get non finalised blocks to your EL but it’s probably faster to let it fetch finalized ones itself)",
+        "created_at": "2023-09-14T00:04:53.210000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The block being imported is known to be final and indeed can be backfilled",
+        "created_at": "2023-09-14T00:05:51.366000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "That's my point here",
+        "created_at": "2023-09-14T00:06:18.360000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Here",
+        "created_at": "2023-09-14T00:06:45.150000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "And the big difference is in liveness of the network if every client does this",
+        "created_at": "2023-09-14T00:07:52.700000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "If it's already known to be finalized then the CL must already have imported its descendants and sent them to the EL.  So the backfill would just walk backwards along the chain checking the CL block hash matches and verifying the signature, but it wouldn't do anything at all with the EL payload.\n\nBut if the CL hasn't imported a descendent then the block can't be known to be finalized (it can be assumed to be so based on peer status reports and received gossip, but it can't actually be known).",
+        "created_at": "2023-09-14T00:10:04.842000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Import a descendent would include having been given a checkpoint state for a descendant.",
+        "created_at": "2023-09-14T00:11:15.041000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "It's \"known\" in the sense that it's being told that this is a finalized checkpoint to sync to. It's true that it's a different status than checkpoint sync from a site you trust (instead of random peers) but none the less, a client that is trying to sync to a \"finalized checkpoint\" for whatever reason (fell out of sync, was just turned on etc) and does this, represent a much lower risk than if every client does this and someone finds a way of triggering this behavior",
+        "created_at": "2023-09-14T00:13:36.303000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah there's definitely risk if people can trigger CLs to enter optimistic sync mode.  I think that applies regardless of whether the CL actually calls `newPayload` or does the block hash validation internally though.  You wouldn't want to skip calling `newPayload` for non-canonical blocks to save time for example because that makes it easy to flip the CL into optimistic mode, but similarly you don't want ELs always skipping execution of non-canonical blocks on `newPayload` for the same reason.\nSo in that sense, yes you want to be a way, way more careful attempting to use this optimisation on non-finalized blocks and I would generally agree its a bad idea.",
+        "created_at": "2023-09-14T00:38:28.303000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Got it now! so it is still an optimistic sync but without calls to the real EL for blocks before finalized checkpoint. Do you read the most recent finalized from the p2p? Btw, I guess you'll have to add versioned hashes check since Deneb",
+        "created_at": "2023-09-14T05:46:54.357000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Then this is viable optimisation path as we highly confident that the finalized blockchain is valid. If it is not then EL won't be able to sync with this invalid chain and the head will either always be optimistic if `SYNCING` is being returned in the perpetuity or the fatal error surfaced to a user if `status: INVALID, lvh: beforeFinalizedCheckpointBlockHash` is returned",
+        "created_at": "2023-09-14T06:09:34.355000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks \u003c@755590043632140352\u003e for detailed explanation, however it's not exactly where I'm confused.\n\n\"NOT_VALIDATED is never a return from the EL, I take it that by this you mean as shorthand for both ACCEPTED/SYNCING but not INVALID nor VALID.\" - correct\n\"I do not understand what do you mean by get_head complexity here.\" - I meant the complexity to correctly calculate head.\n\nSo, back to the beginning. My confusion started when you said that for optimistic syncing we must wait for EL response. So according to the spec we import block optimistically even if EL responds with `ACCEPTED/SYNCING`. My intuition is that not waiting EL response ~~at all~~ when importing optimisticaly and actually receiving response `SYNCING` is equivalent, because both can be invalidated and make a lot of mess. So this should mean that we ~~can not wait~~ can skip waiting for any EL response when importing optimisticaly. So in order to convince me that there is a difference (and this should help to conclude that waiting for EL response is needed) between those cases we should analyse forkchoice examples that compare these two cases. If someone has these examples I would like to analyse it.",
+        "created_at": "2023-09-14T06:12:52.298000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@755590043632140352\u003e The spec may not require to call `newPayload` for blocks before the most recent finalized one but still remain *optimistic* interpreting those blocks as if EL returned `NOT_VALIDATED` for each of them. did you mean that by suggesting to relax the spec?",
+        "created_at": "2023-09-14T06:13:01.749000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "The problem with the FC that Potuz described is that applying an LMD-weight from an attestation is an irreversible operation. So, if you apply a block to the FC without any response from EL you won't be able to correctly remove this block from the fork choice if EL eventually responds `INVALID`. By correct removing I mean evicting a block from the FC as it were never applied",
+        "created_at": "2023-09-14T06:18:28.483000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "but how is it different from importing block optimistically if EL responds with `SYNCING`?",
+        "created_at": "2023-09-14T06:19:30.079000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "in both cases block can be invalidated",
+        "created_at": "2023-09-14T06:19:46.562000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "it is not wrt LMD-weight irreversibility. but when you're optimistic you can't attest/propose and reading blockchain data via beacon APIs will indicate that data is from an optimistic part of the chain",
+        "created_at": "2023-09-14T06:20:25.234000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "OK, so if there is no difference, then why we must wait for EL response?",
+        "created_at": "2023-09-14T06:21:01.170000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "do you agree that in the case when yet no response received you'd have to remain optimistic?",
+        "created_at": "2023-09-14T06:22:00.689000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "and then when response is finally there you switch to normal mode",
+        "created_at": "2023-09-14T06:22:40.067000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "sure. But the whole point of the argumentation seems was that if we follow the spec (if we wait from EL for any response before importing optisiticaly) it \"solves the problems\"",
+        "created_at": "2023-09-14T06:23:10.689000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "so a block that takes 10s to execute or cause a crash in the majority client or whatever else causing EL to remain void will make the majority of validating nodes optimistic for some time or until the restart causing liveness failures",
+        "created_at": "2023-09-14T06:24:41.408000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "while if you wait for the response a 10s block won't make any harm and likely be forked out",
+        "created_at": "2023-09-14T06:26:28.775000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "yea, but if don't wait for EL response and I don't vote/propose on this optimistic head then it's the same result?",
+        "created_at": "2023-09-14T06:28:00.844000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "so you stop voting at all right?",
+        "created_at": "2023-09-14T06:28:29.210000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "hm... \"so a block that takes 10s to execute\" do you mean that it takes 10s to receive `SYNCING` ?",
+        "created_at": "2023-09-14T06:32:12.572000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "10s to receive `INVALID/VALID`",
+        "created_at": "2023-09-14T06:32:26.935000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "but it returns with `SYNCING` immidiatelly or not?",
+        "created_at": "2023-09-14T06:32:57.752000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "no, it is not. `SYNCING` is returned only when EL has not enough information to validate a block e.g. has no pre-state",
+        "created_at": "2023-09-14T06:33:36.418000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "OK, so this is different case, previously we were discussing immidiate `SYNCING` vs not waiting for EL response",
+        "created_at": "2023-09-14T06:34:20.564000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "but this should happen only on bug/attack?",
+        "created_at": "2023-09-14T06:35:04.649000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "some clients like Erigon (shallow state clients) can return `ACCEPTED` if a given block isn't from canonical chain, but when CL makes this branch canonical it has to validated all `ACCEPTED` blocks and return the status",
+        "created_at": "2023-09-14T06:35:16.949000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "yes, it is not a normal operating case",
+        "created_at": "2023-09-14T06:36:00.553000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "which means that CL can appear to be optimistic for the time required for Erigon to execute those blocks upon receiving the corresponding `fcU`, Erigon is highly optimised for this case and I believe responds really fast in the normal case. If execution takes 10s it will cause a node to remain optimistic. This would be a period where a network will rely on EL clients of a different kind, those that can instantly execute blocks on all branches",
+        "created_at": "2023-09-14T06:39:25.952000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "ok, but EL doesn't have some kind of circuit breaker that ensures `SYNCING` is returned immediately in such a bug/attack case? Yeah, there could be a bug in the circuit breaker, but let's not get that deep 😂",
+        "created_at": "2023-09-14T06:47:23.816000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "I don't think EL has a circuit breaker, this would be against the Engine API spec which says that if all data to validate a block is present then EL must run full validation and respond accordingly",
+        "created_at": "2023-09-14T06:51:43.176000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "ok, thanks, so the root issue was that I assumed `SYNCING` is returned in the case when EL takes a long time to process the payload.",
+        "created_at": "2023-09-14T07:16:21.239000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "And what are practical solutions that CL clients implemented for EL error responses? Let's say EL took 30 seconds to validate the payload and eventually returned some random error.",
+        "created_at": "2023-09-14T10:40:15.557000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dapplion",
+        "category": "general",
+        "parent": "",
+        "content": "Researching the feasibility of a ZK circuit to proof full beacon chain consensus, having to perform hundreds of pairings per epoch is a serious bottleneck. I wonder if the signed data by attesters could be optimized to allow more efficient aggregation.\n\nThe current `AttestationData` / `Attestation` data split is the following:\n\n```\nclass AttestationData(Container):\n    slot: Slot\n    index: CommitteeIndex\n    beacon_block_root: Root\n    source: Checkpoint\n    target: Checkpoint\n\nclass Attestation(Container):\n    aggregation_bits: Bitlist[MAX_VALIDATORS_PER_COMMITTEE]\n    data: AttestationData\n    signature: BLSSignature\n```\n\nTechnically, `slot` and `index` are used exclusively to identify the message producers. There's only one correct value for (index,slot) given a signed message. One must have _knowledge_ of these values for efficient verification. Tampering them on the p2p layer would invalidate the message, which should be equivalent to a peer just dropping the message.\n\nConsider the following re-organization of fields\n\n```\nclass AttestationData(Container):\n    beacon_block_root: Root\n    source: Checkpoint\n    target: Checkpoint\n\nclass Attestation(Container):\n    aggregation_bits: Bitlist[MAX_VALIDATORS_PER_COMMITTEE]\n    slot: Slot\n    index: CommitteeIndexs\n    data: AttestationData\n    signature: BLSSignature\n```\n\nAre there p2p consistency issues I'm not seeing? After successfully verifying the Attestation signature, is data integrity guaranteed?",
+        "created_at": "2023-09-14T11:11:40.761000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "As long as the target epoch is signed, forged `(slot, index)` would result in sig verification failure. So the proposed change looks fine wrt p2p consistency. Actually, it is similar to tampering `aggregation_bits` as of today",
+        "created_at": "2023-09-14T14:33:23.562000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sos666",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@688748669268132001\u003ehey! do you happen to have a copy of your slides from dappconn u could send? or where i could find",
+        "created_at": "2023-09-14T15:17:54.094000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "rightly so - but the CL in theory has a timeout to adhere to, most practically the 4s mark where it must attest 😉",
+        "created_at": "2023-09-14T16:18:46.940000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e and actually receiving response SYNCING is equivalent\nThis is true: if you sync your block without waiting for the EL response (and you do check the blockhash as LH + Nimbus do) then this is more or less the same as getting a SYNCING from the EL and you continue optimistic. However the spec says **you should not sync** in this case, and this is definitely different and better: you are allowed to actually propose in this case. So the situation is if someone finds a way of getting a block to take over 12 seconds to validate. If every client acted like what you are suggesting, then we will miss a block, every one will be \"optimistic\" with that definition and no one will be able to propose. The right behavior instead is to disregard this block and propose on the previous one. There are much worse attack scenarios that can be caused if someone manages to get everyone optimistic. The point is that getting an actual EL to return \"ACCEPTED\" instead of \"VALID\" may be  much harder than getting the EL to not return anything. So we are safer if clients do not become optimistic on simple timeouts",
+        "created_at": "2023-09-14T16:25:31.977000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "yeah exactly, although it is a bit of a problem to specify this cause it's hard to define \"finalized checkpoint\" since as Adrian pointed out, the node doesn't know what it's syncing to is actually finalized. Probably it's best to make a blind eye to clients that do this and trust they don't do it for unfinalized blocks",
+        "created_at": "2023-09-14T16:35:57.569000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "What do you do if EL returns with some random error?",
+        "created_at": "2023-09-14T19:52:46.432000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "Do you try to import next blocks in such case?",
+        "created_at": "2023-09-14T19:53:20.030000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "you can't, you can't import the next block without importing the parent, so you retry the current block",
+        "created_at": "2023-09-14T19:57:45.050000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "general",
+        "parent": "",
+        "content": "Yea, was thinking about some weird attack when some payload always returns some weird error so it bricks syncing (as CL is waiting for the response), but if such attack is possible then there is probably bigger issues than a bricked syncing.",
+        "created_at": "2023-09-14T20:02:37.635000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "In that case the chain will fork that block, but if everyone syncs it optimistically then we stall, that's precisely the liveness issue",
+        "created_at": "2023-09-14T20:18:12.857000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "In a fun twist, its possible for a bug to cause a block to return an error when submitted via `engine_newPayload` but then successfully import when pulled via p2p if the CL manages to go into optimistic mode. You'd get that primarily if the JSON parsing of the payload failed (whereas p2p uses RLP).\nNot saying we'd want to rely on that for recovery - it would definitely be a bad bug to not be consistent in rejecting or accepting a block - but worth being aware of the different paths that could be taken and how they can have their own failure cases (and different retry handling).",
+        "created_at": "2023-09-14T20:23:06.268000+00:00",
+        "attachments": null
+    }
+]

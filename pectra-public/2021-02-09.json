@@ -1,0 +1,50 @@
+[
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "Sorry, late reply on this one. Presently, calls between BN/VC only happen when the VC *produces* a block. Requiring a call between Eth2\u003c\u003eEth1 when *verifying* blocks is where I'm concerned about latency.\n\nI'm only really concerned about this latency when syncing. I haven't looked at the numbers recently, but we're generally around 10-20ms to verify a block during sync and we're always looking at ways to reduce this. Adding an RPC call for each block could conceivably have a tangible impact on these speeds.\n\nI don't think adding the RPC to call to Eth2 block verification is a deal breaker, but it's certainly an optimization target.",
+        "created_at": "2021-02-09T00:02:47.130000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "When syncing Eth2 blocks we do BLS \"batch verification\" where we verify the signatures of 64 blocks (and all signed messages inside those blocks) at a time. This turns out to be significantly faster due to some pairing magic.\n\nPerhaps it's not a prototype must-have, but the ability to send `n` blocks to the eth1 engine in one call might be nice. It would reduce network overhead by a factor of `n`, and it also might provide some room for the eth1 engine to perform faster, since it can maintain the context between blocks (instead of each block coming inside a new HTTP/network context).\n\nAlthough having the API available from day 1 isn't hugely important, it might influence the design. For a very rough example, *if* eth1 could read `state.balances[x]` and that value can change whenever there is a valid slashing inside an eth2 block, then there's not really much ability for batch verification in eth1 because the state of the EVM for block at height `h` requires the eth2 node to have fully processed the block at `h - 1`.",
+        "created_at": "2021-02-09T00:15:08.922000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "paulhauner",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e Do all clients run signature verification only before propagating a block?\n\nWe verify the signature and a handful of other trivial things (i.e., the slot of the block against our system time).\n\nIt's worth noting that verifying the signature doesn't *just* involve the BLS operations, we also need to determine the proposer for that slot from the shuffling. In other words, we don't just verify that *any* validator signed the block, we ensure that *the elected* validator signed the block.\n\nYou can find the full list here: https://github.com/ethereum/eth2.0-specs/blob/dev/specs/phase0/p2p-interface.md#beacon_block\n\n---\n\n\u003e How much time it take to verify the signature on avg and at periods of spikes, e.g. when intermediate state should be computed to verify signature\n\nI'm observing ~3ms for verification on LH mainnet nodes. That's the best-case scenario where we're getting cache hits, etc.\n\nSometimes I see spikes of \u003e200ms when we get weird blocks that might require a database read and intermediate state calculation.\n\nThe maximum value here is theoretically unbounded, since the spec permits any number of \"skipped slots\". However, we can make some assumptions about finality and say that the maximum propagation verification time is less than a second.\n\n---\n\n\u003e - How much time it takes on avg to disseminate a block across the network\n\nIn Lighthouse, whenever we get a block we track a metric which measures the time between the start of the slot of the block and when we got that block. I'm currently seeing that value sitting around 700ms, but varying from 500ms to several seconds.\n\nIt's important to consider that this value isn't only network propagation time, it also includes the time it took for the proposer to produce the block. The last mainnet blocks I've seen LH produce took ~300ms, but I'm not sure this value for other clients.\n\nSo, we could *guess* that propagation time is sitting at around half a second at best.",
+        "created_at": "2021-02-09T00:31:03.929000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks a lot for the answers \u003c@!361447803194441738\u003e \n\nRegarding sync. What if eth2-client starts executing the payload only when it turns into online mode, i.e. caught up with the head? Once eth1-engine starts getting the payload it has no state for the state downloader starts to work on fetching the state with whatever algorithm it is. While the state is not yet fully downloaded, i.e. eth1-engine is not able to execute the block it returns something like `syncing` status in response to the `eth2_insertBlock` call. When the first block is inserted then it returns corresponding status to inform eth2-client that it's possible to fully verify blocks coming from the wire.",
+        "created_at": "2021-02-09T15:45:19.370000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "So, it will be possible to sync with the beacon chain using the same strategy as it is now until it starts processing online blocks",
+        "created_at": "2021-02-09T15:48:28.293000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e The maximum value here is theoretically unbounded\nthough through the inactivity penalty, validators will be canned and there will be no proposer at some point which I would consider a theoretical maximum at least 🙂",
+        "created_at": "2021-02-09T22:27:17.236000+00:00",
+        "attachments": null
+    }
+]

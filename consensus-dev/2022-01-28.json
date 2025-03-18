@@ -1,0 +1,236 @@
+[
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Hi \u003c@!340345049063882753\u003e I have a question for you now :), What does Teku in this situation, suppose you have an orphan block as this:\n```\n30 -- 32 -- 33 -- 34 -- ...\n \\\n   -- 31\n```\nAnd someone requests a validator balance at slot `32`  (this means the balance before the block 32 was applied). Do you guys return the balance after `31` has been applied or after `30` has been applied? Does it make a difference if the requests is before or after that epoch is finalized? I am trying to understand a situation where we are returning a different result than Teku, but I am worried that it is simply because my node has the orphan block and Teku doesn't. It's  fine to request a validator balance of a non-finalized state",
+        "created_at": "2022-01-28T12:09:51.129000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "I suspect the discrepancy may be that if you ask teku for the balance at slot 32 it is *after* block 32 is applied, not before.",
+        "created_at": "2022-01-28T12:32:36.055000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Did a quick check on prater against all the beacon nodes and this shows that prysm returns the balance at slot _x_ prior to applying the block's rewards, whereas the other nodes return the balance at slot _x_ after applying the block's rewards.",
+        "created_at": "2022-01-28T12:42:28.992000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "screenshot_2022-01-28-124119.png",
+                "content": "63326aa0556ebc0a1e746e2c021aa272244d2212cc956b2717c1168bb9d55f05"
+            }
+        ]
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "This is odd, the report we have is that they match up except for those orphaned situations.",
+        "created_at": "2022-01-28T12:44:35.073000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "May be a coincidence.  If my assumption is correct then it should also show up a difference whenever a validator is in a sync committee.",
+        "created_at": "2022-01-28T12:45:31.340000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The query is in the standard API `eth/v1/beacon/states/1267872/validators?id=127768`",
+        "created_at": "2022-01-28T12:46:11.626000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "so I suppose it is standardized what clients should return for that state.",
+        "created_at": "2022-01-28T12:47:42.363000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Here's the data for a validator in the sync committee, so yeah looks like prysm is not applying the block at the slot before returning the state.",
+        "created_at": "2022-01-28T12:49:32.449000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "screenshot_2022-01-28-124841.png",
+                "content": "249ce7814617675513c8efb16befcd434757a6ced4779b0cd66d3388d5f8de54"
+            }
+        ]
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "yeah, when you request state `N`  to prysm it returns the state prior to applying the block at `N`",
+        "created_at": "2022-01-28T12:50:01.993000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "is this explicitly stated in the standard API?",
+        "created_at": "2022-01-28T12:50:22.618000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "apologies I never read the standard API section of the specs",
+        "created_at": "2022-01-28T12:50:39.134000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Yep and the other nodes return it after applying the state.\n\nBear in mind if you fetch `/eth/v1/beacon/states/1267872/root` you obtain the same value from all nodes.  In that situation, is prysm applying the block at the state prior to calculating/fetching the root?",
+        "created_at": "2022-01-28T12:51:27.378000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "That's understandable; it's very boring.  But a lot of items aren't explicit, and I think that `state_id` is defined on the assumption that it's post-transition.",
+        "created_at": "2022-01-28T12:52:35.500000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "yeah the state root is taken from the beacon block so it returns the state root reported in the block at N which is after it's been applied",
+        "created_at": "2022-01-28T12:54:22.497000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "The results for all calls should be consistent given the same `state_id`, so that implies that you should return balances after the block is applied, too.",
+        "created_at": "2022-01-28T12:55:12.754000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks Jim, this is enlightening, cc \u003c@!308223150725005322\u003e \u003c@!476250636548308992\u003e",
+        "created_at": "2022-01-28T12:56:17.072000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "still curious though what would Teku return if I request 31 then in the above question",
+        "created_at": "2022-01-28T12:56:38.943000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Here's some data from a recent missed block and roots,",
+        "created_at": "2022-01-28T13:03:04.151000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "screenshot_2022-01-28-130231.png",
+                "content": "168a09e17783f908c72be385a5e0172614a2cfcfe84a4565d34da49bd8d9b818"
+            }
+        ]
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "right because prysm does not advance the slot when you request the state, if it doesn't find a block, it gives you the stateroot of the last block that can find",
+        "created_at": "2022-01-28T13:13:05.882000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_jmc_.",
+        "category": "general",
+        "parent": "",
+        "content": "Hi, I'm putting together a page on client diversity for ethereum.org (PR https://github.com/ethereum/ethereum-org-website/pull/5218) and am wondering about the current status of Lodestar - afaik it has been coming to consensus on the BC for a few months now without any issues - is it now appropriate to include it in a list of alternatives to Prysm?",
+        "created_at": "2022-01-28T13:43:39.724000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "evanvanness",
+        "category": "general",
+        "parent": "",
+        "content": "i think no one can give you a definitive answer here since it's a judgment call.     i don't know of any issues though , so i would say it's appropriate to include",
+        "created_at": "2022-01-28T20:14:48.172000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_jmc_.",
+        "category": "general",
+        "parent": "",
+        "content": "Ok fair enough - thanks.",
+        "created_at": "2022-01-28T20:58:34.499000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I confirm jgm is right - we consider 32 to mean after the block in slot 32 is applied. \nThe orphaned block at 31 should not factor into any results at all because it’s not on the canonical chain. The only time it would affect results is if you specifically referenced it by root hash (or specifically asked for its state root hash). Requests by slot always refer to the canonical chain.",
+        "created_at": "2022-01-28T21:54:23.956000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks so if I ask for the state at slot 31 you return the state right after syncing 30?",
+        "created_at": "2022-01-28T21:56:49.935000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Or put in a different way, does Teku return the same reply for slot 30 than 31?",
+        "created_at": "2022-01-28T21:59:34.602000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ajsutton",
+        "category": "general",
+        "parent": "",
+        "content": "I think we’d return the state at a lot 31 with the empty slot applied though I’m not 100% sure and not at my computer so can’t check.",
+        "created_at": "2022-01-28T23:04:07.341000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "That's striking have a nice weekend I'll bug you on Monday to confirm cause here we seem to differ in more than just a slot shift",
+        "created_at": "2022-01-28T23:05:17.163000+00:00",
+        "attachments": null
+    }
+]

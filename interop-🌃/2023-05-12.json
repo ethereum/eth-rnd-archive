@@ -1,0 +1,90 @@
+[
+    {
+        "author": "roberto.bayardo",
+        "category": "Testing",
+        "parent": "",
+        "content": "If I understand the question, for the forked geth \u0026 erigon EIP-4844 prototypes we convert via golang type conversions at the point we need to call the crate-crypto go-kzg. It's mostly painless except for in the erigon txpool where transactions aren't actually fully parsed, and are instead treated as flat byte arrays. There I need to do copying to make it work with go-kzg. I had asked \u003c@427491045308235776\u003e if he could change the Blob type to slice instead of array, which would allow me to pass in references to the flat tx byte array instead of copying.",
+        "created_at": "2023-05-12T00:10:47.147000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "yeah indeed this is the major problem for me, I think we can simply recast on Go 1.20, but our testing branch hasn't updated yet",
+        "created_at": "2023-05-12T00:24:49.737000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "roberto.bayardo",
+        "category": "Testing",
+        "parent": "",
+        "content": "Let's just get Kev to change it. He was open to it.",
+        "created_at": "2023-05-12T00:34:54.706000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "Speaking of bindings, do any other teams struggle with the fact that c-kzg requires `FIELD_ELEMENTS_PER_BLOB` to be declared at compile time? This makes it impossible to build a binary that works with both mainnet \u0026 minimal specs, unless you're willing to resort to `objcopy` hacks as I did here: \u003chttps://github.com/sigp/lighthouse/pull/4276\u003e (the game is avoiding symbol collisions).\n\nIt seems the main reason c-kzg uses a constant is C's lack of generics:\n\n```c\ntypedef struct {\n    uint8_t bytes[BYTES_PER_BLOB];\n} Blob;\n```\n\nRather than duplicating the `objcopy` hacks in every set of language bindings, maybe we could use the pre-processor to make `c-kzg` more amenable to changing its function names? i.e. use different function prefixes for mainnet/minimal spec.",
+        "created_at": "2023-05-12T02:17:43.741000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "I guess another option is using a different library for the minimal spec, seeing as it's only used in tests \u0026 testnets",
+        "created_at": "2023-05-12T02:19:45.008000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "henridf",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, this is problematic over on Nimbus too",
+        "created_at": "2023-05-12T09:28:24.689000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "henridf",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e i.e. use different function prefixes for mainnet/minimal spec.\n\nnot sure i follow this - how would the differently-prefixed functions be used in the bindings?",
+        "created_at": "2023-05-12T09:32:32.891000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "Testing",
+        "parent": "",
+        "content": "if the function names for mainnet/minimal are different then you can link them in the same binary without collisions\n\nthis is what the hacks I'm doing with `objcopy` accomplish. I compile the library twice, and for the minimal version I rename all the public symbols (the function names) so they start with `ckzgmin_`. Then I generate a version of the `.h` header with the functions renamed, and generate the Rust bindings from that, so that they call the new symbols.\n\nIf the C lib could add the prefix itself it would save messing with the object files after compilation, and the header. It could be as simple as `#define LIBNAME ckzg` or `#define LIBNAME ckzgmin`.",
+        "created_at": "2023-05-12T09:49:20.593000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "It's because of https://github.com/ethereum/consensus-specs/pull/3255 as a root cause",
+        "created_at": "2023-05-12T11:10:20.242000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "The Engine API is explicitly incompatible with minimal-preset Deneb. My preference would be that this incompatibility is resolved at a spec level rather than people inventing ad-hoc ameliorations.",
+        "created_at": "2023-05-12T11:11:24.847000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "lol, this  is what we've wanted since forever for blst proper as well (to get runtime hardware detection)",
+        "created_at": "2023-05-12T20:56:14.693000+00:00",
+        "attachments": null
+    }
+]

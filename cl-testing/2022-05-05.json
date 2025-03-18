@@ -5,7 +5,7 @@
         "parent": "",
         "content": "It would be very nice to test a multiclient, with many branches forked scenario and trigger optimistic sync by fcu to a long branch with INVALID blocks. We only recently realized that had to call recursively FCU as many times as needed until we reorg to a VALID/SYNCING head. I bet we have many more quirks like this that didn't get right, I'm assuming the same for other clients. It would be nice to know if we survive these tests. We can now try to trigger this against lighthouse in our E2E tests.",
         "created_at": "2022-05-05T00:58:38.299000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -13,7 +13,7 @@
         "parent": "",
         "content": "I am curious if multiclient environment allows for any additional checks in this kind of scenarios comparing to single client env? There is a work in progress on creating EL mock (the idea on EL mock is borrowed from prysm's EL proxy) which would allow to test fully functioning CL in Hive. In particular, EL mock should allow us to test CL's behaviour when `SYNCING` turns into `INVALID + lvh`",
         "created_at": "2022-05-05T07:42:29.820000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "potuz",
@@ -21,7 +21,7 @@
         "parent": "",
         "content": "Well, there are different kinds of problems that can arise, some are of the form: we receive an INVALID block, we crash. Those can be tested in a single client environment. Others are worse: we receive an INVALID block, we split the network and continue voting happily on the wrong chain. Those can only be tested in multiclient environments. In some sense these later ones we can somewhat test ourselves by having different implementations of forkchoice, but we're still more likely to have the same bug in both implementations",
         "created_at": "2022-05-05T09:59:09.091000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -29,7 +29,7 @@
         "parent": "",
         "content": "When an INVALID block is received it must be rejected, and fork choice must be reverted to a state where it was before re-orging to INVALID chain if such re-org has happened. If all CLs follow this rule then there should be no split, right? Though, what if there are 3 forks, one is invalid and another two are competing and re-org after invalidation should happen to the one that wasn't canonical before 🤔",
         "created_at": "2022-05-05T10:03:35.630000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "potuz",
@@ -37,7 +37,7 @@
         "parent": "",
         "content": "this is not the case, it's a little subtler than that. You can have a situation like this\n```\n---- A \u003c-- B \u003c-- C\n      \\\n        --  D -- E\n        \\\n          - F -- G\n```\nYour head was C and you received block G, switched to it with FCU and the engine returns `INVALID`, you could have gotten enough attestations so that your new head is `E` now instead of your previous `C`, so you need to run FCU again. Since there's no bound to the number of forks you can have, you need to call fcu recursively until you find a valid or syncing branch again.",
         "created_at": "2022-05-05T11:01:35.882000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "potuz",
@@ -45,7 +45,7 @@
         "parent": "",
         "content": "ah yeah, now I read the last part of your message, indeed you got it right, that's the issue that we found out only in AMS",
         "created_at": "2022-05-05T11:02:18.169000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "potuz",
@@ -53,7 +53,7 @@
         "parent": "",
         "content": "and I'm sure that there are plenty of quirks like these where clients may not agree on what the head is right after being forced into optimistic sync for some reason",
         "created_at": "2022-05-05T11:02:55.104000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -61,7 +61,7 @@
         "parent": "",
         "content": "And given the same inputs CL clients must agree on the fork, right? This is what we'd like to have a test for",
         "created_at": "2022-05-05T11:19:41.778000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "potuz",
@@ -69,7 +69,7 @@
         "parent": "",
         "content": "Yeah, I believe we're resilient enough that even if we didn't agree on head right after such a situation then we will eventually tip to the right chain. But still it would suck to get a network split because of something silly like this. There are so many edge cases with optimistic sync that can't be covered in unit tests that it would be nice to trigger them in multiclient environments",
         "created_at": "2022-05-05T11:21:48.007000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -77,7 +77,7 @@
         "parent": "",
         "content": "Sorry, I might missed something, but I still don't get why multiclient env is required to find issues. If CL clients are following the protocol by re-orging to most valuable chain which IMO can be tested in a single client env then they should work well in multiclient env too.",
         "created_at": "2022-05-05T11:30:08.551000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "potuz",
@@ -85,7 +85,7 @@
         "parent": "",
         "content": "You need to have other forkchoice implementations to find out what \"the most valuable chain is\".",
         "created_at": "2022-05-05T11:38:21.041000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "potuz",
@@ -93,7 +93,7 @@
         "parent": "",
         "content": "We have had bugs that would pass all spec tests, all of our unit tests, and still we were choosing a different head than lighthouse",
         "created_at": "2022-05-05T11:38:55.419000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "m.kalinin",
@@ -101,7 +101,7 @@
         "parent": "",
         "content": "I would defer it to CL-to-CL tests and would move this out of the context of the merge and optimistic sync. What is important for an optimistic sync case is whenever INVALID payload occurs CL client must discard and invalid subchain and do a re-org to the chain that it think is canonical. Wouldn't a test like \"given blocks and attestations tell me what the canonical chain from these three is\" find the same bugs in the fork choice without inducing optimistic sync and invalidating a payload?",
         "created_at": "2022-05-05T13:16:10.559000+00:00",
-        "attachments": []
+        "attachments": null
     },
     {
         "author": "potuz",
@@ -109,6 +109,6 @@
         "parent": "",
         "content": "Yes, indeed if you have a lot of coverage you can probably come up with lots of unit tests that would cover every conceivable situation. But coming up with all these is not trivial. I don't even know if there' s a spec forkchoice test  for the situation described above where you need to call fcu several times to find the right head. Running a multiclient local testnet with a bunch of forks and invalid blocks is a much more effective way of finding these issues.",
         "created_at": "2022-05-05T16:16:10.763000+00:00",
-        "attachments": []
+        "attachments": null
     }
 ]
