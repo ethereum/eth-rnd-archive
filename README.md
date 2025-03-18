@@ -36,6 +36,7 @@ The archive is updated once a week by EF DevOps.
 
 - GIFs from discord are not captured. Messages with only a GIF will be empty
 - Emoji reactions are not captured
+- Mentions are not resolved to usernames yet. They will show internal Discord IDs
 - Threads might not be correctly exported atm
 
 
