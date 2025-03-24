@@ -1,0 +1,80 @@
+[
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I have a general question about EOF which is about the removal of the gas stack item in the \"EOF-CALL\" operands (like EXTCALL). The rationale says: \"The number of cases where such a feature is essential are probably better served by direct protocol integration.\" \n\nI don't understand what this means, what direct protocol integration? We are now removing it from the protocol - right?\n\nAlso, are we sure that the this feature is \"not essential\"? If my sub-call hits an INVALID or some other non-REVERT error, it will immediately consume all gas (which is expensive and could be less risk if we would send less gas, in particular: a smaller *fraction* of gas, not a hardcoded number)\n\nGas introspection removal is what we want to remove in EOF so we cannot forward an exact amount of gas. But, what about a fraction? I could think of two ways to do this: either add two stack items to each `*CALL` operand and you now have the numerator and denominator to calculate how much gas you want to forward (50% of gas for instance). Another option (because this adds 2 stack items) is a new opcode SET_GAS_FRACTION or something like that which pops two stack items and sets that as the \"current\" gas fraction to be used. It starts at 1 (so 100%) and can be edited by using this opcode and setting the numerator and denominator",
+        "created_at": "2025-03-20T06:48:01.308000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003c@907931206081990666\u003e I'm not aware of any use cases people have posted lately, this was more a question out of my own interest. I think solidity by default forwards all gas, but I could certainly see some scenarios (not even exotic ones) where you want to set a much lower gas limit. For instance when calling third-party contracts. This would be more \"security\" at the \"financial\" side where we simply don't want to run the risk that we forward all current gas, hit an INVALID, and end up spending much more gas than would have been necessary (if you would send 1 gas to a INVALID call frame or 100 gas, the outcome is the same, except in the latter one you spent 100 times more funds).\n\nThis also opens somewhat the question for me if we should get rid of this \"spend all gas available\" in EOF (in case we hit an error within EVM, like INVALID or other things like \"static state change\" (for instance writing storage when you are in a STATICCALL context)). I don't know the rationale of spending it all (this sounds like the safest option to me to protect against underflows/overflows when adding it back to the top level caller again?). But on the other hand it makes no sense, gas is supposed to be the unit of \"resources\" spent, and hitting an INVALID opcode is super simple and would spend near-zero gas.",
+        "created_at": "2025-03-20T06:57:09.720000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "frangio_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e I don't understand what this means, what direct protocol integration?\n\none case where gas limiting is needed is ERC-4337. i imagine the rationale refers to, for example, integrating AA into the protocol",
+        "created_at": "2025-03-20T12:53:17.133000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Right, and then the gas limiting rules are part of the integration of AA?",
+        "created_at": "2025-03-20T12:59:30.724000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ok, that does make sense but I think this is a bit too fast since we don't have AA yet. So for now I'd say that we need some way to do our gas handling ourselves (without exact/absolute numbers, but thus with relative numbers i.e. fractions)",
+        "created_at": "2025-03-20T13:00:12.871000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "frangio_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e This would be more \"security\" at the \"financial\" side where we simply don't want to run the risk that we forward all current gas, hit an INVALID, and end up spending much more gas than would have been necessary\n\nin principle it's true one would want to do this, and that we could come up with attack vectors for griefing. in practice i think most smart contracts don't have any reasonable thing they can do other than forward all gas. even if you're able to specify a fraction, how does a contract know the right \"fraction\" of the whole transaction that should be assigned to a contract call? it depends on contextual information the contract doesn't have\n\n\u003e This also opens somewhat the question for me if we should get rid of this \"spend all gas available\" in EOF\n\ni do think this is interesting though. \"spend all gas\" errors seem quite ingrained in the evm though...",
+        "created_at": "2025-03-20T13:04:15.636000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think its easy, we already have checks if we run in EOF mode, so if you hit a \"spend all gas\" error and are in EOF, you dont spend all gas but instead 0 or X",
+        "created_at": "2025-03-20T13:05:12.649000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "RE: ability to specify gas (fraction?) in EOF CALLs \n\nLike I agree with you, I think in most / all cases you currently just forward all gas, I wonder if there are any contracts which don't do this. The main reason would be to protect against this \"loss of all gas but doing absolutely nothing\". But on the other hand, I think `assert` in solidity is only used as guard for unreachable code (or that is the idea I think - and if you hit the assert it will INVALID the last time I checked so consume all gas) and for all other checks you have `require` or for errors `revert` which dont spend all gas but just gracefully return whatever gas is left to the caller.\n\nSo, if you hit an error which spends all gas you are in an EVM context where you really should not be (and it will cost you 😅 )\n\nSo I'm mainly thinking of scenarios where people have a reason where they really need this gas option (gas fraction/gas option). But I just realized, we can just introduce new opcodes, so we could actually go with this opcode I mentioned to set the \"gas fraction\" and can just keep the CALLs for now. So if that turns out to be a problem we can (obviously) still add it and thus also here via a way which only introduces 1 new opcode",
+        "created_at": "2025-03-20T13:10:34.031000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "frangio_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i tried to gather some data on potential demand for the PAY opcode. i considered a \"pay-like call\" to be a call with nonzero value and 2300 gas (the gas stipend). these calls presumably don't care about and would rather avoid any execution so they'd switch to the PAY opcode. [dune query here](https://dune.com/queries/4875405/8076803) (this is only looking at ethereum mainnet)\n\nwhat i found is that out of value-only calls, about a third are pay-like\n\nthis is more than i expected and not a negligible fraction. though i'll say again that this is not the only mechanism people use to prevent reentrancy, and i don't think it's the main one, and this data may confirm that",
+        "created_at": "2025-03-20T23:47:34.326000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "Chart.png",
+                "content": "9105a350f548fc9a7a4d0ca37c9231b68e6ab7b91b292f4b39557f9962dfa7a0"
+            }
+        ]
+    }
+]
