@@ -1,0 +1,274 @@
+[
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "[Add Execution Headers to Beacon Network messages #385](\u003chttps://github.com/ethereum/portal-network-specs/pull/385\u003e) here is a PR for a proposed solution",
+        "created_at": "2025-03-27T00:25:32.637000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "deme1744",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "\u003c@403636673914863626\u003e Thanks for bringing this up! I remember now this being a thing in the `ExecutionPayloadHeader` a long time back, but for some reason I did not remember or did not link it at least with its usage in the `LightClientHeader` that we rely on. Looks like a problem that we won't be able to fix cleanly solely by changes in Portal.\n\nBut here some options on how we can mitigate this currently in Portal:\na. Ephemeral headers in Portal get the same structure as the current CL version. Block bodies need to get verified by doing the `hash_tree_root` of the transactions and withdrawals instead. This is only for the recent headers. The others remain the same. This would be effort that is not \"lost\" completely as hopefully those merkilzation EIPs do eventually get adopted.\nb. We use the `LightClientHeaders` from the beacon network only for verification of the headers (using its blockhash). And the recent headers still need to get gossiped into the network (without proof) by portal bridges. This is of course duplicate data (aside from the tx and withdrawal hashes), and as \u003c@240180844130598912\u003e mentioned in [PR](https://github.com/ethereum/portal-network-specs/pull/385), is a bit more timing dependent.",
+        "created_at": "2025-03-27T08:21:35.995000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "option a) wouldn't make sense to do, because you wouldn't get the complete history from the lightclient updates \n\nYou would end up missing history if\n- the sync aggregate participation is low\n- there is a re-org\n\nfor option b) `e use the LightClientHeaders from the beacon network only for verification of the headers (using its blockhash)` we would only use a LightClientHeader to verify the head of the chain, then we would only verify via  `parent_hash` after that.\n\nThe complexity with this solution is if a re-org happens how do we inject the headers which are now required for the chain. As our nodes can't accept the headers unless they are valid. If we let nodes RFC for missing headers they would do it all at once and dos the network.\n\nSo all Portal History Nodes would need X new headers all at the same time if a re-org happens.",
+        "created_at": "2025-03-27T14:00:38.167000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "So instead of relying on the Beacon Network for EL headers we should instead\n- only use the Portal Beacon Network for being aware of the head of the chain. \n- We would prove the latest block via `keccak256(rlp.encode(header)) == ExecutionPayloadHeader.block_hash`\n- For proving all previous blocks we would use the `parent_hash`\n- All ephemeral History Headers would be gossipped by a History Bridge\n- We would need bridges which monitor CL re-orgs and gossip the multiple missing header's in 1 offer.\n- We should ideally restrict nodes from RFC for headers in the last 64 blocks, since all the Portal nodes will end up gossiping this data throughout the Portal History node set so it would be redundent and potentially a DOS vector.\n\nSo overall our updated model isn't completely different, but for a node to stay at the front of the change there is quite a high reliance on bridges which take on a lot of complexity",
+        "created_at": "2025-03-27T14:08:55.333000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "An alternative path is we could include proofs for ephemeral headers, but there would be a lot complexity, as the anchor would be using block_roots it would be quite complex, as which slot would you create the proof for, so I think our modified pre-existing strat of heavily relying on `parent_hash` would be ideal.",
+        "created_at": "2025-03-27T14:11:13.389000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I will make a PR to update the spec to clarify these details.",
+        "created_at": "2025-03-27T14:21:35.723000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "deme1744",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "How is this different from the option b?",
+        "created_at": "2025-03-27T14:33:52.047000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "deme1744",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "fyi, the missing history on a re-org was in any scenario already a case to consider, whether this SSZ root or not would have been used. And in those scenarios to backfill the 8192 headers or less, one would have to verify by traversing parent_hash",
+        "created_at": "2025-03-27T14:35:35.774000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "deme1744",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Not even in a re-org only, also just in the case of a node that just started. It would be able to follow the latest headers, but the headers that came before that and that are not yet provided with a proof would have to be backfilled and verified as such. This is also why the range request its parameters were decided as they are: the block_hash (latest that you want) + ancestor_count (walking backwards).",
+        "created_at": "2025-03-27T14:38:39.767000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "deme1744",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "The main difference now is that we cannot build the EL headers from the data as we thought before. So we can either gossip them in via the bridge, like we have been doing in the past. Or use them in their CL format. The latter might have some slightly higher security risk due to the sync aggregate participation...?",
+        "created_at": "2025-03-27T14:41:59.695000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "What do  you mean by `Or use them in their CL format`?",
+        "created_at": "2025-03-27T14:43:38.472000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "deme1744",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "The `hash_tree_root` for txs and withdrawals",
+        "created_at": "2025-03-27T14:44:10.600000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "deme1744",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Anyway, not necessarily for this way. I think just gossiping (from the portal bridges) the EL headers is probably the easiest way forward",
+        "created_at": "2025-03-27T14:44:50.159000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I don't think it would make sense to due that, as you would have a fairly incomplete via from LightClientUpdates so it wouldn't be worth the complexity",
+        "created_at": "2025-03-27T14:45:36.458000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I think our spec and option B are under-specified then. And if you think we are arguing for the same thing I think option B is what we should go for.",
+        "created_at": "2025-03-27T14:50:18.934000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I think it is important to specify the information I did, because our original proposal for Ephemeral History couldn't handle the cases I mentioned, as missing EL Headers due to\n-  the sync aggregate participation is low\n-  there is a re-org",
+        "created_at": "2025-03-27T14:52:22.333000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Our assumptions were these we would get LightClientUpdates for all the EL headers, but that isn't true in these 2 cases so I think it is important to specify what we are doing to fix the last solution.",
+        "created_at": "2025-03-27T14:54:40.428000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "deme1744",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "This is not really true, that was never the assumption.",
+        "created_at": "2025-03-27T14:55:02.951000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "deme1744",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "The spec already states currently that to prove these, you need to back track the chain of parent_hash.",
+        "created_at": "2025-03-27T14:55:15.875000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "deme1744",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "What to do exactly in case of a re-org or so, that is under specified, sure. But that also does not change because of this tx/withdrawals root.",
+        "created_at": "2025-03-27T14:55:41.678000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "deme1744",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "It is definitely useful the clarify this in the specifications, but should be kept separate from for example adding solution b) (gossip the headers in via bridges).",
+        "created_at": "2025-03-27T14:56:21.332000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "deme1744",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Lets not mix up several issues or required clarifications.",
+        "created_at": "2025-03-27T14:56:39.024000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "```\nEphemeral block headers are not seeded into the network via traditional gossip mechanisms. Ephemeral block headers are instead expected to be side-loaded from whatever HEAD oracle the portal node is using. A client that is part of the portal beacon network can pull in headers from that network.\n```",
+        "created_at": "2025-03-27T14:57:34.239000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "deme1744",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Yes, that is the part that needs to change because of the tx/withdrawal root issue.",
+        "created_at": "2025-03-27T14:57:54.903000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "deme1744",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "As the assumption was that active nodes on the network would grab these from the beacon network and store them.",
+        "created_at": "2025-03-27T14:58:31.189000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "deme1744",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Or via other means, e.g. full nodes.",
+        "created_at": "2025-03-27T14:58:41.849000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "This part means that there would be no way to get EL Headers which\n- weren't included in a LightClientUpdate due to sync aggregate participation is low\n- or a EL Header from a re-org those EL Headers wouldn't have LightClientUpdates",
+        "created_at": "2025-03-27T14:58:56.716000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "As LightClientUpdate's would only contain a subset of the EL Header's of the valid chain",
+        "created_at": "2025-03-27T15:00:01.487000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "the `tx/withdrawal root issue` isn't the main issue, it was the first apparent issue, but I think it is minor to LightClientUpdates only representing a subset of EL Blocks",
+        "created_at": "2025-03-27T15:01:24.794000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "deme1744",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Sure, that could perhaps occur due to the way consensus light client works, or rather lacks backfilling of those headers. I guess that could/would be covered by either having some nodes that rely on other means. Or just by the fact that eventually those headers get in with their proof.",
+        "created_at": "2025-03-27T15:03:03.076000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "\u003e Looks like a problem that we won't be able to fix cleanly solely by changes in Portal\nThere is no clean way to fix this, even if the EL Header and ExecutionPayloadHeader were the same aka no `tx/withdrawal root issue`",
+        "created_at": "2025-03-27T15:08:25.584000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "\u003e  I guess that could/would be covered by either having some nodes that rely on other means\nI think we resolve this with option b) which would make a bridge ephemeral history and monitor and manage re-orgs. Which then the EL Header would propagate to the whole network.\n\u003e Or just by the fact that eventually those headers get in with their proof.\nThis would cause History Nodes to have incomplete views of the last 8192 headers, potentially ones that are invalid due to being re-orged. As a EL Header proven via LightClientUpdate could be re-orged. So I think the ideal case would be for every Portal Node to store a full copy 8192 ephemeral chain, instead of best effort segment system, instead  of  waiting 27 hours to get the real valid headers with proofs.",
+        "created_at": "2025-03-27T15:18:41.585000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "deme1744",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Again, lets not mix issues. You are quoting me for the wrong issue. The problem I refer to in that quote is the tx/withdrawal root.\n\nAside from that issue, I think the way ephemeral headers is described to work currently was/is sort of best effort and not super thought through. But it did intent do avoid bridges for latest, which was rather nice. I do think the idea was to implement this and see what's missing (at least that is the sentiment I got from it)? Reasoning around forks and specifying this is definitely missing.\nNote that in case of a fork, I think the sync aggregates would not reach its threshold either (in theory, not fully sure about the security model here, beacon light client experts should chime in, perhaps \u003c@881905303011086387\u003e ), and thus in theory different `LightClientHeaders` should be going around too. And thus, those headers would probably not go missing...?\nNote also that in our previous (0 proof) latest headers, bridges were not fork aware either (well, at least not the one of fluffy, not sure about trin). So in that sense, this was still seen as an improvement (they were actually provable).\n\nIt seems that with option b) we can resolve the actual original raised issue, by having bridges that gossip in the headers.\nBut your option b) is about a bit more than just that, as it should also become fork aware and re-gossip headers that were potentially missed due to fork. Which sure, can be a solution for this.",
+        "created_at": "2025-03-27T15:42:46.304000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "\u003e Note that in case of a fork, I think the sync aggregates would not reach its threshold either (in theory, not fully sure about the security model here, beacon light client experts should chime in, perhaps @etan ), and thus in theory different LightClientHeaders should be going around too. And thus, those headers would probably not go missing...?\n\u003c@881905303011086387\u003e can confirm, from my understanding with talking to him there are no `different LightClientHeaders` for this case. We would only get a LightClientUpdate for the tip of the previous-valid-side-chain and for the head of the re-orged chain, so all the EL Headers between before the re-org and the new tip, wouldn't be on our network.\n\n\u003e Note also that in our previous (0 proof) latest headers, bridges were not fork aware either (well, at least not the one of fluffy, not sure about trin). So in that sense, this was still seen as an improvement (they were actually provable).\nSame we don't have a fork aware bridge on our side either yet\n\n\u003e It seems that with option b) we can resolve the actual original raised issue, by having bridges that gossip in the headers.\nThis would handle the original issue found `tx/withdrawal root issue` and apart of the second issue found of missing LightClientUpdates/Headers due to low sync aggregate participation 👍 \n\n\u003e But your option b) is about a bit more than just that, as it should also become fork aware and re-gossip headers that were potentially missed due to fork. Which sure, can be a solution for this.\nThis would handle the part of the second issue found with our original implementation aka Missed EL Header due to a re-org and hence EL Headers not being included in the LightClientUpdates which we originally assumed we would get updates for those",
+        "created_at": "2025-03-27T16:12:35.416000+00:00",
+        "attachments": null
+    }
+]

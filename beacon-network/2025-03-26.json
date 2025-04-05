@@ -1,0 +1,386 @@
+[
+    {
+        "author": "acolytec3",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "has anybody else started work on ephemeral headers?  I'm trying to integrate head tracking with the beacon chain optimistic updates and it seems that the `execution` EL header fields included in the optimistic update don't match 100% the equivalent fields when I retrieve them from an EL block via infura or other full node RPC provider",
+        "created_at": "2025-03-26T10:00:47.836000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "acolytec3",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "specifically, the `withdrawals_root` field does not match between the two",
+        "created_at": "2025-03-26T10:01:00.666000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "acolytec3",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "was curious if anybody else has encountered this and might know why?",
+        "created_at": "2025-03-26T10:01:18.847000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "acolytec3",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "nevermind, checked with a CL dev and figured this one out",
+        "created_at": "2025-03-26T14:22:50.132000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "acolytec3",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "the tx root and withdrawals root in the `execution` payload in the optimistic update are ssz roots for the transaction list and withdrawals list so we can't use this for inserting new ephemeral headers",
+        "created_at": "2025-03-26T14:23:29.474000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "\u003c@881905303011086387\u003e do you think we can update the electra lightclient spec to correct the issue listed above in the construction of the `ExecutionPayloadHeader`, as stated above the EL doesn't use ssz to calculate the transaction_root and withdrawal_root, so currently the Ligth Client Protocol is providing invalid EL headers, which I am assuming it is supposed to give valid EL headers?",
+        "created_at": "2025-03-26T17:56:42.284000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I will try and make a PR to bring this up and do a bit more reading into this, but I am assuming this was just an oversight?",
+        "created_at": "2025-03-26T17:59:32.977000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Thank you for bringing this up 👍",
+        "created_at": "2025-03-26T18:00:12.197000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "acolytec3",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I talked with \u003c@792822129019584562\u003e and my understanding is that it was included in Capella with the view that eventually (though sooner than has happened since it hasn't happened yet) the EL would migrate fully over from RLP to SSZ, as opposed to just a simple oversight",
+        "created_at": "2025-03-26T18:05:00.223000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "acolytec3",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "since it does serve a useful purpose of being the anchor used for proving the existence of specific transactions exist within a block (but only if you're using the SSZ el block definitions that are part of the larger Beacon BLock spec)",
+        "created_at": "2025-03-26T18:06:11.562000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "The first usage of it was 4 years ago [polish merge/beacon-chain.md #2472](\u003chttps://github.com/ethereum/consensus-specs/pull/2472\u003e)",
+        "created_at": "2025-03-26T18:08:04.174000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "All usages stem from here presumably copy pasted",
+        "created_at": "2025-03-26T18:08:47.595000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "\u003e the EL would migrate fully over from RLP to SSZ, as opposed to just a simple oversight\nWell it doesn't seem like the EL is updating to SSZ anytime soon, and I am assuming the usecase of `ExecutionPayloadHeader` in a lightclient protocol is so light clients can track the head of the EL like we are trying to do. So we are implementing the intended usecase for this right now",
+        "created_at": "2025-03-26T18:10:50.008000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "acolytec3",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Above my paygrade to make that call, though don't disagree.  I dunno how easy it would be to get that included in a fork though",
+        "created_at": "2025-03-26T18:11:31.489000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "But I guess this brings up 2 routes to resolve this\n- updated the EL to use SSZ `hash_tree_root` for calculating `transactions_root` and `withdrawals_root`\n- update the CL to properly build `ExecutionPayloadHeader` in the light client protocol",
+        "created_at": "2025-03-26T18:33:41.835000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I commented on the upcoming ACDC issue \u003chttps://github.com/ethereum/pm/issues/1399#issuecomment-2755435584\u003e",
+        "created_at": "2025-03-26T18:45:20.642000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "\u003c@881905303011086387\u003e has added sszifying proposals to the fusaka PFI through this meta EIP https://eips.ethereum.org/EIPS/eip-7919",
+        "created_at": "2025-03-26T19:01:36.181000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I think we should defintely push for some low hanging sszification of the EL",
+        "created_at": "2025-03-26T19:02:05.394000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "If that is the easiest path forward I am for it, my incentives are a usable light client protocol as fast as possible, so if we want to sszify the EL I would want to push for ``updated the EL to use SSZ `hash_tree_root` for calculating `transactions_root` and `withdrawals_root``",
+        "created_at": "2025-03-26T19:04:16.224000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "\u003chttps://eips.ethereum.org/EIPS/eip-6465\u003e From this EIP it looks like it was already known the Consensus Light Client Protocol contains invalid EL Headers, I really don't like how instead of shipping a working Light Client Protocol, a broken one is instead being used as leverage to sszify the EL, as it looks like this problem has been known for at least 2 years now.",
+        "created_at": "2025-03-26T19:10:14.392000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "If someone could share some context I am missing that would be great, because from my naive perspective this problem looks like it has been known about for at least 2 years \u003chttps://eips.ethereum.org/EIPS/eip-6465\u003e and the problem is being used as leverage to push changes on the EL, I am not against sszifying the EL. But has there been attempts to resolve this on the CL side? Or has this problem been intentional left until a party which wants to use this functionality appears so they can be used as leverage to push SSZ eips",
+        "created_at": "2025-03-26T19:13:02.320000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "\u003c@881905303011086387\u003e 😆",
+        "created_at": "2025-03-26T19:19:09.448000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "As for me what makes the most sense is, both the EL and CL would upgrade to `hash_tree_root` `transactions_root` and `withdrawals_root` at the same time, instead of using this problem as political leverage",
+        "created_at": "2025-03-26T19:19:22.598000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I would let Etan answer that for you 🙂",
+        "created_at": "2025-03-26T19:19:54.565000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "My understanding is that immaturity of SSZ libraries for EL has been the primary reason to push back on upgrading this.  I believe this reason has persisted for many years now.  Feel like this is an appropriate time to bring it up... see what the reasons are... and if the reasons are the same to push back on those reasons since SSZ-ification of everything is on the official roadmap and we need to unblock that so that it can start moving forward.  I know there are other upgrades that also depend on EL usage of SSZ and having these perpetually blocked doesn't feel like something that should just be accepted as the norm.",
+        "created_at": "2025-03-26T19:24:53.240000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I'm curious if anyone  knows what any of the other reasons are... I would guess that there's some concept of \"this is a breaking change\"... but I'd be curious for actual examples of smart contract usage of these roots if so.",
+        "created_at": "2025-03-26T19:32:45.231000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "yes, the scope is https://purified-web3.box and migrates everything from the EL to SSZ (except the state trie).\nthis set of EIPs would be beneficial _today_, we don't need to wait for crazy zk tech to stabilize to make use of it.",
+        "created_at": "2025-03-26T20:18:26.735000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "you can preview how mainnet txes look on ssz at https://eth-light.xyz",
+        "created_at": "2025-03-26T20:19:12.006000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Yes, also, for portal, keep in mind that SSZ also unblocks EIP-7745 which provides an efficient log filter to look up block number by block / tx hash and that enables exhaustive verifiable enumeration of logs with just a ~1 MB download to the client 😉 Useful for portal as the index itself is shareable and verifiable with a simple merkle proof against the block header",
+        "created_at": "2025-03-26T20:23:03.453000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "and, there's the lido request for EIP-7688 where SSZ unblocks forward compatibility. As in, write a smart contract today that will not need maintenance whenever a random fork affects some unrelated feature that they don't care about 😉",
+        "created_at": "2025-03-26T20:23:45.474000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "the entire scope is described at EIP-7919, and the individual chunks can also be shipped (somewhat) independently",
+        "created_at": "2025-03-26T20:24:51.118000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pipermerriam",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Yup.  I think we should coordinate to push for these in the next fork.  No reason not to make a real effort for inclusion.  Find out early what the blockers are and then do the work to unblock them.",
+        "created_at": "2025-03-26T20:24:55.087000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I am going to make an EIP with the minimal change to the EL for `EL Header` == `ExecutionPayloadHeader`, aka being able to get an EL Header from LightClientUpdates. \n\nIf meta EIP-7919 (which was made a few hours ago) gets enough support for fusaka, that is great, but I am not sure if there will be enough support to SZZify the whole EL in fusaka, so if there isn't enough support for EIP-7919 due to the complexity, hopefully at least my minimal eip is included which will resolve the problem we face.",
+        "created_at": "2025-03-26T21:56:15.255000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Especially with the massive push for performance,AA,etc and people are having a hard time selling Verkle and EOF for inclusion, I am not sure if people see `Serialization Harmony` as priority.",
+        "created_at": "2025-03-26T22:08:20.665000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "From my perspective I just want the problem of `EL Header` != `ExecutionPayloadHeader` to be fixed, EIP-7919 has so much extra scope and I don't want to take my chances, when `EL Header` == `ExecutionPayloadHeader`, would be massive for Execution Light Clients alone.",
+        "created_at": "2025-03-26T22:09:06.097000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "acolytec3",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "And even if it's not approved, we can still get the correct block. It just means we have to do a second request to the beacon node to get the full beacon block and then we can derive the El block",
+        "created_at": "2025-03-26T22:56:35.177000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "acolytec3",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Since the full transaction list and withdrawals array is contained there and we can reconstruct the correct hashes",
+        "created_at": "2025-03-26T22:57:10.054000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "acolytec3",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Not ideal but will work for purposes of ephemeral headers if nothing else",
+        "created_at": "2025-03-26T23:01:25.739000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Then we would need to gossip the latest EL Headers ourselves, instead of the Portal Clients deriving it from the LightClientUpdates they are getting",
+        "created_at": "2025-03-26T23:01:45.613000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "acolytec3",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Hmm, I guess so. But a client can just do recursive find content for that ephemeral header as well",
+        "created_at": "2025-03-26T23:02:33.486000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Which kind of un idle to need to gossip almost duplicate data twice. We should probably update our LightClientUpdate Container to just contain the EL Header",
+        "created_at": "2025-03-26T23:02:37.082000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "acolytec3",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "That could work too if the bridges can insert the into the container",
+        "created_at": "2025-03-26T23:03:11.943000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Every node would be storing every ephemeral header, should I there shouldn't need to be a reason to do a RFC",
+        "created_at": "2025-03-26T23:03:20.955000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "acolytec3",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Before gossiping the updates",
+        "created_at": "2025-03-26T23:03:29.846000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "acolytec3",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Although that gets weird quickly since then we have ssz containers with the same layout but different values and no way to tell them apart",
+        "created_at": "2025-03-26T23:04:34.988000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "acolytec3",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Anyway, ideal solution is to sszify the el",
+        "created_at": "2025-03-26T23:05:01.543000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I think the play would be to just add an additional field, then we could prove the included EL header with the block_hash in the `ExecutionPayloadHeader`",
+        "created_at": "2025-03-26T23:06:42.896000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I will read a bit more into and make a PR to the portal-network-specs",
+        "created_at": "2025-03-26T23:07:03.222000+00:00",
+        "attachments": null
+    }
+]

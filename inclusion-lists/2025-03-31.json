@@ -1,0 +1,66 @@
+[
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@1035747431461167125\u003e I've updated the Prysm PR and am trying the interop between Lodestar and Prysm. The PR is still WIP but now it seems it doesn't have the state root mismatch issue. But Lodestar produces error like attestations publishing error even on Electra:\n\n```\n[cl-1-lodestar-geth] Mar-31 11:49:21.383[api]             error: Error publishing attestations slot=9 - submitPoolAttestationsV2 failed with status 400: Error processing attestations\n[vc-1-geth-lodestar] PublishError.NoPeersSubscribedToTopic\n[vc-1-geth-lodestar] Error: submitPoolAttestationsV2 failed with status 400: Error processing attestations\n```\n\nAfter they enter eip7805, Lodestar also emits error on submitPoolSyncCommitteeSignatures:\n\n```\n[cl-1-lodestar-geth] Mar-31 08:27:24.181[api]             error: Error on submitPoolSyncCommitteeSignatures [95] slot=39, validatorIndex=55 - PublishError.NoPeersSubscribedToTopic\n[cl-1-lodestar-geth] Error: PublishError.NoPeersSubscribedToTopic\n```\n\nIt works well in Lodestar only devnet. Prysm's log is slient (but we don't know if Prysm is innocent though.) Any clue? (You can try the latest Prysm image with tag `5b1c9c3`)",
+        "created_at": "2025-03-31T12:25:09.797000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Geth is also complaining. I think it's better to wait until the Prysm PR merged and then look into the interop. Sorry for this hassle.\n\n```\n[el-1-geth-lodestar] DEBUG[03-31|13:21:57.526] Removing p2p peer                        peercount=1 id=d4314a304f5af022   duration=199.952ms   req=false err=\"network ID mismatch: 369 (!= 3151908)\"\n\n[el-2-geth-prysm] DEBUG[03-31|13:21:23.988] Removing p2p peer                        peercount=1 id=d4b16cb435416741   duration=197.625ms   req=false err=\"network ID mismatch: 369 (!= 3151908)\"\n```",
+        "created_at": "2025-03-31T13:27:12.228000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e After they enter eip7805, Lodestar also emits error on submitPoolSyncCommitteeSignatures:\nI think this is related to our electra attestation bug which causes really unstable subnet peers, we haven't updated our focil branch against unstable yet, there should be tons of attestation errors in debug log\n\nI am just wondering, you said after eip7805, so maybe it's something else don't see how it's related to FOCIL changes though, NC will know more",
+        "created_at": "2025-03-31T17:04:02.457000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "For the Electra error, I can't reproduce it on my local machines. Maybe you can give this a try\n```\nparticipants:\n  - el_type: geth\n    el_image: jihoonsg/geth-focil:no-osaka\n    el_log_level: debug\n    cl_type: prysm\n    cl_image: jihoonsg/prysm-beacon-chain-focil:5b1c9c3\n    cl_log_level: debug\n    vc_type: prysm\n    vc_image: jihoonsg/prysm-validator-focil:5b1c9c3\n    vc_log_level: debug\n    cl_extra_params:\n      - --interop-write-ssz-state-transitions\n  - el_type: geth\n    el_image: jihoonsg/geth-focil:no-osaka\n    el_log_level: debug\n    cl_type: lodestar\n    cl_image: ethpandaops/lodestar:focil-fdb9dd8\n    cl_log_level: debug\n    vc_log_level: debug\n      - --chain.persistInvalidSszObjects\n\nnetwork_params:\n  genesis_delay: 20\n  electra_fork_epoch: 0\n  eip7805_fork_epoch: 1\n  seconds_per_slot: 6\n  num_validator_keys_per_node: 256\nsnooper_enabled: true\nadditional_services:\n  - dora\n  - tx_fuzz\nport_publisher:\n  additional_services:\n    enabled: true\n    public_port_start: 65500\nethereum_genesis_generator_params:\n  image: pk910/dev-images:genesis-generator-electra\n```\nFor eip7805 error related to `NoPeersSubscribedToTopic`, that's a known issue because Lodestar and Prysm rejecting each other's messages and lead to them dropping each other",
+        "created_at": "2025-03-31T20:27:03.536000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "After running this I don't see any state root mismatch issue anymore on Lodestar and Prysm. However it seems like they accept each other's block, but chain still splits. Looking more into it",
+        "created_at": "2025-03-31T20:32:46.080000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "```\ntime=\"2025-03-31 21:14:20\" level=debug msg=\"Gossip message was rejected\" agent=\"lodestar/v1.25.0\" error=\"inclusion_list_committee_root does not match the inclusion_list_committee\" gossipScore=32.72 multiaddress=\"/ip4/172.16.0.14/tcp/58098\" peerID=16Uiu2HAkuTa4rhVSTJLqRM31p7Nhdvd8uuyma1ji6bmb7pBbs12d prefix=sync topic=\"/eth2/0b0b2001/inclusion_list/ssz_snappy\"\ntime=\"2025-03-31 21:14:20\" level=debug msg=\"Gossip message was rejected\" agent=\"lodestar/v1.25.0\" error=\"inclusion_list_committee_root does not match the inclusion_list_committee\" gossipScore=32.72 multiaddress=\"/ip4/172.16.0.14/tcp/58098\" peerID=16Uiu2HAkuTa4rhVSTJLqRM31p7Nhdvd8uuyma1ji6bmb7pBbs12d prefix=sync topic=\"/eth2/0b0b2001/inclusion_list/ssz_snappy\"\ntime=\"2025-03-31 21:14:20\" level=debug msg=\"Gossip message was rejected\" agent=\"lodestar/v1.25.0\" error=\"inclusion_list_committee_root does not match the inclusion_list_committee\" gossipScore=32.72 multiaddress=\"/ip4/172.16.0.14/tcp/58098\" peerID=16Uiu2HAkuTa4rhVSTJLqRM31p7Nhdvd8uuyma1ji6bmb7pBbs12d prefix=sync topic=\"/eth2/0b0b2001/inclusion_list/ssz_snappy\"\n```\nLodestar and Prysm rejecting each other's gossip ILs, leading to peer being dropped.",
+        "created_at": "2025-03-31T21:44:38.668000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@845691100072509460\u003e I probably need to review Lodestar's ILC and ILC root calculation. Maybe Prysm can log its ILC and ILC root too so I can compare",
+        "created_at": "2025-03-31T21:50:22.311000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Hmmm looks like I can't get ILC from Prysm. GRpc's `ListValidatorAssignments` is not returning ILC, and beacon api's `getInclusionListCommitteeDuties` is not implemented",
+        "created_at": "2025-03-31T23:19:22.197000+00:00",
+        "attachments": null
+    }
+]
