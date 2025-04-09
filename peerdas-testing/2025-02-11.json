@@ -1,0 +1,154 @@
+[
+    {
+        "author": "dapplion",
+        "category": "Testing",
+        "parent": "",
+        "content": "Do you foresee us in the future changing the Cell size? \u003c@520034910149410861\u003e \u003c@857052906495017000\u003e \u003c@478543974156730369\u003e",
+        "created_at": "2025-02-11T00:48:06.272000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Testing",
+        "parent": "",
+        "content": "Not tagged, but I could see this potentially happening in FullDAS. Smaller cells \u0026 more samples.",
+        "created_at": "2025-02-11T00:56:45.515000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "With full peerdas, samples changes from full columns to cells, and num of samples increase with blob count.\n\nSo yeah, samples are smaller than 1D (column -\u003e cell), but any reason to change cell size? Cell data is currently 2 kb - they're already pretty small, what are the possibilities and reasons to change this?",
+        "created_at": "2025-02-11T02:22:16.224000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Testing",
+        "parent": "",
+        "content": "I believe the ratio between sample (cell) size and sample count isn't linear. These are made up numbers, but for example, instead of 2048-byte cells and 50 samples per slot we could have 512-byte cells and 150 samples per slot. So lower bandwidth requirements with the same security guarantees.",
+        "created_at": "2025-02-11T03:05:49.272000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@520034910149410861\u003e and \u003c@555483069038198827\u003e please correct me if I'm wrong.",
+        "created_at": "2025-02-11T03:07:15.604000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "A few more questions re 2D sampling: \n- with increasing blob count and assuming a fix cell size (`FIELD_ELEMENTS_PER_CELL`), the number of total cell sample increases, does the required `SAMPLES_PER_SLOT` increase?\n- if the columns get too large, we may want to increases `NUM_COLUMNS` to reduce the size of the column being distributed and this would mean a change in cell size right? \n\nWhat we're trying to figure out is, whether the change to \"moving cell proof computation to tx sender\" would make it hard  to change these parameters in the future (breaking change for both CL/EL?), if the EL or tx sender has knowledge of the das parameters and how the proofs are being computed.",
+        "created_at": "2025-02-11T04:01:39.928000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "hangleang.eth",
+        "category": "Testing",
+        "parent": "",
+        "content": "It seems the syncing issue, I already reported the bug to the team. I will look into it more in deep tomorrow, right now I’m on the road",
+        "created_at": "2025-02-11T05:06:09.760000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matthewkeil",
+        "category": "Testing",
+        "parent": "",
+        "content": "Just noticed that its every week now and not every two weeks.  FOCIL breakout room is biweekly in the same time slot with a meeting tonight",
+        "created_at": "2025-02-11T08:53:13.014000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Testing",
+        "parent": "",
+        "content": "I would say let's have the meeting today anyway, and discuss what to do with the time.",
+        "created_at": "2025-02-11T09:00:04.207000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "There were some breaking changes + features merged in on the EL side that would mean using the `latest` geth (for e.g) would activate EOF on fulu too). So we're gonna have to pin an older version that works without fulu for PeerDAS testing purposes. \n\nI've created this image: `ethpandaops/geth:PeerDAS`, so please use that for all peerDAS testing now onwards - until we start collabing with ELs and need their involvement. It will read FULU and throw it away, so its acting how we want it to for peerDAS.",
+        "created_at": "2025-02-11T12:15:07.263000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dankrad.eth",
+        "category": "Testing",
+        "parent": "",
+        "content": "hmm I'm confused, I think they are in direct relation to each other as long as you keep the coding rate constant",
+        "created_at": "2025-02-11T12:56:40.856000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ah okay. Yeah I was wrong. Is it accurate that with 2x erasure coding, the required unique sample count would be ~7 (to have 99% confidence that all of the data is available) regardless of the total data size or sample size? So seven 2048-byte samples vs seven 512-byte samples would provide the same DA confidence.",
+        "created_at": "2025-02-11T13:41:37.630000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Testing",
+        "parent": "",
+        "content": "- No (ish). Whether in 1D or in 2D, the sample count for a certain security level is more or less independent of the total number (and thus also size) of samples. E.g. in 1D we'd be fine with 8 samples (columns) even if we moved to 256 columns, so halving the cell size (doubling `NUM_COLUMNS`) would halve the sampling load.\n- Imo the main reason we would want to lower the cell size is for making 1D sampling cheaper. If we stop caring about 1D sampling completely, and downloading columns is only for distribution purposes (not for security, e.g. same-slot 2D sampling), we wouldn't need to reduce the cell size to reduce the distribution load, we could just download less columns (e.g. we could download 4 columns instead of 8, still halving the distribution load. If we really don't care about security at this step, we could even pack them into a single subnet, e.g. have 32 subnets, 4 columns per subnet and each validator only custodies 1 subnet). We might still want to reduce the cell size to make 2D sampling cheaper, but that seems much less impactful? Given that we're talking about 35 KBs versus 140 KBs per slot, all fairly negligible",
+        "created_at": "2025-02-11T14:00:21.282000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "PeerDAS breakout room is happening now: https://ethereumfoundation.zoom.us/j/87225793361?pwd=Pe0H4sFMX9wr1HFRLfQo3yrDB6a4hk.1",
+        "created_at": "2025-02-11T14:01:04.207000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Testing",
+        "parent": "",
+        "content": "proposal: keep the peerdas call at this time on the week when it doesn't overlap with FOCIL, and put it back at the previous time (11 UTC, or CET, don't remember) every other week, so Asia/Australia people can join  (more easily) once every two weeks. Also just to avoid having to change day or go back to the drawing board about finding a time",
+        "created_at": "2025-02-11T14:06:49.302000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Testing",
+        "parent": "",
+        "content": "alternative proposal: clash with epbs breakout 😁",
+        "created_at": "2025-02-11T14:23:22.358000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Test cases to run:\nDevnet-4:\n- Increase blob count\n- Once lighthouse image is ready, use their delayed publishing of blobs and columns\n- resync 1 node of each CL, first genesis sync, then checkpoint sync\n- if passing, resync 20% of nodes to then become full nodes\n- if passing, resync ~60% of nodes to become full nodes\n\ncc \u003c@892053833121923094\u003e there's a potential future change in which the cell proof computation would be moved from CL to the tx sender. What would be the appropriate place to spec and test such a change? Some basic details here: https://hackmd.io/@jimmygchen/rk9C3MwY1x . Is there EELS for mempool related changes? Are there hive tests or a txpool hive test suite? If yes, how do we add such a change as a test there?",
+        "created_at": "2025-02-11T15:00:41.849000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "cskiraly",
+        "category": "Testing",
+        "parent": "",
+        "content": "I’m a bit late to this party and I see \u003c@520034910149410861\u003e  has already answered most questions, so let me just add a bit more detail.\n- Sample count almost only depends on the code rate. There is a slight dependence on the actual N (number of segments), because we have a  hypergeometric distribution instead of the binomial distribution used for approximation, but the difference is negligible with typical parameters. Details are e.g. here https://colab.research.google.com/drive/1Di1-hBae8tZr1tZqcu1JqYycOFy8FdAy\n- The main difference between the 1D and 2D calculation for sample count are in the coding rate. There are some details though:\n    - What we do in the calculations is to put an upper limit on false positives (you think it is available, but it is not). We’ve always aimed for a much more stringent false positive rate in the 2D case than in the 1D case, because in the 2D case we can afford this. That’s why you see 16 (out of 128, but that’s not that important) in one case, while 72 (out of 512*512) in the other case. If we would aim for the same limit for 1D, we would need I think 25 out of the 128.\n    - What I’ve wrote above is also not 100% precise. The 1D RS code gives you an exact bound, but in the 2D case probabilities depend on the erasure pattern. We play it safe and count with the worst case pattern (adversarial erasure). In case of random erasures we would need lass samples.",
+        "created_at": "2025-02-11T23:42:43.053000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "cskiraly",
+        "category": "Testing",
+        "parent": "",
+        "content": "- There is some advantage in having 512 byte cells in the 2D case, as it fits in a single IP packet. Whether we use TCP or UDP, that could matter in situation where we have packet drops.\n- 35 KB vs 140 KB would be a nice difference for someone who does sampling only, but we don’t have such nodes in the plans for now. If we add the block size, and also some custody requirement, it indeed starts to be a negligible difference.",
+        "created_at": "2025-02-11T23:42:59.942000+00:00",
+        "attachments": null
+    }
+]

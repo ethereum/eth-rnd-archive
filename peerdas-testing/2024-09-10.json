@@ -1,0 +1,298 @@
+[
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@466006586477772831\u003e, on LH, can you confirm that if no log `New block received` is printed for slot `n`, then it means that no block has beed received for slot `n`?\n\n(It may sound obvious but I ask the question because, on Teku, the lack of `Received block of slot \u003cn\u003e` does not mean that no block has been received for slot `n`, so I'd like to double check for LH as well 🙂 )",
+        "created_at": "2024-09-10T10:17:07.880000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Since we have 3* nodes on fork 1 and 2 nodes on fork 2, eventually nodes on fork 2 should re-org and align on fork 1. (No finalization happened.)\n\n*I said 3 nodes (only) because `4-geth-prysm` is always lagging by several slots ...\n\nBut in this precise case, it seems, for some reason, nodes of fork 2 **never** see any more blocks published by nodes on fork 1.\n==\u003e It is irrecoverable in this case. For nodes of fork 2, it is like if nodes of fork 1 were always offline.",
+        "created_at": "2024-09-10T10:29:26.201000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "So I do.\nSo either:\n1. The rest of the columns were not published, or\n2. All columns were published, but not received by nodes on fork 2.\n\nI would think we are on hypothesis `2.`, because, after slot `321`, no blocks at all coming from nodes on fork 1 are received by nodes on fork 2.\nIt's like if the pipe is broken... (But more strangely, peers are not disconnected ...)",
+        "created_at": "2024-09-10T10:31:44.927000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "`New block received` means we received a gossip verified block, if it arrives late and we request the block for slot `n` over rpc first, then this log won't be logged because we already know about the block via rpc.",
+        "created_at": "2024-09-10T12:45:59.153000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "hmm why would they re-org to fork 1?\nif they can't import the block (custody column unavailable) they won't be considered for fork choice at all. I don't think this split view is recoverable",
+        "created_at": "2024-09-10T12:48:58.625000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "Do you see any of the following debug level log\n\u003e Unknown parent for gossip block\n\nIf the node gets block 322 and the parent block is unknown to us, then we log this instead of \"New block received\", and it triggers a block lookup (RPC) for the parent block, e.g. 321\nYou might then see the following log followed by slot: `321`\n\u003e Processing RPC block\n\nbut then it doesn't import the block into fork choice because data is unavailable, i.e. no peer is able to serve the data columns that it asks for. So it just ignores the block from fork 1.\n\nIt doesn't disconnect because peer scoring for PeerDAS is not fully implemented - once we implement scoring, it *should* disconnect peer if this scenario happens.",
+        "created_at": "2024-09-10T13:06:13.212000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "they couldn't re-org if availability on fork1 is still not available",
+        "created_at": "2024-09-10T16:14:11.006000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "in Teku we are trying to log instead of disconnect as we are prototyping mostly on this stage",
+        "created_at": "2024-09-10T16:15:09.411000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm testing following scenario Teku vs Teku, 2 supernodes:\n- on slot 10 40% of DataColumnSidecars are not published\n- nodes are forked as supernodes need all columns for custody and therefore cannot import it without sampling all DataColumns\n- I expect that at some point reconstruction should kick-in and forked peer will be able to return to the canonical fork\n\nIt doesn't happen, investigating",
+        "created_at": "2024-09-10T22:26:02.355000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "For information, Prysm super nodes does the following:\n- As soon as it receives 64 (out of 128) columns, it trigs reconstruction.\n- If, at 3 seconds into the slot, some of the 128 columns have not been received via gossip, then Prysm super node broadcasts these missing columns to the network.",
+        "created_at": "2024-09-10T22:31:20.255000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Example of log of a super node which saw only columns 64 to 127 (because the block was proposed by an other Prysm node with the `--data-columns-withhold-count=64` flag set:\n\n```\n[2024-09-10 21:59:07.64]  DEBUG sync: Broadcasting not seen via gossip but reconstructed data columns columns=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63] root=c89a7fcb6256f8ddd41988645433c292028696d309a74434745bd9e1f1230fdb slot=97 timeIntoSlot=3.000000s\n```",
+        "created_at": "2024-09-10T22:33:17.481000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ohh so you already tested this, cool!",
+        "created_at": "2024-09-10T22:34:48.051000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "we had no issues when it was custody only, but now with sampling and forkchoice something is broken in reconstruction",
+        "created_at": "2024-09-10T22:36:19.328000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Do you integrate the result of sampling in the fork choice?",
+        "created_at": "2024-09-10T22:36:52.413000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "yeah",
+        "created_at": "2024-09-10T22:36:58.404000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "siimple sampling which == custody",
+        "created_at": "2024-09-10T22:37:14.197000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Sorry, I was talking about data availability sampling (with `data_columns_by_root` requests)",
+        "created_at": "2024-09-10T22:37:41.487000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "it's data availability sampling https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/fork-choice.md#modified-is_data_available",
+        "created_at": "2024-09-10T22:38:51.388000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "bring it back! \u003c:crazycry:932693133546889216\u003e",
+        "created_at": "2024-09-10T22:48:14.703000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "we do this \nhttps://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#subnet-sampling",
+        "created_at": "2024-09-10T22:49:12.656000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "is it really out of devnet-2 scope?\nI'm confused",
+        "created_at": "2024-09-10T22:50:01.405000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "What does return your implementation of retrieve_column_sidecars?\n1. only columns you should custody (4 for a full node, 128 for a super node), or\n2. also some additional columns?\n\nIf 1. we have the same implementation.\n\nBy `data availability sampling` in my previous message, I should have written `Req/resp peer sampling` as in this document: https://ethresear.ch/t/from-4844-to-danksharding-a-path-to-scaling-ethereum-da/18046#peer-sampling-5 and this document: https://ethresear.ch/t/peerdas-a-simpler-das-approach-using-battle-tested-p2p-components/16541#peer-sampling-11\n\n(But it is out of the scope of `peerdas-devnet-2` as far as I know.)",
+        "created_at": "2024-09-10T22:51:52.979000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "We do 1",
+        "created_at": "2024-09-10T22:52:43.896000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "but it's integrated with forkchoice\nif we cannot get it into custody, we cannot import block",
+        "created_at": "2024-09-10T22:53:46.031000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "as per spec from my understanding",
+        "created_at": "2024-09-10T22:54:01.830000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm really not sure of the wording, but there is two type of sampling.\n1. `subnet sampling` (what we currently do by being subscribed to some subnets corresponding to columns we should custody). ==\u003e If one of the column we should custody is not available, then the block is considered unavailable. ==\u003e In the scope of `peerdas-devnet-2`.\n2. `peer sampling` (Additionnaly to `1.`, the node requests `SAMPLES_PER_SLOT (8)` columns randomly chosed). If these columns are not available, the block is considered unavailable (with tight or trailing forkchoice, TBD) ==\u003e NOT in the scopre of `peerdas-devnet-2`, and maybe not in the scope of peerDAS at all.\n\n(Again, I'm not sure if the wording `subnet sampling` and `peer sampling` is legitimate.)",
+        "created_at": "2024-09-10T22:55:29.144000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e We do 1\n\u003e but it's integrated with forkchoice\n\u003e if we cannot get it into custody, we cannot import block \n\u003e as per spec from my understanding\n\nOK, so Prysm and Teku do the same 🙂",
+        "created_at": "2024-09-10T22:56:06.471000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "2 is out of current spec from my understanding, we decided to skip it for now\nfor 1, it's not only gossip, we try req/resp if don't receive it  by subscription",
+        "created_at": "2024-09-10T22:57:17.512000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "And for information, Prysm also does `2.`, BUT the result of this sampling is NOT taken into account in the fork choice.\nThe output of this \"peer sampling\" is only printed to the console, like:\n\n```\nDEBUG sync: Data columns sampling - start columns=[125, 88, 43, 36, 70, 60, 13, 56] root=0x8adfa3f... round=1\nDEBUG sync: | Sampled data columns from peer columns=[13, 125] peerID=16Uiu2HAm1oFQKbTJpyzXGzcDuUxP1rFRTm... root=0x8adf...\nDEBUG sync: | Sampled data columns from peer columns=[36, 56, 88] peerID=16Uiu2HAmSppSFoRnVYFJYiymWZcypbJiWy... root=0x8adf...\nDEBUG sync: | Sampled data columns from peer columns=[43, 60, 70] peerID=16Uiu2HAmNTkraePbeK9tp8PMgcnr5HnHoN... root=0x8adf...\nDEBUG sync: Data columns sampling - success columns=[125, 88, 43, 36, 70, 60, 13, 56] duration=0.613545s neededRounds=1 root=0x8adf...\n```",
+        "created_at": "2024-09-10T22:57:34.587000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e for 1, it's not only gossip, we try req/resp if don't receive it  by subscription\nOh, interesting, we do not do that. We do really only gossip.",
+        "created_at": "2024-09-10T23:00:07.758000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "We do the same as well. same logic as today - if we don’t have a block via gossip, we trigger a by root request for block and blobs - in peerdas we do the same for custody data columns",
+        "created_at": "2024-09-10T23:05:29.517000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "How do you decide \"you don't have the column via gossip\"? You wait for `n` seconds into the slot and then if not seen via gossip you send the column by root request?",
+        "created_at": "2024-09-10T23:08:01.108000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "if the node receives an attestation with unknown block root, we'll request for the block/blobs/columns over rpc\nalso if re we receive a gossip block/blob/column with unknown parent (parent block root unknown), we do the same as well",
+        "created_at": "2024-09-10T23:35:07.746000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "if we dont have the custody columns via gossip, the block is not imported, and triggers by root requests in any of the two above scenarios",
+        "created_at": "2024-09-10T23:36:24.170000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "so this is a late recovery (after attestation for the slot already happened)",
+        "created_at": "2024-09-10T23:39:10.222000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "we still rely on gossip to make a new block attestable. But if we miss it, and the above lookup gets triggered, we can still recover and sync with the network",
+        "created_at": "2024-09-10T23:40:39.204000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "OK, we do the same in this case. When reading the second sentence of this message https://discord.com/channels/595666850260713488/1252403418941624532/1283199651071262772 , I understood that the node tried to retrieve the custody data columns via req/resp **within a slot** if not received soon enough via gossip, to increase the likelihood of importing the block (not skipping it). But I probably misunderstood.",
+        "created_at": "2024-09-10T23:46:15.818000+00:00",
+        "attachments": null
+    }
+]

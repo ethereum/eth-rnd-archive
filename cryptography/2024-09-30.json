@@ -1,0 +1,154 @@
+[
+    {
+        "author": "draganrakita",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Just to note that blst rust bindings does some workflow in thread pool so when calculating gas this needs to ba taken into account. It will use clot `blst_p1s_mult_pippenger` only if `cpu_n \u003c 2` https://github.com/supranational/blst/blob/6f3136ffb636974166a93f2f25436854fe8d10ff/bindings/rust/src/pippenger.rs#L143",
+        "created_at": "2024-09-30T10:51:54.032000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Do we have code that did this gas estimations, this could be very valuable?",
+        "created_at": "2024-09-30T10:52:33.257000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "As we discussed with geth, we don't want a precompile to run on multiple threads. \u003c@427903869226582018\u003e \u003c@360491619402776577\u003e",
+        "created_at": "2024-09-30T11:20:44.020000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Agreeing on this, gas pricing should be made on single thread. Just making a note **if** benchmark for gas discount was made in rust and this feature was enabled we should revisit it.",
+        "created_at": "2024-09-30T11:33:05.340000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "In deployment, would you be running it on multiple threads? Or is this just for gas benchmarks?",
+        "created_at": "2024-09-30T14:39:04.871000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Interested in what \u003c@427903869226582018\u003e , \u003c@425274498732916736\u003e and others are doing here",
+        "created_at": "2024-09-30T14:40:11.059000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Geth will run it with multiple threads.",
+        "created_at": "2024-09-30T14:43:02.114000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Whats the rationale for this? Versus running it on a single thread?",
+        "created_at": "2024-09-30T14:47:06.558000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "just trying to figure out how folks are thinking about benchmarking on a single thread and then running on multiple threads",
+        "created_at": "2024-09-30T14:47:52.246000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "There is no reason not to run in multiple threads",
+        "created_at": "2024-09-30T14:47:53.229000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The discrepancy between measuring on a single thread is fine then I’m guessing?",
+        "created_at": "2024-09-30T14:49:27.388000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think for gas benchmarking:  conceptually the EVM is a single thread of execution, and we want to keep the pricing tuned to not break that assumption.\n\nBut clients are free to run it however they want to maximize performance.",
+        "created_at": "2024-09-30T14:52:11.710000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yeah makes sense — do clients do this with other precompiles too?",
+        "created_at": "2024-09-30T14:54:29.902000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "off the top of my head, I can't think of another existing precompile that benefits from multithreading",
+        "created_at": "2024-09-30T14:54:58.687000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Or perhaps there has not been a precompile big enough to warrant it?",
+        "created_at": "2024-09-30T14:55:00.784000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Okay I see",
+        "created_at": "2024-09-30T14:55:05.577000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm also against of considering multi-threading execution:\n1. As already mentioned, since 10 years EVM is single-threaded. You should not suddenly and silently drop a thread-pool to it.\n2. What is your baseline? 4, 16 or 256 threads?\n3. You need a thread-pool in your EVM. This is complicated component with non-deterministic properties. You benchmark it in clean environment, but in production other CPUs may do something useful (e.g. networking, io, beacon chain client, db compacting, metrics).",
+        "created_at": "2024-09-30T16:09:26.280000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "To clarify, when you deploy, you will be running the msm precompile on a single thread?",
+        "created_at": "2024-09-30T16:35:54.366000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes. We actually have no other option even for testing.",
+        "created_at": "2024-09-30T16:38:01.176000+00:00",
+        "attachments": null
+    }
+]

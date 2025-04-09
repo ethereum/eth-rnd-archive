@@ -1,0 +1,117 @@
+[
+    {
+        "author": "jwasinger",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I did some benchmarks for bls ecmul in gnark for glv, double-and-add and subgroup checks.\n```\nBenchmarkG1JacScalarMultiplication/double_and_add_(2_bit_window)-12                 9188        124130 ns/op\nBenchmarkG1JacScalarMultiplication/GLV-12                                          15762         75613 ns/op\nBenchmarkG1JacScalarMultiplication/subgroup_check-12                               21189         56661 ns/op\n...\nBenchmarkG2JacScalarMultiplication/double_and_add_(2_bit_windowed)-12                 3000        403193 ns/op\nBenchmarkG2JacScalarMultiplication/GLV-12                                             5066        236869 ns/op\nBenchmarkG2JacScalarMultiplication/subgroup_check-12                                 14960         82193 ns/op\n```",
+        "created_at": "2024-10-11T07:57:36.229000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "so keeping subgroup checks for mul makes sense with gnark",
+        "created_at": "2024-10-11T07:58:00.800000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i think it was for MSM.\n\nThe gas formula is sublinear (and too steep) but on their benchmark, MSM + N subgroup checks have a linear cost.",
+        "created_at": "2024-10-11T11:58:17.572000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "can you show the code used for double_and_add_2_bit_window? Is it using wNAF?",
+        "created_at": "2024-10-11T12:04:59.805000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "no NAF: https://github.com/Consensys/gnark-crypto/blob/master/ecc/bls12-381/g1.go#L505-L537",
+        "created_at": "2024-10-11T12:06:00.497000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "BenchmarkG1JacScalarMultiplication/GLV \u003c- This is without subgroup checks? \n\nand BenchmarkG1JacScalarMultiplication/subgroup_check \u003c- This is GLV with subgroup checks?",
+        "created_at": "2024-10-11T12:06:39.221000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "ah... sorry, it's confusing:  `*subgroup_check` is only the subgroup check.  `GLV`/`double_and_add...` are multiplication without subgroup check.",
+        "created_at": "2024-10-11T12:07:32.408000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "https://github.com/jwasinger/gnark-crypto/tree/subgroup-check-bench",
+        "created_at": "2024-10-11T12:08:26.789000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So without subgroup check, a regular scalar multiplication without the glv optimization is `124,130 ns/op`\n\nThe subgroup check costs `56661 ns/op` and the glv version of scalar multiplication costs `75613 ns/op` so altogether the cost would be `132,274 ns/op`\n\nDoes that sound correct?",
+        "created_at": "2024-10-11T12:10:52.585000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Thanks for the link -- so I would draw the opposite conclusion from those benchmarks then; if the subgroup check is needed with glv, then its not better than having no subgroup check without glv optimization",
+        "created_at": "2024-10-11T12:19:59.761000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\u003e  keeping subgroup checks for mul makes sense with gnark\n\nThat was the same opinion I was trying to express",
+        "created_at": "2024-10-11T12:21:55.821000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "\"from geth pov: keeping subgroup checks for the mul precompile makes sense if we use gnark/GLV\" - is what I meant to convey",
+        "created_at": "2024-10-11T12:22:30.157000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Those are my bench in cosntantine.\n\nsubgroup check + GLV + wNAF is faster than a naive double-and-add but slower that plain wNAF.",
+        "created_at": "2024-10-11T19:49:24.510000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "spectacle_20241011_094803.png",
+                "content": "819fbd4b60a1f48d4b18a01f2b335d0048fcdf799b110a985f1bb6e6664c680e"
+            },
+            {
+                "type": "image/png",
+                "origin_name": "spectacle_20241011_094718.png",
+                "content": "4d7dacc7b3363386a7ef7c9c2d812d581c838bae7fb16dacaced12785f50eade"
+            }
+        ]
+    }
+]

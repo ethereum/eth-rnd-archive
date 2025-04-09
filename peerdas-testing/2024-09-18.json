@@ -1,0 +1,630 @@
+[
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah this is peer sampling. Both peer sampling and trailing fork choice are out of scope for now. \n\nFrancesco clarified this term in a breakout call couple of weeks ago - sampling is the broad term for validating data and proof, and it covers both custody or peer sampling.\n\nOriginally we were doing custody + peer sampling, but we've moved to custody + subnet sampling since #3870 (https://github.com/ethereum/consensus-specs/pull/3870) and this is what we're targeting for peerdas-devnet-2.",
+        "created_at": "2024-09-18T01:17:05.910000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "LH is the same as Teku, we're missing the changes from #3870 and working towards it.",
+        "created_at": "2024-09-18T01:18:10.789000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Nimbus exactly the same",
+        "created_at": "2024-09-18T03:56:52.480000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "From 3870:\n\n\u003e At each slot, a node advertising `custody_subnet_count` downloads a minimum of `subnet_sampling_size = max(SAMPLES_PER_SLOT, custody_subnet_count)` total subnets. The corresponding set of columns is selected by `get_custody_columns(node_id, subnet_sampling_size)`, so that in particular the subset of columns to custody is consistent with the output of `get_custody_columns(node_id, custody_subnet_count)`. Sampling is considered successful if the node manages to retrieve all selected columns.\n\nbut this doesn't imply peer sampling on the current slot, so if you get all the columns by gossip you will not do by root requests on peers right? (but if you don't by certain time threshold then ofcourse you will)",
+        "created_at": "2024-09-18T08:39:35.512000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Prysm does not do any peer sampling at all any more. Neither for the current slot, nor for any slot.\n\n\u003e (but if you don't by certain time threshold then ofcourse you will)\n\nI guess it's [this part of the spec](https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/das-core.md#column-gossip):\n\u003e Verifiable samples from their respective column are distributed on the assigned subnet. To custody a particular column, a node joins the respective gossipsub subnet. **If a node fails to get a column on the column subnet, a node can also utilize the Req/Resp protocol to query the missing column from other peers**.",
+        "created_at": "2024-09-18T08:48:49.148000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "then i dont understand this log, so these columns prysm didn't had which it needed for availability?",
+        "created_at": "2024-09-18T08:51:35.522000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "its almost requesting at the same time (1.3 sec into slot) at which time these were being persisted/imported by lodestar",
+        "created_at": "2024-09-18T08:52:26.903000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "so what is the time threshold you wait for before doing byroot requests?",
+        "created_at": "2024-09-18T08:52:51.285000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "I answered just after, here: https://discord.com/channels/595666850260713488/1252403418941624532/1285592832396103754\n\nThe version of prysm you use DO peer sampling.\nThe new version of Prysm (with PR linked just after this message) does not do peer sampling any more. (Peer sampling is fully replaced by subnet sampling.)",
+        "created_at": "2024-09-18T08:53:13.474000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "ahhh ok, i didn't understand that response fully",
+        "created_at": "2024-09-18T08:53:51.624000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "what is the threshold you are using?",
+        "created_at": "2024-09-18T08:54:19.062000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "lodestar I have set to pull columns by root from peers after 2.5 sec into slot",
+        "created_at": "2024-09-18T08:54:48.648000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "I do not actually (at the moment.) The latest version of prysm (the one which uses subnet sampling only) expects to receive data columns only via gossip.\nIf not receive via gossip, then the data columns is considered unavailable.\n\nFor the case \"within a slot, if a column is not received fast enough via gossip, then take a chance with Req/Resp\", we talked a little bit about it [here](https://discord.com/channels/595666850260713488/1252403418941624532/1283211975220002830).\n\nI'm not sure if any client does implement this currently.\n\nI plan to implement it but I don't know exactly how long into the slot I should wait to sent the `by root` request if a column is not received via gossip.\n2000ms? 2500 ms? 3000 ms?",
+        "created_at": "2024-09-18T08:58:35.078000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "well in lodestar blobs we already start doing the pull and similarly for columns , 2.5 sec into slot",
+        "created_at": "2024-09-18T09:01:16.058000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Out of curiosity, do you have some metrics about that?\nI would be interested by the likelihood of success when retrieving a column (or blob in your case) with a byRoot request when not received (after 2500 ms into slot in your case) via gossip.\n\nHow often do you need to activate the req/resp rescue plan?\nWhen you do, how often this rescue plan works?",
+        "created_at": "2024-09-18T09:03:50.118000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "We have a branch for subnet sampling under review. I'll run some test tmr and should be ready to interop test with Prysm",
+        "created_at": "2024-09-18T09:04:23.073000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "to be honest, subnet sampling of 8 or greater could simply translate to custody of max(subnet sample, custody)\n\nthere is no point having them as independent variables because the main issue of having the datacolumns is to push the blob count without pushing the bandwidth, transient data storage is not so much of the worry actually imo with TBs of cheap nvme storage available these days",
+        "created_at": "2024-09-18T09:05:34.417000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "i think we should have metrics on this, will check and revert",
+        "created_at": "2024-09-18T09:05:53.807000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "pls use standard metrics: https://github.com/KatyaRyazantseva/beacon-metrics/blob/master/metrics.md#peerdas-metrics",
+        "created_at": "2024-09-18T09:07:08.712000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "what i know for sure is our head accuracy count increased by atleast 1% because of this (thats why we added it in deneb)",
+        "created_at": "2024-09-18T09:07:11.595000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@931591385545584640\u003e please add these",
+        "created_at": "2024-09-18T09:08:08.412000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "ok so that's worth to implement!",
+        "created_at": "2024-09-18T09:08:28.598000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Subnet sampling for Nimbus is ready as well, can interop test as soon as your images are updated",
+        "created_at": "2024-09-18T09:11:55.261000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Do you have an image I can test?",
+        "created_at": "2024-09-18T09:14:59.430000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "i will also update lodestar for the subnet sampling, although one should just update min custody to 8 imo since in multi client we are seeing clients forking away (and not always by client forks)",
+        "created_at": "2024-09-18T09:15:25.716000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "my reasoning and analysis for the forks is that clients end up having different views of availability leading to forks and they don't resolve because they are not able to pull unavailable data despite supernodes being there",
+        "created_at": "2024-09-18T09:17:27.959000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "i do 4 seconds into slot",
+        "created_at": "2024-09-18T09:17:51+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "But in general i think the wait time should vary based on super and full node",
+        "created_at": "2024-09-18T09:18:14.153000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "that is late because your attestation would be on incorrect head",
+        "created_at": "2024-09-18T09:18:15.943000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ok let me check",
+        "created_at": "2024-09-18T09:18:47.846000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "g11tech",
+        "category": "Testing",
+        "parent": "",
+        "content": "although we have timing games in mainnet with the likes of 'kiln' and others releasing blocks so late 3.5 sec into slot",
+        "created_at": "2024-09-18T09:19:30.491000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Few more checks then I’ll be triggering the image build",
+        "created_at": "2024-09-18T09:19:36.605000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Do you have an image ready?",
+        "created_at": "2024-09-18T09:20:06.356000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "I just merged the PR doing this into our `peerDAS` branch a few seconds ago 😉\nI'm waiting for it to appear in `ethpandaops/prysm-beacon-chain`.",
+        "created_at": "2024-09-18T09:21:46.913000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "I",
+        "created_at": "2024-09-18T09:22:12.389000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'll let you know when ready",
+        "created_at": "2024-09-18T09:22:19.133000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@199561711278227457\u003e can you manually trigger?",
+        "created_at": "2024-09-18T09:22:19.632000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "^ just did: https://github.com/ethpandaops/eth-client-docker-image-builder/actions/runs/10919324376",
+        "created_at": "2024-09-18T09:23:10.441000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "thanks",
+        "created_at": "2024-09-18T09:23:16.315000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@785811170387951616\u003e , this is the config for Prysm only testing with the Prysm image doing subnet sampling only.\n(I tested if for ~10 hours in a raw without issue.)\n\n```yaml\nparticipants:\n  # Super nodes\n  - cl_type: prysm\n    cl_image: ethpandaops/prysm-beacon-chain:peerDAS-4a731d8\n    vc_image: gcr.io/prysmaticlabs/prysm/validator:stable\n    count: 2\n    cl_max_mem: 4096\n    cl_extra_params: \n      - --subscribe-all-subnets\n      - --p2p-max-peers=4\n      - --minimum-peers-per-subnet=1\n\n  # Full nodes\n  - cl_type: prysm\n    cl_image: ethpandaops/prysm-beacon-chain:peerDAS-4a731d8\n    vc_image: gcr.io/prysmaticlabs/prysm/validator:stable\n    count: 3\n    cl_max_mem: 4096\n    cl_extra_params: \n      - --p2p-max-peers=4\n      - --minimum-peers-per-subnet=1\n\nnetwork_params:\n  eip7594_fork_epoch: 0\n  eip7594_fork_version: \"0x50000038\"\n\nsnooper_enabled: true\nglobal_log_level: debug\n\nadditional_services:\n  - dora\n  - prometheus_grafana\n  - goomy_blob\n\ndora_params:\n  image: ethpandaops/dora:peerdas-as-deneb\n\nethereum_metrics_exporter_enabled: true\n```",
+        "created_at": "2024-09-18T09:36:51.920000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thanks",
+        "created_at": "2024-09-18T09:37:18.799000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "need some more time, found an issue rn 🙂",
+        "created_at": "2024-09-18T10:46:23.354000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think I would go for a 10 hour-ish all nimbus test as well, to iron out",
+        "created_at": "2024-09-18T11:06:47.841000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Maybe it can help, but I modified (I added a hidden flag actually) one of my BN for it to ignore all incoming data columns every `\u003cn\u003e` slots (I configured `n=15`). This way, depending when is the next proposing slot for this BN, it creates some re-orgs. ==\u003e I was able to very quickly detect some bugs with this tool.",
+        "created_at": "2024-09-18T12:38:41.719000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "question \u003c@531934490826768418\u003e , when you construct valid custody peer set, do you pass max(SAMPLES_PER_SLOT, fetchCustodyColumn) in get custody columns or just fetchCustodyColumn (custody column of the peer)?",
+        "created_at": "2024-09-18T12:43:27.070000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "also does subnet sampling version of prysm even call data column by root?",
+        "created_at": "2024-09-18T12:44:22.032000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e For the case \"within a slot, if a column is not received fast enough via gossip, then take a chance with Req/Resp\", we talked a little bit about it here.",
+        "created_at": "2024-09-18T12:44:49.463000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "something you mentioned",
+        "created_at": "2024-09-18T12:44:54.496000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "for the current slot",
+        "created_at": "2024-09-18T12:45:02.532000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e question @Manu , when you construct valid custody peer set, do you pass max(SAMPLES_PER_SLOT, fetchCustodyColumn) in get custody columns or just fetchCustodyColumn (custody column of the peer)?\nNot really sure to understand the question, but a Prysm full node is subscribed to `get_custody_columns(node_id, subnet_sampling_size) = 8` subnets. When looking for peers, the node will try to find peers subscribed (among other) to these 8 subnets.\n\nMaybe this can help too: https://discord.com/channels/595666850260713488/1252403418941624532/1285715762681741353\n\n\u003e also does subnet sampling version of prysm even call data column by root?\nNot for the current slot. (Not at the moment, but I plan to implement it). However, we do some data column by root requests if we are out of the main fork and we want to rejoin it. In this case, missing data columns are retrieved with data column by root requests.",
+        "created_at": "2024-09-18T12:50:49.183000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e Not really sure to understand the question, but a Prysm full node is subscribed to get_custody_columns(node_id, subnet_sampling_size) = 8 subnets. When looking for peers, the node will try to find peers subscribed (among other) to these 8 subnets.\ngot it, clear",
+        "created_at": "2024-09-18T12:51:35.840000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e However, we do some data column by root requests if we are out of the main fork and we want to rejoin it. In this case, missing data columns are retrieved with data column by root requests.\nunderstood",
+        "created_at": "2024-09-18T12:55:24.941000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "Based on the issue of resource capping we have decided to change the default behaviour of the ethereum package such that resources wouldn't be limited by default, unless the values are set. This will enable all containers to use as much resources as they want. PR is still WIP should be merged by EOW",
+        "created_at": "2024-09-18T14:05:43.958000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "cc: \u003c@476250636548308992\u003e",
+        "created_at": "2024-09-18T14:05:53.392000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "have you been able to test prysm with any other clients? I can't seem to find any working pairs unfortunately",
+        "created_at": "2024-09-18T14:31:19.848000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "I’m running the all nimbus devnet, and looks like I found the bug, so maybe it’ll be ready by tomorrow",
+        "created_at": "2024-09-18T14:42:59.468000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Planning to run it like 50-60 epochs atleast",
+        "created_at": "2024-09-18T14:43:22.816000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Could you please share your kurtusis configuration?\n\nWith the following kurtosis configuration:\n```yaml\nparticipants:\n  # Super nodes\n  # -----------\n  # Prysm\n  - cl_type: prysm\n    cl_image: ethpandaops/prysm-beacon-chain:peerDAS-4a731d8\n    vc_image: gcr.io/prysmaticlabs/prysm/validator:stable\n    cl_max_mem: 4096\n    cl_extra_params: \n      - --subscribe-all-subnets\n      - --p2p-max-peers=4\n      - --minimum-peers-per-subnet=1\n      - --log-format=json\n    vc_extra_params: \n      - --log-format=json\n  \n  # Teku\n  - cl_type: teku\n    cl_image: ethpandaops/teku:nashatyrev-das-60679f2\n    cl_extra_params: \n      - --p2p-subscribe-all-subnets-enabled\n      - --p2p-subscribe-all-custody-subnets-enabled\n\n  # Full nodes\n  # ----------\n  # Prysm - Normal\n  - cl_type: prysm\n    cl_image: ethpandaops/prysm-beacon-chain:peerDAS-4a731d8\n    vc_image: gcr.io/prysmaticlabs/prysm/validator:stable\n    cl_max_mem: 4096\n    cl_extra_params: \n      - --p2p-max-peers=4\n      - --minimum-peers-per-subnet=1\n      - --log-format=json\n    vc_extra_params: \n      - --log-format=json\n\n  # Prysm - Withholding 64 columns when proposing\n  - cl_type: prysm\n    cl_image: ethpandaops/prysm-beacon-chain:peerDAS-4a731d8\n    vc_image: gcr.io/prysmaticlabs/prysm/validator:stable\n    cl_max_mem: 4096\n    cl_extra_params: \n      - --p2p-max-peers=4\n      - --minimum-peers-per-subnet=1\n      - --data-columns-withhold-count=64\n      - --log-format=json\n    vc_extra_params: \n      - --log-format=json\n\n  # Teku\n  - cl_type: teku\n    cl_image: ethpandaops/teku:nashatyrev-das-60679f2\n    count: 2\n\nnetwork_params:\n  eip7594_fork_epoch: 0\n  eip7594_fork_version: \"0x50000038\"\n\nsnooper_enabled: true\nglobal_log_level: debug\n\nadditional_services:\n  - dora\n  # - prometheus_grafana\n  - goomy_blob\n\ndora_params:\n  image: ethpandaops/dora:peerdas-as-deneb\n\nethereum_metrics_exporter_enabled: true\n```\n\nthe chain is progressing:",
+        "created_at": "2024-09-18T14:44:51.389000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "dc82f4e39a786782d18966f47e449c65596779a00d045363b093310bce6f420f"
+            }
+        ]
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "",
+        "created_at": "2024-09-18T14:45:05.438000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "a0c309723bca1ccbc82afaaece9e94f87de90acae2f2c4d69f63e4edac8b4824"
+            }
+        ]
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "does it get past the 12 epoch barrier too?",
+        "created_at": "2024-09-18T14:46:47.809000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e  I can't seem to find any working pairs unfortunately\nYou mean it losts peers after epoch 12, or it does not find peers from start?\n\n(I did not test this config for 12 epochs. I can do it right now.)",
+        "created_at": "2024-09-18T14:47:56.987000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "(I edited my message with the kurtosis config containing the latest version of teku.)",
+        "created_at": "2024-09-18T14:56:52.392000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "I have some issues with Teku x Prysm after a few epochs.\nTeku did not receive all the data columns (or prysm did not send all data columns). Don't know why exactly.\n\n\u003c@425907307621122049\u003e , in this log:\n```\n2024-09-18 15:54:12.557 INFO  - Collected DataColumnSidecar[block be7b4...\n```\n\nCan you explain the meaning of the different fields?\n\nI get that: https://gist.github.com/nalepae/aca365ae62efdb61f2f8427b45c9a34b\nParticularly, columns from 0 to 59 differ from columns from 64 to 127.\n(And also, some columns are missing between 0 to 69)",
+        "created_at": "2024-09-18T16:30:03.909000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "It should differ, 64-127 are extension, calculated, 0-63 is generated blob, filled mostly with 0s\nyeah looks like we have not received it via gossip and retrieving via req/resp is currently broken. I'd suggest don't spend your time, we will have better version in a few days. By the end of the week.",
+        "created_at": "2024-09-18T17:38:59.586000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "we print 1st cell, slice (0,7)\nand it's labeled btw `, 1st cell 00000000000000`",
+        "created_at": "2024-09-18T17:40:52.138000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "not hash, yeah",
+        "created_at": "2024-09-18T18:02:51.021000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "I will still check that Prysm (and more particularly the `gossipsub` library) we internaly use is not responsible not to transmit some of the data columns.\nOut of curiosity, what are the meaning of the `empty` fields there is sometimes?\n\n```\n, index 51, 1st cell 00000000000000, commitments 3, proofs 3],[empty],DataColumnSidecar[block be7b48..96e4 (104)\n, index 53, 1st cell 00000000000000, commitments 3, proofs 3],[empty],[empty],DataColumnSidecar[block be7b48..96e4 (104)\n, index 56, 1st cell 00000000000000, commitments 3, proofs 3],DataColumnSidecar[block be7b48..96e4 (104)\n```",
+        "created_at": "2024-09-18T18:09:45.943000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "it means 52, 54,55 were missed",
+        "created_at": "2024-09-18T18:10:28.300000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "we will change this logging to be more clear",
+        "created_at": "2024-09-18T18:10:43.692000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "looking at randomness of gaps, I have a feeling that it could be due to lack of resources on one of the sides",
+        "created_at": "2024-09-18T18:12:17.954000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e it means 52, 54,55 were missed\nGot it thanks. So if I understand well:\n-  1 `[empty]` on column `51` means column `52` is missed\n- 2 `[empty]`s on column `53` means columns `54` and `55` are missed.\n\n\u003e I have a feeling that it could be due to lack of resources on one of the sides\nMy intuition is our gossipsub library is silently stopping sending columns to teku because, for some reason, the gossip score of the teku peer is too low.\n (I have to confirm by activating the trace logs of the gossipsub library that floods 1 million messages/sec...)\n\nAlso, to add more context, for this precise block:\n- A prysm full node published the block, but withheld on purpose columns 0 to 63\n- A prysm super node then reconstructed (at 3 seconds into the slot) all the missing 0 to 63 columns and reseeded them to the network. The majority of them was received by the teku node, but some... not.",
+        "created_at": "2024-09-18T18:18:09.787000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "so it's just ordered list of all collected columns where required but not collected are replaced with [empty]",
+        "created_at": "2024-09-18T18:19:18.505000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "so we have 0 gaps for those columns that were distributed in time and a lot of gaps in delayed distribution, so probably timeout before we received part of it",
+        "created_at": "2024-09-18T18:22:57.945000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "When is your cutoff into the slot regarding declaring data columns not available?",
+        "created_at": "2024-09-18T18:23:31.445000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "5 seconds",
+        "created_at": "2024-09-18T18:24:53.846000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "gossip only, no req/resp in current build (in process of fixing)",
+        "created_at": "2024-09-18T18:25:43.730000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "That's 2 seconds after the start of the re-seeding. That's not normal.\n(I reconstruct the matrix as soon as I have 64 columns, but I reseed columns not received via gossip at 3 seconds into the slot.)",
+        "created_at": "2024-09-18T18:27:38.867000+00:00",
+        "attachments": null
+    }
+]

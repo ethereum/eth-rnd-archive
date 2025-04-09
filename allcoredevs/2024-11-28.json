@@ -1,0 +1,426 @@
+[
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The trade-off of changing the rate limits is very simple: in an adversarial situation it could lead to a dos vector. If my understanding from Nishant's message is correct lighthouse's defaults can lead to 8Gbps requests.  Prysm 's defaults are too strict and that's what isolated us in the devnet so we need to increase them as we are approaching those limits on mainnet, but I'm not keen in increasing then too much above what regular consumer connections should support (at least by default)",
+        "created_at": "2024-11-28T05:21:18.164000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "per https://github.com/ethereum/consensus-specs/pull/3767, what other peers have as limit should not matter..\n\na more interesting question is whether the rate that exists is enough to sync up with the chain _at all_ - technically, sync can be parallelised between peers so the rate limit of any one peer should not be a bottleneck but rather the aggregate rate that you can get from downloading from multiple peers (how many?)..\n\nthere's also a danger increasing blob limits based on self-reported metrics / studies since these don't account for bias in reporting nor do they address the question of what we _want_ to achieve.. I see this as more of a philosophical question: does it bother us at all that say 2-3% (pick a number, whatever) of the weakest stakers can no longer participate so that some l2's don't have to pay / pay less for their service?",
+        "created_at": "2024-11-28T10:28:10.502000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e a more interesting question is whether the rate that exists is enough to sync up with the chain at all \nWe've proved it is isn't it?",
+        "created_at": "2024-11-28T10:33:27.977000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "the live chain (gossipsub) is one thing - the ability to sync history\\ from peers that might limit the req/resp protocol is another",
+        "created_at": "2024-11-28T10:35:56.337000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "I think what saves us somewhat in this particular case is the neat optimization of grabbing the blobs from the execution client _assuming_ they are there (which might not be the case with private blobs)",
+        "created_at": "2024-11-28T10:36:53.447000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e the live chain (gossipsub) is one thing - the ability to sync history\\ from peers that might limit the req/resp protocol is another \nWhat did you do over this weekend?",
+        "created_at": "2024-11-28T10:37:39.233000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "I got a really nice new bike which needed baptising in the snow/mud, why? 🙂",
+        "created_at": "2024-11-28T10:41:37.910000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "right now though, I was thinking right now about nishants comment about increasing rate limits for syncing which _in theory_ shouldn't be needed if you assume you can sync from more peers at once - in fact, this would be the normal case, most of the time the vast majority of peers are not syncing .. the way 3767 sets up rate limit recommendations is that someone syncing from several peers at once should be able to get some pretty good rates without any one peer having to serve excessive amounts - there is one more trick that can be added to a rate limiter like that, which is to maximise the global total of peers you're serving to -\u003e this has the effect of allowing a few peers to sync faster meaning that they will finish faster and turn into providers instead of consumers of historical data (this is more or less the \"torrent\" effect of bittorrent, where randomisation causes this to effect to kick in more quickly vs a sequential download)..",
+        "created_at": "2024-11-28T10:46:36.203000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "Don't disagree, we would like to move our rate limiting to recently merged format in the spec. But even with that increasing the target and max rate would necessitate having the average node serve more blobs via req/resp for syncing.  You can keep the rate limits the same as before but it leads to a jankier sync UX , where your node takes longer to sync up becomes it needs data from more peers than before. \n\nWhile this is not representative of how mainnet works in the nft devnet that we ran, close to all peers had exhausted their capacity to serve blobs. So new nodes who wanted to sync up had to wait a lot longer",
+        "created_at": "2024-11-28T11:19:13.060000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "general",
+        "parent": "",
+        "content": "I dont think all nodes had exhausted their capacity though. I think the issue actually lies elsewhere. \n\ncase 1:\n- 80% gigabit nodes, 20% nodes with 100/20mbps. Even during the period of 33% of nodes syncing, we didn't notice any node using more than 160mbps. This means each gigabit node had a 5x headroom that was unused. Probably peering/other issues led to it being unused, but clearly there was raw bw that could be used but was not.\n\ncase 2:\n- flat rate limit on all nodes to have 100/50 mbps connections and no supernodes. When the 33% was brought back up, almost all nodes synced at the upload rate limit (50mbps), even though they all had 100mbps download limits. Indicating they weren't able to fetch from enough sources, in an optimal network you'd see the download limit being hit, but that wasn't the case.",
+        "created_at": "2024-11-28T11:26:26.800000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "When i say capacity , i mean what the client is willing to serve rather than what is the maximum the network the node is running in will allow. The capacity that we put into into clients is with the assumption that the node needs bandwidth for other things (gossip) along with other processes running in the same network ( el, netflix, torrenting , etc).",
+        "created_at": "2024-11-28T11:38:16.536000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "general",
+        "parent": "",
+        "content": "ah do the nodes then cap their usage based on a % of the network bandwidth they detect?",
+        "created_at": "2024-11-28T11:41:36.036000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "general",
+        "parent": "",
+        "content": "why couldn't all clients just have a bandwidth limit flag that the user could provide on startup? Would default to 0 (unlimited) and those that struggle with bw at home, could specify how much bandwidth their CL should be using max.",
+        "created_at": "2024-11-28T11:43:40.448000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "This is currently a hardcoded limit . So it follows on numbers more suited for nodes with more restrictive bandwidth.",
+        "created_at": "2024-11-28T11:48:49.878000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "I think rather than a flag this can simply be computed by a client during startup",
+        "created_at": "2024-11-28T11:49:59.271000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "general",
+        "parent": "",
+        "content": "so each time you start up you run a built in speed test to some cdn?",
+        "created_at": "2024-11-28T11:51:40.546000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "general",
+        "parent": "",
+        "content": "Isnt this approach nerfing our network though? We have ~44% of nodes on the cloud, this implies (albeit only with a high likelihood) that these nodes are purely running eth nodes without any other purpose. So i would assume using anything less than 100% of all their resources is unfair to these nodes, as they're setup with said expectation",
+        "created_at": "2024-11-28T11:52:26.490000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "Doesnt have to be a cdn, could just be other peers",
+        "created_at": "2024-11-28T11:54:21.922000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "general",
+        "parent": "",
+        "content": "other peers? Thats gonna be very variable",
+        "created_at": "2024-11-28T11:55:40.393000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "bandwidth availability fluctuates over time - this is basically why options such as these only work in theory",
+        "created_at": "2024-11-28T11:55:44.659000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "general",
+        "parent": "",
+        "content": "also finding peers might take a while",
+        "created_at": "2024-11-28T11:55:46.435000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "If they are on the cloud they will be even more sensitive to excessive bandwidth being used",
+        "created_at": "2024-11-28T11:56:01.626000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "unlimited is also not viable because sync b/w eats into your ability to gossip, which is the important functionality",
+        "created_at": "2024-11-28T11:56:18.983000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "flags are possible, but users _typically_ wouldn't use them anyway because they are too complex to set correctly (if this was \"easy\" we would indeed have an \"automatic\" method for it)",
+        "created_at": "2024-11-28T11:56:53.827000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "it's easy to argue this point from the point of view of a perfectly controlled aws node, but real-world conditions are not like that for the kind of users we want to keep in the loop",
+        "created_at": "2024-11-28T11:58:05.980000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "general",
+        "parent": "",
+        "content": "Lets move this discussion into a thread?",
+        "created_at": "2024-11-28T11:58:12.213000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "general",
+        "parent": "",
+        "content": "hmm, not sure i follow this argument though? If i've a gigabit connection on the cloud, why would i be sensitive to the node using all of it? If this is related to egress costs, that assumption is only true for certain clouds",
+        "created_at": "2024-11-28T11:58:19.652000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah networking egress costs are what i was referring to",
+        "created_at": "2024-11-28T12:05:18.486000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "general",
+        "parent": "",
+        "content": "At a bare minimum, i'd advocate for flags to let me max all my bw 😅  I get not doing it as the default ofc, we still design the network with the home staker in mind. But we do have 44% of the nodes where this isn't the case, we should atleat give them the flags to tune it if they want to. Wether they use it, is their problem. However if some of them do use it, we get a better functioning network.",
+        "created_at": "2024-11-28T12:07:24.708000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "in my internal mental calculus though, networks without supernodes are more beautiful 😉",
+        "created_at": "2024-11-28T12:11:58.853000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "If the consensus node uses all the bandwidth then what about the execution node? \n\nHard-coding limits, even if it's a configuration parameter, will not be a great move because the limit may be too low during sync (for example). \n\nNodes should always use as little bandwidth as possible, and that value should really be dictated by the number of peers (obviously the bandwidth per peer changes over time, but it at least gives some ability to control the overall usage of a node). Adding more dimensions to the problem won't make it easier.",
+        "created_at": "2024-11-28T12:13:02.247000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "except for the transaction pool, execution nodes _broadly_ don't need a network any more - this is something we should start designing for as well, ie deprecating the execution client devp2p network",
+        "created_at": "2024-11-28T12:13:49.647000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "I agree with the sentiment though",
+        "created_at": "2024-11-28T12:15:17.920000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Broadly is doing a fair bit of work there, though. If a node fails or if sync, or has a peer bugging it for blocks, then the bandwidth requirement will change. \n\nAgree that it isn't common or high, but the general idea that a consensus node should use all the bandwidth it can, rather than the minimum it can, is not a great design IMO.",
+        "created_at": "2024-11-28T12:16:24.612000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "we tested this on devnets during the weekend, specifically long range syncing",
+        "created_at": "2024-11-28T12:16:42.756000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e that value should really be dictated by the number of peers\nthis is a flawed assumption - peer count is a terrible substitute for bandwidth usage",
+        "created_at": "2024-11-28T12:16:46.156000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "this is one of my pet \"somebody is wrong on the internet\" peeves...",
+        "created_at": "2024-11-28T12:17:34.222000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I think they should cap it based on whatever the operator decides, with a sane default",
+        "created_at": "2024-11-28T12:17:52.972000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Is not so much an assumption as a recognition that this already exists in the codebases, and it's understood by the community at large. I agree there is no clean correlation between the two, but it's not bad as a first approximation and adding a new metric in addition to peers will make tuning much harder.",
+        "created_at": "2024-11-28T12:18:55.054000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "We could provide a flag where we would allow a node to be greedy with bandwidth and 'max' out. But outside a few usecases, the average node runner will never prefer to use more bandwidth to less. This works the same wether they are in the cloud or home",
+        "created_at": "2024-11-28T12:18:55.674000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "lol \"no clean correlation\" and \"understood by the community\" doesn't really add up, you know",
+        "created_at": "2024-11-28T12:19:26.359000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "it's one thing that the community consistently misunderstands about the network, if anything - in fulldas, we expect to have 200 peers connected , that's gonna be a fun reeducation session",
+        "created_at": "2024-11-28T12:20:35.841000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "that's fine too, I would actively want to limit my rate so that I don't need to put up with my wife yelling at me the kids can't watch Disney",
+        "created_at": "2024-11-28T12:20:50.962000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "in gossipsub, it's _broadly_ limited by `D` which is a different parameter entirely vs peer count (yes, there exists an iwant/ihave effect too but this one is / should live under a rate limiter)",
+        "created_at": "2024-11-28T12:21:27.760000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "The community does generally understand that more peers require higher bandwidth.  This remains true within a given hard fork, even if the numbers change between hard forks.",
+        "created_at": "2024-11-28T12:22:12.971000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Jacek, no matter how much you tell me the theory, whenever I go from 30 peers to 100 my node increases bandwidth considerably without other changes. Either there's a bug in Prysm or there's a bug in the theory",
+        "created_at": "2024-11-28T12:24:06.235000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "general",
+        "parent": "",
+        "content": "You still serve req/resp for all your peers. So its proportional to your peer count",
+        "created_at": "2024-11-28T12:25:43.744000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "kind of - this is what we cap with a rate limit - per 3767 that's a fixed cap that is independent of peer count",
+        "created_at": "2024-11-28T12:28:28.464000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "to sum up, we have:\n* gossipsub - bandwidth determined broadly by mesh size (in/out) - independent of peer count and the bulk of traffic\n* floodsub (out, when publishing messages, should have a fixed cap or you'll swamp your bandwidth on block publish)\n* ihave/iwant - determined by subscription count which indirectly is determined by peer count for popular topics like block and aggregate _but_ there should be a fixed rate limit here -\u003e worst case is not peer-count-driven\n* req/resp - same as ihave/iwant ..\n\nso what you sometimes see with higher peer counts is a tendency to approach those worst cases  (or indeed, there are bugs / gaps)",
+        "created_at": "2024-11-28T12:31:49.834000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "general",
+        "parent": "",
+        "content": "you've all seen this work btw in all those fancy client comparisons that people make - there, the peer count doesn't match bandwidth consumption but is much more tightly correlated with client software",
+        "created_at": "2024-11-28T12:33:06.859000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "ACDC #146 in ~15 mins! \nAgenda: https://github.com/ethereum/pm/issues/1200\nStream: https://www.youtube.com/live/HcjuY3WDa9A\nZoom: https://ethereumfoundation.zoom.us/j/83703239965?pwd=VnjQjZ06LIaCzOjmyY1Jllt0LoTpvK.1",
+        "created_at": "2024-11-28T13:42:31.688000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "francis.li",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e does it bother us at all that say 2-3% (pick a number, whatever) of the weakest stakers can no longer participate so that some l2's don't have to pay / pay less for their service?\n\nI want to provide my perspective here. \n\nIt's not about pricing / pay less, it's about the capacity of blobs. Ultimately the goal of L2s and Ethereum would be to onboard billions of users, and not having enough blob capacity limits the growth rate of the entire ecosystem. We've been at capacity for almost a month now and this morning the blob base fees raised to \u003e170 gwei which results to \u003e$400 per 5 blobs.\n\nThose prices will eventually reflect back onto our users and their transaction costs will go high, and we can all agree that's not a good thing for users.\n\nWhat we're arguing for is that we have blob capacity to continue to bring more and more users to the Ethereum ecosystem while paying reasonable amount of fees, we've recently increased our priority fees for blob transactions and we're totally fine with setting a minimum blob fee to help better cover the costs.\n\nHope that helps",
+        "created_at": "2024-11-28T13:49:42.777000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cadietrichs\u003e created a PR with my proposed update fraction adjustment for 7691:\nhttps://github.com/ethereum/EIPs/pull/9060\n\nThere are several different options available, with different tradeoffs for blob basefee sensitivity to full vs empty blob sections. I think this is uncontroversial enough that we will just pick the majority option in a day or two, so if anyone has opinions, please come leave feedback!",
+        "created_at": "2024-11-28T15:49:41.186000+00:00",
+        "attachments": null
+    }
+]

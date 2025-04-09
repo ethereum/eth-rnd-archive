@@ -1,0 +1,240 @@
+[
+    {
+        "author": "pawandhananjay",
+        "category": "Testing",
+        "parent": "",
+        "content": "i'm curious of the specific concern here. Are you saying that 20 blobs is way too small of a number for the network to degrade without getBlobs or that we shouldn't be taking getBlobs into consideration when setting the blob counts",
+        "created_at": "2025-04-03T02:58:55.377000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thanks Mininny! This is great. I think this provides enough info about how our current impl works without offloading proof computation from the nodes - we can't scale more than 20 blobs due to proof computation bottlenecks in the nodes. \n\nI'm interested in validating a few things (once we have the devnet-6 implementations)  if possible in the next test\n- A network without distributed blob publishing should work just fine, if *all* proposers are not constrained by bandwidth. This should confirm \u003c@360491619402776577\u003e's statement about `the whole system should work stableish without getBlobs at all`. (I don't think it's possible to not rely on `getBlobs` on high blob counts, if *any* of the block builders are bandwidth constrained)\n- As long as *some* nodes in the network is able to fetch 100% of blobs from the EL, then the network should be resilient regardless of the proposer bandwidth, due to distributed publishing. To validate this we need a small number of nodes (maybe 5-10%?) in the network with unconstrained bandwidth. \n\nI think we should also make sure all nodes that use EL fetch blobs to comput columns should publish the data columns (on topic they're subscribed to) - otherwise it stops the message propagation in the network. This hasn't been implemented for full nodes in LH, we're going to work on it now.",
+        "created_at": "2025-04-03T03:45:00.863000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e we shouldn't be taking getBlobs into consideration when setting the blob counts\nI agree with this, before we go for a high blob count, we need both:\n- Network to be stable without `getBlobs` at all.  (the block builder should be able to include private blob txs as long as they have enough bandwidth to publish them out by themself, either via multiple BNs or a higher mesh peerconfig)\n- Distributed blob publishing to be effective - **both** for making local block building feasible AND the overall health of the network (improving propagation and eliminating single point of failure, e.g. the proposer has enough bandwidth but did not have good peer distribution across all column subnets at the time of publishing, or its mesh peers happen to be slow with downloading for whatever reason)",
+        "created_at": "2025-04-03T03:53:39.839000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mininny",
+        "category": "Testing",
+        "parent": "",
+        "content": "Regarding bandwidth restriction, all the nodes should have upper limit 8Gbps and are located in single cloud provider. There's no inherent bandwidth restriction so this would be okay, right? I could also have all the nodes located in a single region as well to maximize bandwidth if that would improve things",
+        "created_at": "2025-04-03T03:57:09.746000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yep I think this is fine for the 1st test. Latency from different regions is fine and we should be resilient to that.",
+        "created_at": "2025-04-03T04:00:29.573000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Testing",
+        "parent": "",
+        "content": "Right, once the cell proof computation stops being the bottleneck, we should then distinguish failures due to the proposer’s bandwidth vs overall network failures. I would very much expect that, with an unconstrained builder, the network can handle a lot more than  20 blobs",
+        "created_at": "2025-04-03T05:28:53.578000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Testing",
+        "parent": "",
+        "content": "To confirm, what you guys have right now for distributed blob publishing is that supernodes will publish the columns in random batches of 32, or am I misremembering?\n\nWhat do other clients do here btw?",
+        "created_at": "2025-04-03T05:30:56.697000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "yes thats right, random batches of 32, with 200ms in between publishng each batch by deafult - both batch size and interval are configurable via CLI.\nFrom what observed earlier on devnets, supernodes usually end up only publishing some columns in the 1st batch and sometimes very few columns in the 2nd batch, and usually don't end up publishing any thing in the last two because it had already received those columns from gossip.",
+        "created_at": "2025-04-03T05:33:42.398000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "Btw the default batch size and intervals were not carefully calculated  - it was a quick guess and  something we wanted to tweak over time,.",
+        "created_at": "2025-04-03T05:37:42.235000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think it makes sense to have at least some delay, for the batching to be meaningful. Would be curious to see how this performs versus publishing each column to one peer at a time (the batches being nth copies: first copies, delay, second copies etc…)",
+        "created_at": "2025-04-03T05:40:12.824000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "Is this with the gossip batch publishing proposal? Current gossip doesn't support this yet and I'm not sure if anyone is implementing it right now.\n\nFrom what I remember, we don't send copies out sequentially to peers, because sending is bidirectional and if the 1st peers don't consume it, then it blocks the subsequent copies from being sent to other peers.\n\nChanging gossip at the libp2p spec level seems to be a slow and difficult process from what I can see, it would be a lot easier to allow for customisation on broadcast strategies off libp2p spec - that way we could easily try out different strategies (https://github.com/libp2p/specs/pull/664), e.g.\n- *if* the node is publishing block with private blob txs (distributed publishing not viable), quickest way may be going with a strategy similar to flood publishing, assuming the node has high bandwidth\n- *if * distributed blob publishing is effective and we can rely on it, then using the current gossip V2 proposal may be suitable to save us bandwidth (we trade latency for less bandwidth). \n\nWhat we're currently doing is an alternative approach at the client level - each node sends smaller batches, but to the same number of peers (~5-8 copies) - i'm hoping this could be ~~as effective~~ somewhat effective in terms of propagation if there enough peers doing publishing.",
+        "created_at": "2025-04-03T05:57:19.167000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "Teku. we don't have batch publishing, just publish the old way all reconstructed DataColumnSidecars",
+        "created_at": "2025-04-03T09:07:05.899000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "Guys how do you test distributed cell proof computation? \nDo we have special Geth branch? Is there special blob tx generator branch? Could you share your args-file please!",
+        "created_at": "2025-04-03T09:08:22.339000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "hangleang.eth",
+        "category": "Testing",
+        "parent": "",
+        "content": "Nethermind now has a branch for cell proofs https://discord.com/channels/595666850260713488/1356578605957775361",
+        "created_at": "2025-04-03T09:11:29.190000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "just default nethermind or I need a branch? Cannot find docker image name in link",
+        "created_at": "2025-04-03T09:14:31.693000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "hangleang.eth",
+        "category": "Testing",
+        "parent": "",
+        "content": "here is the kurtosis config: https://discord.com/channels/595666850260713488/1252403418941624532/1356578046663983134",
+        "created_at": "2025-04-03T09:18:20.273000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "__flcl",
+        "category": "Testing",
+        "parent": "",
+        "content": "+ you can also enable spammor to send new proofs:\nhttps://discord.com/channels/595666850260713488/1356578605957775361/1356746721711095878",
+        "created_at": "2025-04-03T09:19:24.466000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "or just naviagte to the page for devnet 6: https://notes.ethereum.org/@ethpandaops/peerdas-devnet-6#Kurtosis-Interop-Conifg-Pre-devnet-testing",
+        "created_at": "2025-04-03T09:20:48.557000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "",
+        "created_at": "2025-04-03T09:25:27.403000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "__flcl",
+        "category": "Testing",
+        "parent": "",
+        "content": "Some raw txs + broken ones",
+        "created_at": "2025-04-03T11:09:30.489000+00:00",
+        "attachments": [
+            {
+                "type": "application/zip",
+                "origin_name": "txs.zip",
+                "content": "bab2d7c05ab1188a630d9bb4afb2705dd454df4b703b5aee6357fc842861e9e8"
+            }
+        ]
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Testing",
+        "parent": "",
+        "content": "FYI \u003c@106441459183423488\u003e \u003c@857052906495017000\u003e",
+        "created_at": "2025-04-03T20:53:53.690000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "cskiraly",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@466006586477772831\u003e , why did you say \"all\" and \"any\" here? If a block builder does not have the bandwidth, his block will not reach enough custody to get attestations, hence it will be reorged. What am I missing?",
+        "created_at": "2025-04-03T20:59:20.570000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marcopolo__",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e From what I remember, we don't send copies out sequentially to peers, because sending is bidirectional and if the 1st peers don't consume it, then it blocks the subsequent copies from being sent to other peers.\n\nI don't think this is true, but I'm not sure I understand this sentence. In go-libp2p-pubsub you send a message to each peer in your mesh, but a slow peer doesn't prevent you from sending a message to another peer.",
+        "created_at": "2025-04-03T21:01:14.039000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "cskiraly",
+        "category": "Testing",
+        "parent": "",
+        "content": "Also in Nim, there is no such blocking. When a message is to be sent, the peers are selected, and a copy is immediately queud to each. These are separate (per-peer) queues, not blocking between different peers.\n\nWhat batch publishing is changing is the \"peers are selected, and a copy is immediately queued to each\" part. In batch publising we are not handling messages one-by-one, queuing many copies of each.\nWe are handling a batch of messages. And since we know there are multiple messages, we can alter the schedule. First we select one peer for each message, and queue those on per-peer queues. Of course the peer is selected from the respective message's topic neghborhood.\nThen we select another peer for each message (from its respective topic neighborhood), and queue those, etc.",
+        "created_at": "2025-04-03T21:10:06.754000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marcopolo__",
+        "category": "Testing",
+        "parent": "",
+        "content": "All else being equal, it's likely better to publish D/4=2 copies of the 128 columns across the network than it is to publish D=8 copies of 32 columns per round. This is what the batching api proposal would let you do.",
+        "created_at": "2025-04-03T21:20:26.980000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "yeah that's right I'm not describing the current behaviour. I was talking about the proposed behaviour to send out copies sequentially.",
+        "created_at": "2025-04-03T22:59:47.885000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "(if i understood it correctly, could be wrong though)",
+        "created_at": "2025-04-03T23:00:07.013000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes that's right - sorry maybe i didn't describe it clearly.\nlet me reword this: \n- the network should work as expected at high blob count without `getBlobs`, if **all** proposer nodes have enough bandwidth (to publish the columns out)\n- if any of the block builder is bandwidth constrained, then they won't be able to publish their columns out in time, hence we need to rely on distributed publishing\n\nI think it's basically the same thing as what you said?\nBut i'd like the 1st point to be validated in a testnet - because it's likely similar to the mainnet network topology - 95% of blocks are published by high bandwidth relays / builders",
+        "created_at": "2025-04-03T23:20:34.970000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "Also in Nim, there is no such blocking.",
+        "created_at": "2025-04-03T23:28:00.144000+00:00",
+        "attachments": null
+    }
+]

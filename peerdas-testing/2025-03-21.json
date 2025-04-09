@@ -1,0 +1,266 @@
+[
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "While spec'ing out Distributed Blob Publishing with \u003c@491624610215886849\u003e , we realised that Lighthouse's full node behaviour may impact data column propagation. Currently, Lighthouse full nodes retrieve EL blobs and compute columns, then import them. They also add these columns to the \"gossip seen cache\", but full nodes don't attempt to publish them at all.  \n\nThis hurts propagation because if the node later receives the same columns via gossip, it will `IGNORE` them as they're already in the seen cache. That means the node doesn’t forward them, effectively halting propagation of those data columns to the rest of the network.  \n\nWe'll need to change this behaviour so that nodes **always attempt to publish** columns they haven't seen on their **subscribed** gossip data column topics - in line with the requirements in this PR: https://github.com/ethereum/consensus-specs/pull/3864",
+        "created_at": "2025-03-21T04:43:11.820000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "This may be one of the sources of instability, we'll add a fix for this.",
+        "created_at": "2025-03-21T04:45:00.792000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "Spec PR for distributed blob publishing, any feedback is appreciated 🙏 \nhttps://github.com/ethereum/consensus-specs/pull/4183",
+        "created_at": "2025-03-21T07:00:00.324000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Testing",
+        "parent": "",
+        "content": "q: do you guys use getBlobs only when receiving a block, or also when receiving a DataColumnSidecar? It makes sense to also do it upon receiving the latter, since it includes all kzg commitments. Perhaps it should be noted in the spec (this wasn't possible with blob sidecars because they do not contain all kzg commitments)",
+        "created_at": "2025-03-21T08:53:46.543000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "You mean blob?",
+        "created_at": "2025-03-21T09:15:43.365000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes for just blobs hit rate does matter, but columns as long as hit rate gives me more than half, it should be fine as time to parallely reconstruct is way faster than validating 128 column gossips, for the same reasons you mentioned",
+        "created_at": "2025-03-21T09:17:13.380000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "hangleang.eth",
+        "category": "Testing",
+        "parent": "",
+        "content": "We getBlobs only after received block, as you mentioned, we also can request after receiving data column, but only if all blobs is in the mempool, and block available in order to construct the data column sidecars",
+        "created_at": "2025-03-21T09:57:14.615000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e and block available in order to construct the data column sidecars\n\nWhy do you need the block at all? If you have a DataColumnSidecar and ALL the blobs + proofs from the mempool, you have everything you need, no? Since the sidecar already contains the header + kzg_commitments + inclusion proof",
+        "created_at": "2025-03-21T10:02:15.495000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Testing",
+        "parent": "",
+        "content": "It's likely not going to make a huge difference, but it's at least a bit faster whenever you receive even a single column sidecar before the block",
+        "created_at": "2025-03-21T10:04:02.919000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "hangleang.eth",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes yes, make sense. I’ll review to see we can make it",
+        "created_at": "2025-03-21T10:36:51.387000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Testing",
+        "parent": "",
+        "content": "To clarify, didn't mean to say that this is a priority or anything 😄  Was just wondering what clients are doing right now, and whether it would be worth explicitly mentioning in the spec that it can (or SHOULD) be used upon both block and DataColumnSidecar retrieval. My sense is, I don't see why we'd want to exclusively do it on block arrival, and if that's the case the spec should indeed mention it",
+        "created_at": "2025-03-21T10:42:38.729000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, it would make sense to mention this in the spec. Will make an issue for it.",
+        "created_at": "2025-03-21T14:31:58.948000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Testing",
+        "parent": "",
+        "content": "I made a suggestion in Jimmy's PR",
+        "created_at": "2025-03-21T15:24:50.601000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Testing",
+        "parent": "",
+        "content": "Cool I see. Is it possible to construct data column sidecars without the `signed_beacon_block` (not just the `signed_beacon_block_header` found in `DataColumnSidecar`)? ~~Also, why only do it with ALL blobs? We could do it with partial blobs too, no?~~",
+        "created_at": "2025-03-21T15:31:12.254000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Testing",
+        "parent": "",
+        "content": "This was the tracking issue I made earlier btw: https://github.com/ethereum/consensus-specs/issues/4186",
+        "created_at": "2025-03-21T15:31:34.133000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Testing",
+        "parent": "",
+        "content": "I see, I didn't think about `get_data_column_sidecar` needing updating/another function",
+        "created_at": "2025-03-21T15:34:42.376000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Testing",
+        "parent": "",
+        "content": "But yes, you can do it just with (header, kzg_commitments, inclusion_proof)",
+        "created_at": "2025-03-21T15:35:05.296000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Testing",
+        "parent": "",
+        "content": "Could we split this into two functions? One that takes the signed block \u0026 one that takes the header?",
+        "created_at": "2025-03-21T15:40:15.162000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Testing",
+        "parent": "",
+        "content": "this would be the function:\n```python\ndef get_data_column_sidecars(signed_block_header: SignedBeaconBlockHeader,\n                             kzg_commitments: MAX_BLOB_COMMITMENTS_PER_BLOCK],\n                             kzg_commitments_inclusion_proof: Vector[Bytes32, KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH]\n                             cells_and_kzg_proofs: Sequence[Tuple[\n        Vector[Cell, CELLS_PER_EXT_BLOB],\n        Vector[KZGProof, CELLS_PER_EXT_BLOB]]]) -\u003e Sequence[DataColumnSidecar]:\n\n    assert len(cells_and_kzg_proofs) == len(kzg_commitments)\n\n    sidecars = []\n    for column_index in range(NUMBER_OF_COLUMNS):\n        column_cells, column_proofs = [], []\n        for cells, proofs in cells_and_kzg_proofs:\n            column_cells.append(cells[column_index])\n            column_proofs.append(proofs[column_index])\n        sidecars.append(DataColumnSidecar(\n            index=column_index,\n            column=column_cells,\n            kzg_commitments=kzg_commitments,\n            kzg_proofs=column_proofs,\n            signed_block_header=signed_block_header,\n            kzg_commitments_inclusion_proof=kzg_commitments_inclusion_proof,\n        ))\n    return sidecars\n```\n\nA bit ugly",
+        "created_at": "2025-03-21T15:40:17.884000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Testing",
+        "parent": "",
+        "content": "Could do this I guess? \n\n```python\ndef get_data_column_sidecars_from_block(signed_block: SignedBeaconBlock,\n                             cells_and_kzg_proofs: Sequence[Tuple[\n        Vector[Cell, CELLS_PER_EXT_BLOB],\n        Vector[KZGProof, CELLS_PER_EXT_BLOB]]]) -\u003e Sequence[DataColumnSidecar]:\n    \"\"\"\n    Given a signed block and the cells/proofs associated with each blob in the\n    block, assemble the sidecars which can be distributed to peers.\n    \"\"\"\n    blob_kzg_commitments = signed_block.message.body.blob_kzg_commitments\n    signed_block_header = compute_signed_block_header(signed_block)\n    kzg_commitments_inclusion_proof = compute_merkle_proof(\n        signed_block.message.body,\n        get_generalized_index(BeaconBlockBody, 'blob_kzg_commitments'),\n    )\n    return get_data_column_sidecars(signed_block_header, blob_kzg_commitments, kzg_commitments_inclusion_proof, cells_and_kzg_proofs)\n```",
+        "created_at": "2025-03-21T15:44:31.062000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Testing",
+        "parent": "",
+        "content": "We'll need to pass the `cells_and_kzg_proofs` to `get_data_column_sidecars` too, right?",
+        "created_at": "2025-03-21T15:45:27.371000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Testing",
+        "parent": "",
+        "content": "But yes, this is almost exactly what I had in mind.",
+        "created_at": "2025-03-21T15:45:48.367000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "thanks, I’ll take a look tomorrow sir",
+        "created_at": "2025-03-21T19:37:36.672000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Testing",
+        "parent": "",
+        "content": "PR from \u003c@303930231066984449\u003e to address the issue of how validator custody should dynamically update (issue with more context linked)\n\nhttps://github.com/ethereum/consensus-specs/pull/4188",
+        "created_at": "2025-03-21T21:10:08.092000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Testing",
+        "parent": "",
+        "content": "curious to hear what people think about phrasing/language here",
+        "created_at": "2025-03-21T21:10:52.866000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Testing",
+        "parent": "",
+        "content": "Maybe one question would be how often should a node dynamically adjust its custody?",
+        "created_at": "2025-03-21T21:35:09.983000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Testing",
+        "parent": "",
+        "content": "ideally in real-time",
+        "created_at": "2025-03-21T21:36:52.048000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Testing",
+        "parent": "",
+        "content": "we discussed even updating every epoch",
+        "created_at": "2025-03-21T21:37:11.833000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Testing",
+        "parent": "",
+        "content": "e.g. piggybacking on validator registrations",
+        "created_at": "2025-03-21T21:37:19.314000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Testing",
+        "parent": "",
+        "content": "lean towrads leaving exact impl details out of spec",
+        "created_at": "2025-03-21T21:37:29.207000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Testing",
+        "parent": "",
+        "content": "but open to suggestions",
+        "created_at": "2025-03-21T21:37:35.846000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah it would probably be over-specification. But considering `BALANCE_PER_ADDITIONAL_CUSTODY_GROUP` is 32 ETH, it should be a pretty rare occurrence, right? I was thinking check like once every 100 epochs or something. Or if/when a validator is added/removed.",
+        "created_at": "2025-03-21T21:40:10.804000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "francis.li",
+        "category": "Testing",
+        "parent": "",
+        "content": "cell proof specs",
+        "created_at": "2025-03-21T22:00:32.432000+00:00",
+        "attachments": null
+    }
+]

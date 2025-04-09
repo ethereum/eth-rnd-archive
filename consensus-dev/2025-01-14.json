@@ -1,0 +1,114 @@
+[
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "Lighthouse only stores the advanced finalized state in the DB (i.e. the epoch boundary state), and this works fine for us when we initialise with checkpoint sync. We actually download the finalized state first, then work out its corresponding block from `latest_block_header` and download that (by `slot`), and verify that it's consistent.\n\nIf Lighthouse checkpoint syncs from an unaligned state (e.g. the state of the finalized block) then we just advance it through to the epoch boundary and hit the same code path as above. E.g. this is what happens when we checkpoint sync off Teku (you guys serve the block's unadvanced state for `/finalized`, right?).\n\nAlthough the spec for `get_forkchoice_store` assumes the state is the unadvanced state, I think the spec is just lacking in this area. The whole `get_forkchoice_store` function behaves a bit oddly wrt checkpoint sync, and I think the spec could use some updates to be both more flexible, and more robust: \u003chttps://github.com/ethereum/consensus-specs/issues/2566\u003e\n\nHave you hit a concrete issue in Teku? Is it Lighthouse giving you aligned finalized states exclusively?",
+        "created_at": "2025-01-14T02:49:19.195000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "We do have an issue where we cant initialise if the last slot of the finalized epoch is empty (iirc)... teku has been responding with the actual anchor state, which is the un-advanced state we used as the basis for fork choice, but i was thinking about changing that to the checkpoint state, which obviously leads to the issue of initialising fork choice, but i think i should be able to just download what i need for the anchor state assuming i have a beacon-api like checkpoints to work with... does definitely rely on checkpoints retaining the actual anchor states (noone's initialising fork choice with checkpoint states?), and im not sure if thats a fair assumption to make yet...\nThere's a pr that would allow us to start from the checkpoint state, but im not sure thats ideal either, so just trying to figure out the better way to proceed i guess...\nMy current theory is\n - `/finalized` endpoint to return the finalized checkpoint state\n - if we're passed a URL to initialise from, then assume we can fetch multiple states if required (checkpoint state AND anchor state)\n - if we're passed a file as initial state we'd still require an anchor state\n\nI do wonder if its worth building out some more context in a spec somewhere around this initialisation...",
+        "created_at": "2025-01-14T03:07:50.791000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e noone's initialising fork choice with checkpoint states?\n\nwe are initialising fork choice with checkpoint states, it doesn't matter IMO",
+        "created_at": "2025-01-14T03:08:50.787000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "if I could, I would just change the spec to use the checkpoint state, or say that either is fine",
+        "created_at": "2025-01-14T03:09:33.917000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "ok cool, its just explicitly called out as needing anchor state... would certainly simplify life",
+        "created_at": "2025-01-14T03:10:05.968000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "yeah, but there's no real reason for that AFAIK",
+        "created_at": "2025-01-14T03:10:37.507000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "apart from the fact you want to have some kind of consistency check",
+        "created_at": "2025-01-14T03:10:56.634000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "yeh and if you try to refer to that anchor state it might not be there",
+        "created_at": "2025-01-14T03:12:00.563000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "yeah, we prune everything prior to the checkpoint state in normal operation",
+        "created_at": "2025-01-14T03:14:04.079000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "what does Teku do (outside of checkpoint sync) when the finalized state is on a skipped slot? it keeps the anchor state and info for all intermediate states?",
+        "created_at": "2025-01-14T03:14:38.475000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "bootstrapping its a definite issue, which is why we're throwing out questions 🙂 luckly currently the network is high quality and our issue is rare",
+        "created_at": "2025-01-14T03:15:36.255000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "normal operations we have a reasonable sized cache so its fairly transparent but im trying to close the gap initializing",
+        "created_at": "2025-01-14T03:16:37.961000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "do you keep it on disk though while operating a pruned/full node?",
+        "created_at": "2025-01-14T03:28:00.199000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "so for pruned, we'd have finalized (atm anchor point) and a state every 2 epochs if required\narchived we'd have 1 in 2048 states on disk, as well as the anchor state and one every 2 epochs of non finalized... the rest would need rebuilding",
+        "created_at": "2025-01-14T03:35:18.973000+00:00",
+        "attachments": null
+    }
+]

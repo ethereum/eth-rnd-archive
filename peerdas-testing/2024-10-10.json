@@ -1,0 +1,506 @@
+[
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "For information (maybe it could be useful for other clients as well), I'm currently trying to understand why Prysm  sync is so slow when data columns are involved (data columns by range requests).\nI did some measurements.\n\nRequesting a big data columns by range (`128 columns * 64 blocks`) takes around `8 seconds` to a lodestar node. That's a really big request: `8192 items.`\nThen, running `verify_data_column_sidecar_kzg_proofs` (cKZG) for the retrieved columns takes  an additionnal 25 seconds.\n\nKZG verification really hurts the speed of initial syncing.",
+        "created_at": "2024-10-10T10:13:17.633000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "maybe your node being rate limited by lodestar?",
+        "created_at": "2024-10-10T10:15:29.924000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "got any metrics for these syncing from other nodes?",
+        "created_at": "2024-10-10T10:15:39.413000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "No I mean the issue here is not really the request time, but the additional time needed to verify the KZG proofs of the columns.",
+        "created_at": "2024-10-10T10:16:09.559000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "(25 seconds)",
+        "created_at": "2024-10-10T10:16:17.523000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "can you only progress to the next batch if you finish verification?",
+        "created_at": "2024-10-10T10:16:35.542000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "can you not shove the verification in the background?",
+        "created_at": "2024-10-10T10:16:48.698000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "is this on kurtosis or on devnet?",
+        "created_at": "2024-10-10T10:17:29.028000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "hangleang.eth",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think grandine and lighthouse has rate limiting on 32 blocks per request on that type of request: https://github.com/hangleang/eth2_libp2p/blob/feature/das/src/rpc/config.rs#L117",
+        "created_at": "2024-10-10T10:19:19.333000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e can you only progress to the next batch if you finish verification?\n[The spec](https://github.com/ethereum/consensus-specs/blob/dev/specs/_features/eip7594/p2p-interface.md#datacolumnsidecarsbyrange-v1) say so:\n\n\u003e Before consuming the next response chunk, the response reader SHOULD verify the data column sidecar is well-formatted, has valid inclusion proof, and is correct w.r.t. the expected KZG commitments through verify_data_column_sidecar_kzg_proofs.\n\nFor sure, we could parallelize a bit (like requesting batch 2 while processing batch 1), but, at the end of the day, we still need to verify all the ZKG proofs before declaring the block as available. So it won't change much.",
+        "created_at": "2024-10-10T10:19:22.208000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah thanks, but again the issue here is not really the request, but the time needed to verify the proof.",
+        "created_at": "2024-10-10T10:20:01.259000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e is this on kurtosis or on devnet?\ndevnet",
+        "created_at": "2024-10-10T10:20:12.348000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "should is not a must 😄",
+        "created_at": "2024-10-10T10:20:21.428000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "assume its correct, and verify in the background ?",
+        "created_at": "2024-10-10T10:20:33.388000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e should is not a must\nI think it `should` should be actually a `must` IMO",
+        "created_at": "2024-10-10T10:21:57.732000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "checkpoint syncing would require you to verify all the previous blob's kzg commitment then before you could attest on the next slots?",
+        "created_at": "2024-10-10T10:22:49.922000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "or is this only true for forward sync?",
+        "created_at": "2024-10-10T10:23:20.982000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Only true for forward sync.\nI mean, if you start for a checkpoint, it remains true for all blocks between the checkpoint and the head. (So not so many blocks.)",
+        "created_at": "2024-10-10T10:24:13.999000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "is it really a problem then?",
+        "created_at": "2024-10-10T10:27:25.661000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "most ppl gonna checkpoint sync - as its also considered to be the safer option",
+        "created_at": "2024-10-10T10:27:56.556000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah, probably not so a big problem so",
+        "created_at": "2024-10-10T10:28:25.521000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "lh for example expects an explicit flag if you want to enable \"unsafe - forward syncing\"",
+        "created_at": "2024-10-10T10:29:30.383000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "thats why I think generally speaking if you are forward syncing you should be able to yolo sync then verify after.",
+        "created_at": "2024-10-10T10:30:04.380000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "But we might have a different opinion on this",
+        "created_at": "2024-10-10T10:30:11.381000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e But we might have a different opinion on this\nActually I'm not sure of the consequences. Maybe \u003c@592004585506340885\u003e can help?\n\nI'm wondering what is the worst impact if no node at all runs the `verify_data_column_sidecar_kzg_proofs` during sync.\n(aka my `should` should be a `must` comment in [this PR](https://github.com/ethereum/consensus-specs/pull/3963)\n\nCould this lead, in the worst case (for example when trying to recover for a long period of un-finalization) to finalize a block with an invalid KZG proof?",
+        "created_at": "2024-10-10T10:32:35.083000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Proposal from Potuz: When syncing from genesis, do not run those checks for finalized blocks, but only for un-finalized ones.",
+        "created_at": "2024-10-10T12:11:20.436000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "it sounds better from him ? 😄",
+        "created_at": "2024-10-10T12:20:04.154000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Sorry it is what you did propose?",
+        "created_at": "2024-10-10T12:21:08.891000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "not exactly, was thinking of just doing it in the background",
+        "created_at": "2024-10-10T12:21:37.404000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "his idea is a lot better indeed 😄",
+        "created_at": "2024-10-10T12:21:43.214000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "(Also, about the speed of verification, it seems we do **not** verify by batch, so a significant speedup may be possible here.)",
+        "created_at": "2024-10-10T12:23:01.725000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Testing",
+        "parent": "",
+        "content": "Gm. I'm not totally sure of the worst case. My initial worry is if there were a large number of syncing validators and 1/3+ were tricked into thinking some data is available when it wasn't. But since most data should come from gossip which must verify the proofs, I'm not sure how practical that would be. I will think about it more.",
+        "created_at": "2024-10-10T12:25:57.335000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Testing",
+        "parent": "",
+        "content": "Slow data column kzg proof verification",
+        "created_at": "2024-10-10T12:29:40.156000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Testing",
+        "parent": "",
+        "content": "Lodestar team: when requesting columns by range (in particular around slot 16700) from Lodestar nodes  I'm getting the following error: \n`[Code 2] RESPONSE_ERROR_SERVER_ERROR: dataColumnSidecar index=0 dataIndex=-1 not custodied`",
+        "created_at": "2024-10-10T13:38:24.738000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "hangleang.eth",
+        "category": "Testing",
+        "parent": "",
+        "content": "Same from grandine",
+        "created_at": "2024-10-10T14:05:24.797000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@498331483732312075\u003e likely means that the same error is seen when Grandine requests colums by range from Lodestar",
+        "created_at": "2024-10-10T14:06:24.965000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "hangleang.eth",
+        "category": "Testing",
+        "parent": "",
+        "content": "I wonder what does that mean",
+        "created_at": "2024-10-10T14:07:03.999000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Testing",
+        "parent": "",
+        "content": "Also wondering about some prysm nodes, they are returning empty list of columns (by `by_range` request) for the slots I've tested `16544 - 16699`. \nThe nodes not returning any columns: `1-arm`, `2`, `2-arm`, `4`, `6`\nThe nodes returning expected columns: `1`, `3`, `3-arm` , `5`\nAll the prysm nodes on the same chain at the moment, so it looks weird they are doing differently",
+        "created_at": "2024-10-10T14:34:25.803000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Which columns exactly?\nDo you have some time of requests so I can check in logs?",
+        "created_at": "2024-10-10T15:07:16.519000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Testing",
+        "parent": "",
+        "content": "Here is what I've found from Teku nodes: they forked on the slot `16566` (epoch `517`). \nI believe some other client nodes did the same (at least all Grandine nodes)\n\nSuper nodes `1`,`3`,`5` considered the block `16566: 0xe983cf..6a6a` as not available and proceed on the fork which is 'main' at the moment. \nThe justified epoch on this chain is still `515`\n\nFull nodes `2`, `4`, `6` successfully sampled the block `16566: 0xe983cf..6a6a` and proceed on another fork which made the epoch `517` justified. \nWhile these nodes are still importing blocks from the 'main' chain they are not reorging to it due to lower justified epoch",
+        "created_at": "2024-10-10T15:07:31.279000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Testing",
+        "parent": "",
+        "content": "It was about 30-60 mins ago. If you need exact time I can repeat the test and check the time",
+        "created_at": "2024-10-10T15:10:11.597000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "With exact time I can look into logs what Prysm node did exactly. (I log incoming requests.)",
+        "created_at": "2024-10-10T15:11:08.226000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "all `-arm` nodes are fullnodes btw.",
+        "created_at": "2024-10-10T15:12:06.669000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Testing",
+        "parent": "",
+        "content": "Probably I was requesting all columns from full nodes and they are returning nothing instead while I was expecting them to return all the columns they are custodying...",
+        "created_at": "2024-10-10T15:14:25.712000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "They should return all columns they have, so at least all columns they custody. (unless the node is not synced, which is not the case.)",
+        "created_at": "2024-10-10T15:14:49.456000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Testing",
+        "parent": "",
+        "content": "But then why `prysm-3-arm` returned `7` (?) columns",
+        "created_at": "2024-10-10T15:15:48.203000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "If not, it's a bug.",
+        "created_at": "2024-10-10T15:15:48.470000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "You asked for all columns, and `prysm-3-arm` only returned `7` ?",
+        "created_at": "2024-10-10T15:16:12.700000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yep",
+        "created_at": "2024-10-10T15:16:24.277000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "That's not normal. Yes if you have some timestamp it could help me a lot.",
+        "created_at": "2024-10-10T15:16:43.561000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Testing",
+        "parent": "",
+        "content": "Oh sorry, not `7` but 1 column with index `7`\n```\n### DasScan: prysm-geth-3-arm\n      Slot 16544: 726703..0a42 \u003c~ a2cfad..6f5c, columns: (len: 1) [7]\n      Slot 16545: \u003cempty\u003e\n      Slot 16546: \u003cempty\u003e\n      Slot 16547: 6d3706..b0b3 \u003c~ 726703..0a42, columns: (len: 1) [7]\n      Slot 16548: d65f0b..59eb \u003c~ 6d3706..b0b3, columns: (len: 1) [7]\n      Slot 16549: e0edef..bafc \u003c~ d65f0b..59eb, columns: (len: 1) [7]\n      Slot 16550: \u003cempty\u003e\n      Slot 16551: \u003cempty\u003e\n      Slot 16552: a4cfe8..0842 \u003c~ c939b7..6420, columns: (len: 1) [7]\n      Slot 16553: f73533..6198 \u003c~ a4cfe8..0842, columns: (len: 1) [7]\n      Slot 16554: \u003cempty\u003e\n      Slot 16555: 036a4f..a282 \u003c~ f73533..6198, columns: (len: 1) [7]\n      Slot 16556: d38028..d02d \u003c~ 036a4f..a282, columns: (len: 1) [7]\n      Slot 16557: 8df7a9..d0de \u003c~ d38028..d02d, columns: (len: 1) [7]\n```",
+        "created_at": "2024-10-10T15:17:31.289000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ok, let me repeat the experiment...",
+        "created_at": "2024-10-10T15:17:57.066000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Testing",
+        "parent": "",
+        "content": "May be you are just taking first N column indexes from the request, where N is the custody column count?",
+        "created_at": "2024-10-10T15:19:52.640000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "It should node. The implementation should respond all columns we store among all the requested columns. (So, just skip non stored but requested columns.)",
+        "created_at": "2024-10-10T15:21:42.730000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "So, for example, when we receive a by root request, we print this log:\n```\n[2024-10-08 06:33:08.84] DEBUG sync: Serving data column sidecar by root request columns0=[123 125] custody=[13 122 123 125] peer=16Uiu2HAmCqgFe5ybSSX7R65umdpzCioTrKM1ZMytognWG2yNEWZM root0=0xf506f309d839d93cd7d1b7b47d00bc5ef5e5d5425d6f243088aeef5aaf1608d6\n```\n\nWhen we receive a by range request, we print this log:\n```\n[2024-10-08 06:23:11.60] DEBUG sync: Serving data columns by range request count=32 custodyColumns=[13 122 123 125] remotePeer=16Uiu2HAmLHh6oHUdfxcgFeNQJavbYZFNQXBKpEs2iRxB9ra7JUv6 requestedColumns=[122] startSlot=17024\n```",
+        "created_at": "2024-10-10T15:24:58.722000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Testing",
+        "parent": "",
+        "content": "```\n2024-10-10 19:27:17.998+04:00 | DEBUG | das-scanner | Requesting columns from slot 16563 from prysm-geth-3-arm\n2024-10-10 19:27:18.420+04:00 | DEBUG | das-scanner | Requesting columns from slot 16565 from prysm-geth-3-arm\n```",
+        "created_at": "2024-10-10T15:29:20.344000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Testing",
+        "parent": "",
+        "content": "It is probably a similar issue with Lodestar",
+        "created_at": "2024-10-10T15:31:40.880000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Is it 15:27 UTC?",
+        "created_at": "2024-10-10T15:32:08.422000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes",
+        "created_at": "2024-10-10T15:32:32.275000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "What's your PeerID? `16Uiu2HAmRpdbFUR9CqBXXeA5XtkD5GYgLFUFExhYgmdsXi9W2BzX`?",
+        "created_at": "2024-10-10T15:33:52.207000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "What columns did you request? What did you effectively receive?",
+        "created_at": "2024-10-10T15:34:05.700000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Is it by root? by range?",
+        "created_at": "2024-10-10T15:34:38.956000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nashatyrev",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yes, it's me. \nI've requested all columns `0,1,2,...,127` by range. I've received just a single column with index `7`",
+        "created_at": "2024-10-10T15:41:00.176000+00:00",
+        "attachments": null
+    }
+]

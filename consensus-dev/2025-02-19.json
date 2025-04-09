@@ -1,0 +1,90 @@
+[
+    {
+        "author": "radekkapka",
+        "category": "general",
+        "parent": "",
+        "content": "Hey guys, I can't find the answer to the following question: \"Do all attester committees for a slot have the same size?\". I expect the answer is yes, but I'd like a confirmation, ideally pointing to the part of the spec form where it can be deduced",
+        "created_at": "2025-02-19T12:29:16.886000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "general",
+        "parent": "",
+        "content": "Yes I think so. I could be wrong but I think even all attester committees in the same epoch have the same size. See `get_beacon_committee()` feeds in `count = committees_per_slot * SLOTS_PER_EPOCH` to `compute_committee` where `committees_per_slot` is constant throughout the entire epoch. Then in `compute_committee()` you can see `end - start = len(indices) // count`.",
+        "created_at": "2025-02-19T13:19:21.747000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Using the definition from Phase 0\n```\ndef compute_committee(indices: Sequence[ValidatorIndex],\n                      seed: Bytes32,\n                      index: uint64,\n                      count: uint64) -\u003e Sequence[ValidatorIndex]:\n    \"\"\"\n    Return the committee corresponding to ``indices``, ``seed``, ``index``, and committee ``count``.\n    \"\"\"\n    start = (len(indices) * index) // count\n    end = (len(indices) * uint64(index + 1)) // count\n    return [indices[compute_shuffled_index(uint64(i), uint64(len(indices)), seed)] for i in range(start, end)]\n```\nYou see that the re are two integer divisions. Let  `len(indices)  = p * count + s`  be the integer division.  Then you have `start = (p *  index * count + s * index) // count = p * index + s * index // count`    and `end = (p * (index  + 1) * count + s *(index + 1)) // count =  p * (index + 1) + s * (index + 1)// count` and then the difference is `p + s // count = p`, which is literally what \u003c@1035747431461167125\u003e  just wrote",
+        "created_at": "2025-02-19T13:20:38.496000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "radekkapka",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks a lot \u003c@1035747431461167125\u003e \u0026 \u003c@755590043632140352\u003e",
+        "created_at": "2025-02-19T13:34:13.928000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "general",
+        "parent": "",
+        "content": "Is that correct?  Just off the top of my head, you would expect that if there was an odd number of validators then some committees would be of different sizes.  And a quick check against a beacon node:\n\n```\ncurl -s http://localhost:5052/eth/v1/beacon/states/head/committees | jq '.data[] | walk(if type == \"array\" then length else . end)'\n```\n\nGives different sizes for different committees.",
+        "created_at": "2025-02-19T14:21:37.433000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "inspector.butters",
+        "category": "general",
+        "parent": "",
+        "content": "not exactly the same size but the difference between any two committees is either 0 or 1.\non mainnet right now there are 481 committees with 512 validators and 1567 committees with 513.\non holesky it's (686 X 865) + (1362 X 866).\non sepolia 18 X 55 and 14 X 56.",
+        "created_at": "2025-02-19T14:42:05.995000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah as soon as I was writing the above I noticed that I didn't understand cause it would imply some validators not being assigned, but I didn't find any errors on the derivation above though",
+        "created_at": "2025-02-19T14:50:25.290000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Ah crap I should have continued. \u003c@308223150725005322\u003e it's like this",
+        "created_at": "2025-02-19T14:53:27.429000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "With the notation above, let `s index = l count + t` be the division. Then the difference is `p  +  (t + s) // count`",
+        "created_at": "2025-02-19T14:56:26.794000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "and yeah `s \u003c count` but it can happen that `s + t \u003e= count` in which case you get `p+1` instead of `p`",
+        "created_at": "2025-02-19T14:57:02.276000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I took the time of writing the divisions to avoid the common error ` (a + b) // c = a // c + b // c`  and anyway I committed it",
+        "created_at": "2025-02-19T14:58:15.278000+00:00",
+        "attachments": null
+    }
+]

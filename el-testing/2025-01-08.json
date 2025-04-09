@@ -1,0 +1,66 @@
+[
+    {
+        "author": "siladu",
+        "category": "Testing",
+        "parent": "",
+        "content": "For https://github.com/ethereum/execution-spec-tests/releases/tag/pectra-devnet-5%40v1.1.0...\nRegarding the state_tests (as opposed to blockchain_tests) e.g. \n\n`\"tests/prague/eip2537_bls_12_381_precompiles/test_bls12_pairing.py::test_call_types[fork_Prague-state_test-inf_pair-call_opcode_STATICCALL-]\"`\nin this file `fixtures/state_tests/prague/eip2537_bls_12_381_precompiles/bls12_pairing/call_types.json`\n\nDo the state_tests consider the state root change as a result of EIP-2935 in their output (i.e. in `post.Prague.hash`)?\ni.e. after the transaction is applied, we should consider the history storage update to the state (that would normally happen during block processing)\n\nI'd expect the answer is yes (which makes sense from an e2e test point of view) but it leads to an odd problem in how Besu consumes these tests. Currently, we consume state_tests by passing them into our transaction processor code, which doesn't trigger this block-scoped system contract processing and thus doesn't update history_storage_address and alter the state root.\n\nIt's probably a Besu test runner-specific issue but I wanted to confirm for sure what the test expectation is.\nAlso whether other clients have run into this issue, think it might be unique to Prague because EIP-2935 should always run after every block (we passed all the execution-spec-tests previously AFAIK).",
+        "created_at": "2025-01-08T07:51:15.740000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "EthJS passes the state tests, I'll TAL what we do there",
+        "created_at": "2025-01-08T16:59:31.904000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm not sure here, 2935 is applied before any txs? It saves the parent block hash into the state. If you would save the \"current block hash\" into state after running the txs, this would alter the state root and thus the block hash",
+        "created_at": "2025-01-08T17:00:33.881000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "What our state test runner does is: it imports the pre-state (this includes stuff like the `env` like `timestamp`) and then runs all txs on top of it. This does not run any block-related logic, for instance 2935 is also not used so no block hash is imported.\nAlso note: in most (all?) the 2935 contract (and related contracts) is not populated (there is no code)",
+        "created_at": "2025-01-08T17:04:46.818000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "s1na",
+        "category": "Testing",
+        "parent": "",
+        "content": "Is there a plan to update these tests with the recent EIP-2537 changes? https://github.com/ethereum/tests/tree/develop/EIPTests/StateTests/stEIP2537",
+        "created_at": "2025-01-08T17:56:35.009000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hey thats interesting, seem like the test files in the EIP as well, I opened a PR for that https://github.com/ethereum/EIPs/pull/9217 \nMight as well open a PR in the ethereum/tests dir (should maybe have done that in the first place since it seems to be sourced from that?)",
+        "created_at": "2025-01-08T19:29:53.844000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "siladu",
+        "category": "Testing",
+        "parent": "",
+        "content": "ah yes, it is indeed applied _before_ any txs, I misunderstood...so the post state root shouldn't account for EIP-2935 in these tests. \n\n\u003e This does not run any block-related logic, for instance 2935 is also not used so no block hash is imported.\nThat's good to know, thanks. Presumably your post state account data doesn't contain the modified history storage account as well then?\n\nThere must be something else wrong with our runner or code then, thanks for checking 🙂",
+        "created_at": "2025-01-08T20:53:46.772000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "ah yes, it is indeed applied _before_",
+        "created_at": "2025-01-08T22:44:29.711000+00:00",
+        "attachments": null
+    }
+]

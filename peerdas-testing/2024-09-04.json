@@ -1,0 +1,670 @@
+[
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "Looking into this",
+        "created_at": "2024-09-04T00:26:54.015000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm running this version\n```\nbeacon-chain version Prysm/Unknown/751a7a00eee00f70bfe1a92147f2aa8162c48f54. Built at: 2024-09-03 20:42:55+00:00\n```\nand seeing this\n```\n[cl-1-prysm-geth] time=\"2024-09-04 00:24:01.88\" level=error msg=\"There were some issues parsing the config from a yaml file\" error=\"yaml: unmarshal errors:\n[cl-1-prysm-geth]   line 107: field EIP7594_FORK_VERSION not found in type params.BeaconChainConfig\n[cl-1-prysm-geth]   line 148: field REORG_HEAD_WEIGHT_THRESHOLD not found in type params.BeaconChainConfig\n[cl-1-prysm-geth]   line 209: field MAX_BLOBS_PER_BLOCK not found in type params.BeaconChainConfig\n[cl-1-prysm-geth]   line 213: field WHISK_EPOCHS_PER_SHUFFLING_PHASE not found in type params.BeaconChainConfig\n[cl-1-prysm-geth]   line 215: field WHISK_PROPOSER_SELECTION_GAP not found in type params.BeaconChainConfig\"\n```\nam I testing with the right version?",
+        "created_at": "2024-09-04T05:18:37.020000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "That is cosmetic, so you can ignore it",
+        "created_at": "2024-09-04T05:23:52.095000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "ah ok thanks!",
+        "created_at": "2024-09-04T05:24:09.697000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "just means we don't recognize the field in the yaml config",
+        "created_at": "2024-09-04T05:24:32.116000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "looks like there's still a metadata mismatch between LH and Prysm - lighthouse is expecting 8 bytes (uint64) but missing 7 bytes\n\n```\n[cl-2-lighthouse-geth] Sep 04 00:24:11.416 DEBG RPC Error                               direction: Outgoing, score: 0, peer_id: 16Uiu2HAmQYLCMts8LXgTWfFmv8tp7vCe3juTAJroY2Jiosz9nT3G, client: Unknown, err: Error while decoding ssz: InvalidByteLength { len: 18, expected: 25 }, protocol: metadata, service: libp2p\n```\n\nshould the `custody_subnet_count` field here be `uint64`? \nhttps://github.com/prysmaticlabs/prysm/blob/751a7a00eee00f70bfe1a92147f2aa8162c48f54/proto/prysm/v1alpha1/p2p_messages.pb.go#L359",
+        "created_at": "2024-09-04T05:47:57.085000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "ah yeah never mind,  i see an open PR to update this\nhttps://github.com/prysmaticlabs/prysm/pull/14415",
+        "created_at": "2024-09-04T05:57:10.641000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nishant0",
+        "category": "Testing",
+        "parent": "",
+        "content": "It should be merged in the next few hours once manu is online",
+        "created_at": "2024-09-04T06:12:13.706000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thanks!\n\nSeems better when everybody agrees on the `csc` format.",
+        "created_at": "2024-09-04T08:42:08.184000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "a37f9767538e928a77f2ae5fb0ec512f31ec86f9be43cf8717f7674cd2bf9ac5"
+            }
+        ]
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "wohoo! can you toss your config here and i can pin it? 😄",
+        "created_at": "2024-09-04T08:45:02.468000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "```yaml\nparticipants:\n# Super nodes\n  - cl_type: prysm\n    cl_image: ethpandaops/prysm-beacon-chain:peerDAS-ec35840\n    cl_max_mem: 4096\n    cl_extra_params:\n      - --subscribe-all-subnets\n      - --minimum-peers-per-subnet=1\n  - cl_type: lighthouse\n    cl_image: ethpandaops/lighthouse:unstable-4e675cf\n    cl_extra_params:\n      - --subscribe-all-data-column-subnets\n  - cl_type: teku\n    cl_image: ethpandaops/teku:nashatyrev-das-7725aa9\n    cl_extra_params: \n      - --p2p-subscribe-all-custody-subnets-enabled\n# Full nodes\n  - cl_type: prysm\n    cl_image: ethpandaops/prysm-beacon-chain:peerDAS-ec35840\n    cl_max_mem: 4096\n    cl_extra_params:\n      - --minimum-peers-per-subnet=1\n      - --data-columns-withhold-count=64\n  - cl_type: lighthouse\n    cl_image: ethpandaops/lighthouse:unstable-4e675cf\n  - cl_type: teku\n    cl_image: ethpandaops/teku:nashatyrev-das-7725aa9\nnetwork_params:\n  eip7594_fork_epoch: 0\n  eip7594_fork_version: \"0x50000038\"\nsnooper_enabled: true\nglobal_log_level: debug\nadditional_services:\n  - dora\n  - goomy_blob\n  - prometheus_grafana\ndora_params:\n  image: ethpandaops/dora:peerdas-as-deneb\nethereum_metrics_exporter_enabled: true\n```",
+        "created_at": "2024-09-04T09:35:34.422000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "that should be pushed by the scheduled builder, ill see whats up 😄",
+        "created_at": "2024-09-04T09:44:54.475000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "bazel cache issue for amd64 image, that led to the manifest not being built and then the tag we like not being spat out 😅",
+        "created_at": "2024-09-04T09:47:58.583000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "I've this issue again on any `kurtosis web`\nAny suggestions how to fix it?",
+        "created_at": "2024-09-04T09:49:35.575000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "fd597f717d0b024adc85130133154136d8ea9fbb11c85805c156fd002bf2120b"
+            }
+        ]
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "are you using kurtosis web? like the hosted version?",
+        "created_at": "2024-09-04T09:55:59.650000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "I don't understand you\nI just type `kurtosis web` in terminal on the same machine",
+        "created_at": "2024-09-04T09:57:23.746000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "ah interesting, i didn't even know this existed 😅\nit does say its in beta though, maybe \u003c@733801960360378388\u003e knows whats up?",
+        "created_at": "2024-09-04T09:58:03.009000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "for now, id say just restart the engine and update once?",
+        "created_at": "2024-09-04T09:58:26.073000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "and you can interact with everything via the CLI anyway",
+        "created_at": "2024-09-04T09:58:35.655000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "ahh this thing helps\n```\ndora_params:\n  image: ethpandaops/dora:peerdas-as-deneb\n```\nhave not noticed this change",
+        "created_at": "2024-09-04T09:59:14.158000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "tried everything before",
+        "created_at": "2024-09-04T09:59:48.947000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "ah awesome! yeah i guess dora wasnt able to spin up and the kurtosis webui panicked",
+        "created_at": "2024-09-04T10:00:10.950000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "",
+        "created_at": "2024-09-04T10:00:18.091000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "^ added Manu's message to the pins. Please refer to that for a kurtosis config",
+        "created_at": "2024-09-04T10:00:44.313000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "Testing Teku with Prysm. We are on the same chain, but Dora gone crazy",
+        "created_at": "2024-09-04T10:09:55.828000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "c1faa618a0a2da6263eb23028d25a5be81e7bc38c70ffef340af3a1786252728"
+            }
+        ]
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "ahh votes are 0, hmm",
+        "created_at": "2024-09-04T10:12:31.688000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "but",
+        "created_at": "2024-09-04T10:13:27.573000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "ec771b0c5deb9c3ea1425e9bf848c7412bbf306bdd0d9a948b50d39826f70c82"
+            }
+        ]
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Do you have an image + teku kurtosis config so I can test on my side Prysm\u003c\u003eTeku?",
+        "created_at": "2024-09-04T10:16:07.693000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm not sure whether it's already last at ethpandaops",
+        "created_at": "2024-09-04T10:17:48.995000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@199561711278227457\u003e for information I modified my pinned message with kurtosis config by adding this flag on the Prysm full node:\n```\n- --data-columns-withhold-count=64\n```\n--\u003e When the Prysm full node proposes a block, it actually withhold 64 columns out of 128. It forces super nodes to reconstruct the missing 64 data columns from the 64 one sent by the block proposer, and to broadcast them to the network.\n\nI think this flag was already used in the previous devnet.\n\nIt adds these logs in the Prysm full node:\n```\n[2024-09-04 10:16:57.07]  WARNING rpc/validator: Withholding data column dataColumnIndex=0 root=0x400c1162a5cd820af3c2452d8e7a9f52c9c4d5db1b1c1ab00cbe11009e75ab56 slot=20 subnet=0\n[2024-09-04 10:16:57.07]  WARNING rpc/validator: Withholding data column dataColumnIndex=1 root=0x400c1162a5cd820af3c2452d8e7a9f52c9c4d5db1b1c1ab00cbe11009e75ab56 slot=20 subnet=1\n[2024-09-04 10:16:57.07]  WARNING rpc/validator: Withholding data column dataColumnIndex=2 root=0x400c1162a5cd820af3c2452d8e7a9f52c9c4d5db1b1c1ab00cbe11009e75ab56 slot=20 subnet=2\n[2024-09-04 10:16:57.07]  WARNING rpc/validator: Withholding data column dataColumnIndex=3 root=0x400c1162a5cd820af3c2452d8e7a9f52c9c4d5db1b1c1ab00cbe11009e75ab56 slot=20 subnet=3\n[2024-09-04 10:16:57.07]  WARNING rpc/validator: Withholding data column dataColumnIndex=4 root=0x400c1162a5cd820af3c2452d8e7a9f52c9c4d5db1b1c1ab00cbe11009e75ab56 slot=20 subnet=4\n[2024-09-04 10:16:57.07]  WARNING rpc/validator: Withholding data column dataColumnIndex=5 root=0x400c1162a5cd820af3c2452d8e7a9f52c9c4d5db1b1c1ab00cbe11009e75ab56 slot=20 subnet=5\n[2024-09-04 10:16:57.07]  WARNING rpc/validator: Withholding data column dataColumnIndex=6 root=0x400c1162a5cd820af3c2452d8e7a9f52c9c4d5db1b1c1ab00cbe11009e75ab56 slot=20 subnet=6\n[2024-09-04 10:16:57.07]  WARNING rpc/validator: Withholding data column dataColumnIndex=7 root=0x400c1162a5cd820af3c2452d8e7a9f52c9c4d5db1b1c1ab00cbe11009e75ab56 slot=20 subnet=7\n...\n```",
+        "created_at": "2024-09-04T10:22:20.614000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Let me know. Or I can build the docker image locally as well.",
+        "created_at": "2024-09-04T10:23:56.840000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "sounds good, added to my local config too and im running a test run now",
+        "created_at": "2024-09-04T10:24:34.192000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "is it just the teku main branch?",
+        "created_at": "2024-09-04T10:24:49.285000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "it's old yet",
+        "created_at": "2024-09-04T10:24:52.053000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "https://github.com/Nashatyrev/teku/tree/das",
+        "created_at": "2024-09-04T10:25:07.732000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm triggering a build now 😄",
+        "created_at": "2024-09-04T10:25:15.443000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "it's `ethpandaops/teku:nashatyrev-das` usually",
+        "created_at": "2024-09-04T10:25:27.028000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "I've triggered it manually, https://github.com/ethpandaops/eth-client-docker-image-builder/actions/runs/10699824540",
+        "created_at": "2024-09-04T10:26:50.825000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "and config lines should be \n```\n# super node\n  - el_type: geth\n    cl_type: teku\n    cl_extra_params: [\n        --p2p-subscribe-all-custody-subnets-enabled\n    ]\n    cl_image: ethpandaops/teku:nashatyrev-das\n# normal node    \n  - el_type: geth\n    cl_type: teku\n    cl_image: ethpandaops/teku:nashatyrev-das\n```\nafter build finished",
+        "created_at": "2024-09-04T10:27:24.339000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "why do you call it full node? or is it something other?",
+        "created_at": "2024-09-04T10:27:41.791000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e why do you call it full node? \nhttps://ethereum.org/en/developers/docs/nodes-and-clients/#node-types\n(Full node, archival node, light node)\n\nAnd now, super node",
+        "created_at": "2024-09-04T10:30:18.856000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "new das image published for teku 🙂\nmake sure to pull latest! or use `das-7725aa9` as the tag to pin to a commit",
+        "created_at": "2024-09-04T10:32:50.158000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "i can confirm lighthouse-prysm works on my machine. im gonna add teku to the mix too, but gonna head for lunch real quick",
+        "created_at": "2024-09-04T10:33:08.460000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "but if someone else is around, please try it out",
+        "created_at": "2024-09-04T10:33:18.286000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "note the full teku image is `ethpandaops/teku:das` or `ethpandaops/teku:das-7725aa9`",
+        "created_at": "2024-09-04T10:36:16.163000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "ahhhh archive node, got you ❤️",
+        "created_at": "2024-09-04T10:58:20.545000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "`--data-storage-mode=prune` for teku will do it (if you don't need states, only blocks)\nwe have extension for blobSidecars store epochs with separate flag, but have not added anything for DataColumnSidecars yet, so no option to extend storing period for DataColumnSidecars for Teku",
+        "created_at": "2024-09-04T11:02:15.622000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Seems good!",
+        "created_at": "2024-09-04T11:17:18.844000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "b190903ab5e614d1476f5568a5036164a70ec0a4c39300fc5d12dc289c44080b"
+            }
+        ]
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "(However the `/slots` view of Kurtosis seems to have troubles, it does not update any more. But the main view seems fine.)\n\n`/slots` view:",
+        "created_at": "2024-09-04T11:17:54.107000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "b2e575e7cea0fe823541207816c4ebd9220cb90b1a57afe0c3eeecb816d94c84"
+            }
+        ]
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "hmm, are you sure? i see some forking after epoch 1 :/\nepoch 0 is indeed all perfect",
+        "created_at": "2024-09-04T12:00:36.382000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah I have some issues as well for Prysm+LH+Teku, it starts forking after some time.\nI'm retesting only Prysm+LH, and then will re-introduce Teku to check",
+        "created_at": "2024-09-04T12:02:56.511000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "sounds good 🙂",
+        "created_at": "2024-09-04T12:03:20.474000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah Prysm+LH seems fine even in epoch 2. I'm trying a run with teku again now 😄",
+        "created_at": "2024-09-04T12:22:15.546000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm testing Prysm+LH for 10 epochs",
+        "created_at": "2024-09-04T12:27:19.477000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "hmm, LH+Prysm+Teku seems fine for ~3 epochs now",
+        "created_at": "2024-09-04T12:47:41.746000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Prysm+LH seems fine for 10 epochs.\n\nI'll run Prysm+Teku",
+        "created_at": "2024-09-04T12:52:12.779000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah weirdly its perfectly fine now :/",
+        "created_at": "2024-09-04T12:53:02.843000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "00471622267ae7e66ed4d97511deda48eaaa45f5269fea6bf7ece912f3debd15"
+            }
+        ]
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "its good news, but i still kinda wanna know why it failed last time",
+        "created_at": "2024-09-04T12:53:11.365000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "I also had forks with Prysm+LH+Teku, so for sure there is an issue we need to fix.",
+        "created_at": "2024-09-04T12:54:31.503000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Teku + Prysm. Working on the issue.",
+        "created_at": "2024-09-04T13:18:05.722000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "2a7839ddd1ab99580d36b53360290de7904990bf74b4415d455ff452d9c7dd20"
+            }
+        ]
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Not sure it is related, but I see these logs in Teku:\n```\n2024-09-04 13:14:03.719 DEBUG - Failed to fetch blob sidecar by identifier BlobIdentifier{block_root=0x8b89812dfff272487ba651ac80bb70e2803df1353caf85262502ea179bdaf0b7, index=0} from peer 16Uiu2HAm71pVhxLE5ZX5jVqC8Md8kTRiNa8u5rTiiYiTZggmHaCv\njava.util.concurrent.CompletionException: io.libp2p.core.NoSuchRemoteProtocolException: ProtocolNegotiationFailed: ProtocolNegotiationFailed(attempted=[/eth2/beacon_chain/req/blob_sidecars_by_root/1/ssz_snappy])\n```\n\n==\u003e Why would Teku use `blob_sidecars_by_root` instead of `data_columns_sidecars_by_root`? cc \u003c@425907307621122049\u003e",
+        "created_at": "2024-09-04T13:48:30.767000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Also (related, or maybe not), it seems that each time Teku has to propose a block at slot 1, this block is missed, or orphaned even by the same beacon node.\n\n**Missed example:**",
+        "created_at": "2024-09-04T14:19:09.470000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "d72ab7bf31439c172ddb53850d89a44632b3640cfdb0d6d0e4cc91a43898ce68"
+            }
+        ]
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "**Orphaned example:**",
+        "created_at": "2024-09-04T14:19:29.964000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "24bf0dfc8e39f3b9aeaef9ace6f1bfa830f63837b0a6e19a08e24e3b115b1fa0"
+            }
+        ]
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "How'd you reproduce it? I have a run going on now that seems fine :/",
+        "created_at": "2024-09-04T14:25:57.135000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "For slot 1 issue, I just restarted the devnet until teku had to propose at slot 1 and slot 2.\n\nFor the \"main issue\", I did nothing special, it eventually happened.\nHowever, when I wanted to retrieve Teku logs, my docker died. (The `docker`  command does not respond any more and I have to restart the docker engine.)\n\nIt's not actually the first time it happens when running Teku in Kurtosis, but I did not paid attention in the past.\nWondering how (and if) it can be related to our issue.",
+        "created_at": "2024-09-04T14:31:52.874000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "interesting...You even have a memory limit set, so that really shouldn't happen",
+        "created_at": "2024-09-04T15:24:27.147000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "next time it happens, can you do a kurtosis enclave dump for me? maybe there's some hints in there",
+        "created_at": "2024-09-04T15:25:31.209000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "but I'm not sure if it would work if your docker socket is locked up :/",
+        "created_at": "2024-09-04T15:25:46.527000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Im gonna run a full network on my system now, will upload my enclave if i find the bug too",
+        "created_at": "2024-09-04T15:39:23.834000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "The network was fine till ~epoch 8 and then broke. I did an enclave dump, maybe its useful to you guys 😄\ncc \u003c@425907307621122049\u003e \nlogs: https://drive.google.com/file/d/10Pc5PxS20BagiVNDyUu2JZIF6DD0S-_m/view?usp=sharing",
+        "created_at": "2024-09-04T18:16:39.853000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "interesting, will check it",
+        "created_at": "2024-09-04T18:45:28.349000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "yeah we often miss 1st block, from my guess it's a core issue in our services startup routine, difficult to fix",
+        "created_at": "2024-09-04T18:46:47.929000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "btw thinking on mentioned log issues: we have huge size of DEBUG logging, and even more for TRACE, I guess more than any other client.I think it could lead to log handlers stuck. I usually run INFO only, and there are no issues with it",
+        "created_at": "2024-09-04T18:53:20.969000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "it will be difficult to decrease volume in DEBUG mode because it's mostly not connected with PeerDAS, it's everywhere",
+        "created_at": "2024-09-04T19:15:34.165000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dmitriishmatko",
+        "category": "Testing",
+        "parent": "",
+        "content": "I recommend to run in INFO when possible",
+        "created_at": "2024-09-04T19:15:49.707000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "okay sure, i can drop down for info in the future 😄",
+        "created_at": "2024-09-04T19:58:40.265000+00:00",
+        "attachments": null
+    }
+]

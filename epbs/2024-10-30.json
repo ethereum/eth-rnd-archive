@@ -1,0 +1,174 @@
+[
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Only a builder needs to count them. Could this be separate logic that does not require importing them?",
+        "created_at": "2024-10-30T10:24:56.822000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I am not entirely sure I understand the problem though",
+        "created_at": "2024-10-30T10:25:05.965000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So for Builders the cache will indeed be different as they need to count single-bit attestations. My problem is with not being able to determine head immediately after importing the payload. In vanilla 7732, when we import the payload timely, it becomes immediately head and I can cache it and be done with it if the EL returns that it's valid. With this new PR, I have to import it and I cannot call the payload head until later when I actually need to act on head and can do the computation.",
+        "created_at": "2024-10-30T11:54:13.853000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Still, I'll know more in a couple of weeks, I'm implementing currently a stripped down version of your forkchoice to get a feeling on where the technical problems will arise, I should be done in the next couple of days.",
+        "created_at": "2024-10-30T11:54:54.952000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@520034910149410861\u003e I also have a more technical question for you to consider when you get time. It's about justification. The target checkpoint is just a root. Because of the blockroot vote, except when the vote is on slot 0, we can infer if the vote is for full or empty in the target checkpoint. I am completely disregarding this and counting both votes for full or empty as justifying the same checkpoint (as a pair Epoch, Root, both full or empty have the same checkpoint). Therefore when choosing head, I need to consider descendants from both full or empty justified checkpoints. This has both advantages and dissadvantages in implementation. An alternative would be to keep a justified node in forkchoice and state that keeps track of the payload presence. This is a much more invasive change. I wonder your thoughts on the safety of the  above design of considering both justified empty and full to gather descendants for head.",
+        "created_at": "2024-10-30T13:16:42.175000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'm accumulating pain points here, this applies to both forkchoices: we lose the invariant that the weight of a node is the sum of the attested stake for that node directly plus the sum of the weights of it's children. This is an invasive change to prysm cause we rely heavily on it",
+        "created_at": "2024-10-30T14:13:25.719000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Ok so it's probably not so bad, when I process an attestation, no matter for which slot this attestation is, I count it for both the empty and full node of that root, and then it will be counted twice on all ancestors.",
+        "created_at": "2024-10-30T14:38:51.201000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Before trying to get into these questions, I am spending some time looking at the the spec. One thing I don't understand is one can even vote for full vs empty if a bool isn't added to regular attestations. Say at slot N beacon block B is proposed but its payload P is missing, and at slot N+1 there's no block at all. We would want attesters to vote for \"B empty\", but how do they do that? As far as I understand from the spec, you could only vote for B, which doesn't help \"B empty\" win against \"B full\".",
+        "created_at": "2024-10-30T16:28:32.955000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "```\n# an attestation for a given root always counts for that root regardless if full or empty\n# as long as the attestation happened after the requested slot. \n```\nBy doing this in the scenario above, we would up not differentiating at all between B empty and B full no? Whereas I think we would want the attestations of slot N+1 to make this decision final, even if there's no block in slot N+1.",
+        "created_at": "2024-10-30T16:46:20.808000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "What about having a `payload_present: bool` in attestations, and having a three-valued `payload_status` flag instead of the two-valued `is_payload_present` that's currently in fork-choice nodes, where `payload_status` is either `PAYLOAD_COMMITTED`, `PAYLOAD_PRESENT`, `PAYLOAD_MISSING`. For a beacon block with root `r` and slot `s`:\n1.  `Node(r, s, PAYLOAD_COMMITTED)`  receives the attestation weight from `(r, slot, payload_present)` votes where `slot=s`, i.e., just the attestations from the *proposal slot* (we can just say that here `payload_present` is always set to `False`)\n2. `Node(r, s, PAYLOAD_MISSING)` receives the attestation weight from `(r, slot, payload_present=False)` votes where `slot \u003e s`\n3. `Node(r, s, PAYLOAD_PRESENT)` receives the attestation weight from `(r, slot, payload_present=False)` votes where `slot \u003e s`\n\nAnd `Node(r, s, PAYLOAD_COMMITTED)`  is a parent of both `Node(r, s, PAYLOAD_MISSING)` and `Node(r, s, PAYLOAD_PRESENT)`, so its weight is the sum of its own attestations (the ones from the proposal slot, which don't say anything about the payload) plus their weights",
+        "created_at": "2024-10-30T17:01:52.951000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Essentially this",
+        "created_at": "2024-10-30T17:02:37.935000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "ftYECBAgQIAAAQIECBAgQIAAAQIECBAgQIAAAQIECBAgQIAAAQIECBAgQIAAAQIECIQCgugQ3zUBAgQIECBAgAABAgQIECBAgAABAgQIECBAgAABAgQIECBAgAABAgQIECBAgAABApAIPrzsyZAgAABAgQIECBAgAABAgQIECBAgAABAgQIECBAgAABAgQIECBAgAABAgQIECBAIBQQRIf4rgkQIECAAAECBAgQIECAAAECBAgQIECAAAECBAgQIECAAAECBAgQIECAAAECBAgQAQE0ZfNQECBAgQIECAAAECBAgQIECAAAECBAgQIECAAAECBAgQIECAAAECBAgQIECAAAECocAA2uZacyjmyXUAAAAASUVORK5CYII.png",
+                "content": "899aea218ca6f71b7d4cc456c065663b2a6d567d59402b05828ce2497c9453bf"
+            }
+        ]
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Or alternatively we could still have a `payload_present: bool` in attestations, but just have the same Nodes with a two-valued `is_payload_present` , and do the double counting thing you mentioned, *but only for attestations from the proposal slot*. Meaning:\n1. `Node(r, s, is_payload_present=False)` gets the attestation weight from `(r, slot, payload_present=False)` votes where `slot \u003e= s`\n2.  `Node(r, s, is_payload_present=True)` gets the attestation weight from `(r, slot, payload_present=True)` votes where `slot \u003e s` *and from `(r, slot, payload_present=False)` where `slot = s`*",
+        "created_at": "2024-10-30T17:06:40.227000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Like this",
+        "created_at": "2024-10-30T17:08:07.667000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "OmMAAAAASUVORK5CYII.png",
+                "content": "67846bd91fad7e2e53aeb557ddbdd20a70f54fb241e66426899bdab9af82bc16"
+            }
+        ]
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "In either case, the difference from the current spec (afaict) is that, in my initial example, the votes from slot N+1 would *not* go both to B empty and B full, but only to one of the two",
+        "created_at": "2024-10-30T17:09:05.027000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes this is the point of my above comments. There's a trade-off here and changing the attestation type is an EIP killer, that's why I want the compromise of always vote for both",
+        "created_at": "2024-10-30T17:37:45.497000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Changing the attestation type makes the accounting more rigorous but it's a brutal change as Electra already showed",
+        "created_at": "2024-10-30T17:39:47.440000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I thought it was supposed to be easier to do another change now, after the work to do this one",
+        "created_at": "2024-10-30T17:40:20.690000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Not really",
+        "created_at": "2024-10-30T17:40:35.406000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'd like to analyze the trade-off space here. I think it doesn't weaken the Payload",
+        "created_at": "2024-10-30T17:41:55.821000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Not sure if you're interested in implementation details but the way I'm doing this in prysm is to have nodes  share a big chunk (root, hash, parent, etc) and then the wrapper has full/empty, children, etc\n\nThe above accounting becomes simpler cause the inner node has the balance (the stake that attested for that root) and the outer wrapper has the weight (the stake that attested for descendants) this makes the design clean",
+        "created_at": "2024-10-30T17:57:20.475000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,138 @@
+[
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "i was thinking that the other day, the 2 values would improve compatibility, if make a little messy... the waters would be muddied if it was re-named and the value changed, but i think if something like that happened we'd change the old constant value, and create a new name with the new value as well...\nI'm currently thinking its ok for teku given its defaulting so i'll probably just rename it and hope the support load isn't too large.",
+        "created_at": "2025-01-20T01:32:05.470000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "general",
+        "parent": "",
+        "content": "Looking at the spec, in phase0 on the voluntary_exit topic it states ([ref](https://github.com/ethereum/consensus-specs/blob/b1c70a96883feddb194eba4f3a033a8b53f0d082/specs/phase0/p2p-interface.md?plain=1#L434))\n\u003e [REJECT] All of the conditions within `process_voluntary_exit` pass validation.\n\nBut we have modified process_voluntary_exit in electra to also check that validator has 0 pending balance to withdraw ([ref](https://github.com/ethereum/consensus-specs/blob/b1c70a96883feddb194eba4f3a033a8b53f0d082/specs/electra/beacon-chain.md?plain=1#L1497C5-L1497C115))\n\u003e assert get_pending_balance_to_withdraw(state, voluntary_exit.validator_index) == 0  # [New in Electra:EIP7251]\n\nIs anyone checking this on the gossip topic, I am guesing not as it is a transient condition and should probably only be enforced in state transition and block construction.",
+        "created_at": "2025-01-20T09:51:08.860000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "i don't have a strong opinion on that, but the new Electra condition is similar to the old ones (except potentially sig verification) as like the others it depends on the state over which it is executed. From this perspective it should be a part of gossip validation. However, the new one doesn't seem to be that critical for gossip",
+        "created_at": "2025-01-20T10:04:30.919000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "general",
+        "parent": "",
+        "content": "you're probably right, seems simpler to just apply this on gossip as well, only downside could be minor ux impact, ie. similar to now that you have to wait for your validator to be active before you can submit the exit",
+        "created_at": "2025-01-20T10:37:55.527000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "serenita_io",
+        "category": "general",
+        "parent": "",
+        "content": "Hey all, I’m working on a validator client (https://github.com/serenita-org/vero) and wanted to ask about the expected behavior for validator clients during the upcoming Pectra upgrade, specifically about the new endpoint for submitting attestations (`POST /eth/v2/beacon/pool/attestations`).\n\nThe API schema allows for both `Attestation` and `SingleAttestation` objects to be submitted. Based on some Kurtosis experiments with the pinned `devnet-5` interop client versions, it seems to me there is an implicit expectation of submitting `Attestation` objects pre-Electra and `SingleAttestation` objects post-Electra.\n\n-\u003e Is that indeed the expected behavior for validator clients?\n\n-\u003e Are CL clients expected to accept `Attestation` objects on the v2 endpoint pre-Electra?\n\nThank you!",
+        "created_at": "2025-01-20T18:00:14.168000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "general",
+        "parent": "",
+        "content": "Hey Luca, the `Attestation` defined in the schema is `phase0.Attestation` from the CL spec and `SingleAttestation` is `electra.SingleAttestation` from CL spec. So pre-electra you wanna still submit phase0 attestations and then after the fork you would submit single attestations. Might be a bit confusing because the name of the type changed but it works the same `publishBlockV2` for blocks.",
+        "created_at": "2025-01-20T18:07:54.908000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "serenita_io",
+        "category": "general",
+        "parent": "",
+        "content": "Perfect, thanks Nico! And can I submit both objects to the new v2 endpoint (stop using the v1 endpoint before Electra)?\n\nAll clients except Lighthouse seem to support this",
+        "created_at": "2025-01-20T18:11:10.721000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "general",
+        "parent": "",
+        "content": "That was the idea so we can remove the v1 endpoints eventually without breaking earlier forks",
+        "created_at": "2025-01-20T18:12:23.508000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "general",
+        "parent": "",
+        "content": "But what we do in Lodestar is that we only start using the v2 apis after the electra fork (based on clock slot) as otherwise you don't really know if the beacon node already supports v2 endpoints. I guess another strategy would be to try v2 even pre-electra and if you receive a 404 you could fall back to v1.",
+        "created_at": "2025-01-20T18:14:06.856000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "serenita_io",
+        "category": "general",
+        "parent": "",
+        "content": "I could definitely take the same approach *but* assuming you have updated  your CL to be Pectra-ready, wouldn't it be better for the VC to find out early that the v2 endpoint isn't supported and start throwing errors (in a Pectra release of the validator client)?\n\nBasically the update would look like this:\n1) update your CL client to be Pectra-ready (adding support for the v2 endpoint)\n2) update your VC to be Pectra-ready, only using the v2 endpoint",
+        "created_at": "2025-01-20T18:20:38.736000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e wouldn't it be better for the VC to find out early that the v2 endpoint isn't supported and start throwing errors\nI hope this would be something we already find out on a devnet, maybe it's time to test mixed client setups for this\n\nThe problem really is that you don't really know if a user updates their vc and bn at the same time and it gets more complicated if they run mixed client setups.",
+        "created_at": "2025-01-20T18:29:15.392000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "serenita_io",
+        "category": "general",
+        "parent": "",
+        "content": "Makes sense, mixed client testing would be good for sure.\n\nI think I'll use your approach (v1 pre-Electra, v2 post-Electra) and check the connected CL's Electra readiness some other way (e.g. checking the `ELECTRA_FORK_EPOCH` in the spec endpoint).",
+        "created_at": "2025-01-20T18:56:29.363000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "to me, gossip is a lot less important, becasue regardless of gossip being ok, we're going to get into spots building where theres pending xx and we're building a block, and that validator also has a voluntary exit in the queue. so the only real validation time is building, we need to make sure it has no pending deposits or withdrawals, and if the exit we put in the block has pending xx, we build an invalid block if we fail to check. It'd be fine to just keep that exit in our queue and check again next time imo.",
+        "created_at": "2025-01-20T20:38:34.571000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "so really, i guess test cases for pending deposits and putting exit in a block, and pending withdrawals and putting exit in a block, where both should fail.",
+        "created_at": "2025-01-20T20:39:17.911000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e so really, i guess test cases for pending deposits and putting exit in a block, and pending withdrawals and putting exit in a block, where both should fail.\nI think the first case shouldnt fail. `process_voluntary_exit` only checks for `state.pending_partial_withdrawals` and not `state.pending_partial_withdrawals`. I think in current spec, if a validator has pending deposit in the state, and exit in the block, exit will be processed at the slot, and during the end of epoch, the deposit will be postponed ([ref](https://github.com/ethereum/consensus-specs/blob/b1c70a96883feddb194eba4f3a033a8b53f0d082/specs/electra/beacon-chain.md?plain=1#L935)) until it is fully withdrawn, then deposit will be processed and the validator's balance witll be credited",
+        "created_at": "2025-01-20T23:01:41.987000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "general",
+        "parent": "",
+        "content": "Second case should fail because we want to prevent double withdrawal",
+        "created_at": "2025-01-20T23:04:23.264000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "Yeh I think I’ll have to add pending deposits to the spec, will raise in a bit. Otherwise we may end up with non zero exited withdrawn validators in some weird case… I think both need tests in ref ( if deposits accepted as a change )",
+        "created_at": "2025-01-20T23:20:36.144000+00:00",
+        "attachments": null
+    }
+]

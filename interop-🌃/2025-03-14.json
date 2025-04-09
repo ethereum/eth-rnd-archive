@@ -1,0 +1,332 @@
+[
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "Maybe someone has a dump of more blocks than the canonical chain during Holesky non-finality? The chain was forking a lot so it would be useful to reproduce that forking.",
+        "created_at": "2025-03-14T10:27:35.091000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Testing",
+        "parent": "",
+        "content": "this was the nimbus fork choice back then. it got stuck because geth replies with SYNCING on newPayload and only returns INVALID on forkchoiceUpdated, so nimbus is forced by spec to import the bad block into fork choice (advancing the justified cp optimistically), and restarting nimbus ends up with same result (SYNCING on newPayload --\u003e import in fork choice) even though by then geth should know from cache that the block is invalid.",
+        "created_at": "2025-03-14T11:50:12.869000+00:00",
+        "attachments": [
+            {
+                "type": "application/zip",
+                "origin_name": "fork_choice.json.zip",
+                "content": "30c01bbcf9355a6591b1e5b8b630969e4c2a4fbc7ffc0a63e625bc02443b3913"
+            }
+        ]
+    },
+    {
+        "author": "etan_status",
+        "category": "Testing",
+        "parent": "",
+        "content": "```zsh\n% cat /Users/etan/Downloads/fork_choice.json | jq -r '.fork_choice_nodes[] | select(.validity==\"INVALID\") | .block_root' | xargs -I {} ../build/ncli_db --db=/Users/etan/.Trash/nimbus\\ 21.43.29/data/holesky/db dumpBlock {}   \nCouldn't load 0x903b00e1e37c947defb752c6722f9266bad793e3d21faad7662767509eed5005\nCouldn't load 0x47a7bf7b9a25ae7ae16ff72405fc0b3be38aef62c9f7c49bc82a394dbcccd5bd\nCouldn't load 0xcfd768dfd31f35993ac8add8c13ecff8214c5b9f4e09ebe81b81a907b79894bd\n```\nAll the others I still found in my trash 🙂 auto-delete after 30 days, you got lucky",
+        "created_at": "2025-03-14T12:33:24.199000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "806551e931e60533639b850f7b000cf95071d638b63467f2613eb5c4c6e2cfc5"
+            }
+        ]
+    },
+    {
+        "author": "etan_status",
+        "category": "Testing",
+        "parent": "",
+        "content": "these are all the INVALID minus the three that were not found",
+        "created_at": "2025-03-14T12:35:14.773000+00:00",
+        "attachments": [
+            {
+                "type": "application/zip",
+                "origin_name": "holesky-dump.zip",
+                "content": "edc1d744098e682596bbd7be13b0bb2a80d7ccb9ffefb563b93012e9b62127bc"
+            }
+        ]
+    },
+    {
+        "author": "etan_status",
+        "category": "Testing",
+        "parent": "",
+        "content": "I can send my entire DB if that's needed. it was not set up to dump block maybe \u003c@449019668296892420\u003e has a setup that dumped all the branches.\nNimbus never blocklisted roots (and with nethermind it was sufficient to just restart nimbus to reset forkchoice after syncing the invalid branch / neth replies INVALID on newPayload from cache, preventing repeatedly getting stuck)",
+        "created_at": "2025-03-14T12:36:52.599000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Testing",
+        "parent": "",
+        "content": "so, just dumping the blocks for the entire fork choice, is enough, I guess",
+        "created_at": "2025-03-14T12:38:31.336000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Testing",
+        "parent": "",
+        "content": "states can be recomputed by starting from the last dencun state",
+        "created_at": "2025-03-14T12:38:51.922000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thanks \u003c@881905303011086387\u003e, \u003c@84562395988508672\u003e already provided us with blocks and hopefully I'll get some states. I'll come back here next week with a proposal for slashers.",
+        "created_at": "2025-03-14T12:51:04.593000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Testing",
+        "parent": "",
+        "content": "what's special about this incident is that the very first invalid also bumped the justification. it's tricky, because this highlights the optimistic sync issues when `engine_newPayload` replies SYNCING even if a prior `engine_forkchoiceUpdated` for a descendant already replied INVALID. \n\n- if it needed multiple invalid blocks to justify, one could just restart CL to fix it, and then hopefully newPayload + fcU would properly detect INVALID before a second invalid block reaches forkchoice.\n- But because it's the very first invalid block that also fake-justifies its branch, the restart CL trick only works on EL that reply INVALID for `engine_newPayload`, preventing the block to be imported into fork choice on subsequent runs. on EL that reply SYNCING for `engine_newPayload`, CL is forced to import into fork choice and then `engine_forkchoiceUpdated` and it's too late to reply INVALID in case of invalid justification / finalization.",
+        "created_at": "2025-03-14T12:58:54.777000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Testing",
+        "parent": "",
+        "content": "and, if there's still stuff in my fork choice that is not covered by his blocks, lmk and I can export them. there are tens of thousands of blocks, exporting them all is slow, but I can provide cherry-picked ones on demand 🙂",
+        "created_at": "2025-03-14T13:15:47.543000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Testing",
+        "parent": "",
+        "content": "`cat fork_choice.json | jq -r '.fork_choice_nodes[] | .block_root'`\nthis one lists all the block roots regardless of validity",
+        "created_at": "2025-03-14T13:16:16.750000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "If I understand correctly \u003c@84562395988508672\u003e has all the blocks? If yes, then \u003c@84562395988508672\u003e please ping me when you available.",
+        "created_at": "2025-03-14T13:50:23.646000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "here's an idea: we shut down ~50% of validators for the last 3 days of every quarter on hooli . feels like handling 3 days of nonfinality should be a reasonable thing for any client to handle, ie they should be able to sync, not blow up memory-wise etc",
+        "created_at": "2025-03-14T14:28:10.663000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "I had an idea to make it longer, something like a week at least.",
+        "created_at": "2025-03-14T14:29:20.196000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think the quarterly shutdown of Ephemery is a better place to exercise non-finality.  Failure is an option there.",
+        "created_at": "2025-03-14T14:29:21.965000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "not enough pressure on client devs 😛",
+        "created_at": "2025-03-14T14:30:12.713000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "Sepolia is where the people who just want a stable chain to run EVMs go",
+        "created_at": "2025-03-14T14:30:27.842000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm thinking of downstream teams like staking providers with this recommendation",
+        "created_at": "2025-03-14T14:30:37.824000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "they _especially_ need to be prepared for non-finality",
+        "created_at": "2025-03-14T14:31:02.204000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "there is big difference between just non-finality because \u003e1/3 is down and chain split. We should also test chain split.",
+        "created_at": "2025-03-14T14:32:10.530000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Testing",
+        "parent": "",
+        "content": "one tends to lead to the other - I think once we \"pass\" a few days of non-finality, we can turn up the heat like this - it's .. hard:ish to make an artificial split if everything \"just works\" unless you have special tooling for half those validators (ie include a block on a bad-list",
+        "created_at": "2025-03-14T14:33:41.002000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "pandas will control 1/3 so they can coordinate a fake split with some intentionally broken EL. I think it's not that hard to makeup such thing.",
+        "created_at": "2025-03-14T14:35:19.497000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "I don't think we can reliably simulate a split we had in Holesky, but at least a few days long minority chain that will be dropped later is a good test.",
+        "created_at": "2025-03-14T14:36:22.507000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sauliusgrigaitis",
+        "category": "Testing",
+        "parent": "",
+        "content": "but I think we just need to start the testing process with regular long non-finality on the testnet. And then proceed further.",
+        "created_at": "2025-03-14T14:38:11.475000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "radekkapka",
+        "category": "Testing",
+        "parent": "",
+        "content": "Do we intend to keep Holesky as a core-dev-only testnet? If yes, then maybe we should exercise such issues there first",
+        "created_at": "2025-03-14T16:59:41.261000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think holesky is a great candidate for it, however it does have two problems:\n- with 1M validators exiting, it would only be left with ~700k validators\n- exits can't be tested\n- validator set is more distributed, so its harder to co-ordinate fixes or chaos\n\nthese could lead to interesting scenarios themselves, i would ofc give the community some time to settle into hoodi before wrecking chaos on holesky or we spin up a new network once we deprecate holesky.",
+        "created_at": "2025-03-14T17:01:48.261000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Testing",
+        "parent": "",
+        "content": "There should be some serious consideration as to how long you want holesky to keep going. We're planning to move to hoodi as soon as it's feasible, and although we can keep a server running with our remaining validators we would rather not. I'm sure that many others are going to just abandon their holesky setups for hoodi, so it's entirely possible that it will end up not finalising again.\n\nI suggest that ethpandaops offer a key takeover for people leaving holesky, to try to avoid this.",
+        "created_at": "2025-03-14T17:28:24.110000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah i think we're a bit underwater now, quite a bit happening at once 😅 \n\nIf someone really wants to get rid of their holesky keys, please do let us know beforehand. We would prefer it if you ran them for a bit longer at least until its clear how/what holesky could/couldn't be and we announce to people what we intend to do with. While we can run the keys short term, i highly doubt our budget would allow us to run all of holesky throughout the year without us setting nodes up in a way that makes it useless for collecting data. \n\nMaybe step 1. is, if you plan on abandoning your holeksy validators for hoodi ones, get in touch. We can make a plan from there onwards.",
+        "created_at": "2025-03-14T17:34:12.333000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "a thing I would like to stress about holesky being mantained is that running and supporting testnets is expensive. not so much finance-wise but it hinders developments and hard forks rollup, other than adding complexity and cognitive load. we should not keep more than 2 testnets. If we need a testnet for gas limit, likely we should use sepolia.",
+        "created_at": "2025-03-14T17:54:41.689000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "siladu",
+        "category": "Testing",
+        "parent": "",
+        "content": "Agree. Also finance-wise, holesky already required higher powered machines to handle larger validator set, and current network conditions have increased requirements further.",
+        "created_at": "2025-03-14T20:10:12.002000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "financials are fine. I think we paid very little for our holesky machines, I just do not want the cognitive load of 3 testnets, ideally only 2",
+        "created_at": "2025-03-14T20:11:39.177000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "regardless, holesky has really no use for anything",
+        "created_at": "2025-03-14T20:11:51.762000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "siladu",
+        "category": "Testing",
+        "parent": "",
+        "content": "Agree dev time is much bigger impact",
+        "created_at": "2025-03-14T20:12:12.820000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "+ imagine rolling out an hard fork on 3 testnets. it is gonna be 3 weeks more of rollup AT LEAST",
+        "created_at": "2025-03-14T20:12:46.806000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "siladu",
+        "category": "Testing",
+        "parent": "",
+        "content": "With two testnets, there will always be migration periods when we setup the third. I thought that’s essentially our situation now with hoodi, assuming holesky would be deprecated.",
+        "created_at": "2025-03-14T20:14:06.805000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "siladu",
+        "category": "Testing",
+        "parent": "",
+        "content": "But if we want a third “core devs can break” testnet then agree it’s a significant burden",
+        "created_at": "2025-03-14T20:14:31.201000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "why not devnets? it seems to me that it is what devnets are for",
+        "created_at": "2025-03-14T20:14:52.112000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "siladu",
+        "category": "Testing",
+        "parent": "",
+        "content": "I was wondering if it’s feasible core dev teams could only run keys on sepolia and the unstable one and staking providers etc only run on the stable one.",
+        "created_at": "2025-03-14T20:15:50.905000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "siladu",
+        "category": "Testing",
+        "parent": "",
+        "content": "Maybe unstable ones are more like longer run devnets - the main difference is which team runs the nodes",
+        "created_at": "2025-03-14T20:16:44.328000+00:00",
+        "attachments": null
+    }
+]

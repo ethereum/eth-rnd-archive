@@ -1,0 +1,162 @@
+[
+    {
+        "author": "chfast",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@341574016160497665\u003e \u003c@758579010027782144\u003e \u003c@892053833121923094\u003e \u003c@689161464829050960\u003e \u003c@1126229231572094976\u003e \n\nHi there, I'm late to the party, but I spent the last night debugging 7623. I think EELS implemented it incorrectly and EEST followed with incorrect tests.\n\nI believe the `evm_gas_used` from the spec should include the gas refund (i.e. `evm_gas_used` should have the refund subtracted from). Otherwise the total tx gas used don't adds up. So the \"floor\" gas correction should be applied after gas refunds. However, EELS implements it _before_ and EEST has dedicated tests for this behavior. I plan to send an update to the EIP to clarify this.\n\nBut for you to quickly verify this claim is to move the \"floor\" gas application _before_ the gas refund. You should pass much more tests this way.",
+        "created_at": "2025-01-09T06:54:31.083000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "siladu",
+        "category": "Testing",
+        "parent": "",
+        "content": "cc \u003c@508125616940515329\u003e",
+        "created_at": "2025-01-09T06:59:39.619000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "siladu",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm not following how the refund comes into it. \n\nIn EELS \"evm_gas_used\" appears to be `access_list_cost + auth_cost` as part of `calculate_instrinsic_cost()`\n\nThere's something weird about the tests though because if I completely remove the floor cost, I pass more of them.",
+        "created_at": "2025-01-09T09:01:02.808000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Testing",
+        "parent": "",
+        "content": "You either do (EEST):\n\n```python\ngas_used = max(gas_used, floor_cost)\ngas_used -= refund\n```\n\nor (spec):\n\n```python\ngas_used -= refund\ngas_used = max(gas_used, floor_cost)\n```",
+        "created_at": "2025-01-09T09:08:04.162000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Testing",
+        "parent": "",
+        "content": "https://github.com/ethereum/EIPs/pull/9227",
+        "created_at": "2025-01-09T09:35:31.172000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Interesting, EthJS implementation matches EEST. Will re-check",
+        "created_at": "2025-01-09T12:17:57.393000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "The latter definitely looks more logical and correct 🙂",
+        "created_at": "2025-01-09T12:20:22.765000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Testing",
+        "parent": "",
+        "content": "Good to know it's not only me 🙂",
+        "created_at": "2025-01-09T12:22:29.097000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think some confusion might come because of the somewhat \"newly\" introduced term execution gas used / evm gas used. This was also introduced (?) with 7702 on the refunds, where the discussion was if authority items were part of the 'execution gas' or not.",
+        "created_at": "2025-01-09T12:24:14.839000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Interesting to see how this got triggered on Besu also but when investigating 2537 tests 🙂 (Which was one of the many failing tests, but the initial focus points) - How sometimes the tests can be \"deceptive\" and it is instead another EIP which (might) be wrong 🙂",
+        "created_at": "2025-01-09T12:25:29.163000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ok we definitely apply refunds after checking the floor costs",
+        "created_at": "2025-01-09T12:28:53.355000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "I have to think a little bit more over if I think the change is correct though (initially thought this was indeed logical). Have to think a little bit more 🙂",
+        "created_at": "2025-01-09T12:31:11.662000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Does someone have a quick pointer to what refunds we still apply? There are not a lot. I think it's only SSTORE nonzero -\u003e zero right?",
+        "created_at": "2025-01-09T12:32:16.843000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "SSTORE and auth (7702) refunds on authorizing existing accounts are the only existing refunds (I could find) in Prague",
+        "created_at": "2025-01-09T12:52:53.477000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Testing",
+        "parent": "",
+        "content": "EIP-7623 affects the transaction gas cost in a lot of tests because a lot of tests use small transactions with data.",
+        "created_at": "2025-01-09T12:53:46.840000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm not super sure now when thinking about applying the refunds. Here is a situation:\n\nSimple tx which calls into a contract which sets a nonzero storage slot to zero: PUSH 0 PUSH 0 SSTORE. This yields a net gas of 13003 for me.\n\nIf we instead do the new rule (apply refunds before calculating the floor), this now means that I pay 21k gas. (there is no calldata, but we still apply this new floor rule).\n\nThis looks weird to me?",
+        "created_at": "2025-01-09T13:11:12.962000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm not sure what you mean. The \"apply the new floor rule\" works in other direction and in this case it has no effect (you still pays 13003).",
+        "created_at": "2025-01-09T17:23:38.669000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "🤦‍♂️ woops, my mistake, I applied the formula wrong. Disregard my comment",
+        "created_at": "2025-01-09T17:57:22.104000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "Ok I am now convinced that the \"new\" formula is correct (take max after applying the refund). Will update the EthJS branch on this as well",
+        "created_at": "2025-01-09T18:15:50.032000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "I left my thoughts here: https://github.com/ethereum/EIPs/pull/9227#pullrequestreview-2540856576 for completeness 😄",
+        "created_at": "2025-01-09T20:23:21.706000+00:00",
+        "attachments": null
+    }
+]

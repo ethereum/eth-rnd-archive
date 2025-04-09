@@ -1,0 +1,106 @@
+[
+    {
+        "author": "cperezz.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Hmmm. I understood there are more performant/parallelizable algorithms to use. Addition chains weren't always faster per se.\n\nI should revisit this then. \nThanks Mamy!",
+        "created_at": "2025-03-13T05:42:49.555000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Are the Jacobian coordinates better than \"projective\"?",
+        "created_at": "2025-03-13T09:56:17.149000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "cperezz.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Better as in speed?",
+        "created_at": "2025-03-13T09:56:29.965000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes",
+        "created_at": "2025-03-13T09:59:09.374000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "cperezz.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "What curve are we talking about? Generic one? Does it have birrational equivalences to any other curve? \n\nOr just generically? I say because not all curves can use all coordinate systems. Depends on the type of curve they are. \nie. For curve25519, Extended Twisted edwards coordinates yield the fastest formulas. The problem is that only Twisted Edwards curves have access to use those.",
+        "created_at": "2025-03-13T10:22:04.702000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "For now what we have in precompiles: BN254, BLS, secp256k1, secp256r1. We have basic implementation with projective coordinates (X,Y,Z) but looks everyone else uses Jacobian. We will likely switch to Jacobian and compare performance, but I'm not 100% our formulas for projective are optimal so I'm not sure the comparison will be fair.",
+        "created_at": "2025-03-13T10:28:05.959000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "are you using the complete formulas?  those are not optimal",
+        "created_at": "2025-03-13T10:53:43.338000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm using this one, except there is a variant of it reduced by a=0 (although I cannot find it in this db): https://www.hyperelliptic.org/EFD/g1p/auto-shortw-projective.html#addition-add-2015-rcb",
+        "created_at": "2025-03-13T10:57:26.188000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "cperezz.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Jacobian will be the fastest for all except secp256r1 maybe.\n\nModified Jacobian for `r1`: This is a variant of Jacobian coordinates that introduces a fourth coordinate (often noted $Z^2$ or $Z^4$ precomputed) to save a couple of multiplications in point doubling. It’s particularly useful when the curve equation has a special form like $a=-3$. For example, on curves with $a=-3$, one can store $Z^2$ to avoid computing it during doubling. In secp256k1 and BLS12-381, $a=0$, so this particular optimization isn’t needed (the doubling formula is already simpler). Thus, modified Jacobian coordinates are more relevant to curves like secp256r1 (where $a=-3$) rather than secp256k1. The memory overhead is one extra field element per point (for the additional coordinate), and the complexity is slightly higher due to maintaining that extra parameter, but it can reduce the instruction count for each doubling.\n\nMixed Coordinates for all except `r1`: As highlited for example in https://eprint.iacr.org/2016/103.pd Table 3. \nMost real-world implementations use a mix of representations to get the best performance. A common approach (mentioned earlier) is Jacobian + affine mixed addition: one point (from a precomputed table) is kept in affine, while the accumulator is in Jacobian. Addition then uses the mixed formula (saving multiplications)​.\n\nSecp256k1, Bn256 and BLS12-381 see their best performance with projective coordinate systems (Jacobian), supplemented by algorithmic techniques like windowing, wNAF, and endomorphisms. Affine coordinates, while simple, are far too slow for large-scale use due to inversions. \nMontgomery and TwEdw are out of scope as one can emulate them bit would always perform worse than Jacobian(for the curves you shared ofc).",
+        "created_at": "2025-03-13T10:57:43.389000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "cperezz.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Also, it's ofc useful to consider complete formulas. Although to my knowledge, don't always bring the best performance. But constant-time and also simplicity.",
+        "created_at": "2025-03-13T10:59:06.657000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yeah, I think these are the same as the ones I originally used for the implementation of BLS add/mul with EVMMAX, where they were chosen because of the relative high cost of EVM control flow, stack, arithmetic compared to the EVMMAX arithmetic ops.",
+        "created_at": "2025-03-13T10:59:29.058000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "True 🙂",
+        "created_at": "2025-03-13T11:00:43.538000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It depends on the use case I think -- for precompiles I would look into using affine coordinates though",
+        "created_at": "2025-03-13T17:51:55.060000+00:00",
+        "attachments": null
+    }
+]

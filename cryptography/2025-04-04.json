@@ -1,0 +1,82 @@
+[
+    {
+        "author": "frozenfire.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "What would be the cheapest way to implement big integer modular exponentiation on chains which don't natively support modexp? We did a test implementation of montgomery multiplication, and found that the gas cost quickly blows up to millions on EVM-like L2s which don't have modexp - versus the ~5-10k gas of 1024-bit modexp with the EVM precompile.\n\nI'm directionally thinking of finding some approach where a pre-computed witness of the modexp can be verified, but I haven't found any simple algorithm for that.",
+        "created_at": "2025-04-04T18:07:45.232000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm afraid there is no cheap way.\n\nIf the chain supports elliptic curve precompiles, and modexp is used for cryptography (say RSA), maybe switch RSA to ECC based protocols.\n\nNow if you really really need to implement modexp, here is a guide: https://github.com/status-im/nim-stint/issues/126\n\nThis allows achieving the speed of GMP modexp without assembly.\n\nMy implementation is there: https://github.com/mratsim/constantine/blob/master/constantine/math_arbitrary_precision/arithmetic/bigints_views.nim#L114-L222",
+        "created_at": "2025-04-04T19:55:04.351000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "frozenfire.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yeah, our fallback is implementing blinded Schnorr signatures, which I've made good headway on.\n\nHowever, for our approach, that requires implementing them over the various curves that different chains support, and since we're proving the message + blinding construction in a SNARK, that becomes super complicated. \n\nEven Ethereum doesn't support babyJub natively.\n\nWe originally picked RSA blind signatures because they're cheap in SNARKs, and RSA verification is cheap on Ethereum L1.",
+        "created_at": "2025-04-04T20:00:24.257000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "frozenfire.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Will look at your implementation, though. Thank you.",
+        "created_at": "2025-04-04T20:00:50.225000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "if it's 256-bit EVM and you work with say 2048-bit numbers, you might save 15~20% in gas cost by using Karatsuba multiplication all the way down to 256-bit",
+        "created_at": "2025-04-04T20:02:22.716000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Since you use it for RSA you don't have to worry about even moduli, those are a pain and need the chinese remainder theorem to be computed efficiently.",
+        "created_at": "2025-04-04T20:03:44.482000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "frozenfire.eth",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Since our use-case isn't super sensitive, we're targeting RSA-1024 with an exponent of 3. There are probably a few optimizations to be had under those assumptions.",
+        "created_at": "2025-04-04T20:05:44.087000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Also look into what the folks did for \"EVM384\" which was trying to do 384-bit arithmetic on the EVM. They had a lot of stuff inspired by Weierstrudel using yul or huff to significantly reduce gas cost.\n\nIirc status reports were made by Casey Detrio.",
+        "created_at": "2025-04-04T20:07:21.149000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mratsim",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "To get you started:\n\n- https://notes.ethereum.org/@axic/evm384\n- https://notes.ethereum.org/@poemm/evm384-update5",
+        "created_at": "2025-04-04T20:08:23.194000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "EVM384 became EVMMAX, EVM384 is not being persued anymore.  Currently the EVMMAX implementations use off-memory registers (IIRC 1 gas to load and unload) and the evmone implementation stores them in the register in montgomory form. I think the spec limits the numbers (maybe just the modulus) to 4096 bits as that is the reasonable upper limit of RSA at the moment.",
+        "created_at": "2025-04-04T22:45:58.006000+00:00",
+        "attachments": null
+    }
+]

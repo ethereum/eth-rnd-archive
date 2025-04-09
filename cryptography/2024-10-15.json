@@ -1,0 +1,290 @@
+[
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'll ask here instead of the BLS precompile thread as there are more cryptographers that look here. The issue is the following\n- the algorithm to perform a linear combination in BLS is sublinear in the number of points\n- problem is that we perform the subgroup check on each of the points in the input. Since this check is O(1) for each point, the check itself is linear in the number of points. \n- this makes the whole linear combination take linear time in the input. \n- I claim that if instead of doing the check point by point we do (possibly multiple) random linear combinations of the same input points and check the sum is in the subgroup then we keep the sublinear structure of the algorithm and it's safe anyway, since each such random combination would give approx 1/h probability of certainty where h is the index of the subgroup.",
+        "created_at": "2024-10-15T09:21:44.781000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Is the above standard or not? Cause it seems straightforward",
+        "created_at": "2024-10-15T09:22:16.770000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "A nit pick: generating N random scalars is also O(N).",
+        "created_at": "2024-10-15T10:39:22.894000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Oh right crap, that's not a nit probably that's a killer",
+        "created_at": "2024-10-15T10:52:29.282000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Thanks",
+        "created_at": "2024-10-15T10:52:32.305000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I guess it's a matter of magnitude, the coefficients need be quite small so with a few bits of randomness you can cover large combinations but yeah, linear none the less",
+        "created_at": "2024-10-15T10:53:50.662000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Now I'm curious to run the benches against your implementation, with just 8 bits of randomness per point I wonder when it becomes cheaper than doing the check on all points",
+        "created_at": "2024-10-15T11:00:44.972000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Although 8 bits may be two little, that's at least  2^-16 likely to find a false positive",
+        "created_at": "2024-10-15T11:02:02.380000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Assuming an attacker crafted the input",
+        "created_at": "2024-10-15T11:02:30.271000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think RNG should be fast enough that in the range we care about (1000) it will not dominate the picture. Although, I have a lot of questions about RNG (e.g. should it be a secure one, how to seed it). But this is for later, after we should the idea works at all.",
+        "created_at": "2024-10-15T11:05:35.923000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I've found interesting post exploring similar idea in signature verification. https://ethresear.ch/t/security-of-bls-batch-verification/10748",
+        "created_at": "2024-10-15T11:06:07.925000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Oh no it's much worse than this :(, imagine there's an element g that is not in the subgroup but it's double is.",
+        "created_at": "2024-10-15T11:09:42.644000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Then it's about 1/4 to get false positives",
+        "created_at": "2024-10-15T11:09:55.557000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "So any torsion elements would produce attack vectors that would require many random throws",
+        "created_at": "2024-10-15T11:11:58.455000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Alright, I feel better, it did seem like either completely standard or broken 😆",
+        "created_at": "2024-10-15T11:12:55.077000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think this is not secure because the probability of an element passing the check that is not in the subgroup is 1/size_of_subgroup.\n\nIf we imagine there is a point P in the prime order subgroup, ie the check should pass for P. \n\nThen we imagine that there is a point of order 2 called B. The check should fail when given B, or P + B.\n\nI will now check B and P+B.\n\nWe generate two random elements r1, r2 and the sum S = r1 * B + r2 * (P+B)\n\nIf r1 and r2 are even then the check passes since B has order 2. The probability of r1 and r2 being even is (1/2)^2",
+        "created_at": "2024-10-15T11:13:50.420000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I wrote something similar here yesterday, but it might not have been legible 😅  https://discord.com/channels/595666850260713488/1293956979848380529/1295374332666712074",
+        "created_at": "2024-10-15T11:14:58.706000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "haha yep exactly -- in general if the random number generated \"kills\" the small order component of the point, then you will get a false positive",
+        "created_at": "2024-10-15T11:17:33.326000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yeah that's the exact same example above for the torsion element :(, it'd require many throws",
+        "created_at": "2024-10-15T11:18:06.928000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Jinx",
+        "created_at": "2024-10-15T11:18:28.817000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Do you know what's the size of the torsion of these curves \u003c@427491045308235776\u003e ?",
+        "created_at": "2024-10-15T11:22:33.779000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "For G1, I think it was ~64 bits -- it was a lot larger for G2",
+        "created_at": "2024-10-15T11:24:43.804000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ah nvm, it doesn't matter for this",
+        "created_at": "2024-10-15T11:25:01.214000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "ok, at least this got me to learn and read, is this the algorithm you guys use to check for membership? https://eprint.iacr.org/2019/814",
+        "created_at": "2024-10-15T11:49:53.674000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think most implement https://eprint.iacr.org/2021/1130.pdf\n\nThough the proof in the above paper was corrected in https://eprint.iacr.org/2022/352.pdf so it might be better to read the latter for a complete view. The former is a bit easier to understand imo",
+        "created_at": "2024-10-15T12:04:21.874000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "thanks a lot, I'm trying to find the corresponding code in BLST to match up",
+        "created_at": "2024-10-15T12:06:37.067000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "hmm, BLST links to the same paper I posted",
+        "created_at": "2024-10-15T12:08:08.644000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "rodiazet",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yes. It uses this for subgroup check.",
+        "created_at": "2024-10-15T12:08:30.419000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "oh interesting there's also a link to Kev's paper, so probably both are used",
+        "created_at": "2024-10-15T12:08:52.006000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "rodiazet",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yes and I think they chose faster one. Not sure.",
+        "created_at": "2024-10-15T12:09:48.547000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Lol, the check for Bowe seems to be under an #if 0, and then they use Scott on the #else branch. Apologies for the noise in this channel, but found this funny",
+        "created_at": "2024-10-15T12:11:41.810000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "was grepping the issues and this seems to be the related issues for the rationale in blst:\n\n- https://github.com/supranational/blst/issues/88\n- https://github.com/supranational/blst/issues/79",
+        "created_at": "2024-10-15T12:13:05.513000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "rodiazet",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "In our bn254 pairing implementation we use something newer I believe. https://eprint.iacr.org/2022/348.pdf",
+        "created_at": "2024-10-15T12:27:00.932000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "rodiazet",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "https://ethresear.ch/t/fast-mathbb-g-2-subgroup-check-in-bn254/13974#and-even-better-5",
+        "created_at": "2024-10-15T12:33:51.450000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "rodiazet",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "BTW. We are still looking for someone who woud like to review the pairing I mentioned. We would really appreciate. https://github.com/ethereum/evmone/pull/852",
+        "created_at": "2024-10-15T12:34:42.191000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marchhill",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Drafted a change to the EIP to add MSM and pairings precompiles without subgroup checks: https://github.com/ethereum/EIPs/pull/8965",
+        "created_at": "2024-10-15T13:49:46.719000+00:00",
+        "attachments": null
+    }
+]

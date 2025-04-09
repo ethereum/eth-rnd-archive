@@ -1,0 +1,146 @@
+[
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I've been taking a look at the information returned by the `/eth/v2/beacon/pool/attestations` endpoint and it seems somewhat inconsistent.  There isn't a lot in the API description, so we may want to firm this up a bit and then ensure that beacon nodes all do the same thing.  From my initial testing on hoodi:\n\nLighthouse only returns unaggregated attestations, and returns attestations for all committees if `committee_index` is missing or `0`.  If `committee_index` is present and is any other value (e.g. `1`) it returns nothing.\n\nNimbus only returns unaggregated attestations, and returns attestations for all committees if `committee_index` is missing.  If `committee_index` is present it appears to be honored.\n\nPrysm only returns unaggregated attestations, and returns attestations for all committees if `committee_index` is missing or `0`.  If `committee_index` is present and is any other value (e.g. `1`) it returns nothing.\n\nTeku only returns aggregated attestations if `committee_index` is missing.  If `committee_index` is present it appears to be honored, however it only returns unaggregated attestations, and usually only one or two of them.  (At a guess, teku is continually aggregating single attestations and removing them from the pool once aggregated which is why we don't see lots of single attestations in its pool)\n\n(All of the above testing is also supplying a `slot` of the current or previous slot, testing was carried out throughout the slot time.)\n\nFrom the point of view of the spec (which we need to tighten) I think the behavior should be:\n\n- if `committee_index` is missing then attestations for all committees should be returned\n- if `committee_index` is present then only attestations for that committee should be returned\n\nAnd either:\n- only unaggregated attestations should be supplied (and we create an `/eth/v1/pools/aggregate_attestations` endpoint to obtain aggregated attestations)\nor:\n- aggregated attestations should also be supplied for any aggregated attestation with attestations for the given `committee_index` in this endpoint\n\nAny thoughts from client teams as to why their implementations work the way they do, and if the above is a reasonable clarification of how the endpoint should behave?",
+        "created_at": "2025-04-08T13:17:40.155000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "for Nimbus, it only triggers aggregating on-demand",
+        "created_at": "2025-04-08T13:20:07.068000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "it's software, it can do anything, but there would be a lot of friction with the design Nimbus has",
+        "created_at": "2025-04-08T13:20:37.484000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Okay so for nimbus it sounds like the endpoint only returning unaggregated attestations is the lowest-friction response, and what it does now matches with the first two items.  But obtaining aggregated attestations would be an expensive API call, as it would trigger the attestation process.",
+        "created_at": "2025-04-08T13:44:23.140000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "when you say unaggregated attestation, do you mean a Attestation with just a single aggregate bit set?",
+        "created_at": "2025-04-08T13:44:31.830000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Yes.",
+        "created_at": "2025-04-08T13:44:47.894000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "yes",
+        "created_at": "2025-04-08T13:47:21.052000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "each node will have different attestations anyway, I'm not sure what the overall goal is here?",
+        "created_at": "2025-04-08T13:47:56.523000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "because they're different stability subnets",
+        "created_at": "2025-04-08T13:48:05.243000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "so regarding `committee_index` this is what we do, if supplied only return that committee, otherwise all of aggregated attestations in pool\n\nbut also interesting point, we use our aggregated attestation pool here, not our attestation pool, but even if we would use the attestation pool, we pre-aggregate attestations there, so even if we were to return data from that pool, the only time we return a attestation with just a single bit would be because we haven't seen any single attestations to aggregate into it\n\nbut would need to think about it more, `/eth/v1/pools/aggregate_attestations` endpoint sounds reasonable, right now there isn't even a way for us to query the attestation pool, but also do we need to? we mostly keep track of it via metrics",
+        "created_at": "2025-04-08T13:48:06.140000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "having clients to return the same data wil be hard as this highly depends on how their pool / caches work but at least should have consistent behavior in handling `committee_index` query param",
+        "created_at": "2025-04-08T13:50:49.204000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Yep I suspect that this is where we will land.  Teku appears to be doing similar to you, in that single attestations appear and then vanish between calls, likely because they are aggregated and removed from the pool.",
+        "created_at": "2025-04-08T14:39:36.494000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Sorry, I meant to mention that this is running the nodes with `subscribe all subnets` so they should all have a relatively similar view of the attestations (obviously taking into account latency).",
+        "created_at": "2025-04-08T14:40:32.159000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "If ultimately the answer is to explain the different information the endoints could provide, that may also be good enough.  I don't see that changing the internal models of the beacon nodes just to provided standard output for an API endpoint is a smart move.",
+        "created_at": "2025-04-08T15:08:44.299000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Incidentally, we had a request for this in Prysm and an external contributor opened a PR some time ago: https://github.com/prysmaticlabs/prysm/pull/14982\n\nThe PR fails our end-to-end tests for whatever reason and it looks like the contributor is not in a hurry to fix it, so I will take over",
+        "created_at": "2025-04-08T15:17:14.365000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Thanks a lot for the write-up, you found a bug in Prysm. We intended to return attestations for the supplied committee, not return zero attestations.\n\n\u003e Prysm only returns unaggregated attestations\nHmmm, this is not what we have in code. We combine unaggregated and aggregated attestations from our attestation pool before applying any filtering, and there are unit tests that verify this.",
+        "created_at": "2025-04-08T16:34:43.726000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I will submit a PR with the fix in a few moments",
+        "created_at": "2025-04-08T16:35:26.711000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "\u003e Prysm beacon chain server ignores the Accept-Encoding: gzip header in HTTP requests and always returns uncompressed JSON responses.\nthis is not a bug in Prysm and perfectly fine according to HTTP spec\n\nAs per https://www.rfc-editor.org/rfc/rfc9110.html#name-accept-encoding\n\u003e If the representation has no content coding, then it is **acceptable by default** unless specifically excluded by the Accept-Encoding header field stating either \"identity;q=0\" or \"*;q=0\" without a more specific entry for \"identity\".\n\nso this means unless the `Accept-Encoding` has `identity;q=0` (`identity` means uncompressed) with 0 weight (`q=0`) then the server is allowed to return uncompressed data\n\nIf `identity;q=0` is set and you cannot fulfill any of the requested encoding then would have to return a 406 error but I doubt any client does this at the moment.\n\nAlso adding compression to JSON seems like a waste of time to me (from Lodestar pov) since we can just return data as SSZ and I would rather see adding  additional compression there.",
+        "created_at": "2025-04-08T17:06:23.539000+00:00",
+        "attachments": null
+    }
+]

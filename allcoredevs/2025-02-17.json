@@ -1,0 +1,218 @@
+[
+    {
+        "author": "jimmygchen",
+        "category": "general",
+        "parent": "",
+        "content": "Hi everyone,\n\nWe're looking for feedback on a proposed PeerDAS change that was discussed during the last devcon and multiple breakout calls. It would require changes not just to the CL, but also to the EL and blob transaction sender, so we'd love input from the wider group, especially the EL teams. If there are no major concerns, we'd like to move forward with the spec ASAP to ship it with PeerDAS. \n\nI've put together a write-up on the proposal here - any thoughts would be greatly appreciated \n\nhttps://hackmd.io/@jimmygchen/HkUpFliYJx",
+        "created_at": "2025-02-17T06:24:25.214000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "general",
+        "parent": "",
+        "content": "^ the peerDAS breakout room is tomorrow: https://github.com/ethereum/pm/issues/1295 \nIt would be great if atleast some EL devs show up to ask questions and make a plan for shipping the feature.",
+        "created_at": "2025-02-17T06:38:47.276000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "general",
+        "parent": "",
+        "content": "We have never changed a transaction type after the fact, in order not to break the use case of signing a transaction and sending it much later. With 4844, I could see us doing that change, but it won't be trivial since we would need to support both versions in the codebase at the same time",
+        "created_at": "2025-02-17T07:08:03.187000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "We aren't short on numbers.  Just create a new transaction type.",
+        "created_at": "2025-02-17T07:09:28.688000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah I think thats what we end up with. We need to gracefully retire 4844 txs then though",
+        "created_at": "2025-02-17T07:10:33.067000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Why do we need to retire type 3 transactions?",
+        "created_at": "2025-02-17T07:12:28.310000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Could we have 2 blob limits, one for type 3 blobs and one for type 5 blobs?  This way older blobs can still get included, but we can scale with the new more efficient blobs.",
+        "created_at": "2025-02-17T07:13:56.572000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Alternatively, we suffer the consequences (limited scalability) of our past desire to move quickly (releasing blobs before we were \"done\" designing them) so maybe we learn our lesson and move slower in the future.  I'm aware this is unlikely to be the popular opinion, but I think if we allow ourselves to release things and then \"undo\" them (we aren't stuck with the debt forever) we will keep doing that.  We may be able to convince ourselves that the harm done by removing 4844 support is sufficiently low that it is worth it, but there is no bright line for when it is acceptable to break software written for Ethereum.",
+        "created_at": "2025-02-17T07:15:44.128000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "general",
+        "parent": "",
+        "content": "changing blob transaction type",
+        "created_at": "2025-02-17T10:18:56.659000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "general",
+        "parent": "",
+        "content": "Very relevant point - because having blob tx sender compute proof means the EL need to have knowledge of DAS cryptography. This is why it was initially designed to be computed in the CL, in order to not leak DAS logic into the EL, but in practice this limits scalability of the current design. We've discussed a scenario (in \u003c#1252403418941624532\u003e) where this may potentially change again in the future, e.g. if we reduce sample size, this would require changes across both CL \u0026 EL.\n\nI'm not sure if there's an easy solution to avoid this, even if we ship *even* slower - DAS design has evolved over time, and what we are implementing today is probably very different to what we knew when EIP-4844 was shipped. We expect this to change again at some point.\n\nI'm wondering if some part of Ethereum (blob transaction here) be exempted from this backward compatibility requirement? Blob txs are mostly sent programmatically, and blob users are probably more concerned about how blob fees and DA scaling, rather than having to update a client library before an scalability upgrade.",
+        "created_at": "2025-02-17T10:34:52.881000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "daniellehrner",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks we have a look",
+        "created_at": "2025-02-17T11:03:15.136000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "daniellehrner",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@466006586477772831\u003e Regarding this change that the EL needs to do:\n\n\u003e The KZG commitments match the corresponding blobs and cell_proofs. This requires computing the extension cells for all blobs, and verifying the respective cell proofs (Note: the verification can be optimized using verify_cell_kzg_proof_batch to verify all cell proofs for all blobs at once)\n\nI guess there are existing libraries that we could use to compute the extension cells, aren't there? If yes, where could we find them to check how easy it is to integrate them in our codebase.",
+        "created_at": "2025-02-17T11:12:48.454000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "general",
+        "parent": "",
+        "content": "ckzg is re-adding a way to do this (without also computing the proofs) https://github.com/ethereum/c-kzg-4844/pull/534",
+        "created_at": "2025-02-17T11:16:12.084000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "general",
+        "parent": "",
+        "content": "(also, since that discussion is in a separate thread which doesn't get bridged to telegram/might be missed by people, we don't need to change the tx type, just the network wrapper)",
+        "created_at": "2025-02-17T11:17:59.234000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@466006586477772831\u003e this affects blob/column production only and not verification, is that correct?",
+        "created_at": "2025-02-17T11:18:08.053000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "general",
+        "parent": "",
+        "content": "Not on the CL side, but it impacts existing proof verification on the EL side i think",
+        "created_at": "2025-02-17T11:19:19.063000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "general",
+        "parent": "",
+        "content": "For completeness, it would affect verification if you get a column by pulling all blobs from your EL mempool, because in that case you're pulling cells and proofs and you're already verified everything. If you get a column through gossip, it doesn't",
+        "created_at": "2025-02-17T11:20:27.006000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "ok, I'll be more explicit/pointed: right now it's possible for CLs to do a kind of \"optimistic verification\" for e.g., syncing, where they verify signatures, they verify EL block hashes, etc, but don't call the EL each time. it's a very useful syncing optimization, and also enables a BN without an attached EL to follow the chain in a quasi-safe way (they can't be an honest proposer, no, but they can verify everything they see blobs-wise, and per specs have to within the blob retention period). it doesn't look like this disrupts that, but wanted to verify this",
+        "created_at": "2025-02-17T11:21:20.648000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "by the time it gets close enough to start doing validation, of course, they need the EL to be part of it again, but only then",
+        "created_at": "2025-02-17T11:21:55.520000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "right, this is an optimization point, and a reason people like `getBlobs`",
+        "created_at": "2025-02-17T11:22:48.772000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "general",
+        "parent": "",
+        "content": "yeah i dont think this change disrupts that, CL will be able to independently verify the columns",
+        "created_at": "2025-02-17T11:24:44.083000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "daniellehrner",
+        "category": "general",
+        "parent": "",
+        "content": "It's not 100% clear to me from the proposal, but if we shift the proof computation from the CL to the tx sender, are 72 blobs as new max realistic or is there another limitation that wouldn't allow us to reach that?",
+        "created_at": "2025-02-17T12:12:34.081000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@905058765022310460\u003e Thanks for pointing this out! Based on what I know so far, I believe it's realistic - the main known bottlenecks are proof computation time and bandwidth requirements to propagate blobs during block proposal. This new proposal eliminates the proof computation bottleneck during block production, and distributed blob building is quite effective on solving the later based on the testing so far.\n\nWe expect an increase in EL bandwidth as the blob count increases, but it is relatively small compared to the bandwidth usage on the CL (gossip is bandwidth intensive), and I believe the potential optimisations on CL gossip could offset the increase in EL bandwidth. Some numbers here: https://blog.sigmaprime.io/peerdas-distributed-blob-building.html#impact-on-node-operators\n\nNow the 64-72 max blobs is still a theoretical limit until we have a version to test with, I've only tested up to 32 blobs. AFAIK there are no other known bottlenecks on the CL side, but possible limitations:\n- Unexpected bottlenecks in the EL with a max blobs of 64+.  Is there any limitations with the blob mempool?\n- distributed blob building only works well for public blob transactions, which is what most blob transactions are today. We might need to think about a solution to cover private transactions, but this doesn't seem to be an _immediate_ blocker.",
+        "created_at": "2025-02-17T13:49:48.694000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "general",
+        "parent": "",
+        "content": "Testing call in two minutes: https://ethereumfoundation.zoom.us/j/86466169680?pwd=x17cbD1lDCeQEWMTTOLARQhELiJV21.1",
+        "created_at": "2025-02-17T13:58:10.663000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "general",
+        "parent": "",
+        "content": "# Testing call on 17/Feb/2025:\n\n### MEV on Pectra Devnet-6 status:\n\n- MEV-boost is currently running, but there are issues with withdrawal and consolidation requests. Ryan from Flashbots is currently working on this.\n- Reth builder (rbuilder) is working but it's currently not including execution requests\n- Pk910 offered to send more deposit/withdrawal/consolidation request transactions to the devnet if either team needs them for testing.\n\n### Mainnet shadow-fork\n- Currently underway with all client releases, expected to be completed in 1-2 days.\n\n### Client updates on Pectra\n\n#### Erigon\n- Released a version based on Erigon 2, that is compatible with Pectra.\n- No official release for Erigon 3 yet because they want to support their internal CL implementation (kaplin), which has encountered some issues.\n- An official Erigon 3 release may be available in a day or two.\n- Erigon encountered issues with Kurtosis pectra tests on Devnet-6 that weren’t present on Devnet-5.\n- pk910 is investigating the cause: It could be two lengthy tests in Assertor that take 30 hours to run, and work is needed to stabilize these tests.\n- Erigon also tried to include Assertor directly in the CI and suggested introducing an option to split these lengthy tests into a separate test suite.\n\n#### Nethermind\n- Released a new version\n- All hive tests passed.\n\n#### Besu\n- Released a version last week\n- All hive tests passed without any known issues.\n\n#### Teku\n- There's an impact on attestation aggregation: Prior to pectra there were 128 attestations in a block, now we have 8 attestations aggregated.\n- Optimizations are necessary to include attestations correctly in the block, but this is not part of the current release.\n- Potentially there will be another release before mainnet.\n\n#### Prysm\n- Confirmed that they have the attestation bug as well.\n- They plan to release at least one more version or possibly two before the mainnet.\n- They also have a few more features that missed the cut for the Devnet release which should be included in the following releases.\n\n#### Grandine\n- Release is now available.\n- Testing looks good so far.\n\n#### Lodestar\n- Released version 1.27.\n- A couple of cleanup stuff remaining, but nothing urgent.",
+        "created_at": "2025-02-17T15:16:26.278000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marioevz",
+        "category": "general",
+        "parent": "",
+        "content": "### Sepolia and Holesky System Contract Deployments for EIP-2935\n- Mario from EEST will try to make the deployments.\n- Will reach out to lightclient if he encounters any issues.\n\n### Peerdas:\n- Devnet is still stable.\n- We are experiencing issues with sync tests due to the pinned Geth version used. A plan is being developed in the peerdas-testing chat.\n- There’s a potential Peerdas update that may require involvement from the Eth R\u0026D team. EL teams were asked attend the Peerdas breakout call tomorrow:\n- Potential new transaction type that includes KZG commitments.\n- Discussion currently ongoing here: https://discord.com/channels/595666850260713488/745077610685661265/134093184523934108\n\n### EOF\n- Devnet-0 launched last week:\n- Geth RPC node was offline due to an outdated Geth node, which brought down the explorer but nothing major.\n- Nethermind deployed fixes to issues they encountered.\n- Node 1 in Reth stopped, while Node 2 didn’t fork, possibly due to a misconfiguration, but more investigation is required.\n- The `execute remote` command is being used, which may cause some flakiness in the test execution due to the nature of sending test transactions, which can be improved, but overall Danno mentions this is an useful tool.\n- Overall, there were no unexpected problems.\n\n### New Eth R\u0026D Discord Bot for Devnet Monitoring\n- The new bot, EthR\u0026D, is taking over some of the EthPandaOps work.\n- Can be found on Discord at https://discord.com/channels/595666850260713488/1340925563870908456.\n- It pings clients if there are any issues in Devnets:\n- Displays the client that is hitting the issue, the node, the type of issue, the SSH command to log in, and more.\n- Triggers if the head of the chain isn’t advancing, or the finalized epoch isn’t advancing, sync failures, etc.\n\n### New Hive UI from EthPandaOps\n- The new Hive UI is available at https://hive.ethpandaops.io/pectra-devnet-6/.\n- Thanks to \u003c@131476523050860545\u003e  from the EthPandaOps team, who has been working on this for the past month.",
+        "created_at": "2025-02-17T15:16:56.781000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dapplion",
+        "category": "general",
+        "parent": "",
+        "content": "The peerdas transaction should include the cell count, and then the EL can support specific values of cell count",
+        "created_at": "2025-02-17T20:00:33.986000+00:00",
+        "attachments": null
+    }
+]

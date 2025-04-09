@@ -1,0 +1,386 @@
+[
+    {
+        "author": "hangleang.eth",
+        "category": "Testing",
+        "parent": "",
+        "content": "anyone know what's happened to devnet-5? the network is not in a good shape rn, we lost finality since ~8hrs ago",
+        "created_at": "2025-03-09T04:21:03.906000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "not really, somehow debug logs we're not enabled for the nimbus hosts, so i'm totally lost here",
+        "created_at": "2025-03-09T08:23:14.820000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "plus already \u003e12 hrs",
+        "created_at": "2025-03-09T08:23:35.308000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "this is a great way to get a cascading failure in, just speaking hypothetically, nonfinalization periods where correlated inactivity penalties pull everyon's EBs down at once",
+        "created_at": "2025-03-09T08:43:26.264000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Testing",
+        "parent": "",
+        "content": "If your EB goes down you have no additional work to do, at most you might need to custody less subnets",
+        "created_at": "2025-03-09T10:40:25.087000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Failure seems to start here: https://dora.peerdas-devnet-5.ethpandaops.io/slots?s=117300\u0026c=100",
+        "created_at": "2025-03-09T18:52:16.621000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Nimbus and Prysm seem to start having issues at the same time.",
+        "created_at": "2025-03-09T18:53:39.896000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "If I SSH on a out of sync node, I get:\n```\nssh devops@prysm-geth-1.peerdas-devnet-5.ethpandaops.io\n...\nzsh: locking failed for /home/devops/.zsh_history: no space left on device: reading anyway\n```",
+        "created_at": "2025-03-09T18:55:07.821000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'll investigate more tomorrow.",
+        "created_at": "2025-03-09T18:55:20.936000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "ohhhh",
+        "created_at": "2025-03-09T18:56:52.474000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Not really sure it is related right now.",
+        "created_at": "2025-03-09T18:57:36.606000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "it's okay we can discuss it tomorrow 🙂",
+        "created_at": "2025-03-09T18:58:45.200000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Well, seems related.\n- All Prysm nodes from 1 to 4 have the \"no space left on device\" issue. All these peers are out of sync.\n- Prysm 5 does **not** have the \"no space left on device\" issue. It is synced.\n\nWho is the egg, who is the chicken, I'll check tomorrow.",
+        "created_at": "2025-03-09T19:01:12.902000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Right now all (4) Nimbus nodes are out of sync. 4 (out of 5) Prysm nodes are out sync as well.",
+        "created_at": "2025-03-09T19:05:48.234000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "yeah",
+        "created_at": "2025-03-09T19:06:00.915000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Yeah. From Prysm logs:\n\n```\n[2025-03-08 20:01:49] ERROR sync: Could not handle p2p pubsub error=receive data column: save data column: mkdir /data/blobs/0xd972128f564d6f2c423609cbaf695b4273260a7317aa2c95d8e9a551fb682d65: no space left on device topic=/eth2/f914a0e3/data_column_sidecar_29/ssz_snappy\n```",
+        "created_at": "2025-03-09T19:07:33.478000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "unfortunately, i don't have debug logs available, and the last INF logs from nimbus are way back in time",
+        "created_at": "2025-03-09T19:08:14.884000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "okay, i think i have found some issues from my side, the nimbus nodes all _most likely_ forked off till a point where it lagged quite behind, nimbus went into syncing, but because of a beacon clock issue, ONE of the 2 sync handlers, the one that uses light client data, kept asking blobs by range in FULU, it kept getting downscored, until they all got disconnected.\n\ni believe purging both the databases, gating the blobs by range, and restarting should fix Nimbus, thus letting it re-sync",
+        "created_at": "2025-03-09T19:19:37.969000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "i still don't know why nimbus forked off at `117273`, mostly because i don't have debug logs",
+        "created_at": "2025-03-09T19:20:27.528000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "will push a fixed image in the next 2 days max.",
+        "created_at": "2025-03-09T19:22:25.642000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "best case tomorrow",
+        "created_at": "2025-03-09T19:22:31.275000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@412614104222531604\u003e just a nice to have, can we have panda pulse alerts for peerdas devnet?",
+        "created_at": "2025-03-09T19:28:15.611000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "it appeared for a few days it seemed in discord",
+        "created_at": "2025-03-09T19:28:28.713000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "or a similar alert system?",
+        "created_at": "2025-03-09T19:28:43.831000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Testing",
+        "parent": "",
+        "content": "https://discord.com/channels/595666850260713488/1340943777715716136 this one?",
+        "created_at": "2025-03-09T20:33:55.949000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "Q: do we keep the blob sidecars on the libp2p req/resp? what about the beacon api?",
+        "created_at": "2025-03-09T21:07:13.559000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "oh yes right this one",
+        "created_at": "2025-03-09T21:25:33.088000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "suddenly it appears in `suggested` once again, okay i have to manually add it to the `channel-list`",
+        "created_at": "2025-03-09T21:28:45.166000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "till \u003c FULU_FORK_EPOCH we do keep, not after that",
+        "created_at": "2025-03-09T21:29:20.369000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "Q no2: how are L2s querying blobs? They query each and every column?",
+        "created_at": "2025-03-09T21:37:32.240000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "i don't think we have beacon API defined for columns yet, https://github.com/ethereum/beacon-APIs/tree/master/types\n\nso that's still to do, the entire fulu spec",
+        "created_at": "2025-03-09T21:42:15.163000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003e how are L2s querying blobs\ni don't think there's much work done in this entire aspect, i mean in terms of columns",
+        "created_at": "2025-03-09T21:44:13.737000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "We have to keep the blob sidecars req/resp even after the fulu fork epoch, since it's still possible to query blobs via P2P for blocks **before** Fulu. However, a beacon node should respond only to columns req/resp after fulu and to blobs req/resp before fulu.\n\nRegarding the beacon API, I think we should not change it. Aka, we keep blobs and we do **not** introduce data columns.\nWhy? Data columns (and later cells with fullDAS) are implementation details, which should not leak out of the beacon node.\nL2s need blobs (and so, the corresponding beacon API endpoint), not data columns.",
+        "created_at": "2025-03-09T22:03:09.109000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "The [fulu spec](https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#the-reqresp-domain) does introduce by range/root data columns sidecars req/resp but does **not** remove by range/root blobs sidecars req/resp. (Contrary to blob sidecars **subnets** which are deprecated at fulu.)",
+        "created_at": "2025-03-09T22:10:28.238000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "hm, that's putting a lot of computational load on the arguably wrong party",
+        "created_at": "2025-03-09T22:11:34.219000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "and/or storage load",
+        "created_at": "2025-03-09T22:11:44.127000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "the options end up being reconstruct the blobs on demand, or store the blobs (and columns, both), or is there something else?",
+        "created_at": "2025-03-09T22:13:14.936000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "req/resp of blobs simply exists in order to be able to serve blobs on demand to any syncing peer who is at a pre-fulu time",
+        "created_at": "2025-03-09T22:15:15.218000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "i don't think there's any other reason why it's in fulu",
+        "created_at": "2025-03-09T22:15:34.659000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "is it required to return blobs into column-time?",
+        "created_at": "2025-03-09T22:16:13.585000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "like, for a fulu block",
+        "created_at": "2025-03-09T22:16:23.674000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "no",
+        "created_at": "2025-03-09T22:16:30.119000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "ok",
+        "created_at": "2025-03-09T22:16:32.006000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "that's fine then",
+        "created_at": "2025-03-09T22:16:35.683000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "I agree with the beacon api point",
+        "created_at": "2025-03-09T22:23:30.440000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thanks for clarifying",
+        "created_at": "2025-03-09T22:24:17.184000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jimmygchen",
+        "category": "Testing",
+        "parent": "",
+        "content": "Is it just out of disk space? \u003c@412614104222531604\u003e \u003c@199561711278227457\u003e",
+        "created_at": "2025-03-09T23:34:35.878000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "https://discord.com/channels/595666850260713488/1348371652450320395",
+        "created_at": "2025-03-09T23:35:20.441000+00:00",
+        "attachments": null
+    }
+]
