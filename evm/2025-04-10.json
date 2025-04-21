@@ -1,0 +1,178 @@
+[
+    {
+        "author": "wzht",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Am I missing something obvious here, the yellowpaper describes memory as a word-addressed byte array but instructions like MSTORE behave as though the top-of-stack operand is an _offset_ effectively meaning memory is actually a byte-addressed byte array",
+        "created_at": "2025-04-10T13:18:30.953000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "wzht",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The yellowpaper also later says memory contents are a series of zeroes of size 2^256 reinforcing the word-addressed aspect",
+        "created_at": "2025-04-10T13:19:03.132000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "you're right, and I think that phrasing in YP is misleading",
+        "created_at": "2025-04-10T13:39:38.089000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "memory is byte addressed.  To my knowledge, all opcodes that reference memory do so with offsets and sizes that are expressed in bytes.  The 256bit word size is only relevant for determining memory expansion gas costs",
+        "created_at": "2025-04-10T13:42:32.845000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "wzht",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Rightio, good to know I am not insane.",
+        "created_at": "2025-04-10T13:52:34.871000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "frangio_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "is there a reason to make initcode transactions invalid with null `to`? this would be an easy way to deploy eof contracts without a preexisting TXCREATE factory. (update: [posted this question in ethmag](https://ethereum-magicians.org/t/eip-7873-eof-txcreate-and-initcodetransaction-type/22765/17?u=frangio))",
+        "created_at": "2025-04-10T18:33:35.885000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "frangio_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "we should think more about contract creation from the perspective of tools and libraries. the `contractAddress` field of transaction receipts will stop being relevant",
+        "created_at": "2025-04-10T18:40:27.922000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "frangio_",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "we need a standard recommendation for how eof contracts should be deployed. imo this should not rely on ERC factories. the current state of things is there is no standard deployment procedure, i think this is pretty bad",
+        "created_at": "2025-04-10T18:41:38.284000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The standard deployment procedure was the pre-deploy contract, which we recently dropped in favor of exposing TXCREATE to legacy,  I'll discuss it further in eth-mag",
+        "created_at": "2025-04-10T19:43:18.687000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "wjmelements",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "can anyone point me to a 7702 testnet transaction? they're hard to find",
+        "created_at": "2025-04-10T19:53:16.058000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "wjmelements",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "ok here's one: https://sepolia.etherscan.io/tx/0xd72a638aa639f71b989bf34a9cf8eae23949ffb9bc9635b51daee700a7310a93",
+        "created_at": "2025-04-10T19:56:18.100000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I have a general EOF question regarding the container. Why do we encode the code section as:\n\n` kind_code, num_code_sections, code_size+,`\n\nAnd not\n\n` kind_code, num_code_sections, code_start_position+`\n\nIf we do the latter, we can directly lookup the start `pc` of a code section. For this we also know the EXACT byte which we need to read from the container (read 2 bytes starting at `9 + code_section*2` 0-indexed). This is handy for things like CALLF (dont need to first sum up all the `code_section`s to read the starting position of the code) and it is also important for code witnesses! Because in the current form we will need the `code_size`s from all previous sections, and if we have the position we will only need those two bytes! This is important for if we chop up code in, say, 32-byte chunks (planned for Verkle, not sure directly or as an extra EIP on top of it) or things like code merklization",
+        "created_at": "2025-04-10T21:15:08.557000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The only nasty thing is marking the code to be ended I think, so one can deduce the size of the final code section 🤔",
+        "created_at": "2025-04-10T21:16:24.543000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Code position would also need to be 4 bytes or a VLQ.",
+        "created_at": "2025-04-10T21:17:27.391000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Oh right yes I see otherwise we limit ourselves to 2^16 complete code size 🤔",
+        "created_at": "2025-04-10T21:18:26.266000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "What is a VLQ?",
+        "created_at": "2025-04-10T21:18:37.882000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Ah ok a variable length quantity I see",
+        "created_at": "2025-04-10T21:19:11.530000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Other VMs use length instead of offset for such structures, Java uses the code attribute with a length https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.7, for example.",
+        "created_at": "2025-04-10T21:19:14.536000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I am super novice in Java VMs but I think their VM might not really care about \"witness sizes\" or what parts of the code have been touched (?). Since this might reduce witness size, especially for contracts where entire code has a lot of sections but the code ran is actually small (2 sections, the 0-section and the final section - if we use code size \"as is\" this would thus mean the entire (?) code size section has to be included in the witness in order to figure out what code (parts) we should include). I'm just asking if witness sizes has been taken into account into the decision to either encode position/size?",
+        "created_at": "2025-04-10T21:27:55.812000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Right now I am expecting most of the header to be included.  That's one 32 byte chunk for a typical 1-2 section header and then another chunk for each 16 code sections.  Even with indexes we would need to load about the same amout of chunks to get to the index.  The complexity adds the possibility that we may be able to skip inner chunks of a large set of code sections (at least 16 properly aligned), but it's easier to say \"load the whole header\"",
+        "created_at": "2025-04-10T22:13:55.237000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "To really gain we would need to change CALLF to be the byte position of a section start, and that would make for fragile code sections that would require extensive re-linking whenever they are edited.",
+        "created_at": "2025-04-10T22:16:11.781000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_shemnon",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Only then could we drop most of the header, and it wouldn't be much of a gain.",
+        "created_at": "2025-04-10T22:16:35.088000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,248 @@
+[
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "0xdd1674b7d3332f8e8e2083cbdc9aa986403c88bb463e2265e8d2cee6333967f1 \u003c\u003c my txn on hoodi",
+        "created_at": "2025-04-17T07:42:23.398000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "i found the errors in my script, i needed to make more of the variables hex, but forgot to include the \"0x\" in front ...",
+        "created_at": "2025-04-17T07:42:55.800000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "Hi,\n\nI've deployed a smart contract and i've successfully made a type 0x04 transaction with my script, but when i tried to transfered to the wallet address with the code, wallet A, it does not trigger the smart contract ... here is my script:",
+        "created_at": "2025-04-17T09:01:36.060000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "",
+        "created_at": "2025-04-17T09:01:40.352000+00:00",
+        "attachments": [
+            {
+                "type": "text/plain; charset=utf-8",
+                "origin_name": "message.txt",
+                "content": "3367f7870b94eb5f9ca94dbe15e50ec2500e1c9bf54a8333829342f0fb85a421"
+            }
+        ]
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "This is the deployed smart contract with contract address: \"0x2c572EdfF0C28d9ccAce104d2DB104319a0008C2\"\n```\n// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract DelegateContract {\n    function transferETH(address payable recipient, uint256 amount) public {\n        require(address(this).balance \u003e= amount, \"Insufficient balance\");\n        recipient.transfer(amount);\n    }\n}\n```",
+        "created_at": "2025-04-17T09:02:50.306000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "Here you can see the multiple failed attempts:\nhttps://hoodi.etherscan.io/address/0x3b98517FC209671AeA5d22a58e068f5a7Eab03A8\nI also tried to directly send a transaction to the smart contract. But of course it fails the smart contract hash no balance and does not have any payable function .\nhttps://hoodi.etherscan.io/address/0x2c572edff0c28d9ccace104d2db104319a0008c2",
+        "created_at": "2025-04-17T09:04:14.776000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "This is the test setCodeTx script",
+        "created_at": "2025-04-17T09:50:05.089000+00:00",
+        "attachments": [
+            {
+                "type": "text/plain; charset=utf-8",
+                "origin_name": "message.txt",
+                "content": "76a7baefafc18ee7557a9670fc75b9fda58ca9df8786902d3dda6b14f573a40f"
+            }
+        ]
+    },
+    {
+        "author": "pk910",
+        "category": "Testing",
+        "parent": "",
+        "content": "Your authorizations have a too low nonce.\n\nLet's take this one:\nhttps://hoodi.etherscan.io/tx/0x2cc3443005219277098374b0ce77b7c6a6a1e06b1084721b77ea87bc780d3e00#authorizationlist\n\nThe TX has nonce 25 and the code authorization has nonce 25 too.\nBoth operations (tx \u0026 authorization) require their own nonce and increase it by 1 after processing.\n\nTo make that work, you need to increase the nonce of your authorization by one.\nSo the tx has nonce 25 and the authorization nonce 26. \nYou wallet's nonce is increased by 2 at the end.\n\nRight now your authorizations are ignored because the nonce is too low",
+        "created_at": "2025-04-17T09:59:27.203000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "Thank you ! \u003c@808969530608451584\u003e . Really appreciate the warm response. T_T\n\nthat made alot of sense. So i tried on sepholia this time so that i could actually make use of tenderly to view the transaction.\n\ni've updated my tuple creation function:\n```\nasync function createAuthTuple(wallet, chainId, contractAddress, nonce) {\n    let authNonce = nonce + 1; // Increment nonce by 1 for the next transaction\n    const chainIdHex = \"0x\" + chainId.toString(16);\n    const nonceHex = \"0x\" + authNonce.toString(16);\n    const addressHex = contractAddress; // Should already be a hex string like \"0x...\"\n\n    // Step 1: RLP encode [chain_id, address, nonce]\n    const rlpEncoded = RLP.encode([chainIdHex, addressHex, nonceHex]);\n\n    // Step 2: Prepend MAGIC (0x05)\n    const magic = Buffer.from('05', 'hex');\n    const messageBuffer = Buffer.concat([magic, rlpEncoded]);\n\n    // Step 3: Hash to get the message\n    const message = ethers.keccak256(messageBuffer);\n\n    // Step 4: Sign the message\n    const signature = await wallet.signMessage(ethers.getBytes(message));\n    const sig = ethers.Signature.from(signature);\n    const yParity = sig.v - 27; // Converts v to 0 or 1\n\n    // Step 5: Return the tuple\n    return [\n        chainIdHex,\n        addressHex,\n        nonceHex,\n        yParity,\n        sig.r,\n        sig.s\n    ];\n}\n```\n\nThis is the transaction hash for tx2: `0xe83c5c931d6454d7060b0d8ee4bc3582bf303a6c3d978ca668166fcdb49aa8fe` on sepolia\nit should trigger a transfer that would send 0.1 eth to 0x6aE2F56C057e31a18224DBc6Ae32B0a5FBeDFCB0",
+        "created_at": "2025-04-17T10:25:35.681000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "",
+        "created_at": "2025-04-17T10:26:21.078000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "0d269b58b295a93079f2a097703c7bf43d6b1dbeb693710f58ed8fa6f4e09791"
+            }
+        ]
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "good thing now is that i can see the trasferETH function being called ..",
+        "created_at": "2025-04-17T10:26:38.794000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "but the state did not change for the wallet address `0x6aE2F56C057e31a18224DBc6Ae32B0a5FBeDFCB0`",
+        "created_at": "2025-04-17T10:27:14.692000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "912ff60288f6a907ffd7a302ca798c40a5ba142335c35a9fe7a54e0ed9919fc7"
+            }
+        ]
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "it should trigger a transfer from Wallet A `0x3b98517FC209671AeA5d22a58e068f5a7Eab03A8`(context of the smart contract) to Wallet B (`0x6aE2F56C057e31a18224DBc6Ae32B0a5FBeDFCB0`).. if i understood correctly ..",
+        "created_at": "2025-04-17T10:27:50.969000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pk910",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think your authorization still didn't get applied. Etherscan should show the delegation address on the wallet overview when set:\nhttps://hoodi.etherscan.io/address/0x9f53917b21852c66dfc572c4807c90bfc39351ec  (see the delegated addresss entry under more info)",
+        "created_at": "2025-04-17T10:34:23.654000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "i transacted on sepholia",
+        "created_at": "2025-04-17T10:36:12.006000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "let me try hoodi..",
+        "created_at": "2025-04-17T10:36:43.417000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "you are right ! there's no delegated address ! in wallet A `0x3b98517FC209671AeA5d22a58e068f5a7Eab03A8`",
+        "created_at": "2025-04-17T10:38:26.500000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "https://hoodi.etherscan.io/tx/0x95a5fc2508aa9580ba5072e579483f50e89cfa3a4bb22a6dbe6641a09ae4423a#authorizationlist\n\nbut the nonce for the authList is correct now ... its + 1 of the transaction nonce.",
+        "created_at": "2025-04-17T10:42:36.648000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "4968e163315e86e2a7b3437a2eb7c5914949cba345786301247b1936039df30c"
+            }
+        ]
+    },
+    {
+        "author": "pk910",
+        "category": "Testing",
+        "parent": "",
+        "content": "hmm, it looks all right 🤔",
+        "created_at": "2025-04-17T10:55:12.761000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pk910",
+        "category": "Testing",
+        "parent": "",
+        "content": "I think there's something bad with the signature.. Everything else looks good",
+        "created_at": "2025-04-17T10:58:35.648000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pk910",
+        "category": "Testing",
+        "parent": "",
+        "content": "how does your `messageBuffer` look like before hashing?\ncan you print it for comparison? 🙂",
+        "created_at": "2025-04-17T11:14:49.279000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pk910",
+        "category": "Testing",
+        "parent": "",
+        "content": "oh,  I think `ethers.signMessage` is not a low level signer. \nThat function does a lot more, it generates a EIP-191 signed message signature.",
+        "created_at": "2025-04-17T11:22:12.325000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "YOU'RE RIGHT !!!! WOO HOOO !!!",
+        "created_at": "2025-04-17T11:34:04.221000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "https://hoodi.etherscan.io/address/0x3b98517FC209671AeA5d22a58e068f5a7Eab03A8",
+        "created_at": "2025-04-17T11:34:21.001000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "```\nasync function createAuthTuple(wallet, chainId, contractAddress, nonce) {\n    let authNonce = nonce + 1; // Increment nonce by 1 for the next transaction\n    const chainIdHex = \"0x\" + chainId.toString(16);\n    const nonceHex = \"0x\" + authNonce.toString(16);\n    const addressHex = contractAddress; // Should already be a hex string like \"0x...\"\n\n    // Step 1: RLP encode [chain_id, address, nonce]\n    const rlpEncoded = RLP.encode([chainIdHex, addressHex, nonceHex]);\n\n    // Step 2: Prepend MAGIC (0x05)\n    const magic = Buffer.from('05', 'hex');\n    const messageBuffer = Buffer.concat([magic, rlpEncoded]);\n\n    // Step 3: Hash to get the message\n    const message = ethers.keccak256(messageBuffer);\n\n    // Step 4: Sign the message\n    const walletSigningKey = new ethers.SigningKey(wallet.privateKey);\n    const authSignature = walletSigningKey.sign(ethers.getBytes(message));\n    // const signature = await wallet.signMessage(ethers.getBytes(message));\n    const sig = ethers.Signature.from(authSignature);\n    const yParity = sig.v - 27; // Converts v to 0 or 1\n\n    // Step 5: Return the tuple\n    return [\n        chainIdHex,\n        addressHex,\n        nonceHex,\n        yParity,\n        sig.r,\n        sig.s\n    ];\n}\n```",
+        "created_at": "2025-04-17T11:34:38.165000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "updated authTuple function ! used the primitive sign function .",
+        "created_at": "2025-04-17T11:34:56.731000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "_kernelkennethg",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@808969530608451584\u003e thank you 3000",
+        "created_at": "2025-04-17T11:35:07.818000+00:00",
+        "attachments": null
+    }
+]
