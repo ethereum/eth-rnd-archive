@@ -1,0 +1,202 @@
+[
+    {
+        "author": "b.hartnett",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "\u003c@240180844130598912\u003e I'm looking at the E2SS file structure and it looks to me like we only store state values at each block without the proofs. Is that correct, we don't store any MPT proofs?",
+        "created_at": "2025-05-27T12:15:22.968000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Sorry not every block, I meant at specific block numbers",
+        "created_at": "2025-05-27T12:18:32.423000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "milos88",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "E2SS stores entire snapshot of a state tree, at a given block.\nMeaning, you can use it to recreate entire MPT trie, which you can use to create MPT proofs that you need.",
+        "created_at": "2025-05-27T12:19:29.497000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I see, makes sense",
+        "created_at": "2025-05-27T12:19:58.427000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "So I guess it can't be used to reply the full state history then right? Because if some state gets created then deleted, or in the reverse order then the state snapshot won't have that data right?",
+        "created_at": "2025-05-27T12:20:46.855000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "milos88",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "yes, correct",
+        "created_at": "2025-05-27T12:22:27.343000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "milos88",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "basically, we plan to use it in the following way:\n1. initialize state bridge at a certain block (using e2ss)\n2. execute blocks going forward and gossip state diffs\n3. reach head of the chain, follow it, and gossip state diffs\n\nsteps 1 and 2 can be used for backfilling the state network as well",
+        "created_at": "2025-05-27T12:26:56.640000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Ok interesting. I guess even just gossiping all the state from each state snapshot would put the majority of the state into the network anyway and then doing the execution and sending state diffs can fill in the gaps",
+        "created_at": "2025-05-27T12:29:38.710000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I was thinking that I would be able to just execute the full history from these files initially, perhaps if they just contained the state diffs (new/updated state) at each block then that would be possible",
+        "created_at": "2025-05-27T12:31:11.983000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Has anyone considered the state diff approach? Because in that case you could avoid the execution of the blocks when backfilling the historical state from these files",
+        "created_at": "2025-05-27T12:32:54.226000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "milos88",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "There are tradeoffs. You could go and generate all state-diffs and put them in some e2store format (inluding the MPT proofs). Those files would probably be very big, but it would make bridges very simple.  And this only works for backfilling bridges.\n\nIf you want to follow the head of the chain or even to generate these files, you have to be able to execute blocks and create state-diffs. Executing blocks and creating state-diffs is relatively cheap (logic is not trivial, but it's not very expensive operation), so having a bridge do that doesn't seem like a big cost (i.e. gossiping the state-diff is much more expensive than generating state-diff).",
+        "created_at": "2025-05-27T13:08:11.964000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "True. Storing proofs for every block would make the files very large indeed and yes we will always need to execute in order to generate the files in the first place or to gossip the head the chain in real time. I see the files use case as just for seeding historical data and it is something very simple that anyone can simply download the files and run a bridge to contribute to seeding content into the network.",
+        "created_at": "2025-05-27T13:49:51.645000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Actually we could have a file format that stores the state diffs without proofs for the entire state history. I think the file sizes would be more reasonable in that case. It would just require starting from genesis or from one of the E2SS state snapshots.",
+        "created_at": "2025-05-27T13:52:23.502000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "One downside of the state snapshots if that any two snapshots may contain duplicated state. For example the second state snapshot will likely contain much/most of the state that is in the first state snapshot. So if we regularly use the state snapshots to seed content then we may end up sending redundant state.",
+        "created_at": "2025-05-27T13:56:10.499000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Of course this would only happen if you seed all the state in the snapshot. If you only use the snapshot to initialize your local database before starting the execution then this is not a problem",
+        "created_at": "2025-05-27T13:58:31.380000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "\u003c@261161007982968833\u003e Another question about the E2SS format. What is the CompressedHeader? Is this the compressed rlp of the block header?",
+        "created_at": "2025-05-27T14:00:30.414000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "milos88",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "\u003e Is this the compressed rlp of the block header? \n\nYes, that's correct",
+        "created_at": "2025-05-27T14:03:53.489000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "The state is massive",
+        "created_at": "2025-05-27T14:08:40.543000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "If you reconstruct the MPT from an E2SS file you get all the proofs, so it wouldn’t make sense to include the proofs in the archival format",
+        "created_at": "2025-05-27T14:12:05.790000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I don’t think it makes sense to store diffs in a archival flat form due to the size. As you can just execute from a checkpoint to the state you need, also the state is just massive",
+        "created_at": "2025-05-27T14:13:40.059000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "I wasn't suggesting that we should store the proofs, just asking to clarify my understanding of the file format.",
+        "created_at": "2025-05-27T14:43:30.746000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Yes your method makes sense but does require executing the transactions/blocks in an EVM which is more complex but not a problem once implemented",
+        "created_at": "2025-05-27T14:46:34.169000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "Well the idea would be that this is an Option of Nimbus EL, you wouldn't use the EVM in the bridge, the EL would be the bridge and gossip a portion of the diff",
+        "created_at": "2025-05-27T18:11:58.639000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "So if you have a fleet of 100 EL's they could also bridge a small slice of the state every block",
+        "created_at": "2025-05-27T18:12:40.892000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kolbyml",
+        "category": "Portal R\u0026D",
+        "parent": "",
+        "content": "You will need a EVM regardless to gossip latest state, so the complexity is required regardless",
+        "created_at": "2025-05-27T18:17:51.976000+00:00",
+        "attachments": null
+    }
+]

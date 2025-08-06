@@ -1,0 +1,114 @@
+[
+    {
+        "author": "radekkapka",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "We had a chat with \u003c@1057691141237125190\u003e about this and we came to the conclusion that using the attested header's version is inferior, particularly when you consider `/eth/v1/beacon/light_client/updates`. If the returned range of updates crosses a fork boundary, then shortly after the fork happens, the attested header can be either from the current fork or from the old fork. If we use the attested header for `version`, then the client has to look at the `signature_slot` to determine the actual structure type so that it can unmarshal the data. This is not that hard with JSON, but much harder for SSZ (the client has to either inspect raw bytes or try unmarshaling to different types until they get the right one, which is not that terrible but somewhat awkward). Using the update itself for `version` makes things cleaner - unmarshaling always succeeds and then it's just a matter of inspecting `attested_header.beacon.slot` to know the fork of the attested block.",
+        "created_at": "2025-06-26T12:46:10.424000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Changing this now is probably impossible and I am not sure how feasible it would be in a future fork in case we wanted to switch",
+        "created_at": "2025-06-26T12:47:55.220000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "The actual structure type is also depending on the attested header, though",
+        "created_at": "2025-06-26T13:35:14.755000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Precisely, because cannot look at the `signature_slot` without already having decoded the object, when SSZ decoding.",
+        "created_at": "2025-06-26T13:40:56.364000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Flow is:\n\n1. Look at the prefix (either HTTP Eth-Consensus-Version header, or libp2p forkdigest context in req/resp or topic name in gossip).\n2. decode the data according to that prefix\n3. look at attested_header.beacon.slot, check if it matches the prefix\n\nif consuming the data as a LightClientStore\n4. upgrade the data to whatever format the local LightClientStore expects\n5. feed it into the LightClientStore",
+        "created_at": "2025-06-26T13:42:16.395000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003e upgrade the data to whatever format the local LightClientStore expects\n\nAll right, so I expect this is precisely the source of my confusion. If the attested header is in a previous fork, should the full node **NOT** upgrade it by zeroing out fields for the new fork? I thought it has to because of the below, but maybe this is just an exception so that updates for Bellatrix attested blocks can work?\n```\n# Note that during fork transitions, `finalized_header` may still point to earlier forks.\n# While Bellatrix blocks also contain an `ExecutionPayload` (minus `withdrawals_root`),\n# it was not included in the corresponding light client data. To ensure compatibility\n# with legacy data going through `upgrade_lc_header_to_capella`, leave out execution data.\nexecution_header = ExecutionPayloadHeader()\nexecution_branch = ExecutionBranch()\n```",
+        "created_at": "2025-06-26T14:26:52.880000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Actually the below is also very confusing because it sets Deneb fields on the existing header object in case the epoch is in Deneb, so I assumed these fields are in the structure\n```\nexecution_header = ExecutionPayloadHeader(\n            parent_hash=payload.parent_hash,\n            fee_recipient=payload.fee_recipient,\n            state_root=payload.state_root,\n            receipts_root=payload.receipts_root,\n            logs_bloom=payload.logs_bloom,\n            prev_randao=payload.prev_randao,\n            block_number=payload.block_number,\n            gas_limit=payload.gas_limit,\n            gas_used=payload.gas_used,\n            timestamp=payload.timestamp,\n            extra_data=payload.extra_data,\n            base_fee_per_gas=payload.base_fee_per_gas,\n            block_hash=payload.block_hash,\n            transactions_root=hash_tree_root(payload.transactions),\n            withdrawals_root=hash_tree_root(payload.withdrawals),\n        )\n\n        # [New in Deneb:EIP4844]\n        if epoch \u003e= DENEB_FORK_EPOCH:\n            execution_header.blob_gas_used = payload.blob_gas_used\n            execution_header.excess_blob_gas = payload.excess_blob_gas\n```",
+        "created_at": "2025-06-26T14:30:14.800000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I must say I did not pay much attention to the consumer spec, but the full node spec led me to believe all header structures should be \"lifted\" to the current fork",
+        "created_at": "2025-06-26T14:31:18.533000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003cetan_status\u003e the data on libp2p / from rpc is always using datatype based on attested_header.beacon.slot\n\nthe upgrade process is used in two cases.\n\n1. if finalized slot is from an earlier fork. then the finalized_header has to be upgraded to the attested_header type so that it fits in the datatype. \n\n2. when consuming, the LightClientStore may be from a future fork. for example, it could be an Electra store. but because the data from libp2p/rpc is static, before feeding it into the LightClientStore it has to be upgraded to whatever fork it expects. as in, upgrade both finalized and attested header to the LightClientStore’s fork. this is just a local processing step, the data out in the world remains at attested_header.beacon.slot",
+        "created_at": "2025-06-26T14:33:20.690000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003e the data on libp2p / from rpc is always using datatype based on attested_header.beacon.slot\nFor Electra, the size of the finality branch changed, so if you send an Electra update with a Deneb attested header and announce it as `deneb`, unmarshaling will fail",
+        "created_at": "2025-06-26T14:40:20.848000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "Well, not even the unmarshaling, even the sending part - you can't construct a valid finality branch if you are to send a Deneb update when the incoming block is in Electra",
+        "created_at": "2025-06-26T14:41:52.246000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "\u003cetan_status\u003e if it has a deneb attested header it has a deneb finalitybranch. the finality branch is rooted in attested_header.beacon.state_root",
+        "created_at": "2025-06-26T14:42:56.745000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "you're right",
+        "created_at": "2025-06-26T14:44:42.300000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus R\u0026D",
+        "parent": "",
+        "content": "I need to think about this some more, but I believe you are correct and everything will work. The way the spec is written is confusing (at least to me) because of using a single type/object in the full node spec, which led me to believe the headers must match the incoming block, and all extra fields should be zeroed out if the header references a past fork",
+        "created_at": "2025-06-26T14:48:18.666000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,106 @@
+[
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "On a different topic, something that makes little sense to me in the current spec is that the execution payload header does *not* fully commit to the object that ends up being gossiped (the envelope). The main barrier to doing that is that the envelope contains the `state_root` after the payload, which cannot be computed before the beacon block is known. It's not clear to me what benefit there is to having this `state_root`, and I'd much rather remove it and have a 1:1 relationship between the commitment and the gossiped object.\n\nFor example I'd change the spec objects to:\n\n```python\n# replacing the envelope, mirroring the BeaconBlock\n# structure other than removing state_root\nclass ExecutionBlock(Container):\n    slot: Slot\n    builder_index: ValidatorIndex\n    beacon_block_root: Root\n    body: ExecutionBlockBody\n\nclass ExecutionBlockBody(Container):\n    payload: ExecutionPayload\n    blob_kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]\n    execution_requests: ExecutionRequests\n\n# commits to body_root and builder_index. Together with slot\n# and beacon_block_root, they determine the ExecutionBlock\n# (so BeaconBlock fully determines an ExecutionBlock)\nclass ExecutionPayloadHeader(Container):\n    parent_hash: Hash32\n    parent_beacon_block_root: Root\n    block_hash: Hash32\n    gas_limit: uint64\n    builder_index: ValidatorIndex\n    slot: Slot\n    value: Gwei\n    body_root: Root # replaces `blob_kzg_commitments_root`\n```\n\n(With some optional renaming for spec aesthetics 😶 )",
+        "created_at": "2025-08-04T12:48:39.883000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "lgtm, each beacon committee is about size 530 today, agree it's cheap",
+        "created_at": "2025-08-04T14:32:49.857000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "option 2 you mean right?",
+        "created_at": "2025-08-04T14:35:09.870000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I dont have a strong opinion for this one, one thing I'm not sure and I do not know is whether ppl \u0026 applications use post state root for on chain proving, this will defer them to the subsequent slot, which is ok? I haven't heard anyone is doing that anwyay",
+        "created_at": "2025-08-04T15:32:04.584000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "There aren't any attestations to the validity of the payload's post-state until the next slot, so that's the minimum waiting time to be able to prove anything (backed by attestations. If you are doing an actual validity proof you can just generate the state root yourself, it's not particularly helpful to have it in the envelope). At that point, there will almost always be a new beacon block with its own `state_root` that gets attested to, and proofs can be made against that",
+        "created_at": "2025-08-04T15:34:40.187000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Hey \u003c@755590043632140352\u003e the weekly reminder to review more of \u003c@363800010518822915\u003e's PRs 🙂",
+        "created_at": "2025-08-04T16:02:48.342000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I would like to get these in pretty soon, so that I can make an alpha.4 release.",
+        "created_at": "2025-08-04T16:02:58.121000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "On it right now",
+        "created_at": "2025-08-04T16:43:01.824000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@520034910149410861\u003e can we delay that discussion until clients have seen this? My original thought was to mimic the current design of committing to the post root on the block. But I don't mind removing the state root until later. However I'm not fond on committing to the full envelope. In fact we don't want to commit to it and we only do so now because we thought slot auctions will be not viable. I envision a future in which we want to add stuff to the envelope that doesn't need to be known at the time of bid selection. So I would oppose to enshrining full commitment when we actually would prefer to commit the minimum possible",
+        "created_at": "2025-08-04T16:47:19.879000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Cc \u003c@486501030046203915\u003e \u003c@981249983196041218\u003e you guys from Rig also may have a take on this.",
+        "created_at": "2025-08-04T16:47:53.098000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Examples of things that we may never want to commit and will come in the envelope are zk proofs",
+        "created_at": "2025-08-04T16:51:14.376000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Created an agenda item for August 15th with the items that I remembered were already added for discussion/description, Feel free to add to the Agenda, we still have a couple of weeks to go https://github.com/ethereum/pm/issues/1659",
+        "created_at": "2025-08-04T19:06:23.765000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "trent_vanepps",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://collective.flashbots.net/t/the-free-option-problem-in-epbs-part-ii/5145",
+        "created_at": "2025-08-04T19:35:09.315000+00:00",
+        "attachments": null
+    }
+]

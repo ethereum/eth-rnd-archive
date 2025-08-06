@@ -1,0 +1,554 @@
+[
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "Given we have almost none of the context i do wonder if we're better off just letting it be a fully EL thing and just validating it's below the big max (`MAX_BLOB_COMMITMENTS_PER_BLOCK`), and not even have a notion of how many is the arbitrary 'max' for 1 validation that is probably already validated by the EL we're talking to... what's the downside to that im missing?",
+        "created_at": "2025-05-23T05:19:33.929000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e Do we want to do this? That way we can also avoid the mix-in solution for `ForkDigest`—there'll just be an explicit version assigned to the BPO fork.\n\nAt this point I don't see what BPOs even add. Just add a fork. Like, maybe hypothetically we could call this fork \"Glamsterdam\".\n\nThe point of BPOs, as initially presented, was partly to exploit that they change a specific, well-defined and delineated part of the consensus which allowed certain shortcuts to be reasonably, and safely, taken.\n\nNone of this recent elaboration of this mechanism has been necessary, and rather instead closes the gap between a BPO and a fork of the \"Electra\"/\"Fulu\"/\"Glamsterdam\" sort.\n\nSo it's become almost a bait-and-switch on the CL side, from my perspective: do this simple thing. Oh, it's not so simple anymore. Ah, and, it's not it's even less simple. Oops, now maybe need to change the beacon APIs too?\n\nJust make a fork.",
+        "created_at": "2025-05-23T05:39:46.753000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "But if the apparent consensus issue bothers people, I'd support \u003c@680234424037670912\u003e 's proposal too",
+        "created_at": "2025-05-23T05:42:09.578000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "general",
+        "parent": "",
+        "content": "this would work for the context of block validation/exec, but not for column propagation. but even if we interrogated the EL to obtain the parameter to then enforce the validation rule on CL p2p, it’s just unclean to have the validation rules for a given topic changed arbitrarily, as it introduces non-determinism where previously it didn’t exist. so i’d still support rolling over topics to keep things clean, simple, and deterministic",
+        "created_at": "2025-05-23T08:48:01.645000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "general",
+        "parent": "",
+        "content": "BPO fork semantic integration",
+        "created_at": "2025-05-23T08:49:01.843000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "The problem with this approach is that you will be peered and retry to peer with others in a different fork",
+        "created_at": "2025-05-23T11:18:22.982000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "If the fork is contentious it will lead to Mayhem instead of just two clean branches as it should be",
+        "created_at": "2025-05-23T11:18:52.726000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "But I agree with \u003c@654267572107083777\u003e's frustration, \"simple\" changes sneaking into the protocol have been a drag forever",
+        "created_at": "2025-05-23T11:20:24.882000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I just don't like to rely on block validation to differentiate a fork. I think this is very unsafe as a fork may honestly have high stakes on both sides of the fork",
+        "created_at": "2025-05-23T11:21:33.396000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "It just sounds more and more like we may as well bite the bullet and just do the forks properly",
+        "created_at": "2025-05-23T11:47:14.255000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "What goes wrong with column propagation? I'm looking at https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#data_column_sidecar_subnet_id and it's not obvious to me",
+        "created_at": "2025-05-23T11:51:48.796000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "`verify_data_column_sidecar()` doesn't care about any maximum except `NUMBER_OF_COLUMNS` (not part of BPOs). `verify_data_column_sidecar_kzg_proofs()` doesn't care about any maximum. `verify_data_column_sidecar_inclusion_proof()` doesn't care about any maximum except `KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH` (also not part of BPOs). `compute_subnet_for_data_column_sidecar()` is a mechanism for decoupling from the specific even number of columns so `DATA_COLUMN_SIDECAR_SUBNET_COUNT` and `NUMBER_OF_COLUMNS` can change without interfering with each other.",
+        "created_at": "2025-05-23T11:56:01.815000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "general",
+        "parent": "",
+        "content": "yeah, apologies, i was imprecise. what i meant to say is that `verify_data_column_sidecar` validates that `len(columns) == len(kzg_commitments)`, the latter being derived from the block.\n\nand as \u003c@680234424037670912\u003e pointed out above, the `beacon_block` validation enforces max blocks (not the big max). I would strongly recommend NOT relaxing that constraint at the p2p layer. it's safer to stay defensive and perform a simple structural check at the edge, than to have to incur in the EngineAPI call and involve EL machinery to validate if the incoming block is structurally valid.",
+        "created_at": "2025-05-23T13:45:05.164000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "general",
+        "parent": "",
+        "content": "*(Moving back to channel since conversation seems to have continued here).*\n\nTaking a step back, it looks like pesky implementation details have uncovered some latent design misalignment in how to reason about BPO forks and integrate them into the existing conceptual framework.\n\nFWIW, I think all of this is reconcilable, and I can take a stab at proposing an EIP iteration, if that helps us move forward. But I'd like to align on a few preliminaries first.\n\nDo we (still) agree on the following?\n\n- it's desirable to have the ability to bump up blob limits/params through social consensus, without requiring code changes and new client binaries, simply based on a configuration file. Clients are obviously free to release a new binary version with a prepackaged file if it's easier for their users.\n- we accept to incorporate the general notion of \"parameter-only hardforks\" into our conceptual framework: a fork that only changes certain parameters instantaneously at a particular point in time, and it strictly requires no additional client side logic.\n- we agree that such forks are, nevertheless, **consensus-breaking** and therefore should receive their own fork_version / fork_id. This means that the sequence of named forks will no longer be contiguous, since parameter-only forks may be interleaved.\n- for governance purposes, we maintain a ***canonical*** version of that schedule configuration, and client teams are free to adopt it as-is, or they can choose to deviate and have their own format.\n- we agree that named forks **cannot** modify parameters being managed through parameter-only forks; instead a new entry needs to be added to the schedule aligning with that named fork to avoid ambiguity/conflicts. \n- the first set of parameters we intend to manage through parameter-only forks are blob target, blob max, and blob base fee update fraction; but this mechanism may be extended in the future to include other consensus-breaking parameters.",
+        "created_at": "2025-05-23T14:15:52.764000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "general",
+        "parent": "",
+        "content": "I was in the \"hard fork\" camp, I also have an implementation of BPO as a hard fork in Prysm just for fun, and it turned out to be simple, far simpler than any of the other suggestions. The downside is the obvious code repetition and lack of elegance. Some thoughts,\n\n* It gives us the ability to raise the limit through social consensus: In most cases, node operators will restart their nodes and load a new config anyway. Many don't even load configs and just rely on the client's default values. So it's not that different from waiting for a new client release.\n* If we expect to do BPO frequently, say once a month or weekly, then a non-hard fork approach makes more sense for elegance. But if BPOs are infrequent, like once per quarter, then a hard fork approach is totally reasonable in my view.\n* The second question is, given the amount of work we have for Fusaka and with devnet0 about to start, how much complexity do we want to take on now? Is this something we can continue to iterate on for the G star fork, and just make Fusaka a dumb hard fork that updates the target and max values?",
+        "created_at": "2025-05-23T14:40:30.478000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "general",
+        "parent": "",
+        "content": "In my opinion, the benefits are worth a reasonable amount of new complexity. I want it to be easier to adjust the limit, so we can fine-tune the limit based on real-world data. Personally, I'm in favor of smaller, more frequent blob limit changes, which would benefit from BPO forks. And I believe now is the time to do it, not in Glamsterdam.",
+        "created_at": "2025-05-23T15:43:30.383000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "general",
+        "parent": "",
+        "content": "Also, we only have fork names for ~20 more consensus layer upgrades. Then it's ossified 😅  (\\s)",
+        "created_at": "2025-05-23T15:47:45.943000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "general",
+        "parent": "",
+        "content": "I agree and I'm fully onboard. But we have to be honest that this will delay fusaka by a few weeks. To implement the spec, review the spec, implement and test. Which I think is the right thing to do",
+        "created_at": "2025-05-23T17:32:47.200000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "general",
+        "parent": "",
+        "content": "Thanks for comments! Does what I outlined above sound reasonable? If yes, I’m happy to submit an EIP iteration. Just want to make sure I’m headed in the right direction.",
+        "created_at": "2025-05-23T18:40:44.274000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "general",
+        "parent": "",
+        "content": "sounds good, once there's a general design outline, ACDT / ACDC are good venues to get final closure",
+        "created_at": "2025-05-23T20:04:20.074000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "it sounds like the only spec change we want to make is the ability to have a new forkdigest right?",
+        "created_at": "2025-05-23T20:19:59.452000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "general",
+        "parent": "",
+        "content": "otherwise, we would still stick to the BPO idea (including the caveats \u003c@795439202732867594\u003e introduced above)",
+        "created_at": "2025-05-23T20:20:38.274000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "or we just change teh scheme, or start again lol",
+        "created_at": "2025-05-23T21:14:26.237000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "Ubuntu is on their second trip around the alphabet, I think, for codenames",
+        "created_at": "2025-05-23T21:16:21.296000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "theres nothing stopping us from doing something like fulu, fulu_epoch etc to pad things out",
+        "created_at": "2025-05-23T21:17:07.117000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "well, one major difference is that right now the fork version strings are strictly fixed constants",
+        "created_at": "2025-05-23T21:17:57.410000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "also theres apparently roughly 500 stars officially named... just saying",
+        "created_at": "2025-05-23T21:19:35.600000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "And their validity as fork strings is verifiable straightforwardly, no configuration, et cetera required. It doesn't depend on details of how many BPOs people chose to have, or if a new one popped up",
+        "created_at": "2025-05-23T21:19:37.214000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "This is exactly the kind of hidden submarine implementation complexity I was alluding to before",
+        "created_at": "2025-05-23T21:20:06.428000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "these are our rules, we could say they have an epoch, theres nothing stopping that",
+        "created_at": "2025-05-23T21:20:08.219000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "so the forkdigest-only thing seems like the lesser evil (and yes, I still view this as substantial premature and unwarranted complexity, even within the BPO design space)",
+        "created_at": "2025-05-23T21:21:17.950000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "or we could choose other f stars to consume after fulu",
+        "created_at": "2025-05-23T21:21:21.358000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "because of subscriptions etc its going to still be complicated whether we call it a fork, change digest etc. if we're on that road we can pretend its not a fork but it basically is",
+        "created_at": "2025-05-23T21:23:08.055000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "Conveniently, forkdigests aren't durable entities, so it's at least removable if this is decided to be changed later.\n\nBut I'm also still wondering what the need to constantly be adjusting BPO parameters is coming from, cc \u003c@592004585506340885\u003e, i.e. at some point PeerDAS is going to be a known quantity, and it will be known what the practical scaling parameters are. It doesn't seem like an indefinite task",
+        "created_at": "2025-05-23T21:25:05.072000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "we still cant constantly just change it, theres releases etc and EL were saying something about 5 forks",
+        "created_at": "2025-05-23T21:25:44.994000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, and people were saying changing every week, which seems just ... no",
+        "created_at": "2025-05-23T21:26:00.927000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "these two sets of ppl need to talk lol",
+        "created_at": "2025-05-23T21:26:16.173000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "I think there are multiple visions of what \"BPOs\" are going to be used for, and it happened to create a useful alliance of both, who now have to figure out what they jointly want",
+        "created_at": "2025-05-23T21:26:59.908000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "back to my initial point, our value means / controls very little - if the EL doesnt have a fork at the time we say, then nothing will be altered",
+        "created_at": "2025-05-23T21:28:01.505000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "so we can put one every epoch, and as long as its above the max set by eL, it means 0",
+        "created_at": "2025-05-23T21:28:31.011000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, as you pointed out, the CLs could more or less safely even remove all BPO-adjacent checks",
+        "created_at": "2025-05-23T21:28:37.643000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "It's almost entirely an EL concern",
+        "created_at": "2025-05-23T21:28:47.999000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "ok well i guess we'll see what happens but it sounds like a delay of weeks for 1 validation",
+        "created_at": "2025-05-23T21:29:52.753000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, I completely agree, I'd look at this and seriously look at backing out BPOs personally",
+        "created_at": "2025-05-23T21:30:14.451000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "For Fusaka",
+        "created_at": "2025-05-23T21:30:27.330000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "or just allowing it to change and being controlled by EL and CL just keeping its nose clean",
+        "created_at": "2025-05-23T21:30:55.448000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "Also a good option",
+        "created_at": "2025-05-23T21:31:02.892000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "we set the max at fulu to 100 and move on",
+        "created_at": "2025-05-23T21:31:19.005000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "another option i guess",
+        "created_at": "2025-05-23T21:31:33.768000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, the CL can have some reasonable max which the EL doesn't have to share",
+        "created_at": "2025-05-23T21:32:04.335000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "the CL is only using it for this gossip/execution payload check",
+        "created_at": "2025-05-23T21:32:19.396000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "thta'd just be the ceiling for how high they can go",
+        "created_at": "2025-05-23T21:32:21.179000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "Exactly, but within that the ELs can do anything they want. I like that one actually",
+        "created_at": "2025-05-23T21:32:55.652000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "Might address the consensus concerns but also not 100% remove the front-end check that was mentioned in the gossip  part",
+        "created_at": "2025-05-23T21:33:23.350000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "and if people are that confident about PeerDAS scaling, they can reach that target by end of Fusaka anyway",
+        "created_at": "2025-05-23T21:33:57.878000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "then in glamsterdam if we need to bump that ceiling we could",
+        "created_at": "2025-05-23T21:34:21.256000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, I think this is actually a viable proposal",
+        "created_at": "2025-05-23T21:34:37.501000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "without going as far as to say 'we dont care' and just setting it to 4k",
+        "created_at": "2025-05-23T21:34:44.520000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "Well, and it keeps beacon block byte allocations in check, for maliciously constructed blocks, etc",
+        "created_at": "2025-05-23T21:35:16.554000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "no one can make a block with 10k \"blobs\", et cetera",
+        "created_at": "2025-05-23T21:35:42.835000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "TL/DR from tersec / my discussion\nwe could choose a reasonable MAX during the fulu period rather than a CL BPO, and for fulu basically \n - not use BPO in fulu (CL)\n - pick a reasonable max value (eg. 100) for fulu fork period\n - potentially re-evaluating for glamsterdam if it needs a bump because of bpo forks in EL\nThis would still give us a limit, but allow the EL space to grow up to a specified max within the fulu timeframe. CL would then be able to validate its within bounds still, just that the bounds don't perfectly line up with EL, they just set a ceiling, much like our 10MB gossip max size.",
+        "created_at": "2025-05-23T21:36:19.541000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "yes",
+        "created_at": "2025-05-23T21:36:28.299000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "maybe thats a reasonable tl/dr",
+        "created_at": "2025-05-23T21:36:53.261000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "general",
+        "parent": "",
+        "content": "I’m definitely not suggesting this. But maybe once a month for a year seems like a possibility. A linear increase. Just throwing out what I would like, not saying this is the game plan.",
+        "created_at": "2025-05-23T21:57:07.543000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "this isn't really in line with Marius saying 'maybe 5 forks'",
+        "created_at": "2025-05-23T21:59:29.446000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "general",
+        "parent": "",
+        "content": "Jumping to 100 would be pretty wild",
+        "created_at": "2025-05-23T22:02:20.366000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "Well, that's an envelope, a max, and the exact number there is basically a placeholder",
+        "created_at": "2025-05-23T22:03:03.081000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "So if you have a better suggestion...",
+        "created_at": "2025-05-23T22:03:09.927000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "it would just be a ceiling on whatever EL is allowed to get to as a max before glamsterdam",
+        "created_at": "2025-05-23T22:03:18.110000+00:00",
+        "attachments": null
+    }
+]

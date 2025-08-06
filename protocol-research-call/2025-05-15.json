@@ -1,0 +1,170 @@
+[
+    {
+        "author": "daniellehrner",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@301186049323958275\u003e I was thinking about what you said about more light weight local RPC nodes. While I don't have yet a solution for that, but there might be an idea that could work in the future:\n\nFor Besu we have developed a so called fleet mode feature: https://consensys.io/blog/besu-fleet-the-future-of-rpc-scaling\n\nIt introduces a new node type that only has a flat state, meaning no merkle tree, only the key value representation of the state. That saves a lot of space, mainnet currently only occupies around 80GB in this form. Because it still has the full state you can query it like any other full node, meaning it could be used as a local RPC node. It keeps up with the chain by getting the state diffs from a special full node, the so called captain.\n\nWhy it does not work for your use case today: It was developed as a feature for RPC provider. These light weight nodes fully trust the captain and the captain only send that state diffs to known nodes. So it is neither trustless nor permissionless. But with some protocol updates we could change that. The Block-Level Access Lists EIP was talking about the possibility of adding state diffs to the block header, that would solve the permissionless problem. Creating some sort of proof for this state diff might make it trustless.\n\nAs I said unfortunately not a solution today, but maybe something we could look in the future.",
+        "created_at": "2025-05-15T08:13:54.488000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "general",
+        "parent": "",
+        "content": "I think the stateless witness will help for that in the future. \u003c@353136597522448385\u003e",
+        "created_at": "2025-05-15T08:23:06.042000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Hmm, interesting.  I didn't realize how expensive the MPT overhead was.  I definitely think that trustless block state diffs are possible.  ZK Proof of the diff and pre/post state root at the worst.",
+        "created_at": "2025-05-15T09:10:21.140000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "How do you deal with rollback?  I assume you hang on to the diffs since last finality, which let's you walk backward through them?",
+        "created_at": "2025-05-15T09:11:07.676000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I also assume you have no history stored, so essentially autopruned every block, and at nearly no overhead (just diffs since finality).",
+        "created_at": "2025-05-15T09:11:48.779000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "daniellehrner",
+        "category": "general",
+        "parent": "",
+        "content": "Per default it only stores the last 2048 blocks and prunes the older ones. It can be increased, depending on your needs. \n\nRegarding the rollback I have to refer to \u003c@680337202521440470\u003e",
+        "created_at": "2025-05-15T09:21:10.914000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "If it switched to trustless via some sort of proving system, I think you would want to change that to \"keep diffs until finality is achieved\".  Normally, this is just a few minutes I think.  However, under a pathological scenario this could be weeks.  This would allow you to support reorging anywhere within finality (as all nodes should be capable of).  I wonder how big the diffs would be for the pathological scenario where we have to leak out 66% of validators (which I think takes something like 3 weeks)?",
+        "created_at": "2025-05-15T10:51:30.202000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "general",
+        "parent": "",
+        "content": "We only persist the head and we also persist the trielogs of the last N blocks after last finalization* (and we have a second configuration to keep min X blocks for example 512). A trielog will contain the pre and post value for each slots, accounts and codes modified in the block. Then if you want to rollback you just have to apply the pre value on your flat db or post if you want to rollforward. Pruning is very simple. Just delete the old trielogs. More info here https://consensys.io/blog/bonsai-tries-guide",
+        "created_at": "2025-05-15T12:29:26.885000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "general",
+        "parent": "",
+        "content": "We're not deleting before finalization. Pruning of trielogs is a fairly recent feature. Before, we didn't do any pruning and kept everything from the snapsync. It was certainly larger, but much smaller, than a node storing PMT by hash.\n\nI don't have a number in mind, but three weeks is completely manageable.\n\nWe're currently creating an archive node with this mechanism, which will therefore have all the trielogs since Genesis, and even if we have all the trielog this should significantly reduce the size of the node compared to a node where the pmt is stored by hash and not location.",
+        "created_at": "2025-05-15T12:40:34.700000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Do you have an estimate on how big (on disk) your DB will be for an archive node doing this technique?",
+        "created_at": "2025-05-15T12:41:57.711000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Or is this one of those things where it is easier to build the whole thing and run it than it is to estimate the result (something something Turing Complete)?",
+        "created_at": "2025-05-15T12:42:20.090000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "Erigon has a minimal pruning config. Mainnet is 380 GB there",
+        "created_at": "2025-05-15T12:44:51.704000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "can only serve limited block ranges tho",
+        "created_at": "2025-05-15T12:45:07.766000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "This is pruned though, not archive?  Sounds like Besu's \"trusted pruned state\" is ~80GB, notably smaller.",
+        "created_at": "2025-05-15T12:46:37.433000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "general",
+        "parent": "",
+        "content": "Aah okay",
+        "created_at": "2025-05-15T12:51:53.766000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "general",
+        "parent": "",
+        "content": "I think it's still difficult for me to estimate. We'll need to finish the feature and do the first sync on the mainnet. In fact, we're considering two modes. One mode with just the history of the flat DB, which will be able to do almost everything except `getProof` history. Could be ok because you are doing a normal fullsync and just keeping what you need. So you verified the data during the fullsync. And another, more complete mode that will allow us to serve `getProof`history. This mode will keep several checkpoints of the PMT and will rollback or rollforward from these checkpoints. It will therefore be up to the user to choose between performance and disk size. The more spaced the checkpoints are, the smaller the size will be because there will be fewer PMT nodes in the database, but more rollbacks and rollforwards will be required to find the correct state. And vice versa.\n\nBut I think it's still far from having an accurate size estimate, even though I know it will be smaller than an archive node in PMT per hash.",
+        "created_at": "2025-05-15T12:52:56.490000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "general",
+        "parent": "",
+        "content": "I have some AI notes from the call here: https://efdn.notion.site/prc2 if anyone wants to just parse them, with link to the recording and we'll add a link to a master slide deck in a bit. Could also upload the chat transcript, as there was some helpful discussion in there (as always)",
+        "created_at": "2025-05-15T13:59:58.029000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I wonder if trustless consensus + this flat state system works for you \u003c@301186049323958275\u003e? A light client can be very small on the CL side, blocks would come with a diff to this flat structure plus the reminder of the diff or ZK proof that is necessary for execution validation. Full nodes with the full state can execute and validate, but these flat state nodes can also fully validate the CL side and verify that the block is head, they trust the diff therefore and thus apply it to their state.",
+        "created_at": "2025-05-15T16:31:00.017000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, though this all could be ruined of course if we bump the gas limit up so high that people start using Ethereum state as their desktop backup systems.  But I would be quite happy with the current gas limits if a trustless RPC serving node could get under 100GB.",
+        "created_at": "2025-05-15T16:33:37.734000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I probably would even be open to some marginal gas limit increases with that system in place (but nothing too crazy).",
+        "created_at": "2025-05-15T16:34:37.820000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "general",
+        "parent": "",
+        "content": "I think \u003c256GB disk usage for trustless RPC serving node plus crank up gas limit and state generating opcodes (so state doesn't grow too fast) would be quite a good compromise in my mind.  We would get more compute, so people can do interesting things on Ethereum and more of it, but state still is costly so contract authors are encouraged to be conservative with state usage.  Add on to that ZKEVM type stuff in the future so end-users don't have to compute all transactions to follow along and I think we have a pretty good system that has room to scale.",
+        "created_at": "2025-05-15T16:36:38.290000+00:00",
+        "attachments": null
+    }
+]

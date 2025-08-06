@@ -1,0 +1,50 @@
+[
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The 4th condition inside `should_extend_payload` in the fork-choice:\n```\n ...\n return (\n        is_payload_timely(store, root)\n        or proposer_root == Root()\n        or store.blocks[proposer_root].parent_root != root\n        or is_parent_node_full(store, store.blocks[proposer_root])\n    )\n```\nAm I right assuming that this should only ever be True while the first condition is False for proposers that custody \u003e50% columns, since it's risky for proposers below that custody threshold?\n\nOtherwise one could publish only the columns that the next proposer is looking for, trick it into building on top of the FULL block while the PTC voted against it. \nProposers should only act against the PTC (build on FULL despite PTC voting against) if proposers can validate that the payload is available and valid and the blob data is enough to be fully reconstructable.",
+        "created_at": "2025-07-26T07:24:34.266000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "`should_extend_payload` is not about what the proposer should do, is about what attesters should do (or generally how to run the fork choice). The logic for the proposer should be different and, for a proposer that does sampling, it should rely on the PTC, yes. This is not specified currently, but can be by modifying `get_proposer_head`. We haven't fully decided what this logic should be though. A proposal is simply: \n- for sampling proposers: if locally available and at least 25% of the PTC votes for it, extend it\n- for supernodes, just extend if available\n\nAnother option is for proposers to always require a minimum PTC threshold, to avoid extending payloads that are made available only very late. This could be deactivated via the circuit breaker just the same as proposer boost reorgs, to favor liveness",
+        "created_at": "2025-07-26T09:10:33.923000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes I like better the option of always build on full if available unless some actual threshold of \"no\" votes have been seen, rather than lack of votes",
+        "created_at": "2025-07-26T09:26:52.958000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Also I think it's useless to specify this path before rebasing on top of Fulu or at the very least changing the PTC attestation type to have the DA bit. I hope to have this Monday",
+        "created_at": "2025-07-26T09:46:23.839000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I see why allowing the proposer to counter the PTC for resilience might be nice but it also extends the worst-case confirmation time. E.g. a builder that only releases to the proposer has another 6s (assuming ptc at 9s and attestation deadline at 3s) keeping the payload secret (eclipsing the proposer to prevent/slow-down from forwarding the payload). Builder would then publicly reveal at second 2 of the next slot and would still get the payload on-chain. \nEssentially, proposer (of N) + builder (of N-1) could collude to publish the payload very late - right before the attestation deadline of the next slot.\nThe \"have at least 25% of PTC vote\" check should fix this yeah.",
+        "created_at": "2025-07-26T10:44:32.439000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Should the assert be removed [here](https://github.com/ethereum/consensus-specs/blob/master/specs/_features/eip7732/beacon-chain.md#new-get_attestation_participation_flag_indices) ?\n\n```python\ndef get_attestation_participation_flag_indices(\n    ...\n    is_matching_payload = False\n    if is_attestation_same_slot(state, data):\n        assert data.index == 0  # \u003c- THIS ONE\n        # OR do: assert data.index is [0, 1]\n        is_matching_payload = True\n    else:\n        is_matching_payload = (\n            data.index\n            == state.execution_payload_availability[data.slot % SLOTS_PER_HISTORICAL_ROOT]\n        )\n```",
+        "created_at": "2025-07-26T12:34:58.540000+00:00",
+        "attachments": null
+    }
+]

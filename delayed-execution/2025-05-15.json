@@ -1,0 +1,58 @@
+[
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'm currently not seeing in the spec how the transactions for the current block are being tracked (so the txs which gets executed \"in the block\" in order to be verified in the next one). I see `parent_transactions_root`, but not the txs which current block commits to 🤔 \n\nI.e. how to get `block.transactions`?\n\nShould it not be that current block has a `transactions_root` which commits to block current transactions? The other introduced fields:\n\n```\n    parent_receipt_root: Root         # Receipt root from parent block\n    parent_bloom: Bloom               # Logs bloom from parent block\n    parent_requests_hash: Hash32      # Hash of requests from the parent block\n    parent_execution_reverted: bool   # Indicates if parent block's execution was reverted\n```\n\nSeem correct, these would be the output of the `block.parent.header.transactions_root`.\n\nSo I think we need both a `parent_transactions_root` but also a `transactions_root` in the block header? 🤔\n\nEDIT: I think `transactions_root` is missing in \"Header Changes\" in existing fields?",
+        "created_at": "2025-05-15T00:22:12.965000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "(BTW some side notes: \n\nI would love to get rid of the logsBloom in the header.  (and maybe also in receipts and repurpose it for something more useful. Or re-shape receipts altogether like https://eips.ethereum.org/EIPS/eip-6466)\n\nBlock header currently has constant fields: `nonce` and `ommers_hash`. Esp. `ommers_hash` we could (?) repurpose this for `parent_transactions_root` and keep using `transactions_root` for current block txs commitment (?))",
+        "created_at": "2025-05-15T00:24:43.730000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'm also wondering about this:\n\nThis is checked in `validate_block`\n\n```python\n    # Validate each transaction\n    for i, tx in enumerate(map(decode_transaction, block.transactions)):\n        (...)\n        # Track total gas usage (using the maximum of intrinsic gas and floor cost)\n        total_inclusion_gas += max(intrinsic_gas, calldata_floor_gas_cost)\n        total_blob_gas_used += blob_gas_used\n(...)\n    if total_inclusion_gas \u003e block.header.gas_used:\n        raise InvalidBlock\n```\n\nThen in the execution part of `process_transactions` / `apply_body`:\n\n```python\ndef process_transaction(...)\n  if block_output.block_gas_used + tx.gas \u003e block_env.block_gas_limit:\n        block_output.execution_reverted = True\n        return\n```\n\nThis check itself is fine to be done explicitly, but due to the pre-checks is this actually possible to exceed the block gas limit in execution? 🤔  It should always be the block gas limit or less, right? The txs will spend the `max(intrinsic_gas, calldata_floor_gas_cost)\n` or less than it? 🤔 So this gas is already being reserved in the block pre-execution?",
+        "created_at": "2025-05-15T00:50:10.711000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes you're right we should also have the existing `transactions_root` field. Actually given that we need it, it's  probably better to revert the commit that moved it to `parent_transactions_root` and instead rely on `parent_execution_reverted` (meaning, even if your tx is included in `transactions_root`, you have to wait to see `parent_execution_reverted` in order to know if it was actually executed)",
+        "created_at": "2025-05-15T06:34:33.854000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The check above is only about *inclusion gas*, basically the intrinsic gas. It doesn't/can't check anything about execution gas, other than through `tx.gas`, but we don't want to require `sum(tx.gas) \u003c block_gas_limit`",
+        "created_at": "2025-05-15T06:36:22.020000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e The txs will spend `max(intrinsic_gas, calldata_floor_gas_cost)` or less than it \n\nActually they will always spend *at least* this much, and possibly more depending on how much execution gas they consume",
+        "created_at": "2025-05-15T06:37:54.718000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Aha, I see. I misinterpreted it thought it was the gas limit set by the user but it is indeed the intrinsic gas (corrected with the latest update for floor calldata cost). Yes I see now 😄 👍",
+        "created_at": "2025-05-15T14:30:26.831000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,210 @@
+[
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "re: maxeb, in a validator set with variable balances it is wrong to just count the PTC votes rather than sum their stake. We can either keep the election as is (stake-insensitive shuffle) and count by stake, or do it in reserve like for the sync committee (election probability proportional to stake, simply count votes). Wouldn't be a big deal today, but in principle the current method fails if a lot of honest stake consolidates but malicious stake does not, because there's no proportionality to stake anywhere",
+        "created_at": "2025-07-23T08:23:59.287000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Maybe change `is_payload_timely` to this?\n\n```python\ndef is_payload_timely(store: Store, beacon_block_root: Root) -\u003e bool:\n    \"\"\"\n    Return whether the execution payload for the beacon block with root ``beacon_block_root``\n    was voted as present by the PTC, and was locally determined to be available.\n    \"\"\"\n    # The beacon block root must be known\n    assert beacon_block_root in store.ptc_vote\n    # If the payload is not locally available, the payload\n    # is not considered available regardless of the PTC vote\n    if beacon_block_root not in store.execution_payload_states:\n        return False\n\n    state = store.block_states[beacon_block_root]\n    indices_to_count = [\n        i\n        for i in get_active_validator_indices(state, get_current_epoch(state))\n        if not state.validators[i].slashed\n        and i not in store.equivocating_indices\n    ]\n    ptc = get_ptc(state, state.slot)\n    ptc_score = Gwei(\n        sum(\n            state.validators[i].effective_balance\n            for i,vote in zip(ptc, store.ptc_vote[beacon_block_root])\n            if vote and i in indices_to_count\n        )\n    )\n    total_ptc_score = Gwei(sum(state.validators[i].effective_balance for i in ptc))\n    return ptc_score \u003e total_ptc_score // 2\n```\n\n(or use the justified state for weight like for `get_weight`)",
+        "created_at": "2025-07-23T09:12:14.643000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Both would work. I prefer the justified stake as we keep it always available (and Prysm has it even as part of forkchoice) but not a strong preference. \n\nAnother independent comment I woke up thinking about your PR, you have a game of assigning explicit weights 0,1, 2 to untie in some situations, but we already had a lexicographic resolve of ties when running forkchoice. Can't we move that logic there?",
+        "created_at": "2025-07-23T09:46:33.673000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Fwiw we have had the discussion about weighting the PTC vote by stake during a breakout call and decided against on a first pass to keep it simpler given that the committee changes every slot and doesn't change honest behavior. But yeah it's something that leaked through and was never updated and should have once the EIP took traction",
+        "created_at": "2025-07-23T10:10:02.052000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Not sure how to do that. The tiebreaker can, and does, always prefer FULL, but we do want to have EMPTY win if `should_extend_payload` is false.",
+        "created_at": "2025-07-23T11:07:05.328000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah I like the order of your current tie breaker. Just asking whether the logic can me moved to the current tie breaking logic. I haven't looked into it though at all, so I take your work you have and decided to go with explicit weights",
+        "created_at": "2025-07-23T11:11:23.254000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "this would be one way of doing it: https://github.com/ethereum/consensus-specs/commit/932a495ad9476e3bc9fb8fd022594a4264b3ea04",
+        "created_at": "2025-07-23T11:39:16.408000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "or this, removing any special logic from `get_weight` and having the tiebreaker logic just be the ptc vote, since now proposer boost already applies in `get_weight`, and so the proposer's choice is already respected before getting to the tiebreaker: https://github.com/ethereum/consensus-specs/commit/62681c2d6c0fc30852b03a38e2b2d6a6089b01ca\n\nThis is simpler, because it doesn't replicate proposer boost logic in the tiebreaker, but also less flexible if we wanted to change the payload decision logic",
+        "created_at": "2025-07-23T11:53:21.117000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "off-topic \u003c@520034910149410861\u003e what do you think about this for practical purposes, I'm interested in getting good testvectors so that Teku and us are freed to actually implement the new logic. Would you be OK if:\n1. We merge your PR\n2. I open another one changing the PTC Attestation data to have another field expressing DA view (it will still be on top of Electra but will be the same structure Fulu-compatible), this PR should also touch forkchoice to use this info (I'm fine adding it to the same PR of having you work on it 🤣 )\n3. Only after that merge \u003c@363800010518822915\u003e's PR with testvectors since otherwise many tests would have to change when the structure changes. \n\nThis gives us a way to work on implementations while keeping the rebase to Fulu minimal. cc \u003c@592004585506340885\u003e",
+        "created_at": "2025-07-23T12:05:48.657000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "fine with me",
+        "created_at": "2025-07-23T12:07:27+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "this seems good to me",
+        "created_at": "2025-07-23T12:09:33.752000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Works for me. Will get this PR merged soon.",
+        "created_at": "2025-07-23T12:12:49.978000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It would be more cumbersome to add a minimum threshold if we wanted one though (even just in the equivocation case), because the proposer boost from `get_weight` applies before the tiebreaker",
+        "created_at": "2025-07-23T12:13:49.144000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Can we leave the current weight logic as in your PR, since it doesn' t have any mistakes and later decide this under review if the EIP is actually accepted? I feel like it's probably too early to deal with these minor tweaks",
+        "created_at": "2025-07-23T12:15:47.741000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'd rather change it to the first tiebreaker option for now tbh, I do agree that the current setting of weights in `get_weight` is a bit weird, even if correct. Not a strong preference though",
+        "created_at": "2025-07-23T12:20:55.031000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Either way, I'll change `is_payload_timely` in that branch, using the justified state for weight (the current version just seems wrong to me and I'd rather fix it before it's merged)",
+        "created_at": "2025-07-23T12:21:35.637000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "(I'll remove `PAYLOAD_TIMELY_THRESHOLD` and just do `// 2`, if you want to keep a constant like `PAYLOAD_TIMELY_THRESHOLD_DENOMINATOR = 2` or something like that lmk, I can't think of a good name and we do directly use use `3` and `2` for the justification threshold)",
+        "created_at": "2025-07-23T12:25:44.791000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "probably better to do it in this PR then before merging it",
+        "created_at": "2025-07-23T12:26:14.718000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'm fine with removing this, I kept that as a constant originally cause we were thinking on having independent thresholds for timeliness and DA",
+        "created_at": "2025-07-23T12:27:06.472000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@1035747431461167125\u003e this fails the linter https://github.com/ethereum/consensus-specs/pull/4454",
+        "created_at": "2025-07-23T14:31:04.606000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Thanks for it",
+        "created_at": "2025-07-23T14:31:16.551000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Three new eip7732 PRs from \u003c@363800010518822915\u003e 🙂",
+        "created_at": "2025-07-23T19:27:48.528000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Looks like we sort of skipped 2 here though 😅",
+        "created_at": "2025-07-23T19:28:36.808000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "will be honest, most was claude : )\nworking on process epoch tests now...\nI do have a quetison, for eip7732 ssz_static tests, I dont need do anything right, I was able to manually generate them here without any code changes...",
+        "created_at": "2025-07-23T19:44:41.877000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Re the question. Correct, we don't need to do anything there anymore. Those are automatic now.",
+        "created_at": "2025-07-23T19:54:08.150000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "that's fantastic",
+        "created_at": "2025-07-23T20:35:20.525000+00:00",
+        "attachments": null
+    }
+]

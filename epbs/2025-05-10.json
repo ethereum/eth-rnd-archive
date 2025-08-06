@@ -1,0 +1,66 @@
+[
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "You mean changing type of `previous_epoch_attestations` and `current_epoch_attestations`? It is not an issue. Issue is removing field, changing type is fine.",
+        "created_at": "2025-05-10T02:20:24.807000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So what's the problem then in calling the Payload header, just Payload? Exactly looks previous epoch attestation became participation?",
+        "created_at": "2025-05-10T02:33:23.428000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Problem is `execution_payload`, `blob_kzg_commitments` and `execution_requests` being removed from `BeaconBlockBody` because we have assumed new fields are added to existed containers over time. Don't foresee fields being removed from containers",
+        "created_at": "2025-05-10T02:40:34.515000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "But I don't see the difference between `execution_payload` -\u003e `execution_payload_header`  and `previous_epoch_attestations`-\u003e `previous_epoch_participation` . There's something basic that I'm not understanding here",
+        "created_at": "2025-05-10T02:44:25.914000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Ah I didn't notice the name change. Let me get back to you, I am curious too",
+        "created_at": "2025-05-10T03:02:50.161000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "My previous statement isn’t 100% accurate, let me explain more:\n\nWe have `ForkName` types that basically act as dividers at each hard fork boundary eg. `ForkPostAltair` means everything after Altair (inclusive), `ForkPreElectra` means everything before Electra as defined [here](https://github.com/ChainSafe/lodestar/blob/d8bc6b137888ca1114f7db4d5af9afb04fe00d85/packages/params/src/forkName.ts#L58)\n\nSo every time we add a new hard fork, we define two `ForkName`, pre and post of that fork.\n\nAnywhere that require a container type to be pre or post of a certain fork will have the type defined as `Container\u003cForkName\u003e` eg. `BeaconBlock\u003cForkPostBellatrix\u003e` means a union type of all `BeaconBlock` of fork after bellatrix, `Attestation\u003cForkPostElectra\u003e` means a union type of all `Attestation` before Electra.\n\nThe problem is, if we define a `eip7732.BeaconBlockBody` that doesn’t have `executionPayload` for instance, `BeaconBlock\u003cForkPostBellatrix\u003e` will not be guaranteed to have `body.executionPayload`. But our code still expects it. For instance this [code](https://github.com/ChainSafe/lodestar/blob/d8bc6b137888ca1114f7db4d5af9afb04fe00d85/packages/beacon-node/src/chain/produceBlock/produceBlockBody.ts#L327) will break.",
+        "created_at": "2025-05-10T05:41:21.863000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So back to your question regarding how we handle Altair BeaconState, I guess this type system just works because we (luckily) don't have `ForkPrePhase0` and `ForkPostPhase0`defined. \n\nIn the case  `previous_epoch_attestations`-\u003e `previous_epoch_participation` we just have\n\n`BeaconState\u003cForkPreAltair\u003e`: have `previous_epoch_attestations`, no `previous_epoch_participation`\n`BeaconState\u003cForkPostAltair\u003e`: have `previous_epoch_participation`, no `previous_epoch_attestations`\n\nBut by removing execution payload in `eip7732.BeaconBlockBody`, we will have\n\n`BeaconBlockBody\u003cForkPreBellatrix\u003e`: no `execution_payload`\n`BeaconBlockBody\u003cForkPostBellatrix\u003e`: maybe. Have `execution_payload` up to Electra, and then no `execution_payload`\n`BeaconBlockBody\u003cForkPostEip7732\u003e`: no `execution_paylaod`\n\n\nIt's the maybe that breaks the system. We would need to define a fork name something like `BeaconBlockBody\u003cForkPostBellatrixButPreEip7732\u003e` to have `execution_payload` which is not ideal. And if this happen at every hard fork, we would need to define extra fork name `ForkPreXPostY`, or we will need to redesign a new type system to handle it.",
+        "created_at": "2025-05-10T05:41:41.407000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Also to my message here https://discord.com/channels/595666850260713488/874767108809031740/1367243193581830365 , I guess there is a precedent of removing fields from existed container in the spec as pointed out in your example",
+        "created_at": "2025-05-10T05:42:47.751000+00:00",
+        "attachments": null
+    }
+]

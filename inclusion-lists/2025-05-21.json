@@ -1,0 +1,106 @@
+[
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'm having a bit of a hard time understanding the block validity rules.  From the EIP:\n\n\u003e after all of the transactions in the block have been executed, we attempt to execute each valid transaction from ILs that was not present in the block. If one of those transactions executes successfully, then the block is invalid.\n\nIf I take a block that is missing one or more transactions from the IL, and these transactions would otherwise be valid if there was enough gas left in the block to fit them, this constitutes a valid block.\n\nSo by my interpretation: the block builder can fill a block full of whatever transactions it wants, optionally including IL transactions at the end.  As long as the block is too full to fit any additional valid IL txs, it's considered valid.",
+        "created_at": "2025-05-21T05:08:43.504000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "That part of the EIP is wrong and we're currently working on it: https://github.com/ethereum/EIPs/pull/9381\n\nThe difference is that we don't execute to check transaction's validity. It can be better described as follow:\n\nLet `B` denote the current block.\nLet `S` denote the execution state following the execution of the last transaction in `B`.\nLet `gas_left` be the gas remaining after execution of `B`.\n\nFor each transaction `tx` in ILs, perform the following:\n\n1. Check whether `tx` is present in B. If `tx` is present, then jump to the next transaction, else continue with next step.\n\n2. Check whether `B` has enough remaining gas to execute `tx`. If `tx.gas` \u003e `gas_left`, then jump to the next transaction, else continue with next step.\n\n3. Let `balance` and `nonce` be the balance and nonce of `tx.origin` derived from `S` respectively. If the required funds for `tx` \u003e `balance` or `tx.nonce` != `nonce`, then jump to the next transaction, else terminate process and return an error.",
+        "created_at": "2025-05-21T05:24:19.426000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "okay, but it seems clause 2 ensures that the situation I'm describing above can happen.",
+        "created_at": "2025-05-21T05:29:20.063000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes, it allows builders to fill their blocks with their favored transactions, probably more valuable MEV transactions, during congestion. We'd call it `conditional inclusion` property. Along with other properties including `anywhere-in-block`, this prevents IL from becoming a vehicle for MEV transactions.",
+        "created_at": "2025-05-21T05:33:09.745000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Regarding using `ForkchoiceUpdatedV4` vs `UpdatePayloadWithInclusionListV1`:\n\nIf we add ILs to forkchoice attribute and use `ForkchoiceUpdatedV4` to initiate the payload building process with ILs, we don't need to make an extra call to update payload with ILs. However, a proposer for slot N+1 freezes its view on ILs at 11 seconds into the slot N. Thus, with this change, a proposer doesn't need to make an extra call but a proposer cannot start building their payload until 11 seconds into the previous slot, which is a new constraint. Given that most of builders play timing games, this might be acceptable. \n\nTo not have the new constraint, we can allow a proposer to make an extra call and design `ForkchoiceUpdatedV4` to update the payload in the building process with ILs when it's called with payload ID and ILs. This allows a proposer to choose when to initiate payload building process using the same engine API. The downside would be overloading the forkchoice attribute and adding the complexity to `forkchoiceUpdated` a bit.\n\nWith `UpdatePayloadWithInclusionListV1`, a proposer can initiate payload building whenever they want, but needs to make an extra call to update their payload with ILs.\n\nIMO, this trade-off hasn't gotten enough feedback as of now.",
+        "created_at": "2025-05-21T09:54:14.288000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I replied here: https://github.com/ethereum/EIPs/pull/9381#discussion_r2098460293\n\nI do not understand why the proposer can only start building at 11 second in block N. Why not earlier? The only way to invalidate the IL is if the txs cannot fit in the block. So we can also take snapshots of our build process (for instance, after every tx, such that txs can be super easily be rolled back) and thus ensure that the IL txs fit (or, if no IL tx fits in the block is valid anyways)",
+        "created_at": "2025-05-21T10:11:10.051000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "What about doing both? Update `ForkchoiceUpdatedV4` such that it can have an initial IL, and if the IL gets updated (because more messages from the IL committee get received) then call `updatePayloadWithInclusionList`",
+        "created_at": "2025-05-21T10:14:55.898000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "You don't have ILs before 11 seconds into the previous slot, which is the time that a proposer freezes its view on IL.",
+        "created_at": "2025-05-21T10:26:49.879000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The IL might be removed in case it's equivocated. A set of ILs is not strictly incremental.",
+        "created_at": "2025-05-21T10:28:21.390000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Replied: https://github.com/ethereum/EIPs/pull/9381#discussion_r2099928668",
+        "created_at": "2025-05-21T10:29:47.366000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Oh yes, this is a good point, I forgot about this.\n\nThe IL for the builder gets frozen 11s in the slot (so there is 1s left). Am I correct that at 12s (so start of new slot) the block has to be released? This is what I get from the text and the picture.\n\nDo you agree that even if there is no entry to the IL yet, the build process can start immediately at t=0? The builder can swap out txs later, but could use the executed state already to pre-calculate the final state. It could even be possible that all items in the IL are included in the block!",
+        "created_at": "2025-05-21T11:04:32.686000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e Am I correct that at 12s (so start of new slot) the block has to be released?\n\nThe attestation deadline is 4 seconds into the slot. So in order to get enough attestations and become a part of the canonical chain, a block needs be propagated to enough attesters by that time. With this in mind, most of blocks get broadcasted at the last millisecond to include more valuable transactions as many as it can, which is called the timing game.\n\n\u003e Do you agree that even if there is no entry to the IL yet, the build process can start immediately at t=0?\n\nThis is how it is implemented at the moment.\n\nNot sure what you have in your mind but in Geth's current implementation (with or without FOCIL), it re-builds payload every two seconds and just selects a payload with higher value. Haven't looked into builder's code if they use any granular optimization.",
+        "created_at": "2025-05-21T11:48:30.868000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Right, sorry I think I misunderstood. The \"t=0 building\" was a reply on this:\n\n\u003e You don't have ILs before 11 seconds into the previous slot, which is the time that a proposer freezes its view on IL.\n\nI somehow interpreted this as that the block building would only start at t=11 😅 But that's not the case (I interpreted it wrong)",
+        "created_at": "2025-05-21T11:53:40.666000+00:00",
+        "attachments": null
+    }
+]

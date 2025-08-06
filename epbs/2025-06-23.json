@@ -1,0 +1,312 @@
+[
+    {
+        "author": "robertosaltini9500",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Does the PTC run the fork-choice before voting for availability of a payload or does it just vote for availability of the payload of whatever block has been proposed regardless of whether such a block is canonical?",
+        "created_at": "2025-06-23T06:53:33.363000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robertosaltini9500",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I was thinking whether the following scenario is possible.\n\n- The adversary controls β of the attesters and the proposers of both slot N and slot N+1.\n- The adversary proposes block N conflicting with the current head of the chain (block N-1).\n- block N receives β votes from the adversary\n- the payload of block N is revealed in time so the PTC votes for its availability\n- block N+1 is built on the block N with payload and it is proposed on time\n- The fork-choice weight of block N is then β+RB+PB. If RB = ∞, then N-1 would be reorged out (I think that this would be true even if N+1 was built on top of N-1). If β \u003c 0.2, RB=0.4 and PB=0.2, then N-1 would not be reorged out in this scenario.",
+        "created_at": "2025-06-23T08:13:06.093000+00:00",
+        "attachments": [
+            {
+                "type": "image/jpeg",
+                "origin_name": "00f88c19-6d2b-4465-ae76-a57c7af98c6e.jpeg",
+                "content": "ac4bce804532fcc44491d3e5e369eca4e2bc7842b4d49ce64c7c5e0e2d3cf8c9"
+            }
+        ]
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This is using the reveal boost, but that's out of the picture at this point. This is how I would see the fork-choice working: https://github.com/ethereum/consensus-specs/compare/dev...fradamt:consensus-specs:epbs-payload-root-votes. \nThis is if head vote can be either the payload hash or beacon block root, but can easily be modified to do the same thing with a (root, payload_bit) or (root, payload_hash) head vote, which is the same information at the end of the day. One thing it doesn't say is how the PTC should vote, but I think it can just be \"vote for the payload attached to the first block from a proposer in your canonical chain\" (i.e. basically lock on the first beacon block from the right proposer, vote for its payload if it arrives in time). It's ok if it the block is itself not canonical, as the PTC only affects the last decision of the fork-choice (is the payload there?) and not anything before",
+        "created_at": "2025-06-23T09:32:22.684000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So in the current specification in the EIP with the values of RB this reorg doesn't happen, the PTC votes simply for the first block of the right proposer in the slot. In the modified version with RB=\\infty but still using block slot then the RB would only be used if the Payload is for the head of the CL chain as described in Francesco's notes so it would also not happen. But anyway as Francesco is saying it seemed to me that clients were inclined to agree that changing the attestation wasn't so bad and we would just keep forkchoice as today. I'm awaiting confirmation from other teams to start working on the CL spec to get it up to date this week",
+        "created_at": "2025-06-23T09:44:33.679000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@755590043632140352\u003e a claim you've made (e.g. here https://x.com/potuz_eth/status/1936146331283947978?s=61\u0026t=TyUyEPPiuSijly_7YxKCsw) is that one shouldn't count the latency of beacon propagation as time wasted by the stricter separation of epbs versus other proposals which allow concurrent broadcasting of beacon block and payload (and blobs), because builders/relays would anyway take the same time to make sure they're not unbundled. \n\nI don't quite understand how it maps to the status quo. What exactly do builders/relays do today? My understanding/recollection was that at the time of the low-carb attack they added a delay before directly returning the payload to the proposer (which is a kind of a useless thing to do anyway), but not a delay in broadcasting the payload to the network, essentially to make sure that the unbundling would require \"intercepting\" the payload propagation and racing it. Is this correct? Is there some other delay that you are referring to? At the moment I don't really see why a builder/relay would delay the propagation, it doesn't benefit them to do so because there's no \"locking process\" happening in protocol at the same time (like the beacon block broadcast of epbs, or header broadcast or something)",
+        "created_at": "2025-06-23T10:15:03.697000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Perhaps \u003c@363800010518822915\u003e or relays will know better of the operation today but afaik there were two delays one is on the return with the header, which is akin to making the proposer play a timing game, the other one was about checking if there was an equivocating block out there, we added explicit code for this on Prysm but at that time I believe all relays used lighthouse and they also had support for this.",
+        "created_at": "2025-06-23T10:19:34.310000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The timing game delay can be assumed that it would disappear if there was no time to play the game",
+        "created_at": "2025-06-23T11:36:47.115000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "mev-boost has a get header timeout default [defiend for 950ms](https://github.com/flashbots/mev-boost/blob/fe8d4c5d1e5853ed82fd8851802c3219af0561cb/cli/flags.go#L157), client has it defined for 1s, so it would wait until that time for *all* headers to arrive. A really smart relayer could time that as close to 4s as possible",
+        "created_at": "2025-06-23T12:07:40.081000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yes I think so, we can probably do this with 7732 since the block size may be assumed to be known. I do not think this can be done with designs in which we have to broadcast payload + blobs at the same time",
+        "created_at": "2025-06-23T12:13:54.749000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Even with 7732 I think there will always be some slack though",
+        "created_at": "2025-06-23T12:14:24.366000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Oh.. this is helpful: https://github.com/ethereum/consensus-specs/compare/dev...fradamt:consensus-specs:epbs-payload-root-votes\nI wish I has seen it earlier 🙂",
+        "created_at": "2025-06-23T12:15:20.328000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The delay from relay timing games can be ignored here. \nAs of today, what matters is when the block gets out and not when the proposer receives back the payload from the relay. Relays start propagating before the proposer received the payload. So, to get to the beginning of block propagation, there's only one small getHeader call + a signed response in between.",
+        "created_at": "2025-06-23T12:28:43.780000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Good Monday \u003c@641548687813902336\u003e \u003c@504202741933932544\u003e \u003c@554799849288105986\u003e \u003c@654267572107083777\u003e have you got any feedback regarding the design decision on Friday? \n1) are we going with the signaling approach? (Just confirming those present said yes) \n2) are we going with the boolean or a root in the attestation (want to confirm that for \u003c@520034910149410861\u003e this doesn't matter and want to know your preference here) \n\nDepending on this I'll start working on the spec changes today",
+        "created_at": "2025-06-23T12:30:04.261000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I haven't had much time to think about this yet as I'm trying to help with `devnet-2`",
+        "created_at": "2025-06-23T14:51:06.327000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "who cares about Fusaka?",
+        "created_at": "2025-06-23T15:03:30.455000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Have people looked at how likely `AttestationData` is to become an invasive change, well beyond the stf? web3signer, beacon API...",
+        "created_at": "2025-06-23T15:05:17.169000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "shades of EIP-7549 on that",
+        "created_at": "2025-06-23T15:05:40.601000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yeah it's definitely not a light change, the tradeoff is that forkchoice becomes very much the same as the current forkchice.",
+        "created_at": "2025-06-23T15:07:29.887000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "the thinking for Prysm is that it should be less disruptive than 7549 itself in that we have partly that machinery. Someone argued that we may even change this again in the future by enabling other signalling on attestations",
+        "created_at": "2025-06-23T15:08:56.349000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "hm, ok, if it's anticipated/planned-for, ok. for (2) within the discussed signaling approaches, prefer boolean",
+        "created_at": "2025-06-23T15:11:53.062000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I find \"A boolean field simplifies this and avoids changes to the state transition function\" convincing enough",
+        "created_at": "2025-06-23T15:13:35.420000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "hmmm I didn' t undertand this, why a boolean vs hash have any difference in the state transition function? they serve the exact same purpose, state transition should be the same with either. \n\nNot to disagree with you, I was the one that proposed the hash, but I also started to believe that the boolean may be better anyway, it's faster to verify the attestation over the wire and I think that's the most important point regarding this",
+        "created_at": "2025-06-23T15:22:24.970000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "copy/pasting from https://hackmd.io/@tchain/eip7732-breakout-20",
+        "created_at": "2025-06-23T15:23:12.804000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yeah didn' t understand that either 🙂",
+        "created_at": "2025-06-23T15:24:09.555000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "but yeah the verification part is true: if you get a blockroot and a hash, you need to verify that they are consistent",
+        "created_at": "2025-06-23T15:24:31.945000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "that is that the hash can actually be an EL head for the given CL head",
+        "created_at": "2025-06-23T15:24:45.727000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "In principle this check may be ignored I think. Same with a boolean, when you get a boolean you just check that you have the blockroot and that's it, and you consider the boolean only for the purpose of branch weight counting in forkchoice. You can probably ignore if you have seen or not the payload at the time of validation, you only need to have the branch at the time of importing in forkchoice",
+        "created_at": "2025-06-23T15:26:18.481000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "What if we gave the PTC *two deadlines*?\n* an earlier deadline for which the payload must be available\n* a later deadline for which the blobs must be available\nValidators in the PTC will only attest if both deadlines were met. This would force the builder to relinquish their information monopoly over the state while still letting us pump the blobs.",
+        "created_at": "2025-06-23T17:28:21.200000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This is very simple to implement",
+        "created_at": "2025-06-23T17:58:30.272000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "By the way I talked to Brecht from Taiko today and according to his explanation the monopoly woudn't be an issue at least on their design of the based rollup with preconfs.",
+        "created_at": "2025-06-23T18:37:50.938000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Sorry I added my personal thoughts to the meeting notes and they might not be correct\nI was thinking that if we use a block hash the STF probably needs to verify that it’s a valid one otherwise someone could put in a random hash in an attestation and nothing would fail which just feels intuitively wrong\nBut with a boolean field the STF likely doesn’t need to check anything because it’s just binary it either signals the presence of a payload or not without caring which payload it is....",
+        "created_at": "2025-06-23T18:55:32.980000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "but the fact that it doesn' t fail with the boolean already shows that the check with the hash is probably irrelevant",
+        "created_at": "2025-06-23T18:59:17.985000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "ya I agree it's irrelevant and cosmetic, I just wonder if junk block hash in attestation could be abused for other things,  attestations will be on chain for deferred payment right?",
+        "created_at": "2025-06-23T19:03:41.982000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "not the attestation, but just the balance",
+        "created_at": "2025-06-23T19:05:33.312000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "gotcha, if it's not on chain then I agree it's just cosmetic",
+        "created_at": "2025-06-23T19:06:23.828000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Anyway I think the boolean is better in fact, we anyway need to have the block, and quickly can check if we have already the payload or not",
+        "created_at": "2025-06-23T19:11:13.899000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "and the attestation is smaller",
+        "created_at": "2025-06-23T19:11:22.545000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I just hope our damn fastssz library will support that",
+        "created_at": "2025-06-23T19:12:06.653000+00:00",
+        "attachments": null
+    }
+]

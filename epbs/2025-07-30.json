@@ -1,0 +1,98 @@
+[
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "How can the head go from not weak to weak through equivocations?",
+        "created_at": "2025-07-30T04:45:40.518000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Ah, found it, nvm",
+        "created_at": "2025-07-30T04:49:08.845000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Seems fine to me",
+        "created_at": "2025-07-30T08:40:50.068000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Just to confirm for my understanding, the fallback to \"all the builders I directly pull bids from are offline\" is the global topic `execution_payload_header` in which every builder is allowed to place one bid per slot?",
+        "created_at": "2025-07-30T09:37:28.635000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Made two changes to this:\n- added an equivocation buffer of 1% to `is_head_weak`: attesters consider a head weak if it gets \u003c 19% of the votes, while the proposer \u003c 20%, so it takes 1% of equivocation to make a head go from non weak to weak, protecting the proposer\n- added a second block timeliness indicator for the ptc deadline (it doesn't actually have anything to do with the ptc, it just needs to be later in the slot). The logic in `should_apply_proposer_boost` can then be simplified to not applying proposer boost on weak heads from the previous slot, when there are *timely* equivocations (seen before the ptc deadline)\n\nThe idea is that late equivocations don't affect an honest proposer: if the proposer doesn't see them, no one will have recorded those blocks as timely, so they won't affect attesting (proposer boost is applied normally). \n\nOn the other end a malicious proposer can't just freely extend a late equivocation  `B` and reorg a timely block `A`, because in that case `A` will count as a timely equivocation, and proposer boost won't be applied to `B` if it is weak",
+        "created_at": "2025-07-30T11:25:02.300000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "seems simple enough to me now",
+        "created_at": "2025-07-30T11:25:25.647000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The full argument for builder reveal safety and for the proposer still being protected is:\n- builder reveals =\u003e block not weak (40% weight) and timely, no early equivocations detected =\u003e if the proposer extends an equivocation, proposer boost doesn't apply because the equivocation is detected as such (block is timely) and the equivocation is weak (late equivocations can't accrue honest weight) =\u003e no matter what the proposer does, the block stays canonical\n- proposer doesn't see equivocations =\u003e equivocations not timely =\u003e proposer boost applies normally\n- proposer sees equivocations, weak head =\u003e extends the parent, proposer boost applies since it's extending a block from earlier than the previous slot, the reorg succeeds since head is weak\n- proposer sees equivocations, not weak head (\u003e 20%) =\u003e extends head, head stays not weak (\u003e 19%, unless 1% of committee is slashable), proposer boost applies normally",
+        "created_at": "2025-07-30T12:52:09.344000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@363800010518822915\u003e \u003c@755590043632140352\u003e another eip7732 PR for y'all to review:\nhttps://github.com/ethereum/consensus-specs/pull/4474",
+        "created_at": "2025-07-30T13:57:05.311000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Another question, we currently have this in `process_execution_payload_header`  and I want to perhaps add the marked lines:\n```\n    # For self-builds, amount must be zero regardless of withdrawal credential prefix\n    if builder_index == block.proposer_index:\n        assert amount == 0\n    else:\n        # Non-self builds require builder withdrawal credential\n        # and a non-zero bid                                         \u003c--------- This line and the next one added\n        assert amount \u003e 0\n        assert has_builder_withdrawal_credential(builder)\n```\nThe tradeoff is that if we are in a world in which validators cannot self-build this may cause a liveness issue if the only viable builders are not willing to pay for their blocks. It may be even a deadlock if all viable builders don't have any balance left in that case. I think this is so far fetched that it is not a real problem to require at least 1 Wei of payment. Otherwise I'd like to remove the possible 0 value withdrawal /pending-payment. \n\nWhat do you guys think?",
+        "created_at": "2025-07-30T14:06:24.961000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "`process_execution_payload_header` also requires a minimum activation balance `MIN_ACTIVATION_BALANCE` outside of pending. that is 32 eth, I wonder if there's any feedback on that",
+        "created_at": "2025-07-30T16:39:08.054000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "remove the 0 value withdrawal /pending-payment is a good enough reason to do this imo",
+        "created_at": "2025-07-30T16:50:32.880000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We can probably relax this, I just played safe adding this condition before studying if some assumption would break by relaxing it",
+        "created_at": "2025-07-30T16:55:33.226000+00:00",
+        "attachments": null
+    }
+]

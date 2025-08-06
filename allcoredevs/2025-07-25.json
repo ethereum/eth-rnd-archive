@@ -1,0 +1,90 @@
+[
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "regardless of how we'd get to shorter duration epochs, it'd be changing issuance also if we're 'not altering the current issuance' as far as i understand it.",
+        "created_at": "2025-07-25T07:01:28.035000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "general",
+        "parent": "",
+        "content": "Any change should be made while keeping aggregate issuance constant of course, so we would only alter per slot/per epoch issuance in order to keep the same aggregate issuance otherwise",
+        "created_at": "2025-07-25T08:21:51.636000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "we need to get on top of that statement, its a functional change, but it reads like its just a consideration. so many things need thinking about in that eip, we should start soon regardless of if its a G* to find all the other hidden gems we take on whenever its sfi",
+        "created_at": "2025-07-25T09:21:53.198000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "general",
+        "parent": "",
+        "content": "thoughts on speeding up attestation propagation:\n\n**network workload:** every subnet manages ~535 attestations. every attestation is around 280 bytes uncompressed, ~220 bytes snappy compressed (numbers from memory, pls correct if off). assuming single attestations and all attesters online, we're looking at a raw uncompressed total data of ~150KiB per slot per subnet. let's ignore the compression rate as it's offset by protocol framing. this number is further reduced if we factor in aggregated attestations and missed attestations.\n\n**propagation timing:** \u003c@968526635735326741\u003e's CDF chart showed 0 to 90% delivery within 1.5s (p95) for empty slots. to contextualise, empty slots generate a burstier traffic pattern than non-empty slots with the current client behaviour (and therefore place more concentrated stress on the network than the happy path; this will change if attestation release is aligned across clients in the future). with a node population of 13k, assuming 2 structural subscriptions to per node to attnets, under a homogenenous distribution, we're looking at ~400 beacon nodes as mesh members of every attnet, plus aggregators + observers, maybe 500?\n\n**takeways:** imo, taking 1.5s to deliver ~150KiB of data between 90% of 500 peers is ***excessive***. one key insight is that the network workload for attestations is radically different to that of blocks, blobs, etc. here we have N tiny fragments uniquely produced by N actors *outside* the mesh that need to be routed *within* the mesh, and preferentially to specific members: the aggregators.\n\n**improvements:** my gut feeling is that the gossipsub overhead is dominating due to us treating each attestation as an individual unit of propagation; there may be some bottlenecks at the origin due to reliance on the fanout mechanism. i'm drafting notes on a series of improvements, and lining up people who'd like to help prototype quickly in go. pls reach out if interested!",
+        "created_at": "2025-07-25T10:32:11.469000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Att numbers",
+        "created_at": "2025-07-25T10:47:48.790000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "soispoke",
+        "category": "general",
+        "parent": "",
+        "content": "I’ve been relatively quiet on ACD calls because it felt like discussions around FOCIL had to wait a bit for ePBS and shorter slot times to settle. But I do want to bring up a couple of points that are sometimes overlooked.\u2028\u2028\n\nFOCIL introduces a completely new primitive into the protocol. It allows some protocol participant to impose constraints on others. More specifically, it allows the more decentralized set of validators to impose constraints on sophisticated builders and prevent them from censoring transactions.\u2028\u2028\n\nBy doing PBS, and now by leaning into zkEVMs we are choosing to separate protocol duties into two broad categories: \u2028\n- **The sophisticated, resource‑intensive, centralized category **(e.g., builders, provers)\n- **The geographically distributed, less sophisticated, accessible category **(e.g., attesters, includers)\n\nFor this architecture to make sense, we need to **(1)** Cleanly separate those two categories and **(2) ** Keep the sophisticated, centralized entities in check. \n\nThe point is that FOCIL does both, and by not shipping it we just end up with the worst of both worlds: Low throughput/long slot times and bad CR properties. \n\nNow, a more personal take: Ethereum will always lose to competitors on TPS and slot duration because we’re unwilling to make the same trade-offs when it comes to bandwidth and hardware requirements. Ofc that doesn’t mean we can’t meaningfully improve (by restructuring the slot, by being first to adopt revolutionary tech like ZK); it just means we’re unlikely to be the “best” there in the long run.\u2028\n\nWhere I think we can and should absolutely win is resilience: security, censorship resistance, permissionlessness. But the reality is that we are not in a great spot: we’re barely leveraging our decentralized validator set and we end up  depending on literally two entities to build almost all Ethereum blocks without safeguards.\u2028\u2028We have a chance to fix this, in Glamsterdam.\n\nAnd I think we should just go for it.",
+        "created_at": "2025-07-25T13:04:24.328000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "soispoke",
+        "category": "general",
+        "parent": "",
+        "content": "P.S: Also worth reminding this EIP is the result of years of research, with a stable spec. We have interop across 4 CL and 1 EL client, and implementation has started on one more CL client and 2 more EL clients.\u2028\u2028\n\nP.P.S: And in less than 24 hours after the last call, we have people representing L2 ecosystems (Fabric, L2 beats), MEV (Commit-boost), staking pools (Lido DAO), NFT communities (Miladys) support FOCIL on the ethmagicians thread.",
+        "created_at": "2025-07-25T13:06:20.061000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "general",
+        "parent": "",
+        "content": "On top of this, I’d like to elaborate on why we should ship FOCIL in Glamsterdam. Some people appear to assume there will soon be a second chance, such as H* or even I* fork. However, with the three goals in mind, we would restructure slot in Glamsterdam and likely reduce slot time in H* fork. It’s reasonable to expect that if FOCIL doesn’t make it into Glamsterdam, it won’t make it into H* either.\n\nAdditionally, FOCIL is not a one-stop solution for CR. Instead, it’s the first step toward enshrining CR across the entire stack: from the protocol to the application layer via the MEV pipeline. Many community members have expressed clear preferences regarding CR. Introducing CR at the protocol level is a response and it would usher in significant CR improvements over time.\n\nNot shipping FOCIL in Glamsterdam does not merely mean “we can have CR later.” It signals that Ethereum would neglect CR for years, leaving it in a vulnerable position.",
+        "created_at": "2025-07-25T13:21:29.004000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "greystroke",
+        "category": "general",
+        "parent": "",
+        "content": "Serious consideration should be given to not making the 6 month upgrade interval a sacrosanct goal.  Glamsterdam is an upgrade where it may be worth taking extra time if needed to add both ePBS \u0026 FOCiL within the same fork. Both have been heavily researched and speced out. This will also provide the slot shaping to optimize for shorter slot times in the H* fork. Let's not let process become the enemy of progress.",
+        "created_at": "2025-07-25T21:47:02.358000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah, I'd agree with this in general. If (and I'm for the moment, writing this not taking a position on that point either way, just stipulating it) this combination of ePBS and FOCIL is truly that worthwhile, it's worth getting right, and not relying on some \"2x the functionality for 1.1x the implementation and testing time\" fairy tale to rationalize a 6-month schedule in a dogmatic way",
+        "created_at": "2025-07-25T21:55:00.858000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "This doesn't necessarily say anything about H-star, incidentally; I want to tightly scope this comment to Glamsterdam, in the context of a potential combination of ePBS and FOCIL",
+        "created_at": "2025-07-25T21:56:09.420000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,200 @@
+[
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003camezianehamlat\u003e re: **@KamilChNethermind**\n\u003e Seeking for opinions from people out there especially from EL devs.\n\nWorst-case (opcodes) stress testing seems like super valuable thing but we are having some doubts about results especially comparing various languages used (rust and go vs java and c#). Java and C# seems like require some prewarming of methods to show \"Real\" data.\n\nWorst-case scenario of course is - no warmup and sudden attack with some very specific opcodes but this affects only new nodes - and actually I'm not even sure if it affects them because user needs still to sync and process quite a big chunk of data so EVM methods should be \"warm\" before actually node starts following the chain.\n\nWorking now on prewarming and have first version of that which proves for sure that neth and besu are doing better - question is if we should run both types so \"warm\" and \"cold\" or maybe even spending resources on testing \"cold\" path doesn't make sense.\nMaybe it makes sense to have both, knowing that a cold case attack is pretty rare but still possible, as the attacker would need to trigger a restart with OOM error for example than send the load to trigger the cold case attack. For besu, warmup can have a big impact on performance. This is something we noticed with Nethermind gas benchmarks and arewefastyet. These benchmarks use some warmup techniques but they are not sufficient for some of the benchmarked opcodes and precompiles. They’re still very useful though 👍️️️",
+        "created_at": "2025-06-02T05:16:34.001000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003camezianehamlat\u003e Tier 3 (C1 with full profiling) starts at around 2 000 method invocations.\nTier 4 (C2 “server” compilation) then happens at about 15 000 invocations.",
+        "created_at": "2025-06-02T05:17:33.655000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "tg_image_1838170058.png",
+                "content": "88f482ca3eb6c149db84b64116e52c2254856b98a7c5367912deadb9e44df9b8"
+            }
+        ]
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003camezianehamlat\u003e -Xcomp -XX:-TieredCompilation will force the JVM to compile each single method on its first execution directly to fully optimized C2 code, without using profiles. The first impact will be startup time, but the compiled code will be different from the one that would be generated if the JVM has to go through different tiers (levels of compilations), so I don’t think it will reflect besu real performances. I tried it to be sure and the difference is clear.",
+        "created_at": "2025-06-02T05:19:36.162000+00:00",
+        "attachments": [
+            {
+                "type": "image/jpeg",
+                "origin_name": "file_41.jpg",
+                "content": "d090329db856aac82b748df33b5073d30a6a3a8cb53630b7ad74b1f819b95ac4"
+            }
+        ]
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003camezianehamlat\u003e There is JEP 515: Ahead-of-Time Method Profiling (JDK 25): https://openjdk.org/jeps/515  from project Leyden https://openjdk.org/projects/leyden/ that can help in future, when java 25 will be available in septembre 2025 : https://openjdk.org/projects/jdk/25/. There should be an EA release before that I can test. The idea is to reduce time to peak performance by generating a profile with the first iteration, then use the generated profile in the second iteration, which speeds up JIT compilation and optimizations.  \nIf there is a way to use opcode/precompile benchmarks directly on devnets, that would resolve the warmup issues. The issue we see with Nethermind benchmarks is the restart of the pods for each run, which can be mitigated by a long running devnet.",
+        "created_at": "2025-06-02T05:20:12.993000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cKamilChNethermind\u003e re: **@amezianehamlat**\n\u003e Maybe it makes sense to have both, knowing that a cold case attack is pretty rare but still possible, as the attacker would need to trigger a restart with OOM error for example than send the load to trigger the cold case attack. For besu, warmup can have a big impact on performance. This is something we noticed with Nethermind gas benchmarks and arewefastyet. These benchmarks use some warmup techniques but they are not sufficient for some of the benchmarked opcodes and precompiles. They’re still very useful though 👍️️️\nHave a draft PR which improves warming a lot now so should be much better",
+        "created_at": "2025-06-02T06:21:50.376000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003camezianehamlat\u003e Another interesting case we noticed recently when analyzing opcodes that push on top of the stack like Address, coinbase, basefee, ..etc, is the way the stack is sized. In besu, @shemnon did an optimization to use a flexible stack that resizes dynamically. This works pretty well for a real use case like mainnet and improves call opcodes performance, but has an impact on Nethermind benchmarks results, like address benchmark that pushes 1000 times address on top of the stack. We ran the benchmarks with a fixed stack, and we noticed an improvement of ~30% on 50th percentile and up to 50% for maximum throughput, for opcodes like address or basefee. I believe Nethermind uses a fixed stack and geth has a dynamic sizing as current besu.",
+        "created_at": "2025-06-02T07:16:37.594000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cshemnon\u003e Are we optimizing for realistic cases or worse cases?  IMHO a typical test should be (ADDRESS POP) until gas is exhausted as stack limits are rarely reached in normal operation (mostly because of stack too deep issues in solidity).  Worst case scenario need to be considered, however.",
+        "created_at": "2025-06-02T11:27:39.891000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cben_a_adams\u003e re: **@shemnon**\n\u003e Are we optimizing for realistic cases or worse cases?  IMHO a typical test should be (ADDRESS POP) until gas is exhausted as stack limits are rarely reached in normal operation (mostly because of stack too deep issues in solidity).  Worst case scenario need to be considered, however.\nGas limit is set by worst case? So depends how bad it is :)",
+        "created_at": "2025-06-02T11:28:51.436000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003camezianehamlat\u003e re: **@shemnon**\n\u003e Are we optimizing for realistic cases or worse cases?  IMHO a typical teat should be (ADDRESS POP) until gas is exhausted as stack limits are rarely reached in normal operation (mostly because of stack too deep issues in solidity).  Worst case scenario need to be considered, however.\nWorst cases can be different depending on the clients. For example, the address benchmark example is a worst case scenario for Besu (and maybe Geth) but not for Nethermind. Maybe realistic and non realistic cases is another interesting wording.",
+        "created_at": "2025-06-02T12:21:58.034000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cshemnon\u003e I think we should phrase it as \"typical\" instead of realistic, because realistically trolls will push all corners of the performance envelope because they can.",
+        "created_at": "2025-06-02T12:23:34.944000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cnotnotstorm_p\u003e re: **@amezianehamlat**\n\u003e Worst cases can be different depending on the clients. For example, the address benchmark example is a worst case scenario for Besu (and maybe Geth) but not for Nethermind. Maybe realistic and non realistic cases is another interesting wording.\nit would be interesting to know the worst case for each client in a very precise way\n\ngas limit will be set by some fuzzy function of these worst cases\n\nand having precise data will help each client team optimize their worst cases over time",
+        "created_at": "2025-06-02T16:16:10.367000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cKamilChNethermind\u003e You mean like this?",
+        "created_at": "2025-06-02T16:22:07.686000+00:00",
+        "attachments": [
+            {
+                "type": "image/jpeg",
+                "origin_name": "file_42.jpg",
+                "content": "1a75d89bc44cfe778b89f3dd725b9657dd886dc852387fc7c003302ae6d41232"
+            }
+        ]
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cKamilChNethermind\u003e Most important is to find the worst, fix it, then find another, fix it and so on and so on",
+        "created_at": "2025-06-02T16:23:01.287000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cnotnotstorm_p\u003e re: **@KamilChNethermind**\n\u003e You mean like this?\nyes exactly. but nethermind isnt on there 😉",
+        "created_at": "2025-06-02T16:23:14.314000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cnotnotstorm_p\u003e re: **@KamilChNethermind**\n\u003e Most important is to find the worst, fix it, then find another, fix it and so on and so on\nyea 1000%",
+        "created_at": "2025-06-02T16:23:25.968000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cKamilChNethermind\u003e Fixing tests so probably will appear :) \n\nBut we are as slow as the slowest one - so of course we have charts per client",
+        "created_at": "2025-06-02T16:23:42.957000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cKamilChNethermind\u003e But as long as someone is behind - we should urge to fix this rather than focusing on further problems",
+        "created_at": "2025-06-02T16:24:00.137000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cKamilChNethermind\u003e Nethermind for example but we have precompiles cache - and scenarios are still cachable (@marcin_d_s already have idea for that and should land here soon)",
+        "created_at": "2025-06-02T16:25:16.707000+00:00",
+        "attachments": [
+            {
+                "type": "image/jpeg",
+                "origin_name": "file_43.jpg",
+                "content": "8a96a48e78b9bf6e52479071a1b878ac3181f7a5db4f39500f2ff1e4b2ac6e80"
+            }
+        ]
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cnotnotstorm_p\u003e re: **@KamilChNethermind**\n\u003e Nethermind for example but we have precompiles cache - and scenarios are still cachable (@marcin_d_s already have idea for that and should land here soon)\nthis precision is awesome\n\nwhen you get a chance do you think you could post this chart for each of the 5 clients?",
+        "created_at": "2025-06-02T16:38:35.089000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cKamilChNethermind\u003e re: **@notnotstorm_p**\n\u003e this precision is awesome\n\nwhen you get a chance do you think you could post this chart for each of the 5 clients?\nAll of them are on grafana - tests executed 24/7 pulling images from development branches of each EL:\n\nhttp://172.233.96.208:8084/d/fel9iensrsdtsa/gas-limit-monitoring?orgId=1\u0026from=now-2d\u0026to=now\u0026timezone=browser\u0026var-ClientName=$_all\u0026var-TestTitle=$_all",
+        "created_at": "2025-06-02T17:51:20.906000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cnotnotstorm_p\u003e awesome\n\nhere they all are together for reference",
+        "created_at": "2025-06-02T19:29:18.683000+00:00",
+        "attachments": [
+            {
+                "type": "image/jpeg",
+                "origin_name": "file_44.jpg",
+                "content": "f4a502ca374491bbfc53ccf45e3978fca915dcd98f68bfb96def3959c856613b"
+            }
+        ]
+    }
+]

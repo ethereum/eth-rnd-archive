@@ -1,0 +1,106 @@
+[
+    {
+        "author": "barnabemonnot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "No, it could be starting well after the proposer calls getHeader. For instance, proposer calls getHeader, 850ms later a new bid for a new block is immediately returned by one of the relays. This means inclusion latency is up to 850ms less than if you were computing it from the point where proposer makes the getHeader call. In other words, a tx coming in 800ms after the call is made could be included in the block that is eventually released. Best case then the latency is whatever time it takes for the relay then proposer to receive the winning bid, the proposer to sign it, the signature to reach the relay, and the relay to release the payload to the network",
+        "created_at": "2025-07-15T07:14:53.241000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "You could still get 2s-stale bids from the builders you query in ePBS. I don't see why this less true in ePBS than in mev-boost.\n\nWriting out the transaction latency factors in each path, is this correct?\n- mev-boost: \n  - transaction propagation to winning builder +\n  - delay between transaction inclusion and winning block committed +\n  - delay between winning block committed and winning bid issued +\n  - delay between winning bid issued and proposer signature received by relay +\n  - delay between proposer signature received and payload released to network\n- ePBS: \n  - transaction propagation to winning builder +\n  - delay between transaction inclusion and winning block committed +\n  - delay between winning block committed and winning bid issued +\n  - delay between winning bid issued and proposer signature received by attesters +\n  - delay between proposer signature received by attesters and attestations received by builder +\n  - delay between attestations received by builder and payload released to network\n\nWhat you are saying is that in mev-boost, e.g., for Flashbots, the delay between winning block committed and winning bid issued can be large (2s) but it wouldn't be the case in ePBS. I don't see the argument however.",
+        "created_at": "2025-07-15T07:39:57.962000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "stefanbratanov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We haven't implemented yet the millisecond timestamps as far as I am aware (but I have been on a holiday). I suppose that's non consensus breaking anyways, can still interop without it, it's just refactor",
+        "created_at": "2025-07-15T07:52:47.950000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think the core arguemnt is `delay between winning bid issued and proposer signature received by attesters + delay between proposer signature received by attesters and attestations received by builder` can be made shorter than proposer/relayer interaction today, builder can release payload as soon as it sees its header is committed in the block",
+        "created_at": "2025-07-15T14:00:21.185000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Ok that's a different argument than Potuz's then. I wonder if that would be the default builder behaviour, and if it is, how much shorter it is vs relay path. I suppose the builder would want to see the committed beacon block on the gossip network, to ensure that it's also being seen by enough parties. That doesn't seem much faster than the proposer directly sending their signed bid to the relay and the relay broadcasting the payload",
+        "created_at": "2025-07-15T15:13:40.092000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Cross posting cause most probably CL devs aren't in the gas limit testing, this is Kamil's run with 4 second execution blocks https://x.com/ChodoKamil/status/1945154735058657357",
+        "created_at": "2025-07-15T16:21:09.923000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think the way I attack the timeline is the following. We first specify some big Ts.\nT_0: proposer honest reveal (0s)\nT_1: attestation deadline (4s)\n\nThen some small Ts, each of them is also a network hop\nt_0: proposer calls getHeader \nt_1: relayer returns header\nt_2: relayer receives signature\nt_3: network receives  execution block\n\nToday, [t_0..3] is wrapped by T_0 and T_1, but a node typically receives a block close to 4s because timing game\n\nIn epbs, we specify the following big Ts\nT_0: proposer honest reveal (0s)\nT_1: attestation deadline (2s) [timing game ends here]\nT_2: builder honest reveal (4s)\nT_3: PTC deadline (6s)\n\nIn epbs, [t_0..2] is wrapped by T_0 and T_1, the question is when is t_3, and how to set T_3. In naive parameter above, it could come anywhere between 2-6s",
+        "created_at": "2025-07-15T20:52:09.617000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I’m not sure what to draw from this",
+        "created_at": "2025-07-15T21:38:12.065000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think it comes down to two questions, 1.) will builders reveal early or on time or withhold until last second 2.) what is the PTC deadline. Because if we set the payload reveal at 4s, it doesnt look very different than today. In epbs, we save one network hop",
+        "created_at": "2025-07-15T21:43:32.466000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It's more than the network hop, you save the relay timing shenanigans",
+        "created_at": "2025-07-15T23:05:15.433000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "That's the biggest differentiation",
+        "created_at": "2025-07-15T23:05:26.899000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Because you can assume that all will play it, but the game with 2 seconds attestations is very different than with 4",
+        "created_at": "2025-07-15T23:06:11.432000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Okay true, you also save ~1s there",
+        "created_at": "2025-07-15T23:30:08.083000+00:00",
+        "attachments": null
+    }
+]

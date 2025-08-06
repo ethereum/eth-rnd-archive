@@ -1,0 +1,120 @@
+[
+    {
+        "author": "parithosh",
+        "category": "Testing",
+        "parent": "",
+        "content": "So clients are advertising they’re synced when they aren’t?",
+        "created_at": "2025-04-21T08:39:19.025000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "hangleang.eth",
+        "category": "Testing",
+        "parent": "",
+        "content": "I'm just catch up here, is the syncing issue related to clients implement validator custody, advertise on cgc but not yet backfill columns? is all columns + blocks not response, or partial response?",
+        "created_at": "2025-04-21T09:19:11.141000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "I’m still investigating",
+        "created_at": "2025-04-21T09:22:06.152000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "But i think only prysm had val custody and i think \u003c@531934490826768418\u003e mentioned backfill wasn’t ready for them",
+        "created_at": "2025-04-21T09:23:01.434000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "agnxsh",
+        "category": "Testing",
+        "parent": "",
+        "content": "Prysm had a fair share of the mix, but vals didn’t add/minus during the entire run, so shouldn’t be an issue",
+        "created_at": "2025-04-21T09:23:36.761000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "hangleang.eth",
+        "category": "Testing",
+        "parent": "",
+        "content": "yeah, if Prysm didn't update the cgc",
+        "created_at": "2025-04-21T09:24:20.059000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matthewkeil",
+        "category": "Testing",
+        "parent": "",
+        "content": "As a note, we also have val custody but we are not changing the advertised cgc yet.  We maintain two counts, target and advertised,  with advertised tied to the backfill (which we have not finished working on).  Target is just used internally for pulling what we need in a slot (or on sync).  So we are advertising the same thing as we were before we added val custody (static value like before).  That way we always can serve the columns that we say we have (even though we actually custody more than advertised because that might only be paritally in custody due to missing backfill)",
+        "created_at": "2025-04-21T09:30:22.565000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "corcoranwill",
+        "category": "Testing",
+        "parent": "",
+        "content": "https://github.com/ethereum/pm/issues/1491",
+        "created_at": "2025-04-21T12:40:59.592000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "corcoranwill",
+        "category": "Testing",
+        "parent": "",
+        "content": "PeerDAS Breakout Room #26 Agenda.  Please feel free to comment on the issue if you have any discussion topics you would like added to the agenda (testing, PR, or open).",
+        "created_at": "2025-04-21T12:42:04.845000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "Testing",
+        "parent": "",
+        "content": "Currently prysm does not support backfill. Only sync from Genesis is possible (and effectively done on the devnet).\n\nPrysm does advertise columns it effectively custodies and serves, unless new validators are added in flight (which was not the case on the Denvet)\n\nSo, speaking about validator custod, prysm is expected to behave well.\n\nHowever, it is still possible Prysm has some bugs and does not serve columns correctly for some reason. Would be interesting to have some timestamp and request params to check against Prysm logs.",
+        "created_at": "2025-04-21T13:03:29.521000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Testing",
+        "parent": "",
+        "content": "working on this today",
+        "created_at": "2025-04-21T13:22:58.670000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sibkatya",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@498331483732312075\u003e Grandine's metric `beacon_data_column_sidecar_processing_requests_total` is enormously huge. It's supposed to be somewhere around 128 for supernodes",
+        "created_at": "2025-04-21T17:05:01.039000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "Screenshot_2025-04-21_at_18.55.42.png",
+                "content": "25ae40658ad08bbad90218b120e1bd4fb39ef12558da3f50ff78451e380725d6"
+            }
+        ]
+    },
+    {
+        "author": "mininny",
+        "category": "Testing",
+        "parent": "",
+        "content": "Similar observings here as well: https://discord.com/channels/595666850260713488/1252403418941624532/1361178927522906194",
+        "created_at": "2025-04-21T17:19:57.683000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pawandhananjay",
+        "category": "Testing",
+        "parent": "",
+        "content": "So i was able to check clients which were exhibiting some faulty behaviour while serving columns for sync\nLodestar + Nimbus:\n1. We conenct with the peer and Status response indicates that peer's finalized epoch is close to the wall slot head (these nodes advertise as supernodes with cgc 128)\n2. We request data columns by range for some specific column that they should have given they are a supernode and they claim to be synced\n3. Received empty response for range request even though multiple slots in this epoch had blobs\n\nMaybe they have started advertising cgc before they backfilled? \n\nGrandine is even weirder\n1. synced node and advertises 128 cgc\n2. we request columns\n3. Returns correct responses for a portion of slots in the epoch\n4. At some specific slot, it misses a column\n\nAn example from my logs is we queried for columns 11, 44, 78 for epoch 213. The grandine node returns the 3 columns for every non skip slot from 2816 to 2830. For 2831, it returns 11 and 114, but does not return 44. I don't understand why this would happen. Is the columns not in the node's db? was it present but not sent?",
+        "created_at": "2025-04-21T18:38:22.902000+00:00",
+        "attachments": null
+    }
+]

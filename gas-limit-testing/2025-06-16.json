@@ -1,0 +1,482 @@
+[
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I am getting slightly confused with the recent LOG issue. The problem is that we can, if we keep raising the gas limit, produce receipts which are \u003e 10 MiB when encoded for devp2p, right? (To send with a `GetReceipts` response?)",
+        "created_at": "2025-06-16T11:28:54.122000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e re: **@gas_limit_testing_bot**\n\u003e \u003cJochem Brouwer (jochem-brouwer)\u003e I am getting slightly confused with the recent LOG issue. The problem is that we can, if we keep raising the gas limit, produce receipts which are \u003e 10 MiB when encoded for devp2p, right? (To send with a `GetReceipts` response?)\nYes",
+        "created_at": "2025-06-16T11:29:15.227000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e current preference so far is: https://github.com/ethereum/EIPs/pull/9892",
+        "created_at": "2025-06-16T11:30:16.444000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Ok will take a look. Just left a review on the LOG repricing but saw you closed it already 😅 \n\nGeneral Q: did we also take a look if we can split devp2p messages larger than 10 MiB in multiple smaller ones under 10 MiB? (As a more general approach here. Could obviously also do that only for receipts to break it up in multiple msgs). EDIT: ok this is also suggested on the EIP above already by lightclient 🙂",
+        "created_at": "2025-06-16T11:33:33.477000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cpk910\u003e Can we easily split large receipts into multiple messages?\nIt could be a single LOG with \u003e10MB data.",
+        "created_at": "2025-06-16T11:46:35.132000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Yes I'm thinking more about a general approach here, so if we think about the devp2p responses/messages in an abstract way: if we have a message \u003e 10 MiB \"just\" cut it off somewhere and send the remainder as the \"next message\"/package (this remainder could also have another remainder). So in that case a large receipt with a large LOG would be split up in multiple devp2p messages/responses.\n\nNote that currently with the quadratic pricing of the memory in terms of gas producing 10 MB of memory is super expensive. 10_000_000 bytes in memory will give you memory expansion cost of ~191.673.589 gas",
+        "created_at": "2025-06-16T11:51:50.948000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "(which LOG opcode has to pay if it tries to do the 10MB log)",
+        "created_at": "2025-06-16T11:52:47.735000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003ccskiraly\u003e re: **@gas_limit_testing_bot**\n\u003e \u003cJochem Brouwer (jochem-brouwer)\u003e Yes I'm thinking more about a general approach here, so if we think about the devp2p responses/messages in an abstract way: if we have a message \u003e 10 MiB \"just\" cut it off somewhere and send the remainder as the \"next message\"/package (this remainder could also have another remainder). So in that case a large receipt with a large LOG would be split up in multiple devp2p messages/responses.\n\nNote that currently with the quadratic pricing of the memory in terms of gas producing 10 MB of memory is super expensive. 10_000_000 bytes in memory will give you memory expansion cost of ~191.673.589 gas\nSplit in pull is a useful network primitive. See e.g. HTTP range. I think we can add it.\nSplit in push only makes sense if we can validate the part.\nValidation also makes sense full pull, but range is useful even without.",
+        "created_at": "2025-06-16T11:55:54.003000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "👍  (where do I find the TG channel for this one?)",
+        "created_at": "2025-06-16T11:59:29.785000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e Paginating logs is kinda cursed imo",
+        "created_at": "2025-06-16T12:11:22.814000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e Because you are paginating the inner data field",
+        "created_at": "2025-06-16T12:11:39.022000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003ccskiraly\u003e The devp2p spec also has a soft limit, currently set to 2 MiB. I'm not sure what soft limit means here exactly, but we might need to change that as well if bumping other numbers.\nhttps://github.com/ethereum/devp2p/blob/bc76b9809a30e6dc5c8dcda996273f0f9bcf7108/caps/eth.md#L17-L26",
+        "created_at": "2025-06-16T12:17:59.565000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "If we introduce the tx gas limit of 30M then at current gas costs of 8 gas/byte we would produce 30M/8 = 3750000  bytes of data. \nIf we would change this rule: (https://github.com/ethereum/devp2p/blob/bc76b9809a30e6dc5c8dcda996273f0f9bcf7108/caps/eth.md#receipts-0x10)\n\n\u003e Each element in the response list corresponds to a block hash of the GetReceipts request, and must contain the complete list of receipts of the block.\n\nWe drop the \"complete list of receipts of the block\" and instead also allow for non-complete list of receipts of the block. If the soft limit is hit when adding receipts, then stop adding receipts. We somehow then have to either change the `Receipts` message (or add a new one) such that we can request receipts from a block starting at a certain index. If we have the block body, we know how much transactions there are, thus we also know how much receipts there are. (This would likely need to be specced as `eth/70` though)\n\nThe tx gas limit with current pricing would then directly mean that it is not possible to create \u003e 10 MiB devp2p receipt messages (only based on the 30M limit and 8 gas/byte)\n\nWe should nevertheless look if we can raise the 8gas/byte, because this is much lower than the EIP-7623 data cost of 10 gas for zero bytes and 40 gas for nonzero bytes.",
+        "created_at": "2025-06-16T12:28:40.775000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "(so 30M would put a 3.75 MB data size cap on the logs. Other elements of the receipt are negligible compared to log data size so we are ok there. This would thus allow to split up the receipt response per block in multiple responses, and we would then have to use the \"pull\" method instead of push method)",
+        "created_at": "2025-06-16T12:30:37.991000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e re: **@gas_limit_testing_bot**\n\u003e \u003cJochem Brouwer (jochem-brouwer)\u003e If we introduce the tx gas limit of 30M then at current gas costs of 8 gas/byte we would produce 30M/8 = 3750000  bytes of data. \nIf we would change this rule: (https://github.com/ethereum/devp2p/blob/bc76b9809a30e6dc5c8dcda996273f0f9bcf7108/caps/eth.md#receipts-0x10)\n\n\u003e Each element in the response list corresponds to a block hash of the GetReceipts request, and must contain the complete list of receipts of the block.\n\nWe drop the \"complete list of receipts of the block\" and instead also allow for non-complete list of receipts of the block. If the soft limit is hit when adding receipts, then stop adding receipts. We somehow then have to either change the `Receipts` message (or add a new one) such that we can request receipts from a block starting at a certain index. If we have the block body, we know how much transactions there are, thus we also know how much receipts there are. (This would likely need to be specced as `eth/70` though)\n\nThe tx gas limit with current pricing would then directly mean that it is not possible to create \u003e 10 MiB devp2p receipt messages (only based on the 30M limit and 8 gas/byte)\n\nWe should nevertheless look if we can raise the 8gas/byte, because this is much lower than the EIP-7623 data cost of 10 gas for zero bytes and 40 gas for nonzero bytes.\nrepricing is probably not on the table",
+        "created_at": "2025-06-16T12:31:13.615000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e there are a few things about receipts: \n1) not part of the critical path and validation is much cheaper than blocks\n2) one of the most used functionality of the network",
+        "created_at": "2025-06-16T12:31:50.448000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e I think conceptually, since it is not part of the \"hot-path\"/aka people can sync state without fetching receipts we can just have an higher limit",
+        "created_at": "2025-06-16T12:32:32.785000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e you can make a single 10MiB receipt though so paging does not work and segmenting the RLP is cursed and probably too much of an hassle for something that is not even critical to the network (relative to blocks at least)",
+        "created_at": "2025-06-16T12:33:31.782000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "How do we make the 10 MiB receipt?",
+        "created_at": "2025-06-16T12:35:19.955000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "(If we also take into account the 30M gas limit cap of the tx)",
+        "created_at": "2025-06-16T12:35:33.086000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cpk910\u003e 10MB receipts should not be possible with a per tx gas cap of 30M,   it's more about the total size of all receipts per block",
+        "created_at": "2025-06-16T12:35:48.776000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Yes. So if we would then split up the receipts such that it could be that a Receipts response does not contain all receipts of a certain block and a node can request the remainder (or: the starting index to rq receipts from in that block) in a new request, this would work, right?",
+        "created_at": "2025-06-16T12:37:11.455000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e re: **@pk910**\n\u003e 10MB receipts should not be possible with a per tx gas cap of 30M,   it's more about the total size of all receipts per block\nit is",
+        "created_at": "2025-06-16T12:40:25.953000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e oh wait no",
+        "created_at": "2025-06-16T12:40:32.028000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e uh",
+        "created_at": "2025-06-16T12:40:33.390000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e re: **@gas_limit_testing_bot**\n\u003e \u003cJochem Brouwer (jochem-brouwer)\u003e Yes. So if we would then split up the receipts such that it could be that a Receipts response does not contain all receipts of a certain block and a node can request the remainder (or: the starting index to rq receipts from in that block) in a new request, this would work, right?\nI think it should be something like having a `GetReceipt` vs `GetReceipts` where you specify hash and index",
+        "created_at": "2025-06-16T12:41:28.351000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e bit more skeptical this can work as you cannot validate single receipts",
+        "created_at": "2025-06-16T16:33:29.775000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Let's ship SSZ receipts and the network update 🙂",
+        "created_at": "2025-06-16T16:55:49.755000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cnotnotstorm_p\u003e regarding XEN it would be helpful to dig into whether the slowdowns are due to 1) SSTORE's 2) contract deploys 3) SSTORE's specifically on new contracts 4) SSTORE's on many vs few contracts",
+        "created_at": "2025-06-16T17:00:36.797000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I don't think SSZ receipt will help",
+        "created_at": "2025-06-16T17:06:36.631000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "And the pagination will not help either, since a single receipt with a large size can be created",
+        "created_at": "2025-06-16T17:07:32.903000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "In the spec, the soft limit just means, if the message goes above the limit, the server should stop packing the response",
+        "created_at": "2025-06-16T17:08:08.015000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "It's a recommendation",
+        "created_at": "2025-06-16T17:08:23.755000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "As we discussed during interop, the short term fix would be implementing a separate validation limit per type",
+        "created_at": "2025-06-16T17:09:17.110000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "However, we will all have to ship this before the next fork, and we can only really rely on it post-fork",
+        "created_at": "2025-06-16T17:09:34.717000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "A repricing would be better, but it's hard to do",
+        "created_at": "2025-06-16T17:09:45.182000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I was thinking about how we can prove the partial receipt trie but maybe I'm thinking too complex since if we would include a merkle proof for the partial receipt trie data that would also work. Only worried that this proof might be too big but that would only be too big if you have to include the actual data of the receipt (so the logs which could be super large here). But I think it might be OK due to the layout of the receipt trie (keys are indexes and values are the receipts). So you would get a branch node (?) which would point to the target hashes of that specific key. Which itself would not be large at all (to include this in a \"partial receipt\" response where thus not all receipts of a block are included (could thus even be if we only request one blockhash for receipts)). So this extra proof helps to verify the partial response.\n\n\u003e And the pagination will not help either, since a single receipt with a large size can be created\n\nThis is currently indeed the case, but if we ship the tx gas limit cap of 30M then for 8 gas/byte for logs we can \"\"only\"\" produce 30_000_000/8 = 3_750_000 bytes of log data. So this data plus the other items of the receipt (bloom, status, cumulative gas used) would fit well into the soft limit of 10 MiB. However I might also be missing something here 😅 \n\nI think with the tx gaslimit cap we thus also cap the max log data, and I think we therefore put a hard constraint of the size of one receipt. Thus, if we somehow figure out how to change `eth` protocol such that `GetReceipts` / `Receipts` now support sending not all receipts in the block but only a part of it (and the response should prove that the provided data is correct I think), and also support a way to also retrieve the remainder of the receipts (also with proof I think?), then I think this could work 🙂 But this is obviously rather complex and not very trivial since this would either change encoding/decoding or add new methods 🤔 Food for thought 😄",
+        "created_at": "2025-06-16T17:28:45.257000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Yes you are right",
+        "created_at": "2025-06-16T17:41:05.116000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I forgot about tx gas limit cap",
+        "created_at": "2025-06-16T17:41:23.766000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e Yes pagination would work. But how do you check if partial receipts are valid",
+        "created_at": "2025-06-16T17:41:56.659000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I think if you insert the missing trie nodes (the size of those is I think small unless it is the actual leaf data (so the receipt itself which thus could be the 3_750_000 bytes)) in the response then you can prove that the given data is correct. And thus for the trie nodes to get that data, you need the other receipts",
+        "created_at": "2025-06-16T17:52:37.781000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e re: **@gas_limit_testing_bot**\n\u003e \u003cJochem Brouwer (jochem-brouwer)\u003e I think if you insert the missing trie nodes (the size of those is I think small unless it is the actual leaf data (so the receipt itself which thus could be the 3_750_000 bytes)) in the response then you can prove that the given data is correct. And thus for the trie nodes to get that data, you need the other receipts\nYeah this does not work. You would need an archive node",
+        "created_at": "2025-06-16T17:53:14.157000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e Oh wait no, this wont work mpt witness is big",
+        "created_at": "2025-06-16T17:53:42.860000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "We can figure something out",
+        "created_at": "2025-06-16T18:00:39.428000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "The protocol just needs a special marker to tell that receipts are incomplete",
+        "created_at": "2025-06-16T18:01:04.456000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e Ah thats easy, you can just add a \"total\" field to the response",
+        "created_at": "2025-06-16T18:01:57.098000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "When syncing, we do not request proofs of receipts, just the receipts themselves. The request is always for the lists of block receipts for multiple blocks",
+        "created_at": "2025-06-16T18:02:57.467000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e re: **@gas_limit_testing_bot**\n\u003e \u003c.fjl\u003e When syncing, we do not request proofs of receipts, just the receipts themselves. The request is always for the lists of block receipts for multiple blocks\nThe proof is the receiptsRoot of the header",
+        "created_at": "2025-06-16T18:03:24.374000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e You can check hash(receipts)",
+        "created_at": "2025-06-16T18:03:50.035000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "So if we add a marker that the last block in the list has incomplete receipts, the client just needs to  request the missing ones with a second request",
+        "created_at": "2025-06-16T18:04:10.152000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e You can add a marker to GetReceipts and add a GetReceipt method",
+        "created_at": "2025-06-16T18:04:41.884000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "To do this, we would add a parameter to the get request that gives the offset into the first requested block hash",
+        "created_at": "2025-06-16T18:04:47.478000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I think it's doable",
+        "created_at": "2025-06-16T18:05:03.171000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cFunnyGiulio\u003e re: **@gas_limit_testing_bot**\n\u003e \u003c.fjl\u003e To do this, we would add a parameter to the get request that gives the offset into the first requested block hash\nYeah you need \"startIndex\" as an optional field or smthg like that",
+        "created_at": "2025-06-16T18:05:35.031000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003ccskiraly\u003e re: **@gas_limit_testing_bot**\n\u003e \u003c.fjl\u003e I think it's doable\nYes, I think you can simply index into it. Since it is a request, and not a push, I don't think it can be any worse than what would happen if sent in a single big message over the same TCP connection. Supporting indexing into it (as with http range header) also has the advantage of allowing you to resume very large message download after a disconnect ... although I don't think we have such big messages that this matters too much in practice.",
+        "created_at": "2025-06-16T18:11:18.602000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "EIP for eth/70 with paginated receipt lists: https://github.com/ethereum/EIPs/pull/9906",
+        "created_at": "2025-06-16T21:37:51.196000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I put Jochem and Giulio as co-authors",
+        "created_at": "2025-06-16T21:38:06.567000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".fjl",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003c@508125616940515329\u003e if you have time tomorrow, please check the EIP and let's improve the numbers a bit",
+        "created_at": "2025-06-16T21:38:56.536000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Will do 🙂 Thanks for writing this down 😄",
+        "created_at": "2025-06-16T21:41:59.252000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cnotnotstorm_p\u003e what is the timeline on the bloatnet efforts?",
+        "created_at": "2025-06-16T22:59:33.511000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,186 @@
+[
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "My understanding about this proposal is that committee members can propose at-max 8kb-sized IL for their slot, and these are aggregated/deduped into the final IL that will be used to construct the block for the the next slot.\n\n8kb is over an order of magnitude below the recent average Ethereum block size  (https://ycharts.com/indicators/ethereum_average_block_size).  Under the assumptions:\n* committee members have overall a similar view of the mempool\n* committee members will use the same inclusion strategies (generally): highest-paying txs prioritized for inclusion.\n\nthis makes me think:  the ILs from various committee members will have a lot of overlap, and the final IL constructed for the subsequent slot will not fill the block gas limit?  and that this problem will get worse if we scale the gas limit without also increasing the max size of each committee member's IL?\n\nHas this issue been considered?",
+        "created_at": "2025-05-20T06:14:47.974000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "There is no relation between the size of the IL and the gasLimit of the txs it has. I can propose a simple tx which just sends to a contract and give it a gas limit of 30M. The problem is if you have txs with a lot of calldata which does not fit in the 8 KiB. \n\nThe suggested way to construct ILs is changed in this draft PR https://github.com/ethereum/EIPs/pull/9381/files\n\n\u003e The rules for building ILs are left to the discretion of implementers. For instance, they may select transactions from the public mempool in various ways such as at random, by priority fee, or based on how long they have been pending. This process continues until the IL reaches its maximum size of `MAX_BYTES_PER_INCLUSION_LIST = 8 KiB`.",
+        "created_at": "2025-05-20T06:20:55.625000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "my point is that if all ILs proposed by the committee members have a high portion of overlapping transactions, the resulting block may not fill the gas limit.",
+        "created_at": "2025-05-20T06:24:38.614000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "and assuming good network connectivity, I'm wondering if it's reasonable to assume that any given tx submitted through the public mempool will be received by most/all of the committee members",
+        "created_at": "2025-05-20T06:29:02.589000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "If we would assume no censoring then the block builder would likely fill the block with as many txs as possible such that it can collect fees. If however there is censoring then there thus are txs which \"hang\" in mempool and we want these included in the IL. So if that tx gets added to the CL, then any CL which receives the block + that IL with that specific tx in it, then those CLs will not attest to it. (Not entirely sure what not filling the gas limit of the block has to do with this 🤔 Maybe I'm not getting your point)\n\nWe would assume that any just-submitted tx in the mempool would not get directly added to the IL, because we don't know at this point if it is getting censored. If it \"hangs\" in mempool we would like to see it included in the IL (but this is thus based on the strategy of the CL to pick the IL txs)",
+        "created_at": "2025-05-20T06:32:14.019000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "boma_naps",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Instead of a fixed 8KB limit, could `MAX_BYTES_PER_INCLUSION_LIST` scale based on: Observed duplication rates in prior slots?\nMempool size (e.g., allow larger ILs when pending txs \u003e X)?",
+        "created_at": "2025-05-20T06:33:14.793000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "If we would assume no censoring then the",
+        "created_at": "2025-05-20T07:41:06.461000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It could be possible.I think we would have to include the IL duplication rate as an EL block field for it to work.",
+        "created_at": "2025-05-20T07:44:22.231000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "soispoke",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes similar ideas were explored a while ago: https://ethresear.ch/t/cumulative-non-expiring-inclusion-lists/16520\n\nBut it adds a bit complexity and I don't really think it's necessary for now tbh. To me duplication is also a feature, not necessarily a bug because it's what allows the 1-out-of-N honest assumption",
+        "created_at": "2025-05-20T09:16:34.269000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "boma_naps",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "What if we have a hybrid IL construction with prioritized \"stuck  tx \" slots \u003c@427903869226582018\u003e \u003c@508125616940515329\u003e",
+        "created_at": "2025-05-20T09:28:25.239000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "soispoke",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "you can just add ´time pending in the mempool´ as a parameter in your IL building algo",
+        "created_at": "2025-05-20T09:30:26.853000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think what we might see in practice are the things which we can't really test: namely, censored txs on a network with value. So we can think now if there are ways to abuse the IL system or ways if the IL system does not work (for instance if the average load of censored txs is larger than the max IL array size). But those are things we will see in practice. I think for now, this \"\"simple\"\" IL form is a great start 🙂",
+        "created_at": "2025-05-20T09:37:03.621000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "soispoke",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "zoom link is different than previous times for this call, see you all in a couple hours: https://ethereumfoundation.zoom.us/j/84265745580?pwd=bfFrSkautyZYvMqkX1dl6otyJnoCvy.1",
+        "created_at": "2025-05-20T12:12:05.774000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "A simple way to try to have less overlap is for committee member `i` (0 to 15) to prioritize txs whose hash or `tx.sender` starts with `i` (prioritize could mean always prefer them to others, or simply give them a some bonus points in a scoring mechanism, or whatever)",
+        "created_at": "2025-05-20T12:27:40.932000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "poojaranjan",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "**FOCIL Breakout #11**\nDate \u0026 Time: May 20, 2025, 14:00 UTC\nAgenda: https://github.com/ethereum/pm/issues/1551\nX: https://x.com/i/broadcasts/1jMKgkPPWpWKL\nYT: https://youtube.com/live/0clvpSfi09g?feature=share",
+        "created_at": "2025-05-20T13:57:10.005000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I have a rather basic question. We assume that the ILs get propagated effectively. The timeline is: IL can broadcast up to 8s in the slot and a validator will accept new valid ILs up to 9s in the slot. There is however no way that we can distinguish a node to see if it is an \"IL committee\" node or not (right?). What if I instead modify my node such that the IL will be sent 8.8s in the slot. Then for some nodes, the IL will be received on time (before the 9s window close)  but for other nodes, it will be received after and it will thus not be accepted (for instance ping time Amsterdam -\u003e Tokyo is 250ms+). We assume this IL contains a transaction which can fit in the proposed block. So, all nodes which received this IL on time will not attest the  block, while the others which received it to late will accept the block and attest to it.\n\nI guess it does not make sense to do this because there isn't really an incentive to do so (right?). But sounds like this could be used to destabilize the network (not sure what would be gained by this though 🤔 )",
+        "created_at": "2025-05-20T17:33:57.719000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "What you broadcast is signed IL",
+        "created_at": "2025-05-20T18:14:04.823000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes but the node which broadcasts this, from an external observer it is unclear if that is the \"node 0\" who signed it, or actually just a node relaying it",
+        "created_at": "2025-05-20T18:14:44.682000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "And you can thus post it really late. Then the validator will pick it up if its \u003c9s",
+        "created_at": "2025-05-20T18:15:27.368000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Oh wait, maybe I'm forgetting CL comms sign msgs 😅",
+        "created_at": "2025-05-20T18:17:16.691000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "An honest IL committee member would broadcast it before 8 seconds into the slot but yeah technically they can do it between 8s and 9s. But there is no advantage of playing timing game as an IL committee member. It doesn't have an incentive mechanism",
+        "created_at": "2025-05-20T18:17:18.538000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes you are right, yeah there is nothing to gain here I think",
+        "created_at": "2025-05-20T18:17:34.089000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e So, all nodes which received this IL on time will not attest the  block, while the others which received it to late will accept the block and attest to it.\n\nA block builder (or a proposer in case of local building) should have a superset of all attester's views. Attester's deadline is 9 seconds into the slot while that of builder is 11 seconds. So even when attesters have split views of ILs, a block should be able to satisfy the IL constraints.",
+        "created_at": "2025-05-20T18:24:15.199000+00:00",
+        "attachments": null
+    }
+]

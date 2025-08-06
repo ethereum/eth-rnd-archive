@@ -1,0 +1,64 @@
+[
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "You're right, it's not safe. I was going by the analysis done for MaxEB, which indicates full consolidation (of both honest and adversarial validators) as the worst case, which in this case would mean simply looking at the normal safety of a committee of 512 (sampled from a 64x smaller set, but it wouldn't make much of a difference). However that analysis doesn't apply to this case, because the committee size is fixed, and small to begin with. Basically, for slot committees the worst case is going from a 30k validators committee with 32 ETH validators to a 500 validators committee of 2048 ETH validators (full 64x consolidation of all validators), whereas here the worst case is that only the adversary consolidates fully",
+        "created_at": "2025-08-02T07:20:16.070000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "However what's also not safe is the previous behavior of one validator one vote, in the opposite direction: if there's a lot of honest validators consolidating, the committee will be dominated by adversarial validators",
+        "created_at": "2025-08-02T07:21:20.555000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "As mentioned above already, what is actually safe is doing exactly what the sync committee does, weighted sampling and then counting one validator one vote.",
+        "created_at": "2025-08-02T07:29:42.558000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The behavior is equivalent to first selecting a subset of the validator set where each validator stays with probability `stake/2048`, then randomly sampling 512 from that subset. The first step is not very sensitive to consolidation, e.g. a non-consolidated validator set of 1M gives a subset of 15625 +- 600 (5 standard deviations, \u003c once a year), whereas full consolidation would just always give 15625 since selection probability is 1 (and the same logic applies to consolidation of only part of the validator set, it just decreases their variance in the first step a bit). \n\nIdeally the first step maintains a distribution as close as possible to the original stake distribution, so that the following random sampling step is done without a bias. Then actually the worst case is no consolidation of either adversarial or honest validators, because increasing variance on either side is beneficial to skewing the distribution, possibly towards the adversary. E.g. with full consolidation, the first step is a no-op, and the whole process reduces down to sampling 512 out of the entire set of 15625, without any initial distorsion. On the other hand without any consolidation we can have a deviation that's favorable to the adversary, before getting to the final sampling step",
+        "created_at": "2025-08-02T07:52:20.333000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "After a bit of playing around with chatgpt, a good way to model it seems to be:\n- N = 1M, M = E[step 1 set size] = N/64, p = honest fraction\n- adversarial fraction after step 1 is Beta(alpha=(1-p)M, beta=pM) (e.g. for p = 0.6, a 5 standard deviation interval around the expected adversarial fraction of 1-p=0.4 is [0.3804, 0.4196])\n- adversarial validators controlled in the committee is a BetaBinomial(512, a, b), i.e., a Binomial(512,q) with a random probability q ~ Beta(alpha,beta)\n\nThe fraction of adversarial stake required for a certain frequency of failure is basically identical to what you get with a Binomial(512, 1-p), i.e. the usual sampling of a committee of size 512 from a homogenous validator set, without a pre-selection step. That makes sense since the difference is basically just ~3% more variance for the BetaBinomial",
+        "created_at": "2025-08-02T09:18:45.868000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "cdf77eb3b7a70e637db735716d29212d31a2156c83e618639daa88d8ef4216e4"
+            }
+        ]
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Right, this is what I was proposing out, just that instead of using a new sampling function I proposed simply reusing the current shuffling and use the same method we use for choosing proposers, instead of 1, just choose 512. Will play a little bit to make it cheap since the shuffling is stable over the epoch",
+        "created_at": "2025-08-02T10:24:05.054000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah that would be fine as well",
+        "created_at": "2025-08-02T12:38:54.223000+00:00",
+        "attachments": null
+    }
+]

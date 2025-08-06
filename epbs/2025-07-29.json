@@ -1,0 +1,106 @@
+[
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Hmm true, I see that argument, like, in theory, proposer boost would need to be adapted by the actually participating balance. We move the non-participating threshold where weird things can happen up from \u003c20% (boost) to  \u003c60% though.\n\nThinking about it more, since what I described is just a very rare edge case, it's probably not worth changing anything. But I think it might be helpful to trigger such a non finalization scenario in ePBS irrespectively, just to see how it goes",
+        "created_at": "2025-07-29T05:09:06.043000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fiddyresearch",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@725415098331430932\u003e hi is there a new link for the call?",
+        "created_at": "2025-07-29T14:10:44.493000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://us02web.zoom.us/j/81433312031?pwd=OxURzIUN5u9lzzKw6S6FMs1fCRcoDa.1",
+        "created_at": "2025-07-29T14:11:05.204000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Created just a placeholder to have the right data structure, and listed a couple of places where we would want to use it, but I think we can only add those once we rebase on top of Fulu and 3510 or the new PR that \u003c@592004585506340885\u003e will open with millisecond deadlines. But I still think it'd be better to get good static test vectors on top of Electra and so that we can now move on to implementation again.",
+        "created_at": "2025-07-29T16:41:38.166000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://github.com/ethereum/consensus-specs/pull/4473",
+        "created_at": "2025-07-29T16:41:44.021000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "To be clear, we should merge this placeholder now?",
+        "created_at": "2025-07-29T16:56:52.067000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Thanks \u003c@363800010518822915\u003e, I'll review these today. Will wait to merge until Potuz reviews too.",
+        "created_at": "2025-07-29T16:57:20.993000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yeah I'll make this priority starting from now",
+        "created_at": "2025-07-29T16:57:38.817000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think so, but better ask \u003c@520034910149410861\u003e",
+        "created_at": "2025-07-29T16:57:59.860000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://github.com/ethereum/consensus-specs/compare/master...fradamt:consensus-specs:eip7732-latest\n\nHere's a series of proposed changes to how we use proposer boost in case of equivocations:\n1. Only update it if block.proposer_index matches the expected proposer of your current canonical chain, not on random old blocks with a divergent proposer sequence. This happens in `update_proposer_boost_root` (a helper I added) and has nothing to do with epbs, it's a more general security improvement\n2. When the proposer builds on one equivocating block from the previous slot, only *apply* proposer boost if either the parent is *not* weak (at least 20% of weight) or if all other blocks (the equivocations) are weak. This actually enables honest builder reveal safety even when there's equivocations and a colluding next proposer. It deals with the situation in which there are equivocating blocks A, B at slot N, and the proposal C from slot N+1 extends one of them, say B.  The proposer boost is only applied to C if B is *not* weak or if A is. This is to ensure that the next proposer can't just arbitrarily choose to boost a *late* equivocation over a timely block that was well attested (not weak). Either all blocks are weak, in which case you are free to do whatever, or you have to choose one that isn't weak. It happens in `should_apply_proposer_boost_root`\n3. `get_proposer_head` has a more aggressive behavior *when there is an equivocation in the previous slot*:  it always reorgs a weak head regardless of the other conditions.",
+        "created_at": "2025-07-29T21:35:51.716000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The rationale (assuming \u003c 20% adversary as usual) for the proposer in case of equivocations is:\n- If the proposer sees a weak head + equivocations, it builds on the parent. Then proposer boost applies (not building on the equivocations), and proposer boost reorging works since the head is weak.\n- If the proposer sees a not weak head + equivocations, it still builds on it. Since the head is not weak, attesters set proposer boost to the proposed block. A caveat here is that a head can go from not weak (\u003e 20%) to weak (\u003c 20%) through equivocations, so it can happen that the proposer sees a not weak head but the attesters see a weak head. At first I had fixed this by having attesters count equivocating weight as well, but decided to leave that out. We could also just adjust the threshold used by the proposer to `21` and leave the threshold used by attesters to `20` so that reverting to weak requires a large amount of slashable stake (~10k ETH)\n- If the proposer sees a weak head *but no equivocations*, does not decide to reorg it (normal, less aggressive `get_proposer_head` behavior), any equivocations seen by attesters would have been released late and not have received honest votes, so they'd be weak. When attesters only see weak equivocations, they are fine with boosting whichever block the proposer has chosen, so they apply proposer boost normally.\n\nThe rationale for reveal safety is:\n- if there's an equivocation before the attestation deadline, it is detected and the builder can safely not reveal\n- if there's an equivocation after the deadline, it does not receive any honest votes and becomes a weak block. Meanwhile, the first block (that has triggered the builder revealing) is not a weak head since it gets 40% of votes. Therefore, if the next proposer still chooses to build on it to try to boost it, it fails to do so, because attesters do not apply the boost: they detect equivocations, the parent of proposer boost root is weak, and there's a non weak equivocation",
+        "created_at": "2025-07-29T21:37:05.189000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "There's also a couple of other minor changes like renaming `PayloadAttestationMessage` to `SinglePayloadAttestation`, and more importantly adding `get_single_payload_attestation` to more explicitly specify a validator constructs a payload attestation. In particular, I think we should use `proposer_boost_root` as the beacon block to which the payload attestation refers, because it's precisely the first beacon block by the expected proposer of the slot",
+        "created_at": "2025-07-29T21:45:04.737000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I don't know if we should do this or something like this (other than the first point, which is a change to the phase0 spec that is imo necessary), but if not we should be aware that controlling two proposers in a row, and being willing to equivocate with the first, means same-slot unbundling is possible",
+        "created_at": "2025-07-29T21:50:58.163000+00:00",
+        "attachments": null
+    }
+]

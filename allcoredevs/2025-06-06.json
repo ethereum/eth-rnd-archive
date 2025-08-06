@@ -1,0 +1,202 @@
+[
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Hey all, glad to see EIP-7907 (Meter Contract Code Size And Increase Limit) CFId 🙂 I want to point to the discussion thread about it, it is full of insights, and it would be very inefficient if the same discussions happen again. There is a DoS-like vector in the spec which we should discuss I think, devnet-2 is rather soon but would be nice if we can fix the spec here. https://discord.com/channels/595666850260713488/1375206178199572562/1380433232281206894",
+        "created_at": "2025-06-06T06:29:41.292000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "So I didn't entirely like EVM64 as I think it will lose a lot of the benefits from needing double byte opcodes and running in mixed mode (is the opposite of what CPUs do where the larger data sizes have the large opcodes, so they make back in opcode size from doing more work per opcode)\n\nHowever the 64bit sections; I think that could really work. But also 🍿\n\n🫡",
+        "created_at": "2025-06-06T10:20:21.375000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "Yep. Option 2 (\"pure\" EVM64 as an EOF code section) is also my favorite. The optimization and initial JIT work is much more straightforward than Option 1 and we will be able to immediately experiment with noticeable performance gain.\n\nI honestly think something like this (a high-performance variant of pure EVM) may work better than RISCV. If we don't want to split the ecosystem (EVM vs. RISCV), then simple and fast interop is a must (so they shouldn't only be able to interact on contract level, but also on EOF functions). It's possible to design the calling convention EVM-\u003eRISCV (EOF io stack parameters to registers) and RISCV-\u003eEVM (via ECALL), but it's always a bit unnatural and gluing will have performance impact. Performance-wise, in the end it'll always be about how to design the whole thing so that it's easy to JIT (and also keeping the no-need-to-JIT-part easily separate).\n\nBut I know in zk there are a whole different tradeoffs and register-based VMs have certain advantages.",
+        "created_at": "2025-06-06T10:38:07.777000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "Also keep in mind the uncompressed RISCV is 32-bit per instruction. So it will be muuuuuuch larger!",
+        "created_at": "2025-06-06T10:39:29.633000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "What is the dependency of EOF for EVM64? Is it just multi-byte ops of something else?",
+        "created_at": "2025-06-06T14:28:08.679000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "Option 1: Require multibyte ops. Do not require EOF.\nOption 2: Require EOF+EIP-9834. \"Pure\" EVM64 (singlebyte ops).\n(There are no other dependencies.)",
+        "created_at": "2025-06-06T15:07:00.845000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "mode switching; would still be pushing to 256bit stack, wouldn't be able to easily promote to registers etc in mixed mode. So performance benefits might not be there",
+        "created_at": "2025-06-06T15:34:15.344000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "vs clean 64bit section of code via typed container sections where everything was 64bit",
+        "created_at": "2025-06-06T15:34:59.676000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "general",
+        "parent": "",
+        "content": "Have you counted how many instructions is affected?",
+        "created_at": "2025-06-06T16:02:21.827000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "general",
+        "parent": "",
+        "content": "Have you considered 4x64 arithmetic instead?",
+        "created_at": "2025-06-06T16:02:49.878000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "general",
+        "parent": "",
+        "content": "What is the main motivation, lower gas prices?",
+        "created_at": "2025-06-06T16:03:16.855000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "It's probably better to count how many instructions can't have EVM64 version. Those are the \"environmental opcodes\" that read/write from the environment or doing call/create.\n\nThat's 20, 30-4A, 54-55, 5C-5D, F0-FA, FF. In total 44 opcodes.\n\nAll other opcodes have or can have EVM64 version.",
+        "created_at": "2025-06-06T16:36:15.967000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "What do you mean 4x64 arithmetic? Right now in EVM256 we're already doing 4x64 arithmetic on all native64 platforms.",
+        "created_at": "2025-06-06T16:37:33.125000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "The main motivation is for performance. EVM64/RISCV is primarily for those contracts that need to run computationally intensive algorithms on-chain. Most of those algorithms cannot utilize the full 256-bit arithmetic in EVM. Of course, my current pending benchmarking efforts is mainly to show you to how large extent this is true -- I can of course show easily that Doom will run much faster in EVM64 than EVM256 because they're 32-bit/64-bit only. We'll be a lot faster just because we're doing 75% less instructions (4x64 arithmetics to 1x64 arithmetics). But I would prefer to gather some real world smart contracts and we go from there, but this work is still ongoing.",
+        "created_at": "2025-06-06T16:43:35.609000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "general",
+        "parent": "",
+        "content": "I mean vector instructions",
+        "created_at": "2025-06-06T18:06:03.385000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "Can't vectorize everything i.e if you are only interested in single value maths vector doesn't give much?",
+        "created_at": "2025-06-06T18:12:31.200000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "general",
+        "parent": "",
+        "content": "It's the same latency and throughput in the end.",
+        "created_at": "2025-06-06T18:14:48.781000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "I haven't ever really tried to use vector instructions for EVM. But do they have carry bits at all?\nFrom what I know they are more designed for dealing with an array of separate numbers but not a single 256-bit one.",
+        "created_at": "2025-06-06T18:15:46.339000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "In Rust that would corresponds to `u64x4`: https://doc.rust-lang.org/std/simd/type.u64x4.html\nIt doesn't seem to be possible for most operations we'd want to do.\nUsually there's just no alternative than doing `u64` 4 times.",
+        "created_at": "2025-06-06T18:19:50.551000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "most ARM is still 128bit and then you'd want to add in shuffles, extracts etc So would be more compilated than just adding 64bit",
+        "created_at": "2025-06-06T18:26:48.945000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "i.e is probably a different beast for different usecases?",
+        "created_at": "2025-06-06T18:40:16.485000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "something something vector typed section something 😉",
+        "created_at": "2025-06-06T18:41:33.466000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "general",
+        "parent": "",
+        "content": "This is simply untrue because for every instruction are also doing: stack checks (some unnecessarily), gas computation, gas check and interpreter dispatch. You can measure this by check the performance of the instruction which does nothing: JUMPDEST. And finally, double this because for every arithmetic instruction you need (asymptotically) additional DUP instruction.",
+        "created_at": "2025-06-06T19:19:17.713000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sorpaas",
+        "category": "general",
+        "parent": "",
+        "content": "In non-EOF, JIT is indeed not attractive. You can JIT this pretty nicely after EOF (see also EIP-5450). There's no need for runtime stack checks. With the issue of control flow there's now the possibility to calculate the gas cost for a whole block and do an \"optimistic calculation\" first.\n\nIt's true -- once we actually make EVM opcodes fast, then the majority of the bottleneck will actually be the unnecessary stuff like interpreter loop. That's why the majority of the gain will come from JIT. And EVM64 will start to make JIT attractive (if the arithmetic ops are still taking the majority of time than interpreter loop then JIT won't provide sufficient benfits).\n\nThe advantage of the design of current proposal EOF+EVM64 is that we know exactly the boundary of where it's beneficial to do JIT (the EVM64 code sections), and what is not (the regular EVM code sections).",
+        "created_at": "2025-06-06T19:32:01.396000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "chfast",
+        "category": "general",
+        "parent": "",
+        "content": "Don't tell _me_ this.",
+        "created_at": "2025-06-06T20:28:10.247000+00:00",
+        "attachments": null
+    }
+]

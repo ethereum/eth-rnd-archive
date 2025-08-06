@@ -1,0 +1,226 @@
+[
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Hi there, I listened to the recording of the presentation today at the Protocol Research Call (could not attend live, sorry). \n\nI see in the spec that nonce has been tracked of, an that also delegations (so EIP 7702) is part of the spec. It states:\n\n\u003e By tracking sender balances and nonces during validation, the protocol can enforce transaction validity without execution, enabling earlier block attestation.\n\nIt is indeed possible to pre-verify the nonce/balance by immediately pre-charging costs. It also would allow for delegegations to be processed (if delegation is valid, bump nonce). \n\nHowever, this does NOT take into account if the EOA is delegated to a smart contract which invokes CREATE/CREATE2. This will bump nonce during execution and will thus invalidate all pre-validated nonces. Has this been noted somewhere? This invariant has been broken since 7702 (so a week ago 😅 ) and is problematic for the pre-validation of balances and nonces 😅  \n\nGreat presentation \u003c@520034910149410861\u003e 🙂",
+        "created_at": "2025-05-14T20:41:01.829000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Another point: currently during execution (so without delayed execution) it is checked that\n`cumulativeGasUsed + tx.gasLimit \u003c= block.gasLimit`. Where `cumulativeGasUsed` is total execution gas used so far by previous txs.\n\nSo this somewhats limits the amount of \"batch txs\" you can send from the same account, as you will have to reserve the gas and balance which expects all gas to be used. If you get \"gas refunded\" executing it, then this is not taken off the reserved amount. But I guess this is an incentive to optimize preliminary the gasLimit we expect to use to allow us to batch txs in the block.",
+        "created_at": "2025-05-14T20:45:17.423000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "About nonces, the idea was that you just check them at the beginning of the block, at the same time as you're checking/pre-charging the balances, e.g. if sender_account.nonce = n and that account has k txs in the block, you check that the nonces are exactly [n, n+1, ..., n+k-1]. You only actually bump the nonce during execution, but at that point you don't require the nonce to match anymore. \n\nIn the previous example, at the beginning you check tx0.nonce = n, tx1.nonce = n+1,  ..., txk-1.nonce = n+k-1, but during execution the nonce could be bumped to something higher than that due to a CREATE, e.g. we might have that before the execution of tx1 the nonce is n+2 rather than n+1. We just wouldn't care, and wouldn't invalidate the tx at that point. This still prevents any tx replaying afaict, and I am not aware of some other security concern related to this, but if you know of any lmk 🙂",
+        "created_at": "2025-05-14T22:55:36.720000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes, that's another (small?) UX downside of this approach",
+        "created_at": "2025-05-14T22:56:46.426000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "However, after the presentation we figured that there might be a simpler way to do it, if built on top of block level access lists with post-tx values. With those, you can get the post-state without doing any execution, so you could:\n- keep the block execution exactly the same as today, rather than pre-charging senders and checking nonces in advance etc...\n- to check append-validity for FOCIL, do the normal FOCIL check of literally validating the tx against the post-state, as well as `tx.gas \u003c gas_available`\n\nThe caveat is of course that the BAL could be wrong, since, just like the `gas_used` field, it can only be validated by executing. And since we're not pre-charging senders, a tx could also not be funded at execution time. We can deal with all of it in the same way as `gas_used` in the last approach in the presentation, by reverting the whole payload if that turns out to be the case (or charging the coinbase, whichever mechanism we prefer).",
+        "created_at": "2025-05-14T23:03:57.249000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Another way to describe it is that this is exactly approach (3) from the presentation, i.e., leave all execution rules as is and revert the payload if anything turns out to be invalid. In the presentation I mentioned that this was problematic for FOCIL because we can't do the append-validity check, but luckily having BALs gives us an optimistic `post_state`, which, together with the optimistic `gas_used`, is exactly what we need.",
+        "created_at": "2025-05-14T23:09:33.014000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "And because the append-validity check here is the original one of actually running the tx's validation,  rather than only depending on balance and nonce, it also takes care of \u003c@727296082484265073\u003e's concern about AA compatibility",
+        "created_at": "2025-05-14T23:10:42.721000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I just realized via 7702 it is also possible to change the balance of the EOA (so for instance a tx \"later\" in the tx list (account A) could get called by a previous tx which sends value from A to somewhere else (possibly entire balance)). So you can technically only validate the first tx in case it is an delegated EOA, because execution could completely invalidate the assumptions of balance and nonce afterwards. This is different than I think the check which is done now, to ensure that the tx is completely valid even if it pays the full gas fee + value sen (excerpt from EIP):\n\n```python\n        # Verify sender has sufficient balance\n        if sender_balances[sender_address] \u003c max_gas_fee + Uint(tx.value):\n            raise InvalidBlock\n\n        # Verify correct nonce\n        if sender_nonces[sender_address] != tx.nonce:\n            raise InvalidBlock\n\n        # Track balance and nonce changes\n        sender_balances[sender_address] -= max_gas_fee + Uint(tx.value)\n        sender_nonces[sender_address] += 1\n```\n\nSo this does not hold with 7702 anymore. If the tx is invalidated after execution how does this work payment wise? Because the account could thus have 0 balance. Previously (before 7702) we can ensure that the account can always pay this fee (so it always pays also pays for the calldata for instance, the \"free data\" problem)",
+        "created_at": "2025-05-14T23:13:28.414000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "But from a block production point you obviously don't want this since you can't collect the fees 🤔 \n\nI'm just thinking about this from a DoS perspective. It is economically not a good idea to do this. But you could thus create this block (as block producer) and pay minimal fees, but bloat the block space with this \"free calldata\"",
+        "created_at": "2025-05-14T23:14:46.189000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Ah ok right. Yes I will give this some thought on how to combine this with the BAL 🙂\n\nI think the problem here is to \"charge\" for people intentionally trying to grief the system. In general this delayed execution seems like they way to go. (The only preliminary concern I have here if this is combined with BALs this will be another extremely huge change consensus wise. But that's something to worry about later (the process to get this shipped)) 🙂",
+        "created_at": "2025-05-14T23:18:40.960000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "That's why senders are pre-charged in that approach (this one https://github.com/ethereum/execution-specs/compare/forks/prague...fradamt:execution-specs:delayed-execution-noop-for-gas-used). Even if your account is delegated and gets drained afterward, you have already been charged before any execution takes place.",
+        "created_at": "2025-05-14T23:21:44.653000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "🤦‍♂️ Lol I just realized I contradicted myself. Yes you are right, it gets pre-charged so the data fee is already paid for. Thanks 🙂",
+        "created_at": "2025-05-14T23:22:57.924000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "No worries, delayed execution is messy 😄",
+        "created_at": "2025-05-14T23:23:18.230000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "As evidenced by the 8 approaches in the the table in the ethresearch post, and by the fact that the presentation from this afternoon is already outdated with a new approach \u003c:crazycry:932693133546889216\u003e",
+        "created_at": "2025-05-14T23:24:25.054000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This one feels like it might be the best one so far though",
+        "created_at": "2025-05-14T23:24:46.524000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Wait, no, it is not exactly paid for. Because the scenario of this account where tx1 drains all balance (EOA account delgated to some code which sends entire balance) and tx2..txN posts all data, then how is it charged? We know that the balance of the EOA was sufficient pre-executing. But how would it \"pay\" in this attack scenario? Because if the tx2..txN get invalidated then tx1 is only paid for (and for block producing perspective it would only pay for the burnt fees)? tx2..txN do not get run 🤔 And don't \"pay\" for the data included? 🤔 (The payment here would actually only consist of the burnt fees, not the collected fees because block producer can just reap their own priority fees to themselves?)",
+        "created_at": "2025-05-14T23:26:43.443000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I might again miss something obvious here or misunderstood something 🤔",
+        "created_at": "2025-05-14T23:26:56.698000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "You don't just check that it was sufficient pre-execution, you actually charge the balance upfront",
+        "created_at": "2025-05-14T23:27:20.848000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "You do exactly this, same as today:\n`sender_balances[sender_address] -= max_gas_fee + Uint(tx.value)`\n\nBut you do it all at once at the beginning of the block's execution, rather than before each tx",
+        "created_at": "2025-05-14T23:28:35.722000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "`deduct_max_tx_fee_from_sender_balance` -\u003e ah right. I skipped over this part of the spec on `process_transactions` 🙂",
+        "created_at": "2025-05-14T23:29:00.898000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This fee is burned in case of invalidation?",
+        "created_at": "2025-05-14T23:29:18.166000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The *only* way for something to be invalidated is that the block runs out of gas, otherwise an individual tx cannot be invalidated. When the block runs out of gas, it's the block proposer's fault, not the tx sender's fault, so you can't burn their fee",
+        "created_at": "2025-05-14T23:30:23.023000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "That's the issue with `gas_used` being incorrect essentially: the block proposer is lying about the gas usage and it can turn out that the block is actually invalid though all senders were sufficiently funded and nonces matched etc... We have different choices on how to handle this:\n- we can charge the block proposer for this\n- we can revert the payload (treat it as an empty payload, though it still contains the txs)\n- we can invalidate the whole block\n\nWe thought the second option is best, because it doesn't have the complexity of introducing a way for the coinbase/block proposer to sign something agreeing to be charged for this, nor it requires block builders (in particular local block builders) to be funded on the EL, or some mechanism to charge them from their stake. It does not \"solve\" free DA, but it forces the block proposer to pay for it by missing the payload. Essentially you can choose between doing *any* execution (and collecting fees etc...) or getting some unpaiad DA",
+        "created_at": "2025-05-14T23:34:49.920000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I still think reverting the payload as a response to invalidity strikes the right balance between dealing with the problem and not introducing complexity that's overkill for what the problem actually is, and is what I would still want to do in this other approach",
+        "created_at": "2025-05-14T23:37:21.744000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes just FYI I will in almost all cases think of the worst case scenario's and DoS vectors, so I will bring up scenarios which are weird or stupid, but things which should be addressed 🙂 So I will be \"annoying\" from a spec point / EIP point 😛\n\nWill give this some more thoughts, also see I have to read the EIP more thoroughly and dive into the discussions 🙂 Super interesting topic 😄",
+        "created_at": "2025-05-14T23:39:53.340000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "That's the right mindset 🙂 In fact that's why the first spec and proposal was taking the first approach, of charging coinbase for the inclusion costs of all txs upfront, so that you could always make sure that *all* costs were covered. The EIP was very recently changed to this other approach because we decided that the complexity just wasn't worth it",
+        "created_at": "2025-05-14T23:43:09.520000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "However before you go through the specs keep in mind that it might well all be changed to this new approach dependent on BALs if it indeed turns out to be both simpler (at least assuming  BALs are going to be implemented anyway, which of course isn't a given) and compatible with AA 😄",
+        "created_at": "2025-05-14T23:45:23.915000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The payload no-op bit would be the same as in the current specs essentially. The sender pre-charging stuff would disappear, and in fact everything else would be as in the current specs + BALs",
+        "created_at": "2025-05-14T23:46:31.054000+00:00",
+        "attachments": null
+    }
+]

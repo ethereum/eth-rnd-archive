@@ -1,0 +1,90 @@
+[
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This is how it looks like splitting full transactions from the signed IL object and putting them into a sidecar instead:\nhttps://github.com/ethereum/EIPs/pull/9925",
+        "created_at": "2025-06-23T10:36:34.602000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "soispoke",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "can you give more context? I remember we decided not to go with txn hashes at the time because attacks in which txns are not available in the mempool",
+        "created_at": "2025-06-23T10:40:55.281000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "right, here we have both, the full tx (in the sidecar) + the hashes (in the signed object), so we can still enforce tx size limits. This would reduce the worst case equivocation proof from 16 KiB to 64 B (ignoring the other fields in the IL now), so ~99.61% decrease in size. Also, we could have some pull mechanism (instead of push) and first check if tx are already in the mempool, reducing bandwidth.",
+        "created_at": "2025-06-23T10:44:21.264000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "FYI, I believe it turned out the mempool was literally empty: https://discord.com/channels/595666850260713488/1210529202458071050/1362810157427331163\n\nBut after I gathered feedback from various people, it's more semantically make sense to put ILs in the `payloadAttributes` and use forkchoiceUpdated. Also, from what I've heard, the concern of overloading `payloadAttributes` seems not a thing. I'll share more details during the next breakout.",
+        "created_at": "2025-06-23T12:39:51.208000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "In general, I think it's good approach and quite common technique to reduce redundant packets. I also had received a comment from EL devs that propagating transactions on the CL layer is something new and looks sub-optimal. However, I'm not sold about this approach for following reasons.\n\n0.\nWe had discussed this approach when writing the EIP but we decided to not go down this road because\n- it's not a significant improvement compared to blobs and\n- it comes with edge cases such as what happens when an includer doesn't broadcast their IL transaction intentionally.\n\n1.\nThis approach seems to reduce redundant transaction propagation but I think we need at least benchmark to prove it's usefulness outweigh the added complexity. IMHO it would be more productive to put that effort on optimizing blob propagation.\n\n2.\nWe plan to use gas limit instead of size limit. Using transaction hashes adds a little bit of complexity for checking gas limit. It's doable but not pretty I would say.\n\n3.\nAFAIK, CL devs don't want to depend on RLP while EL devs don't want to depend on SSZ.",
+        "created_at": "2025-06-23T12:55:08.591000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The main motivation is not only *redundant packets*. It's the size of equivocations, especially since a hash is enough to prove equivocations. Thinking of witnesses that could potentially be added to FOCIL to make it better compatible with partial statelessness, we could then just do the same with witnesses - have them as a sidecar.\n\n\u003e it comes with edge cases such as what happens when an includer doesn't broadcast their IL transaction intentionally.\nyou'd just only accept messages where it comes together.\n\nWhat complexity are you worried in specific in 1 and 2?",
+        "created_at": "2025-06-23T13:07:44.893000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I was thinking with the pull-based mechanism in mind that you've mentioned. That increases complexity a lot. Without it, I feel like this is a premature optimization. Especially if this is to reduce overhead when there is an equivocation. The worst case adds a half of blob to the bandwidth and it's very not likely to happen every time.\n\n\u003e Thinking of witnesses that could potentially be added to FOCIL to make it better compatible with partial statelessness\n\nDoes it mean that this design is meant to be forward compatible with other proposals, e.g., somehow piggy-backing ILs to other data very nice and cleverly?",
+        "created_at": "2025-06-23T13:25:29.133000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It's esseantially separating the full tx from the signed object. How you handle push/pull optimizations is a separate topics. Just mentioned it as this is something that _could_ be done.",
+        "created_at": "2025-06-23T13:40:42.771000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "That should be the crux of this change imo. I'm of the opinion that the complexity would outweigh the gains in terms of trade-off",
+        "created_at": "2025-06-23T13:44:54.384000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cjulianzma\u003e Iirc we decided not to go with tx hashes in the signed object and full txs in the sidecar because of the interaction between the EL and the CL and not wanting to put assumptions on the performance of the mempool. Curious whether \u003c@520034910149410861\u003e \u003c@725415098331430932\u003e think we should maybe reconsider?",
+        "created_at": "2025-06-23T15:14:09.089000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cterencechain\u003e would this make it easier to cause a network split",
+        "created_at": "2025-06-23T16:00:45.313000+00:00",
+        "attachments": null
+    }
+]

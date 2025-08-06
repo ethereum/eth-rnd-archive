@@ -1,0 +1,10 @@
+[
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This would be generalizing the proposer and sync committee selection: https://github.com/ethereum/consensus-specs/compare/master...fradamt:consensus-specs:epbs-shuffle\n\nOtherwise if we want to reuse the existing shuffle, how about this? Just starting from the first committee for the current slot and going over all committees from there, even for other slots (though currently the expected number of committees needed to fill the PTC would just be 64, i.e., exactly all committees for a slot, since committees are about the same size as the PTC and selection probability with 32 ETH is 1/64). Should be quite cheap this way.\n\n```python\ndef get_ptc(state: BeaconState, slot: Slot) -\u003e Vector[ValidatorIndex, PTC_SIZE]:\n    \"\"\"\n    Get the payload timeliness committee for the given ``slot``\n    \"\"\"\n    MAX_RANDOM_BYTE = 2**16 - 1 \n    epoch = compute_epoch_at_slot(slot)\n    committees_per_slot = get_committee_count_per_slot(state, epoch)\n    seed = hash(get_seed(state, epoch, DOMAIN_PTC_ATTESTER) + uint_to_bytes(slot))\n    i = uint64(0)\n    ptc: List[ValidatorIndex] = []\n    committee_index = (slot % SLOTS_PER_EPOCH) * committees_per_slot\n\n    while len(ptc) \u003c PTC_SIZE:\n        committee = get_beacon_committee(state, slot, committee_index)\n        for candidate_index in committee:\n            random_bytes = hash(seed + uint_to_bytes(i // 16))\n            offset = i % 16 * 2\n            random_value = bytes_to_uint64(random_bytes[offset : offset + 2])\n            effective_balance = state.validators[candidate_index].effective_balance\n            if effective_balance * MAX_RANDOM_BYTE \u003e= MAX_EFFECTIVE_BALANCE * random_value:\n                ptc.append(candidate_index)\n                if len(ptc) == PTC_SIZE:\n                    break\n            i += 1\n        committee_index = (committee_index + 1) % committees_per_slot\n    return ptc\n```",
+        "created_at": "2025-08-03T21:30:50.209000+00:00",
+        "attachments": null
+    }
+]

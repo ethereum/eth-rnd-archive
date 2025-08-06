@@ -1,0 +1,226 @@
+[
+    {
+        "author": "robocopsgonemad",
+        "category": "general",
+        "parent": "",
+        "content": "so i know we're all about BAL as our endgame solution for tx parallelization, and i'm all for that. but i think we can do something really quick, and really high leverage to get more clients able to run parallel transactions the way besu does.",
+        "created_at": "2025-05-22T18:34:57.792000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "general",
+        "parent": "",
+        "content": "i've started a draft EIP here: https://github.com/jflo/EIPs/pull/2/files",
+        "created_at": "2025-05-22T18:35:26.485000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "general",
+        "parent": "",
+        "content": "but the idea is, if a client knows that a subset of transactions in its block are independent, it can include that list in the block as a hint for other clients to execute in parallel",
+        "created_at": "2025-05-22T18:36:38.626000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "general",
+        "parent": "",
+        "content": "it's a work in progress, looking for feedback, TIA.",
+        "created_at": "2025-05-22T18:38:05.127000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "Could include full list (1 integer per tx) of last tx index that tx is dependent on. Probably needs to be 1-based and then 0 as not dependent. So 1 byte per independent tx\n\nWould that be enough to build full parallelization dag? 🤔",
+        "created_at": "2025-05-22T19:01:39.016000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "general",
+        "parent": "",
+        "content": "It would, but also becomes harder to compute for builders. Just identifying the independent ones gets a useful portion of the block in parallel for little work",
+        "created_at": "2025-05-22T19:08:43.270000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "general",
+        "parent": "",
+        "content": "I.e can do simpler approaches like marking slots as dirty",
+        "created_at": "2025-05-22T19:09:19.135000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "mark dirty with tx number (last written); then highest dirty number read is last dependency",
+        "created_at": "2025-05-22T19:11:22.723000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "general",
+        "parent": "",
+        "content": "Is that easy in nethermind?",
+        "created_at": "2025-05-22T19:16:00.752000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "Maybe(ish); add extra numeric to the block cache with value",
+        "created_at": "2025-05-22T19:18:28.624000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "[address+slot] = { value, txIndex }",
+        "created_at": "2025-05-22T19:20:13.039000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "txIndex as -1 if only read",
+        "created_at": "2025-05-22T19:22:10.263000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "though that doesn't work for rlp",
+        "created_at": "2025-05-22T19:22:21.870000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "general",
+        "parent": "",
+        "content": "Can change that, request bodies are opaque",
+        "created_at": "2025-05-22T19:22:55.576000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "I mean 1 based with 0 being independent would be easier",
+        "created_at": "2025-05-22T19:24:08.763000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cdankrad\u003e all the computational work here is part of executing the transactions, there is no meaningful extra computation to be done (re @eth1x_bridge_bot: \u003cJustin Florentine\u003e It would, but also becomes harder to compute for builders. Just identifying the independent ones gets a useful portion of the block in parallel for little work)",
+        "created_at": "2025-05-22T19:24:10.760000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "ah, actaully would fall down if a later tx writes to something an earlier tx reads, but is executed before it",
+        "created_at": "2025-05-22T19:25:09.805000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cdankrad\u003e I would suggest a different solution though (that Toni is working on): transaction-level state diffs (include all values written by a transaction). This allows parallel execution even for the \"dirty\" transactions as you will just get the pre-state from the transaction that came before it",
+        "created_at": "2025-05-22T19:25:21.356000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, I’m aware of the BAL work, this is designed to be an interim parallelization boost, it doesn’t do many of the things BAL does, but could be shipped quick. High leverage",
+        "created_at": "2025-05-22T19:27:29.939000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "robocopsgonemad",
+        "category": "general",
+        "parent": "",
+        "content": "Clients have to just not fail on the new request type, and everything else is optional",
+        "created_at": "2025-05-22T19:28:42.382000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Have you guys seen this idea for BALs to include a bloom filter? Then this filter in particular (once negated) proves what is NOT accessed and this can prove that a tx is independent (based on the acceses of that tx compared with the access filter). See https://ethresear.ch/t/block-level-access-lists-bals/22331/2?u=jochem-brouwer Idea by \u003c@857052906495017000\u003e",
+        "created_at": "2025-05-22T19:59:33.242000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "(could replace logsBloom in block header 👀 )",
+        "created_at": "2025-05-22T20:00:13.318000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Make -1 encoded as empty list 😛 😄",
+        "created_at": "2025-05-22T20:01:51.857000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Have left a reply on PR, per this rq type it will end up in `block.header.requestsHash` so this thing cannot be optional 😅",
+        "created_at": "2025-05-22T20:08:05.790000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "general",
+        "parent": "",
+        "content": "Debate on 7907",
+        "created_at": "2025-05-22T20:18:22.978000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "general",
+        "parent": "",
+        "content": "Debate on 7907",
+        "created_at": "2025-05-22T20:28:47.688000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "notnotstorm",
+        "category": "general",
+        "parent": "",
+        "content": "is there a way to do paralellism that gives improved guarantees about the worst case block execution time? because without such guarantees it doesn't really enable a higher gas limit. if you have BAL's with state images and max tx sizes you get certain guarantees, but even then it might be hard",
+        "created_at": "2025-05-22T22:42:24.058000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Can we also have someone from Besu and Reth in this thread? 🙂 Don't want to ping the entire besu/reth group (cant ping reth but can ping besu? 🤔 ) \u003c@827653956955406406\u003e \u003c@429719902363058177\u003e could you maybe delegate someone here?",
+        "created_at": "2025-05-22T23:24:27.130000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,1400 @@
+[
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I've been collecting feedback, and while many are bullish on BALs, their size and networking impact is a recurring concern.\n\nFollowing \u003c@520034910149410861\u003e 's suggestion, we could drop storage locations for reads and instead include only post-tx state diffs for writes. This would still enable parallel execution, but each core would need to fetch data just-in-time (or use the post-tx value from a prior tx if applicable).\n\nThis change could significantly reduce the avg BAL size.\n\n**Question for EL client teams:**\nHow much value does batch IO bring you? Would it justify increasing BAL size from ~10 KiB to ~40 KiB (pending empirical analysis) for better parallel IO?\n\u003c@508125616940515329\u003e \u003c@905058765022310460\u003e \u003c@764128349488152606\u003e \u003c@774033563732541451\u003e \u003c@687974325072035882\u003e \u003c@519796549279023105\u003e \u003c@194432762315407360\u003e \u003c@316280621783580673\u003e",
+        "created_at": "2025-05-21T06:36:36.128000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "For us main serial time is in SLOAD and load part of SSTORE (for pricing); which you currently can't discover without running tx. Also cannot parallelize inside a tx",
+        "created_at": "2025-05-21T06:40:13.372000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "EthJS is currently a single-core client so I can't really suggest on this.\n\nThe nice \"bonus\" the reads give if they are added in the BAL is that a dependency graph can be made. However if we indeed post the written values in the BAL, if we read a storage slot we should thus check if any prior tx has written to that storage (and then use that value) or read it from disk. I think that the network load could be problematic though so smaller BALs would currently have my preference (gut feeling)",
+        "created_at": "2025-05-21T06:40:41.694000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Yeah can't build a tx dependency graph without the reads; so then can't parallelize the txs reliably either",
+        "created_at": "2025-05-21T06:41:37.918000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Why? Load the previous storage writes in the memory cache of the tx which you run. If it's not in cache, read from disk",
+        "created_at": "2025-05-21T06:44:04.951000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "What order can you run txs in?",
+        "created_at": "2025-05-21T06:44:40.409000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Doesn't matter. You can read the writes of previous txs from the BAL",
+        "created_at": "2025-05-21T06:45:02.940000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Right yeah, you'd see if an ealier transaction has a storage slot in the BAL (write) and if a later tx reads from the same slot, you'd know that you need to take that post-tx value from the bal instead of the one on disk.\nRegarding the depandency graph, that's right yeah, but is there something you'd gain from that? Instead of being able to load in parallel, you'd load just-in-time. Execution parallelization stays the same and is \"embarrassingly parallel\".",
+        "created_at": "2025-05-21T06:45:24.364000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "So the order is arbitrary you could even start at the final tx of the block",
+        "created_at": "2025-05-21T06:45:28.713000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Just in-time loads are very slow; which is why everyone is adding a prewarm where they run all txs in parallel to build a cache and seeing good results\n\nHowever that has bad worst cases",
+        "created_at": "2025-05-21T06:47:10.885000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Ok, but with the BAL without reads you can thus run all txs in parallel. If it's not in cache then read it from disk (although this is cold). Would this not be beneficial? Since the txs now do not have to be ran serially (they can all run parallel)",
+        "created_at": "2025-05-21T06:48:20.256000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "If know what they all are in advance, can just massively load them, and then actual execution will hide latencies",
+        "created_at": "2025-05-21T06:48:32.664000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "It would still be helpful; but tx would experience full latency on every SLOAD/SSTORE where not in cache",
+        "created_at": "2025-05-21T06:50:13.087000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Yup true. It would maybe be nice to have some concrete numbers here (if they are not somewhere yet):\n\nThe average/worst case size of BALs with reads (and BALs without reads, so only writes)\nThe average/worst execution size of these blocks (utilizing the parallelization)",
+        "created_at": "2025-05-21T06:51:34.604000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Also if had full data set could do wild things like load it all to RAM move to GPU and use homestaker's CPU integrated GPU run all txs in parallel on GPU to get one up on enterprise CPUs 😉\n\n(Can't just in time load data for GPU; need all upfront, also can't run serially on GPU as is slower than CPU for single thread)",
+        "created_at": "2025-05-21T06:52:32.102000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "yeah this is on my plate. Will provide those numbers asap",
+        "created_at": "2025-05-21T06:53:50.819000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Hmm ok those are some hardware limitations I would not directly think about, this is good to know 🙂",
+        "created_at": "2025-05-21T06:57:42.043000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "WebGPU for EthJS? 🤔",
+        "created_at": "2025-05-21T06:58:32.806000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Moving memory to GPU has a high overhead; so you really want to do it in complete chunks rather than lots of small bits, and synchronizing between CPU and GPU to service requests (now load this) will destroy any benefits",
+        "created_at": "2025-05-21T07:01:35.364000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Is just a speculative possibility though 🙂",
+        "created_at": "2025-05-21T07:01:52.386000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "That should work even better for besu. Currently, we do optimistic parallel execution, where the transactions are executed in parallel alongside the main thread executing in sequential. It is a race between parallel and sequential execution. So having state diffs on writes will be sufficient to bring parallel execution to 100%.",
+        "created_at": "2025-05-21T07:17:48.428000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I'm a complete noob regarding GPUs, AFAIK those are mostly useful for mountains of linear equations and matrix calculations. Can EVM run on GPU?",
+        "created_at": "2025-05-21T07:19:03.824000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Yeah are a bunch of GPU EVMs on github; mostly used for smart contract fuzzing as you need all the state already on the GPU https://x.com/shoucccc/status/1783545402337423586",
+        "created_at": "2025-05-21T07:22:16.749000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "right but this is also part of the current design which has storage locations, post-tx values and the minimal state diff (post-tx values + minimal state diff = full state diff).\nIt's more about, would it hurt efficiency if we'd remove the storage location. Then, you''d not know which slots will be read but you'd still have all info needed for perfect parallelization.",
+        "created_at": "2025-05-21T07:28:25.905000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Right, I think the EIP currently achieves two things: (1) parallel fetching of the data needed (the reads) and (2) setting up the data \"cache\" (state diffs) for parallel execution (also mentioned in the abstract). \n\nSo I think the point made before is if we remove the locations, we cannot parallel fetch the reads and we have to read this from the cold DB, which will impact execution. Now the question is if we still optimize this (by parallel running all txs) what the \"decrease\" in performance is when compared to including the storage locations (both worst case and average)",
+        "created_at": "2025-05-21T07:35:52.350000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Did some initial empirical analysis on removing storage locs and looks like...\n\n*** Current BAL design (storage locations + post-tx state diff): \n43 KiB\n* Only the post-tx state diff:\n27 KiB.\nSo, we'd almost halve the avg size of the object.**",
+        "created_at": "2025-05-21T07:37:22.424000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Exactly. Right now the flow is like:\n\nparallel IO --\u003e distribute tx over cores -\u003e execute and get values from cache\n\nIf we remove the storage locs it'd look like:\ndistribute tx over cores -\u003e execute and get values from disk",
+        "created_at": "2025-05-21T07:39:42.434000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Having the list of storage keys should help by prewarming all the keys in parallel and not do it on runtime. I guess we need to find the right balance here, between the extra block size and the execution speedup by batch parallel IO. Without testing both cases, it would be hard to asses which approach is best in terms of balance :  size overhead vs execution speedup",
+        "created_at": "2025-05-21T07:39:54.846000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "We’re already executing transactions in parallel on Besu and directly applying the execution results in the block. So it’s not just prewarming , we already have a large part of the logic for BAL. I think on the Besu side, we can create a POC to verify the performance differences between the two solutions. However, Besu will need the BALs so a node capable of generating them during the block building on mainnet.",
+        "created_at": "2025-05-21T07:46:03.953000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "A POC would be great. Essentially, the question is, \"does batch IO\" give us enough to justify an additional 20 KiB in the block. If so, we can keep the EIP as-is. If not clear, then I'd split it up in two and we can discuss them separately.",
+        "created_at": "2025-05-21T07:50:49.879000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I still see BAL as something indirectly related to stateless. What I mean is that BAL will need to be adapted in the future to work with stateless. And for stateless, reads are required — so I would say, why try to avoid including them now only to add them later?",
+        "created_at": "2025-05-21T07:52:52.258000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I think it's important to also keep stateless in mind in order to avoid doing the work twice and to ensure that BAL can be easily adapted in the future to work with stateless.",
+        "created_at": "2025-05-21T07:54:49.835000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "One possible way of doing statelessness is “just” to have proofs. For that, we wouldn’t need reads, and we would only need state diffs in order to allow nodes to be stateful or partially stateful while still consuming proofs rather than doing execution.",
+        "created_at": "2025-05-21T07:56:10.093000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I think a stateless node must be part of the block validation process meaning it should take the prestate and execute the EVM to ensure everything is correct.",
+        "created_at": "2025-05-21T07:58:08.553000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Verifying proofs fulfills the “ensure everything is correct” bit",
+        "created_at": "2025-05-21T07:58:39.111000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "100% agree on paving the way for statelessnes. Right now, it's just the size of BALs that seemed like a serious constrain for some people and I tend to agree that 10 KiB (on avg) is a lot if bandwidth is the most limiting constrain in the network right now. There's no other reason to take storage locs out expect bandwidth.",
+        "created_at": "2025-05-21T07:59:08.207000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I am not saying this is necessarily what’s going to happen, but pretty clearly at this point there is at least a chance that we end jumping straight to zkEVM, so it’s not guaranteed that we’d eventually need reads anyway",
+        "created_at": "2025-05-21T07:59:47.515000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003c@792404665068158998\u003e did you by any chance also see how big a block level diff is on average? Curious how big the difference is with tx level ones",
+        "created_at": "2025-05-21T08:01:48.809000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "(And yes, agreed that bandwidth is the one thing we’re weighing against all of these other benefits)",
+        "created_at": "2025-05-21T08:02:44.305000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Also, adding reads (shipping the split-out EIP) could still be done later on. For an initial version, removing storage locs would just make the object smaller and if this is worth more than batch IO, we should go for it.",
+        "created_at": "2025-05-21T08:02:52.024000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Not yet but I'll check. Notably, this would remove the parallel execution feature, so, not sure if it's worth to consider.",
+        "created_at": "2025-05-21T08:08:22.649000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "By itself probably not, but there’s the option of splitting the block into explicit threads. The tx level diffs is one extreme and the block level diffs is another extreme of the spectrum",
+        "created_at": "2025-05-21T08:11:18.674000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Right, but to me it feels like everything in between is just more complex (to standardize, reason about and use). Post-tx value are super flexible, no matter how many cores you have. If you have as many cores as there are transactions, your exec time becomes the time of the heaviest tx.",
+        "created_at": "2025-05-21T08:13:54.574000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "23 KiB on avg, instad of 27 KiB. This is the SSZ object I used for that:\n\n```python\nclass SlotValue_postBlock(Serializable):\n    fields = [\n        ('slot', StorageKey),\n        ('value', StorageValue),\n    ]\n\nclass AccountStorage_postBlock(Serializable):\n    fields = [\n        ('address', Address),\n        ('slots', SSZList(SlotValue_postBlock, MAX_STORAGE_KEYS)),\n    ]\n\nPostBlockStorage = SSZList(AccountStorage_postBlock, MAX_ACCOUNTS)\n```",
+        "created_at": "2025-05-21T08:17:17.634000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "This makes sense because most transaction aren't dependent on another one in the same block (see https://dependency.pics/). Also, since the tx are pointed to by their index and not using their hash, the overhead from that is rather low.",
+        "created_at": "2025-05-21T08:18:39.948000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Nice ok, then that there seems to be very little reason to consider anything in between. It’s neither better on average nor worst case, just in the exceptional “the whole block is swaps to the same pool” case or something like that",
+        "created_at": "2025-05-21T08:26:12.067000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I think we need to take this also into account assuming it ships with Fusaka https://eips.ethereum.org/EIPS/eip-7934 (assuming BALs are part of block, but that is the case, right? Since BAL is part of consensus, it has to be verified in order to validate a block)\n\nAlso note that the size of the BAL linearly scales with the gas limit of the block",
+        "created_at": "2025-05-21T08:50:13.796000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "This does not include balance/nonce/code",
+        "created_at": "2025-05-21T08:53:33.345000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I'm also worried about the post-state code if we dump that, if we start including codes in the post-state then that could thus lead to entries of 24kb 🤔",
+        "created_at": "2025-05-21T08:54:31.074000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "right but balance and nonce diffs are on avg super small because, for nonces, we only need them for CREATE and CREATE2 and for balances, the worst case is sending 1 wei to as many non-empty accounts as possible, which costs 9300 gas, giving you a worst case size of 12 KiB (note, then the other parts of the BAL would be almost entirely empty).",
+        "created_at": "2025-05-21T09:01:03.112000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003e Also note that the size of the BAL linearly scales with the gas limit of the block",
+        "created_at": "2025-05-21T09:01:39.827000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Not necessarily. if gas limit increases and more users start using the same contracts, it scales slower than the gas limit",
+        "created_at": "2025-05-21T09:02:10.275000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Yes ok you are right in practice it will be sublinear. How come if more users start using the same contract it scales down the growth though? I guess you can then pack things together under the same address. But if it is a token contract then likely the storage slots are still well distributed (unless senders start sending each other token)",
+        "created_at": "2025-05-21T09:03:21.966000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "You are right about the balance and nonce btw, I recall we had this discussion before 😅",
+        "created_at": "2025-05-21T09:04:22.203000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "for token contracts with balances, true. But often times calls just check the balance of different pools (weth, usdc, usdt)",
+        "created_at": "2025-05-21T09:04:54.945000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Regarding contracts:\nDeploying a max size contract costs 4,968,200 (21k + 32k + 4,915,200), thus you can deploy 7.25 contracts of that max size. This results in 7 * 24 = 168 kib in the worst-case, which is fine because it's below the worst-case from reads/writes",
+        "created_at": "2025-05-21T09:17:14.449000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "It's actually less because you need to pay for the memory expansion in the CREATE frame of the contract to be created. But the 4915200 so approx 5M is a good upper bound for the amount of these contracts which can be created",
+        "created_at": "2025-05-21T09:27:04.750000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Where are the worst cases from read/writes again? Can't find them in the EIP only a small section in the \"block size considerations\"",
+        "created_at": "2025-05-21T09:28:22.949000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Right now, in the current EIP (storage loc + post-tx state diff), we're at 0.91 MiB in the worst case. As long as we stay below the calldata max (as BAL and much calldata are exclusive), we're fine (assuming we're fine with the calldata max)",
+        "created_at": "2025-05-21T09:30:51.026000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "That's assuming this EIP https://eips.ethereum.org/EIPS/eip-7778 or some other way of avoiding a block filled with storage slots set back to 0 (e.g. remove the refund altogether)",
+        "created_at": "2025-05-21T09:33:14.387000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Right yeah 👍",
+        "created_at": "2025-05-21T09:33:31.860000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Imo, this eip is overdue",
+        "created_at": "2025-05-21T09:34:29.153000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gballet",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Even if there is a chance for a straight jump to zkvms (and castles in the sky), this is missing a point: witnesses would be used by more than just the attesters: The bandwidth costs are a hefty price to pay when we know that just bulk-loading everything at the start of the block execution is already providing a boost that is good enough (not worst case, but that's fine).\n\nThe advantages of in-block witnesses is that you can find the data, which is otherwise really hard to figure out. If some location is read, this is a signal to wallets/dapps that they need to pay attention and update their internal dbs.",
+        "created_at": "2025-05-21T09:35:02.604000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gballet",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "The other issue I have with only the writes, is (as everyone can guess) that this is a departure from the way verkle/stateless proofs work, which means we would need to make yet another modification to the format, maintain more code, etc... I think we can adapt the verkle/stateless code to work with BALs, but if we have to handle yet another historical format, then it would be yet another proof that BALs are instant technical debt. I only speak for myself, but my understanding is that the geth team's opinion is that BALs are great as long as they prepare statelessness. I am not convinced that removing reads would be an efficient way of achieving that.",
+        "created_at": "2025-05-21T09:39:12.431000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003e If some location is read, this is a signal to wallets/dapps that they need to pay attention and update their internal dbs.\n\nWouldn't this be the case for writes, not reads?",
+        "created_at": "2025-05-21T09:47:30.050000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "About the format, going from writes to reads + writes should be a matter of adding more entries to the list, not changing the format",
+        "created_at": "2025-05-21T09:51:44.727000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Fwiw, I don't have a strong opinion on writes vs reads + writes, but the bandwidth cost is a very real tradeoff of any of these features and we should at least consider it all carefully.",
+        "created_at": "2025-05-21T09:53:40.046000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "This is correct yeah, The SSZ structure of the BAL would stay the same, no matter if we have reads + writes or only writes.",
+        "created_at": "2025-05-21T09:53:53.263000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003e The bandwidth costs are a hefty price to pay when we know that just bulk-loading everything at the start of the block execution is already providing a boost that is good enough (not worst case, but that's fine).\n\nIs it fine? I find it hard to imagine anyone saying \"optimistic solutions give us a 3x boost in the normal case, so let's increase the gas limit 3x\" or anything along these lines",
+        "created_at": "2025-05-21T09:55:48.716000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Wouldn't the witnesses be in the MBs , ike 4MB for MPTs and ~400 KiB for verkle on avg? This is 10x the avg BAL size. \n\nTo add to \u003c@520034910149410861\u003e , it's also not only parallelization in worst cases. You also get pre state -\u003e post state transition without requiring execution (something that might be needed for FOCIL), as well as parallel state root computation.",
+        "created_at": "2025-05-21T10:16:46.746000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "What's `SlotValue_postBlock` size in this? Is it 32 bytes or smaller?",
+        "created_at": "2025-05-21T10:35:55.509000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "as an example would `Rlp(SlotValue_postTx - SlotValue_preTx)` be a smaller size? (maybe issue with sign, 1 bit more)",
+        "created_at": "2025-05-21T10:37:43.988000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "it's 32 bytes yeah",
+        "created_at": "2025-05-21T10:54:26.357000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "regarding bandwidth of BAL.\n\nSSTORE costs 21k gas and SLOAD 2.1k gas for each new entry.\n\nso in the case of BAL, the worst case additional bandwidth for a GasLimit of say 300Mn is 9.4 MB for reads + writes and 900Kb for only writes",
+        "created_at": "2025-05-21T10:54:37.047000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "So smaller if just delta;minus leading zeros",
+        "created_at": "2025-05-21T10:54:49.702000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "if we assume each touch is 64 bytes (key+value)",
+        "created_at": "2025-05-21T10:54:54.950000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "900kb distributed in 2-3s of slot time is pretty neglible imo. the read+write case is more ominous tho",
+        "created_at": "2025-05-21T10:55:56.658000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "depends, if you put a few bytes into the 32 bytes StorageValues, it can be very well compressed using snappy. In the current design we might need ssz because it's more efficient for lists (correct me if I'm wrong) and there are many for mapping to tx indices.",
+        "created_at": "2025-05-21T10:56:34.515000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "worst case is still full 32 bytes with/without diff",
+        "created_at": "2025-05-21T10:57:18.821000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "for reads it's 32+20 bytes max and for writes you'd add another 32 bytes.\nhow did you get to 9.4 MiB?",
+        "created_at": "2025-05-21T10:58:18.321000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "ha sorry i was doing 32+32. but anyway, you are in that high range still. i think write-only case, it is neglible. write+reads less so",
+        "created_at": "2025-05-21T10:58:42.199000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "this is interesting, maybe there is some efficiency gains for avg cases here.",
+        "created_at": "2025-05-21T10:58:56.312000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Full LP balance vs change in LP balance; might be significant difference (and snappy compress better if don't remove the zeros)",
+        "created_at": "2025-05-21T11:00:16.855000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "For reads if you want a different 20 byte address will either need to include call cost or tx cost? Otherwise same address",
+        "created_at": "2025-05-21T11:01:26.290000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "oh i was accounting for key+val+addr",
+        "created_at": "2025-05-21T11:02:19.819000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "if we keep out val then the math is different ofc",
+        "created_at": "2025-05-21T11:02:43.936000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "addr(key0,key1,key2,..) ?",
+        "created_at": "2025-05-21T11:02:55.388000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "when you write, you write at an addr a (key, value) pair",
+        "created_at": "2025-05-21T11:03:30.444000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "when in contract all addresses are same; only keys are different",
+        "created_at": "2025-05-21T11:03:49.893000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "yes that's right, but not keys and values",
+        "created_at": "2025-05-21T11:04:02.154000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "if you keep out values, that is also \"fine\" (still some benefit) i guess but it makes everything more limited",
+        "created_at": "2025-05-21T11:04:32.753000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "key and value is 64 bytes (32 byte key mapping to 32byte value)",
+        "created_at": "2025-05-21T11:05:17.561000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "if you redo the math it is not 9.4 mb but half that",
+        "created_at": "2025-05-21T11:10:32.174000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "which still packs a punch",
+        "created_at": "2025-05-21T11:10:37.969000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "300mn/2.1k * 32 = 4.5MB",
+        "created_at": "2025-05-21T11:11:47.309000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "i do 10x gas limit just to see what the effect is in exaggerated condition",
+        "created_at": "2025-05-21T11:12:10.872000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "also snappy won't help you either because you can just read hashed keys",
+        "created_at": "2025-05-21T11:13:25.448000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "actually the avg case is the worst case because a solidity map is a keccak\nyou cannot literally compress reads in the current evm layout",
+        "created_at": "2025-05-21T11:14:01.816000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I just realized something unrelated to the discussion above. The keys which we are distributing in the BAL are the preimages right? Not the actual hashed keys how they end up in the DB. That would be helpful for the tree transition also (can just query past blocks to get preimages in the protocol)",
+        "created_at": "2025-05-21T12:14:57.250000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "for 300m gas I get 142,847 cold ready, 285,694 addresses and storage slots:\n`(gas_limit-21_000)/2_100 * 54 = 7.08 MiB`.\nThis is still way below what you could get with calldata (`7.15 MIB` without even trying hard to maximize, just using non-zero bytes)",
+        "created_at": "2025-05-21T12:15:26.803000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "The value in the BAL would be the actual keys, not the hashed keys",
+        "created_at": "2025-05-21T12:15:57.648000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "For me it is pre image, I also hope it will be like that. 100% needed for the transition",
+        "created_at": "2025-05-21T12:17:16.275000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "But the keys are hashed even in plain format",
+        "created_at": "2025-05-21T12:19:20.956000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Like a token balance's key is an hash",
+        "created_at": "2025-05-21T12:19:30.413000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "right but you can just hash them after getting them",
+        "created_at": "2025-05-21T12:19:50.437000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Yeah this is how solidity work",
+        "created_at": "2025-05-21T12:20:05.322000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "it is not really related to clients",
+        "created_at": "2025-05-21T12:20:15.467000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "A mapping is solidity is a keccak of the key mapped to the value",
+        "created_at": "2025-05-21T12:20:39.641000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "having also the preimage can help to reduce the size if the slot key is only 0x01 we don't have to share 32 bytes",
+        "created_at": "2025-05-21T12:20:52.102000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "i am saying most contract will SSTORE hashes",
+        "created_at": "2025-05-21T12:21:08.373000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "The plain key is an hash",
+        "created_at": "2025-05-21T12:21:31.751000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "",
+        "created_at": "2025-05-21T12:27:11.525000+00:00",
+        "attachments": [
+            {
+                "type": "image/jpeg",
+                "origin_name": "Screenshot_20250521_142700_ChatGPT.jpg",
+                "content": "5064b3c487785ee2bbc3671ac8e62018de1c978433ac8c5298c8e0e1f0ae5e5f"
+            }
+        ]
+    },
+    {
+        "author": "matkt0",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "yes but this hash it's still the preimage regarding EL client. When you have a SLOAD of this hashed key, you need to do another keccak to have the path in the trie.",
+        "created_at": "2025-05-21T12:30:49.821000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Yes, all I am saying is that BAL's avg case is the worst case because no matter how you put it, you deal with hashes",
+        "created_at": "2025-05-21T12:31:59.785000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Compression wont work on BAL",
+        "created_at": "2025-05-21T12:32:07.639000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "ah but we still have the size of the address",
+        "created_at": "2025-05-21T12:33:05.302000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "what?",
+        "created_at": "2025-05-21T12:33:13.474000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "99% of the size is key and values tho",
+        "created_at": "2025-05-21T12:33:36.096000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "if we share the address it will be 20 bytes instead of 32.",
+        "created_at": "2025-05-21T12:33:49.969000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "uhm, if you store only writes you need to store the address once and then many keys and values",
+        "created_at": "2025-05-21T12:34:30.507000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I wouldn't say 99%, that seems too much ^^, but I would say that everything we win is always positive.",
+        "created_at": "2025-05-21T12:34:43.172000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Well it really does not matter how much it is because addresses are also random",
+        "created_at": "2025-05-21T12:35:26.639000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "still cannot compress them",
+        "created_at": "2025-05-21T12:35:37.496000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "and to be precise, I am talking about compression here since it was brought up",
+        "created_at": "2025-05-21T12:36:24.500000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "This is also compression. In the worst case each access has a different address and you are stuck with 20 + 32 + 32 for writes",
+        "created_at": "2025-05-21T12:37:03.573000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "About the worst case sizes, also worth noting how this interacts with the block size limit. Like we were discussing yesterday with \u003c@415548822983278593\u003e,  it should be fine as long as we have a tx gas limit that's small enough that a single tx cannot overshoot the block size limit by itself, or even better small enough that a single tx can only consume a fraction of the block size limit. E.g. with a block size limit of 10 MBs, a gas limit of 500 Mgas but no tx gas limit, we could have a single tx that forces a \u003e 10 MBs access list and can never be included though its appears to be valid before executing it. On the other hand, with a 10 Mgas tx gas limit each tx could at most contribute ~250 KBs to the access list",
+        "created_at": "2025-05-21T12:38:09.471000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "ok so sure, you could say that by repeating stuff 10 times, you can argue you are compressing because you are not storing addresses in the worst possible ways. However, under BAL's proposed model, snappy wont save you that is all (plain vs mpt makes no difference)",
+        "created_at": "2025-05-21T12:40:27.297000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I'm not sure if I get your point why snappy wouldn't help if we put the actual storage slots in there (e.g. 0x1) instead of its hash?",
+        "created_at": "2025-05-21T12:43:10.573000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I know how keys are stored at the db, but this doesn't force BALs to also hash storage keys.",
+        "created_at": "2025-05-21T12:43:42.436000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "for some data structures e.g. `map()`and `array` solidity keccaks the key/index to get a slot; so the slotId is a random value",
+        "created_at": "2025-05-21T12:45:12.558000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Most of the stprage is a random value",
+        "created_at": "2025-05-21T12:45:31.150000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "right now I am hiking but once I have my PC I can zstd compress plain storage history files and show you that the ratio is 0.97",
+        "created_at": "2025-05-21T12:46:19.684000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "actually wait I have ssh on my phone. Gimme a sec",
+        "created_at": "2025-05-21T12:47:01.021000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "fullmain/snapshots/history/v1.0-storage.1828-1830.v : 91.65%   ( fullmain/snapshots/history/v1.0-storage.1828-1830.v.zst)",
+        "created_at": "2025-05-21T12:52:27.874000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "There you go 0.91 of compression ratio",
+        "created_at": "2025-05-21T12:52:41.188000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "You shave off 9% with zstd (probably values)",
+        "created_at": "2025-05-21T12:52:59.294000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gballet",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "sort of but not entirely, e.g. if you want to use this for sync (a big plus for this kind of approaches): to follow the chain, you need the reads as well. Dapps have similar problems, they need to figure out what interacts with them. This is a real usability problem in eth, and one that would be elegantly fixed.",
+        "created_at": "2025-05-21T12:55:42.278000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gballet",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "that still constitutes a format change in my book",
+        "created_at": "2025-05-21T12:56:04.584000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gballet",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "that doesn't sound correct, unless you would reserve the space for it but keep it empty?",
+        "created_at": "2025-05-21T12:57:03.031000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I still think BAL is valid btw and probably it is fine as a tradeoff as a replacement for statelessness bur we need to be clear what that looks like and what can you not do with partial statelessness",
+        "created_at": "2025-05-21T12:57:16.209000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gballet",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "yeah but that's the point: it's more data but it's data that is useful for many things, not just one.",
+        "created_at": "2025-05-21T12:59:00.461000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "If with reserving we mean making sure that the max entries in ssz lists are big enough for both worst-case reads and writes for a certain gas limit, then yes. Currently, in the EIP, they use the same structure but reads would just come with an empty SlotAccess list:\nhttps://github.com/ethereum/EIPs/blob/master/EIPS%2Feip-7928.md",
+        "created_at": "2025-05-21T13:08:59.081000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gballet",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I'm not in the \"let's blindly increase the gas limit\" camp, so I can't answer that question directly. There are many considerations with increasing the gas limit, beyond just executing txs these in parallel. See the perfnet and bloatnet effort, that are ongoing.\n\nHowever, I can point out that  the bandwidth usage for a feature that can be replaced by one that isn't as efficient in the worst case but still equivalent most of the time - without the bandwidth cost.\n\nAs for what happens when the block is pathologically unparallelizable, it has to be compared to what happens when the block is pathologically unparallelizable AND each tx writes to the same location, which blows up the witness size.\n\nThe point I'm making is that I would like to see some measurements in terms of trade-offs between performance, disk usage (if you're going to include the gas limit increate) and bandwidth. Until we get this, there's no way to make a good decision.",
+        "created_at": "2025-05-21T13:09:43.779000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Reads can also be useful for re-executing a block even if you no longer have the state of this block in the database. You validated the block, so you trust the BAL. And then, if you want to replay a block far in the past, it's possible.",
+        "created_at": "2025-05-21T13:09:45.453000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gballet",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "you mean that in the transition you would also add the values for the iterator sweep? that's going to make for massive blocks don't you think? If there are 10k leaves, and assuming each value is address + slot + value, that's 10k * (20 + 32 + 32) ~ 820k for a block!",
+        "created_at": "2025-05-21T13:13:24.665000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "i think gas limit is offtopic but an extra 900KB (write only case) is just not a lot assuming 10x gas limit",
+        "created_at": "2025-05-21T13:16:02.847000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "idk, we can argue this but i think it is offtopic",
+        "created_at": "2025-05-21T13:16:29.565000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "No I want to say, for example, we can generate preimage dataset before the transition fork, and what’s missing will be coming from the access list. That way, we can trigger the transition directly at the time of the fork.",
+        "created_at": "2025-05-21T13:16:42.654000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gballet",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Don't want to derail the conversion here, but would that not be equivalent to enabling preimage recording before the fork? The problem I see with passing a file before the tree is frozen, is that you will have a hard time figuring out if a file you've been given is correct or not. We can take this offline.",
+        "created_at": "2025-05-21T13:30:52.333000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jsign",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Sorry if this was considered before and I missed, but for the sake of bandwidth efficiency could be optimize BAL construction only for worst-case scenarios? (some arbitrary rule we can define)\n\nIf most clients are already doing optimistic parallel execution for loading storage, then in a theoretical block where all tx are parallelizable sounds like the complete BAL has a lot of wasted resources.\nSo maybe only put data in BALs to help in long chain of dependencies? \nThe more parallelizable the block is, the smaller the BAL is. The less parallelizable, the BAL will be bigger.\n\nThis would make BAL less usable for these other non-block-validation use-cases etc and probably requires some extra complexity in BAL construction/validation rules (and maybe worst-case RAM size from expected optimistic exec). But maybe is worth it for the extra bandwidth efficiency?",
+        "created_at": "2025-05-21T13:37:36.512000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jsign",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I'm not sure long term storage of BAL is a good idea storage-wise?",
+        "created_at": "2025-05-21T13:42:22.267000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jsign",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Also, any external observer of BALs (these wallet/dapp mentioned cases) should be careful of taking BALs values for non-reversible-reality decision/actions. BALs don't provide proofs, so until the block is finalized you have to be quite careful about assuming whatever is there is correct. I guess the impact might depend on each dapp case.",
+        "created_at": "2025-05-21T13:43:48.331000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "so after SSF you can just trust it?",
+        "created_at": "2025-05-21T13:46:09.430000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jsign",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "It is still having an honest majority assumption but that's probably fine for many more apps. Better assumption is a cryptographic proof of course.",
+        "created_at": "2025-05-21T13:47:53.484000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "do we think cryptographic proofs are even needed at that point? seems enough if you want an RPC node on localized state",
+        "created_at": "2025-05-21T13:49:33.189000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jsign",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Nono, my point about this was to say that BALs assisting dapps should might be a low-prio solution for dapps since the provided value could be debatable.",
+        "created_at": "2025-05-21T13:50:42.512000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "ok yeah I was just wondering if cryptographic proofs are going to be overkill at that point because, yes, they are better but also true statelessness is probably not very necessary anymore (regarding the little additional benefits it would provide)",
+        "created_at": "2025-05-21T13:51:25.902000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jsign",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "What I said is just another angle that I think was discussed on how BAL can assist syncing, no? You could optimistically use BALs for healing phase, but you still have to do a final state root check at the end for the same reasons.",
+        "created_at": "2025-05-21T13:53:23.650000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "funnygiulio",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Ok i think we were talking about different things",
+        "created_at": "2025-05-21T13:54:18.813000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "If BALs are included in block hash and block isn't marked as invalid then the BALs are correct though? (reorgs aside)",
+        "created_at": "2025-05-21T14:29:53.797000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jsign",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "If as a wallet/dapp I see a proposed block and react in reality assuming the BAL post-tx values are \"correct\", that is a risky take. Maybe you can wait for some attestations or similar, but my point is that you can't blindly react on BALs as dapps and you should understand which are the trust assumptions. Maybe not a big deal for avg cases, but just to know.",
+        "created_at": "2025-05-21T14:40:18.317000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Similar to receipt in block though?",
+        "created_at": "2025-05-21T14:42:29.070000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "You'd want the block to be somewhat confirmed before reacting to it as \"truth\" (depending how happy you are to reverse it out)",
+        "created_at": "2025-05-21T14:44:44.221000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jsign",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Yep",
+        "created_at": "2025-05-21T14:46:04.988000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "if the BAL is in the block hash it will be difficult to not keep it imo",
+        "created_at": "2025-05-21T14:46:32.757000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "and if its not in block hash then it will be difficult to trust it (would just be free floating data that could be modified by peers in hops)",
+        "created_at": "2025-05-21T14:47:15.884000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jsign",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "It should be part of the block yes. My point was about this comment:\n\u003e And then, if you want to replay a block far in the past, it's possible\nLong storage of  BALs state diffs will take more space than saving snapshots and having other more efficient state-diffs agregations maybe.",
+        "created_at": "2025-05-21T14:50:02.867000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Yes, in Besu we use trielogs internally, which are just the pre- and post-values for each write of the block.\n\nAfter that, I think it’s up to the client to decide what to do once they have that data. With just the pre and post write values of block , it’s still smaller than having all the intermediate nodes of the state. with also the read  (and intermediate write for each transaction) I don't know",
+        "created_at": "2025-05-21T14:54:57.189000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003e The more parallelizable the block is, the smaller the BAL is. The less parallelizable, the BAL will be bigger.\n\nImo there's good reasons to at the minimum want to have a block level diff even if it costs  some bandwidth. Any statelessness design, whether zkEVM or Verkle, should have it to be able to run a stateful node without execution, so I am not sure if there is any future where we don't eventually have it. Moreover it helps with sync. \n\nIf we take a block level diff as the baseline, adding post-tx values already has the behavior that the *additional* data is smaller if the block is more parallelizable, e.g. if all txs write to different slots then the block level diff is exactly the same, if all txs write to the same slot the block level diff would have been much smaller. Of course the argument very much depends on agreeing that a block level diff is a baseline we want.",
+        "created_at": "2025-05-21T15:12:02.005000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "This is how I thought about it too:\nWe may want block state diff for zkEVMs and FOCIL.\nGoing from block state diffs to tx state diff slightly(!) increases their avg size by a few KiB, keeps the worst-case size the same but allows you to build a dependency graph, thus enables parallelization.\nAdding storage values almost doubles the object's size for getting batch IO (maybe fine for current gas limit but potentially too big considering higher gas limits).\nEven without storage locations, we get perfect parallelism and the syncing feature (if it's eventually needed and sync ia a bottleneck).",
+        "created_at": "2025-05-21T15:20:59.575000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "The stongest arguments for keeping storage locations I've heard so far is the it's closer to statelessness designs + batch IO.\nThe counter argument is size.",
+        "created_at": "2025-05-21T15:23:16.356000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I assume if we can't do BLAs due to size, then that would imply would also be a problem with statelessness?",
+        "created_at": "2025-05-21T16:02:34.914000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "s1na",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Reading the result here https://hackmd.io/X4Z4h-EQRPSiQF38rpN9aQ?view: the \"near-zero IO\" is mostly meant for light clients, right? as a full node I would have to double-check the BAL against my db?",
+        "created_at": "2025-05-21T16:16:51.696000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "The current BAL design  as in the EIP does not have pre-tx values. If we want them, the size of the object gets quite significantly bigger because then reads would come with 84 (+32 for post values) bytes instead of 52, but yeah, you'd need to validate them against your db (which can be done async though)",
+        "created_at": "2025-05-21T16:53:57.520000+00:00",
+        "attachments": null
+    }
+]

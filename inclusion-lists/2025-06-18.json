@@ -1,0 +1,370 @@
+[
+    {
+        "author": "pellekrab",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@694014391288332358\u003e I sent you a dm about FOCIL stuff, could you take a look when you get the chance?",
+        "created_at": "2025-06-18T02:52:55.502000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I have a FOCIL question. What is the purpose of keeping `unsatisfied_inclusion_list_blocks` in the store? At least the spec has no further use of them.\nOne of the cases that I can imagine is: 1) block received and it doesn't satisfy ILs 2) IL equivocation received and block must be re-validated",
+        "created_at": "2025-06-18T05:38:15.060000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It also seems that we should remove IL validation from the `state_transition` and make `validate_inclusion_lists` directly call the ExecutionEngine in the CL spec. Since ExecutionEngine is an abstraction in the CL spec, EL can still check IL in the `newPayload` handler and respond with a separate `INVALID_INCLUSION_LIST` status",
+        "created_at": "2025-06-18T05:58:50.376000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I have also noticed that p2p spec disregards `MAXIMUM_GOSSIP_CLOCK_DISPARITY` parameter. Is this intentional or just a miss?",
+        "created_at": "2025-06-18T06:09:28.334000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mehdi.aouadi",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "In the current version of the spec, the `unsatisfied_inclusion_list_blocks` is used in the updated fork choice algorithm (in `get_attester_head` https://github.com/ethereum/consensus-specs/blob/81629f2d727b1b002463fab10f59a2da45e99e2e/specs/_features/eip7805/fork-choice.md?plain=1#L122 and `get_proposer_head` https://github.com/ethereum/consensus-specs/blob/81629f2d727b1b002463fab10f59a2da45e99e2e/specs/_features/eip7805/fork-choice.md?plain=1#L179) because now a block that doesn't satisfy the ILs is reorg-ed",
+        "created_at": "2025-06-18T07:03:15.034000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I see that, but then if there will be no re-evaluation of the block's validity wrt IL, it could make sense to mark block as INVALID if it doesn't satisfy the corresponding IL and discard the block. This would simplify the design",
+        "created_at": "2025-06-18T07:38:46.101000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mehdi.aouadi",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "There were some discussions about considering the block `INVALID`: https://discord.com/channels/595666850260713488/1210529202458071050/1342092718834188400 and https://discord.com/channels/595666850260713488/1210529202458071050/1342967718357368944. IMU we don't want to mark a block invalid because it doesn't satisfy the ILs and we'd want the CL to distinguish the invalidity causes. And btw, there's a draft PR to refactor the design https://github.com/ethereum/consensus-specs/pull/4351 it still has the `unsatisfied_inclusion_list_blocks` in the store but introduces many simplifications to the initial store changes",
+        "created_at": "2025-06-18T10:49:24.469000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It is removed in the next coming PR [here](https://github.com/ethereum/consensus-specs/pull/4351/files#diff-26426b9b899404021b0ddbc114d42e93a98ebf34b93b4d2b7c8175180599b6a2L12)",
+        "created_at": "2025-06-18T11:14:28.481000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Are you referring to `ATTESTATION_DEADLINE` or `VIEW_FREEZE_DEADLINE`?",
+        "created_at": "2025-06-18T11:21:15.657000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "but none the less I believe its a miss",
+        "created_at": "2025-06-18T11:21:35.061000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Regarding this comment https://github.com/ethereum/execution-apis/pull/609/files#r2153694852 I have also observed when lodestar's fcu call and `engine_updatePayloadWithInclusionListV1` are too close together, Geth may not respond to `engine_updatePayloadWithInclusionListV1` on time (or no response at all I haven't checked) result in a timeout error",
+        "created_at": "2025-06-18T11:41:22.030000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "FWIW I haven't followed closely but if the satisfaction of the IL is deterministic, that is if I receive a block every honest validator can determine that this block is not satisfying the IL, I see no reason at all to not mark this block as INVALID. The CL does not care about reasons for the EL to say the block is invalid. If IL satisfaction is part of EL validity conditions, then it's fine for the EL to simply return INVALID and no questions asked. If on the other hand some nodes may think the IL is satisfied while others don't the situation changes.",
+        "created_at": "2025-06-18T12:12:13.476000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cfradamt\u003e I don't think we can call something a validity condition if checking it requires a sidecar that's explicitly not meant to be part of the chain's history. In the two-step version, we could have the beacon block commit to specific ILs rather than just to some bitlist, but we don't want to require these ILs to be available in order to validate the chain (e.g. if the committed ILs are not available you could just skip them when you do the FOCIL check, versus being forced to retrieve them in order to do the validation)",
+        "created_at": "2025-06-18T12:32:10.250000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mehdi.aouadi",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes, the IL satisfaction is deterministic but not the ILs/txs selection (there's no order guaranty when picking the ILs/txs and it's up to the proposer to fill-up the execution payload with txs from the ILs). So yes we could simply consider the block INVALID but the CL might be interested in knowing the reason and act accordingly because the IL satisfaction is a CL validity condition imu",
+        "created_at": "2025-06-18T12:56:16.745000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I don't get why would you make IL satisfaction part of the CL validity. The payload is that needs to satisfy this. In particular, on ePBS the CL block for example would be valid completely independently on what the execution payload does wrt ILs. Same with some variants of delayed execution",
+        "created_at": "2025-06-18T13:03:23.419000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mehdi.aouadi",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "With ePBS (adding a bitlist of the included ILs committee members) and Delayed Execution (charging upfront and adding `gas_used` to the header) the IL satisfaction condition could definitely become an EL concern only and the CL would be able to validate the block independently. My reflexions are based on the current design where the CL might need to check the ILs satisfaction (the EL doesn't have a view on the circulating ILs for example)...",
+        "created_at": "2025-06-18T13:30:43.954000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Hm, but the CL cant parse RLP so CL wouldn't be able to check regardless. It will always have to come from the EL\nCL passes IL txs to the EL at the merge view deadline, that's good enough right?\nThe IL satisfactory should always come from the EL imo \nThe CL handles DOS prevention and equivocation check",
+        "created_at": "2025-06-18T13:35:37.722000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Even in the current design can you actually give me a reason why the CL cares?",
+        "created_at": "2025-06-18T13:36:49.857000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I guess what \u003c@993802539856314398\u003e was trying to say is reorg?",
+        "created_at": "2025-06-18T13:38:29.318000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "What does this mean?",
+        "created_at": "2025-06-18T13:39:04.561000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mehdi.aouadi",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Because the CL keeps track of the blocks that do not satisfy the ILs and uses that when running a fork choice (here for example: https://github.com/ethereum/consensus-specs/blob/81629f2d727b1b002463fab10f59a2da45e99e2e/specs/_features/eip7805/fork-choice.md?plain=1#L179). And yes this is what I'd consider a reorg",
+        "created_at": "2025-06-18T13:42:18.801000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "but that's not an invalid block, that's just a block you are trying to reorg out. Like block today arrives after 4s for late block reorg",
+        "created_at": "2025-06-18T13:43:12.490000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mehdi.aouadi",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So yes it's a VALID block and we wouldn't want to consider it INVALID...",
+        "created_at": "2025-06-18T13:44:58.546000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "the whole point is that the CL shouldn't even have these blocks in forkchoice",
+        "created_at": "2025-06-18T15:09:16.673000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "so it shouldn't care about any of them",
+        "created_at": "2025-06-18T15:09:23.572000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "just like any other invalid block",
+        "created_at": "2025-06-18T15:09:30.349000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think this is mostly an implementation detail. I agree it's not strictly necessary depending on how your client is written. The spec currently keeps it because it's used to filter which block to vote for in `get_attester_head` and `get_proposer_head`, which is shared in cases like a late block reorg.",
+        "created_at": "2025-06-18T15:17:03.712000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "again, if the node is not even in forkchoice then it's even simpler to filter. There must be an actual reason for this decision",
+        "created_at": "2025-06-18T15:28:00.482000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "both francesco and I wrote that, no other reason besides tracking unsatisfied IL block, it needs to be tracked *somewhere* and fork choice store in spec was the only neutral place for it as expressed only in spec, but of course this would look different in client code. In prysm we put this in a different cache",
+        "created_at": "2025-06-18T15:32:39.551000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Why does it need to be tracked? that is the whole point of my question and I assume that \u003c@425572898787426305\u003e's question as well",
+        "created_at": "2025-06-18T16:03:18.433000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "we do not track invalid blocks anywhere, neither does the EL, we simply drop them. What is the problem if we do this with blocks that do not satisfy the IL?",
+        "created_at": "2025-06-18T16:03:57.489000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "they're just not invalid blocks, failing the check locally does not mean the block can *never* become canonical",
+        "created_at": "2025-06-18T16:14:39.529000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "for example it might be that no one else has seen the ILs that your node has, in which case your EL will fail the check but everyone else's EL will not, at which point you should just revert to following the fork-choice, rather than getting stuck with the initial failed check",
+        "created_at": "2025-06-18T16:15:42.651000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I don't think there's any way to simplify this without requiring ILs to effectively be on chain/part of history, since without that there's no way to be sure that everyone agrees on whether the IL check succeeds or not",
+        "created_at": "2025-06-18T16:17:02.317000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We can add `validate_inclusion_lists` that explicitly calls the EL for IL validation but it should be called during the state transition anyway. The IL validation should happen after transaction execution and before operation processing. Otherwise, there is an edge case that a block is incorrectly considered as non-IL-compliant by an IL transaction that the sender originally doesn't have enough balance becomes able to afford it after withdrawal processing.",
+        "created_at": "2025-06-18T16:22:27.942000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Ok, so I am getting different replies to a specific question, this exact scenario was asked above and I was told the opposite lol",
+        "created_at": "2025-06-18T16:29:03.041000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "so the answer to this question is that it's not deterministic",
+        "created_at": "2025-06-18T16:29:37.345000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "and different nodes may have a different view on satisfaction",
+        "created_at": "2025-06-18T16:30:01.465000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "in which case I completely agree that you can't make these blocks invalid",
+        "created_at": "2025-06-18T16:30:19.700000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes, but more specifically it can't be made deterministic without having consensus on the ILs (including their availability), which we don't want",
+        "created_at": "2025-06-18T16:41:33.266000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yeah, I",
+        "created_at": "2025-06-18T16:41:57.571000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'm reading the spec, it seems clear to me that since the ILs aren't on-chain your only view is local, this can't be made deterministic",
+        "created_at": "2025-06-18T16:42:25.656000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "interestingly this may be better in ePBS though: there is at least a commitment to which IL proposer should be satisfied in the payload so if your node has the IL from the includer and the payload doesn't satisfy it, you can safely declare the payload as invalid, barring equivocation from the includer",
+        "created_at": "2025-06-18T16:44:39.362000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "**FOCIL Breakout #13**\n\nRecording: https://youtube.com/live/7hbBfP8jGhI\nSummary of breakout #13: https://github.com/ethereum/pm/issues/1576#issuecomment-2982028845\nShorter summary of breakout #13: https://x.com/jih2nn/status/1935401667031388539",
+        "created_at": "2025-06-18T17:39:02.213000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mehdi.aouadi",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I see what you mean now, I was thinking deterministic = given a fixed set of ILs and a block any validator would have the same ILs satisfaction result (but every node has its own local view of the ILs in the end). Anyway, at least we're all on the same page now and we'd probably need to readjust the design for ePBS anyway",
+        "created_at": "2025-06-18T19:35:12.165000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "ePBS will let some nodes get rid of the Payload I think, but probably not all. I mean some nodes will know for a fact that the Payload is invalid. Others may not",
+        "created_at": "2025-06-18T19:40:23.372000+00:00",
+        "attachments": null
+    }
+]

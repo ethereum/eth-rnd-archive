@@ -1,0 +1,130 @@
+[
+    {
+        "author": "tbenr",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "back to that thread, I don't think teku behavior is accurately described: we always do aggregation when returning attestations from the pool.\nwhen committeeIndex is not passed, it will try to aggregate everything (single attestations, aggregates) into \"onchain\" aggregations. when committeeIndex it passed, it will only aggregate single attestations and aggregations that are only referred to the given committee exclusively.",
+        "created_at": "2025-04-30T10:45:11.075000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tbenr",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "currently they vanish when we import blocks and we drop attestations (and single ones) \"fully covered\" by attestations included on chain. But the new pool we are working on will likely early drop SA as aggregations come in.",
+        "created_at": "2025-04-30T10:55:53.898000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "\u003e currently they vanish when we import blocks\nhow can you remove attestations from pool if block is not finalized? we just prune attestation that are older than previous epoch as those can't be included anymore, but more aggressively pruning our cache would be benefitial for packing performance, I just don't see how that's safe to do",
+        "created_at": "2025-04-30T13:26:35.015000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I think that the issue here is \"exclusively\".  If I want the attestations in the pool for committee index 1 (for example) it seems that I only receive the aggregated attestations that purely have attestations from committee index 1.  With Electra most aggregates seem to be for multiple committees, and the API does not appear to return these even if they include attestations for the committee index.",
+        "created_at": "2025-04-30T13:29:51.414000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I suppose the general question for the CL teams is if such aggregates exist in the pools, or they only aggregate per-committee until it comes to block production (at which point they aggregate across committees).  If it's the former then the the API response makes sense (but again we should clarify this in the docs).",
+        "created_at": "2025-04-30T13:34:47.226000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "we only aggregate per committee in pool",
+        "created_at": "2025-04-30T13:36:50.728000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tbenr",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "we put back in the pool the attestations from reorged blocks.",
+        "created_at": "2025-04-30T13:38:18.605000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tbenr",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "i think it is in general safe. The cross-committee aggregation happens only for block production so the pool generally contains only single attestations and single-committee aggregates. The only issue for is if a reorg happens and we put in the pool a cross-committee aggregates taken from the block.",
+        "created_at": "2025-04-30T13:41:06.429000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tbenr",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "as previously said by nflaig (if i'm not mistaken) all clients have now their own datastructures\\strategies and unifing the API behaviour to a more strict\\consistent one could lead some to rewrite\\add some logic to be compliant.",
+        "created_at": "2025-04-30T13:44:51.741000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tbenr",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "maybe we should restart from the usecases around that api and from that decide what is really necessary",
+        "created_at": "2025-04-30T13:46:42.046000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "yeah would be good to know who is the consumer of this, it hasn't even been useful for us to debug issues, we rather use metrics /logs for that",
+        "created_at": "2025-04-30T13:47:21.259000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tbenr",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "i hit that api just only when i needed to check if it was still working 🙂",
+        "created_at": "2025-04-30T13:48:09.665000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "But if I query teku on that endpoint without a committee index it returns aggregates with multiple committee indices.",
+        "created_at": "2025-04-30T13:55:21.856000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jgm",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "In terms of use cases: in my particular case I'm pulling the attestation pool to see if specific validators have created their attestations (this is ahead of the time for the next proposal, so I can't pull it from the block).  I can work around it, personally, but it was more of a case of tidying up the API specification to be clearer as to what should be expected to be returned.",
+        "created_at": "2025-04-30T13:56:59.551000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tbenr",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "yes if you don't pass it we do not apply that filter and everything is taken into account.",
+        "created_at": "2025-04-30T13:58:45.789000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "\u003e  I'm pulling the attestation pool to see if specific validators have created their attestations\nwould  `attestation` event be a option here? the data in the pool is very unreliable based on when it's queried and how clients prune it\n\n\u003e what should be expected to be returned.\nyeah agree, there should really not be a difference on how client handle `committee_index`",
+        "created_at": "2025-04-30T13:59:12.564000+00:00",
+        "attachments": null
+    }
+]

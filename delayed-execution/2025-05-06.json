@@ -1,0 +1,130 @@
+[
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Put the doc here:\nhttps://ethresear.ch/t/delayed-execution-and-free-da/22265",
+        "created_at": "2025-05-06T05:18:23.109000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Hi, I'm still trying to understand how the optimistic gas used field works with FOCIL under delayed execution. Is the following correct?\n\n* Before attesting, attesters already have a fixed view of the inclusion list\n* When attesting, they check whether each IL tx is included in the payload, or could have been included\n* There are two main reasons an IL tx might be excluded: the block is full, or the tx is invalid\n* The \"block is full\" case is handled by the optimistic gas used field, so attesters can perform this check up front\n* The \"tx is invalid\" case is partially handled via nonce and balance checks, but how does this work if, for example, tx A funds an account and tx B drains it — wouldn’t we need to execute the txs to know for sure?",
+        "created_at": "2025-05-06T15:56:25.967000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Tx validity within a block is changed to be checked *upfront*, at the beginning of the block, and fees are also charged at that point, rather than at the time of the tx’s execution. In other words, for a tx to be valid it must be the case that the sender was sufficiently funded before any execution has taken place. Being funded by another tx doesn’t work, if a tx is not funded upfront the block is invalid. Being drained by another tx doesn’t matter, because the fees have already been charged",
+        "created_at": "2025-05-06T16:03:58.180000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Is there a refund mechanism then?",
+        "created_at": "2025-05-06T16:15:39.945000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "There’s different ways to do it, doing it without a refund means that we can fully statically validate the payload without escrowing any funds from coinbase/the proposer, and without allowing any free DA, because we can exactly tell how much gas is going to be used: gas consumption does not depend on execution, it’s just what is declared. On the other hand it changes UX a lot. Doing it without refunds does not change anything for users (except not allowing EOA txs that are funded within the same block), but it makes the gas consumption dependent on execution. Then we can do one of these options, in all of which we can do FOCIL enforcement conditional on gas_used being correct: \n- treat gas_used optimistically, i.e. block invalid if it’s wrong. It’s better than optimistic attesting without the change in tx validity rules (with the charging upfront etc…) because it works well with FOCIL. No static validation, but also no free DA\n- charge the coinbase/proposer for gas_used: full static validation, no free DA, but more complicated and a pain for local block building\n- only revert the block’s execution when gas_used is incorrect. Static validation but “free DA”, or rather, you don’t pay the exact gas cost for it, you just pay the opportunity cost of a no-op payload.",
+        "created_at": "2025-05-06T16:30:29.911000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I like the last option, it seems to be the simplest (EL-only, no coinbase payment, no user impact), and think it’s ok to have the cost of stuffing the block with unpaid DA be a wasted payload.",
+        "created_at": "2025-05-06T16:37:32.242000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "And we could always eventually add a coinbase/proposer payment if we wanted to make sure we always fully charge for DA",
+        "created_at": "2025-05-06T16:38:27.821000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Wouldn't this be a borad UX change? If a wallet over estimate for gas and senders dont have enough balance to cover, the tx will just fail right",
+        "created_at": "2025-05-06T16:38:56.292000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It’s the same thing today. For your tx to be valid, you must be able to cover the max tx fee (tx.gas * basefee) + tx.value",
+        "created_at": "2025-05-06T16:40:57.573000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "In fact, in the execution-specs I didn’t change the refund mechanism at all. It’s the same exact refund mechanism that already exists, and even the same pre-payment, the only difference is when your pre-payment is made. Today, it’s made right before a tx’s execution, in that design it would be at the beginning of the block for all txs",
+        "created_at": "2025-05-06T16:43:27.145000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I am missing something, gas consumption is determined at runtime, I don't see how this can be computed statically unless you compute a bound, which would be a major degradation of UX",
+        "created_at": "2025-05-06T16:51:25.994000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "or you require the builder to inform the exact gas used by the tx?",
+        "created_at": "2025-05-06T16:52:07.356000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "and then this is validated later",
+        "created_at": "2025-05-06T16:52:13.312000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Without refunds just means that everyone pays tx.gas. We don't think this is a good approach because it's a huge UX change (though it also has a lot of benefits for the protocol)",
+        "created_at": "2025-05-06T16:53:11.748000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "With refunds the UX is entirely the same, and the `gas_used` claimed by the builder can then be dealt with in the different  ways I mentioned",
+        "created_at": "2025-05-06T16:53:50.840000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yes, I agree that' s why I was asking if there's a refund",
+        "created_at": "2025-05-06T16:54:13.235000+00:00",
+        "attachments": null
+    }
+]

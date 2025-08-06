@@ -1,0 +1,178 @@
+[
+    {
+        "author": "radekkapka",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "yes, exactly this was my thinking - require servers to support SSZ",
+        "created_at": "2025-04-25T10:30:30.646000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I think that is reasonable, and some time after the hard fork clients can start using it if they don't have fallback logic implemented, but we need to define which routes we require SSZ support from server, all technically possible routes or just a subset, like validator apis?",
+        "created_at": "2025-04-25T11:30:14.755000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "radekkapka",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I am personally in favour of all endpoints. As I said, I don't expect this to take more than a few days in Prysm, so splitting this into several forks is not necessary",
+        "created_at": "2025-04-25T12:03:30.728000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "serenita_io",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "If we're going to more actively require this, any chance we could require SSZ *and* snappy? It would reduce the bandwidth even further.\nI experimented with this a few months ago and a random Holesky block looked like this:\n\nJSON 120KB -\u003e SSZ 52KB –\u003e SSZ+snappy 32KB\n\nI don't see any reason why we wouldn't want to. As mentioned in the linked Github issue, all CL clients already use snappy on the p2p layer so we wouldn't be trying to invent anything new here. Unless it is a complex change for some implementation...",
+        "created_at": "2025-04-25T14:28:38.972000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "one difference is that SSZ is a pure win, SSZ+snappy is, might not be, it depends, it's another layer of processing. I don't have a strong view on this but its not an \"obviously better\" step",
+        "created_at": "2025-04-25T14:41:13.821000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "a lot of the JSON issues relate to generating and parsing it, and there, SSZ+snappy is potentially worse than SSZ. The req/resp layer uses it partly because there bandwidth is significantly more at a premium",
+        "created_at": "2025-04-25T14:42:00.260000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "validator client could decide to use compression or not via `Accept-Encoding`, by default it would probably be disabled anyways because on a loopback connection it is very likley a perf regression",
+        "created_at": "2025-04-25T14:44:32.313000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "ah, that's another point, HTTP connections already have other compression options, yeah",
+        "created_at": "2025-04-25T14:45:48.644000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "serenita_io",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Ok fair point, it could in many cases be additional unneeded processing.\n\nI have a limited point of view from the VC side where it is often enough to work directly with the JSON-encoded data without deserializing into a more complex SSZ object. But I suppose on the CL client side, it's quite the opposite and you work with the more complex objects all the time, in which case SSZ serializing vs JSON serializing does not make a huge difference in terms of processing yet still leads to reduced bandwidth so that's a win-win 👍\n\nWould it make sense to at least do a very quick analysis of the potential snappy overhead? If it adds e.g. \u003c\u003c1ms of processing overhead to compress a block across all client implementations then it could still be worth it?",
+        "created_at": "2025-04-25T14:55:07.367000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I mean, I guess, one could do the performance analysis? But at that point, it wouldn't just be snappy, it would be all the usual HTTP compression algorithms allowed (zlib, deflate, brotli, etc)",
+        "created_at": "2025-04-25T14:57:36.881000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "obviously we're not going to require something more exotic like brotli, though",
+        "created_at": "2025-04-25T14:58:06.813000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "also to be clear, JSON processing is very slow on the BN, compared to a lot of computation. it also, because JSON isn't ordered, prohibits streaming and requires internal buffers for objects such as, say, blocks",
+        "created_at": "2025-04-25T15:01:45.905000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "serenita_io",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I was thinking we could easily have 3x bigger blocks in a year or two (well, their execution payloads, blobs, ...) at which point the compression tradeoff may make more sense. We'll need to coordinate on it again, so why not do it in one go. But if there are good reasons not to do snappy now, I'm okay with only doing SSZ for now.\n\n(Also I don't think we'd necessarily *need to* support other compression algorithms?)",
+        "created_at": "2025-04-25T15:10:22.237000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "compression might not be effective with regard to blobs as those are already compressed by L2s",
+        "created_at": "2025-04-25T15:12:17.535000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "each new hardfork is a new coordination point, I don't think it makes sense to try to look ahead in this context",
+        "created_at": "2025-04-25T15:16:06.251000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I'm not suggesting a need to suggest other algorithms, I'm suggesting that in the realm of HTTP compression, they already exist, as points of comparison",
+        "created_at": "2025-04-25T15:17:14.630000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "to the extent it would be a bit disingenuous to compare only with uncompressed, for people who want compression",
+        "created_at": "2025-04-25T15:17:39.324000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "serenita_io",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Understood, I thought you meant we'd automatically need to support the other compression algorithms too if we decided to support snappy on the API.\nAnyway, I'll be happy with wider SSZ support too 🙂",
+        "created_at": "2025-04-25T15:22:09.849000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Definitely not gonna support compression for JSON 😄",
+        "created_at": "2025-04-25T15:22:31.773000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "serenita_io",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Well, for that same block, the 120KB of JSON turned into 53 KB of snappy-compressed JSON pretty much on par with SSZ 😄",
+        "created_at": "2025-04-25T15:25:20.246000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "serenita_io",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "But it definitely does sound like the worst option 👍 😄",
+        "created_at": "2025-04-25T15:27:14.148000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "for full blocks (~120KB) our de-/serialization is already 46x slower for JSON, curious how that looks with compression 😄",
+        "created_at": "2025-04-25T15:28:45.429000+00:00",
+        "attachments": null
+    }
+]

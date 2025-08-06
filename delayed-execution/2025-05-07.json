@@ -1,0 +1,162 @@
+[
+    {
+        "author": "sanleo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Not sure if this is of concern to you, but this approach would break sponsored bundles: https://docs.titanbuilder.xyz/api/eth_sendbundle#sponsored-bundles",
+        "created_at": "2025-05-07T03:33:59.533000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It is a concern, but we’re not sure how big of a concern. In principle it could be fixed by other means, for example more generally allowing sponsored txs (letting the builder cover the costs whenever the sender cannot), but this would also involve introducing some form of coinbase signature, so it would be nice to understand if it’s actually worth fixing (assuming we were to go down this route)",
+        "created_at": "2025-05-07T06:05:03.801000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "In your case, is this mainly used by searchers? (since the bundle has to increase the builder’s balance enough to pay for fees)",
+        "created_at": "2025-05-07T06:05:46.107000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "In which case, can they not do it with a smart contract?",
+        "created_at": "2025-05-07T06:10:02.264000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sanleo",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "In my case, I'm not a searcher so I haven't actually used this at all.\nI think primarily yes, it is for searchers, *but* I think it does also provide a potentially very helpful service in that it can be used by end users to move tokens out of wallets with 0 funds, without having to link another wallet, and other such examples.\nI don't think its seen much adoption from the end user space, I'm certainly not aware of any wallets using this feature specifically, and I'm unsure on the front of searchers, I don't have any data on that.\nFor me, I suspect that its probably not worth fixing.\n\nI think it would be nice to get some data on how often this feature is used though to confirm my suspicions.\nMaybe I'll see if I can get in contact with Titan and see if they can provide me the data or give some insight on the best way to obtain it, if you think that would be helpful?",
+        "created_at": "2025-05-07T06:33:33.426000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah that would be great if you feel like doing that 😄 Thanks for engaging!",
+        "created_at": "2025-05-07T06:34:33.774000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "daniellehrner",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Aside from the technical aspects, I think we should also consider the UX impact of this. If I understand correctly by not executing the tx in the same block users have to wait longer until they know if their tx was successful or not.\n\nSo when a user's wallet sends the tx, the wallet or website the user is interacting with, needs to wait 2 blocks instead of 1 until it can know the outcome of the tx. That seems like a big tradeoff and we should think if it is acceptable or not.",
+        "created_at": "2025-05-07T09:18:58.604000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The difference is actually only that to know the outcome of the tx you need to execute the whole block, instead of the block up to that tx. For example for the last tx in the block there wouldn't be any difference",
+        "created_at": "2025-05-07T09:29:17.042000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "You don't need to wait for the next block to execute the previous one",
+        "created_at": "2025-05-07T09:29:33.687000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "You do need to wait for the next block in order to have a post-state root that you can prove things against, but that's necessary for delayed execution, not a particular feature of one of these designs.",
+        "created_at": "2025-05-07T09:37:43.923000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The one thing you could improve on is letting users have inclusion (but not execution) guarantees without executing or waiting for the next block, which could be useful for example for transfers. In this particular design you don't get that because the whole block could revert, so even if your tx is included it doesn't mean that it will actually execute. There's other designs where that's not the case but with other tradeoffs other for UX (paying for the whole tx.gas always, which imo is much worse) or for staking UX and protocol complexity (needing to fund an EOA to build locally). Not sure how much this inclusion-guarantee-without-executing is worth",
+        "created_at": "2025-05-07T09:41:27.460000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "daniellehrner",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Okay, so from the EL point of view:\n\n1) I get the block\n2) I do the static analysis of the header\n3) I send valid / not valid to the CL depending on the result of the static analysis\n4) In the background I start to execute the block body\n5) As soon as that is finished is it safe to send the tx receipt of the txs in this block when somebody requests it via RPC? Or can those get invalid with the next block? I think it's the former",
+        "created_at": "2025-05-07T09:41:43.480000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "anyway, generally agree that UX is an important consideration here",
+        "created_at": "2025-05-07T09:41:47.905000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "2) do the static analysis *of the block*, not just the header (includes looking at txs and doing some basic nonce and balance checks)\n\nOtherwise, yes 🙂",
+        "created_at": "2025-05-07T09:45:45.868000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The static part is really just to know that the block is valid for the purpose of the CL voting, but it doesn't tell you whether the txs will actually execute or be fully reverted due to running out of gas (which is the only thing that can cause it to revert, at least in the particular design I am referring to, which is \"2 + 4\" in the post). But as you said, as soon as you execute you're sure that all the post-execution outputs (state root, receipts, logs etc...) are valid and cannot be changed by the next block",
+        "created_at": "2025-05-07T09:47:29.234000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "the next block is forced to include those in its header (the header has `pre_state_root`, `parent_receipt_root` etc...)",
+        "created_at": "2025-05-07T09:48:30.483000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "daniellehrner",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Okay, this mean that the tradeoff is that block execution gets more complex in the ELs, but that is a good tradeoff, we can definitely manage that.",
+        "created_at": "2025-05-07T09:58:14.988000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah. If you have any insights on complexity that might not be obvious just looking at the execution-specs (https://github.com/ethereum/execution-specs/compare/forks/prague...fradamt:execution-specs:delayed-execution-noop-for-gas-used), early feedback would be great 🙂",
+        "created_at": "2025-05-07T10:01:49.938000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "particularly around user facing things like anything that outputs that are relevant to RPCs",
+        "created_at": "2025-05-07T10:02:27.124000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "in what I linked, `validate_block` would be what you do to be able to respond to the CL, and then `apply_body` is still the actual execution",
+        "created_at": "2025-05-07T10:03:15.705000+00:00",
+        "attachments": null
+    }
+]

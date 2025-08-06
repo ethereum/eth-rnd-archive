@@ -1,0 +1,90 @@
+[
+    {
+        "author": "raulvk",
+        "category": "general",
+        "parent": "",
+        "content": "continuing the conversation on implementing *BPO forks* on the CL side. Options AFAIU:\n1. Treat as a hardfork on the p2p protocol, signalling as a new `ForkDigest` value on the Status req/resp. Could mix in the base `ForkDigest` with a hash of the canonical representation of the currently active BPO config. Key downside cited was code difficulties on various CL clients; but the idea of avoiding using the regular fork boilerplate machinery, and instead creating a secondary (wrapping or intercepting) codepath seemed to (silently) resonate?\n2. Extend the Status req/resp with a new field to represent the BPO configuration. I am less agreeable to this option because it's likely to ossify poorly. At one point in the future BPO forks will stop being relevant, and we'll be left with this field which will only ever carry a fixed value.",
+        "created_at": "2025-05-19T14:43:16.391000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "cc \u003c@498009160982724610\u003e \u003c@449019668296892420\u003e for input. I think both options are relatively simple to implement in Prysm and both are simpler than a full fork. Also think 1 may be better",
+        "created_at": "2025-05-19T17:22:10.698000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "general",
+        "parent": "",
+        "content": "I dont think we want to touch the `ForkData` and `compute_fork_data_root` method because that's going to change the signatgure domain completely. I think the cleanest change for (1) is to update `compute_fork_digest` directly and mix bpo's epoch and max blobs count into it\n\nI like (1) as well but will defer it to the p2p experts",
+        "created_at": "2025-05-19T18:02:18.363000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "general",
+        "parent": "",
+        "content": "according to beacon chain specs, it's the `compute_fork_**digest**` function that returns the domain separation tag for p2p? if we don't want to affect that, we'd have to concat directly to the digest and rehash?",
+        "created_at": "2025-05-19T18:09:38.346000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "general",
+        "parent": "",
+        "content": "oh no, I think it's fine to change that, such that after fusaka gets activated, it uses something like this:\n```python\ndef compute_bpo_fork_digest(current_version: Version, genesis_validators_root: Root, epoch: Epoch, blob_schedule: List[Tuple[int, int]]) -\u003e ForkDigest:\n\n    max_blobs = 0\n    for scheduled_epoch, max_blobs_per_block in reversed(blob_schedule):\n        if epoch \u003e= scheduled_epoch:\n            max_blobs = max_blobs_per_block\n            break\n\n    version_bytes = bytearray(current_version)\n    version_bytes[0] ^= max_blobs\n    mixed_version = bytes(version_bytes)\n    return ForkDigest(compute_fork_data_root(mixed_version, genesis_validators_root)[:4])\n```\nWe just dont want to change the fork data itself",
+        "created_at": "2025-05-19T18:13:12.849000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@363800010518822915\u003e also: what are the downsides of leaning into the separation, btw? i gather this was introduced as a top-level way to version the data structures transiting on topics upon a fork. but is there a downside to segregation upon a BPO fork even if the schemas don't change? (but the max cardinalities do)",
+        "created_at": "2025-05-19T18:15:36.619000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "general",
+        "parent": "",
+        "content": "ok, TIL:\n* fork data root =\u003e determines signature domain\n* fork digest =\u003e determines p2p topic segregation",
+        "created_at": "2025-05-19T18:18:25.600000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "general",
+        "parent": "",
+        "content": "I think the fundamental question is whether we want to change the topic string. Using a different fork digest will change the topic string. Intuitivelly I feel like if the column sidecar has more rows then maybe it should be on a different topic than before, but ill defer this to the p2p experts",
+        "created_at": "2025-05-19T18:18:37.319000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "general",
+        "parent": "",
+        "content": "The option (2) you provided would still use the same topic string, but allow peers to goodbye the ones that's not on the same BPO schedule",
+        "created_at": "2025-05-19T18:20:10.120000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "general",
+        "parent": "",
+        "content": "(if you consider me a p2p expert 😅 ) intuitively I'd like to roll over, but that will reset the meshes -- have we seen p2p stability issues in the past related to this? how do clients handle this? do they start subscribing prior to the fork epoch?",
+        "created_at": "2025-05-19T18:24:24.998000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "general",
+        "parent": "",
+        "content": "we already do this every hard fork so Id say it's battle tested at this point. The only concern I see is the number of data column sidecars subnets to roll over at once. Maybe beacon attestations for nodes that subscribe to all the subnets is close to the same amount. Need to think abou tthis more... \nPrysm for example will subscribe to the new subnets 1 epoch before the target epoch, the disconnect the old subnets 1 epoch after target epoch",
+        "created_at": "2025-05-19T18:27:47.327000+00:00",
+        "attachments": null
+    }
+]

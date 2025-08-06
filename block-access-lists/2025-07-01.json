@@ -1,0 +1,328 @@
+[
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "How do you reliably identify \"Simple ETH Transfers\" in a forward compatible way?",
+        "created_at": "2025-07-01T05:00:47.011000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "21,000 is the current cost of a simple transfer, but it can change in the future.  We can also imagine future transaction types that have different costs but have similar guarantees.  I worry that this optimization is fragile and easy to break in the future on accident.",
+        "created_at": "2025-07-01T05:01:47.235000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Also, it complicates implementations as they now need to locally aggregate two sources of data when processing the diffs, and every light client that is processing the access lists will need to re-implement this logic.",
+        "created_at": "2025-07-01T05:02:23.667000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I think it should be relaxed to \"any transfer from an EOA which doesn't result in code execution at the target\"",
+        "created_at": "2025-07-01T05:07:05.506000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "How will a light client processing state updates know which transactions meet this requirement?",
+        "created_at": "2025-07-01T05:07:47.104000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I don't see future compatibility issues since we can just change the logic and update it in case the 21k base cost update.\nI do see the points around complexity.\nRegarding the additional work. This is what they aleady needed to do for nonces too. I don't see why using the full block incl the BAL + txs, is worse than just the BAL, except complexity.",
+        "created_at": "2025-07-01T05:07:53.629000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "that's a fair point",
+        "created_at": "2025-07-01T05:08:30.153000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I agree that this is not an unsolvable problem.  My concern is the complexity and brittleness addition vs a 5% bandwidth reduction.  Especially since every light client will need to implement and maintain this code, not just full client.",
+        "created_at": "2025-07-01T05:08:40.188000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "For actual balance changes we'd include it. If it's not included but there's a tx with a certain value + gasprice, I have everything needed to compute the post balance for the recipient and the coinbase.",
+        "created_at": "2025-07-01T05:09:46.644000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "it's by far the dirtiest part of the changes that need to be made to Geth in order to construct BALs",
+        "created_at": "2025-07-01T05:10:02.859000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I think nonces at least update automatically for *every* transaction?  No need to have logic that filters the transactions down to a subset?",
+        "created_at": "2025-07-01T05:10:05.290000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "that's not to say that it will be super complicated in the end.  Just as I implement it right now, it's a bit of a hack.",
+        "created_at": "2025-07-01T05:11:25.142000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "In this reply I was referring specifically to the modification jwasinger suggested, not to your proposal.",
+        "created_at": "2025-07-01T05:11:36.415000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "This is on the construction side, or the recipient processing side (or both)?",
+        "created_at": "2025-07-01T05:11:56.359000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "probably both.  We haven't started implementing execution against BALs quite yet",
+        "created_at": "2025-07-01T05:12:18.953000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Nonces for type 4 tx must increase at the address_to and for deployed contracts it must incease by one too.",
+        "created_at": "2025-07-01T05:12:32.136000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Hmm, why are 7702 delegations excluded?  I guess the idea is that if the transaction signatures are valid, then there is no state read that could make the transaction fail for any reason?",
+        "created_at": "2025-07-01T05:14:55.163000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Reading over the list of exclusions, I'm not a fan of them.  While I agree that they are all statically inferable, it feels very brittle and unnecessarily complex.  We should be striving for protocol simplicity when we can, rather than trying to eek out the last few percent of performance.",
+        "created_at": "2025-07-01T05:16:51.924000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Reducing protocol complexity makes the system more robust (less likely for consensus failure), and makes it easier for people to build and maintain new clients.",
+        "created_at": "2025-07-01T05:17:15.558000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "At the least, the Rationale of that EIP should include a detailed analysis of how much is saved by adding this complexity.",
+        "created_at": "2025-07-01T05:18:30.522000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I would also like to see an analysis over a larger block range than just 100 blocks (ideally over the last several years of blocks, which should be trivial once the test suite is setup).",
+        "created_at": "2025-07-01T05:19:14.412000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "If we want to optimize, I feel like the first thing to drop is storage reads.  It appears that accounts for ~30% of the size and removing store read recording would *decrease* complexity rather than increase it.",
+        "created_at": "2025-07-01T05:23:36.152000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "the exclusion list in the EIP is really explicit.  But it's not actually complex on the implementation side for geth at least.",
+        "created_at": "2025-07-01T05:24:36.732000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I misread the original message and thought that the gains from omitting simple transfers were a lot larger than 5%.  I will add it to my implementation, but I'm feeling a bit lukewarm about it now",
+        "created_at": "2025-07-01T05:28:15+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I'm creating a setup that should allow us to get data on the last ~2 million blocks.  just waiting for my node to full sync so that I can save the snapshot at the starting range of my data collection window.",
+        "created_at": "2025-07-01T05:29:05.894000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I agree with minimizing protocol complexity, though, this is a form of complexity that can be well tested and is not something complex on the logical side. We're at a trade-off between bandwidth and simplicity. I will check if those exclusions from statically available info actually brings us much. As we might end up having the sender addresses in the BAL anyway, we might just add the nonces back in.",
+        "created_at": "2025-07-01T05:29:17.627000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Re the \"ignore simple ETH transfers\", the decision one would have to take is quite simple, when reconstructing the state diff from the BAL:",
+        "created_at": "2025-07-01T05:30:12.065000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "flow.png",
+                "content": "9b49dcd026016b03b19c56b3562392d29a663c6f35f8bdd34dcde885e91fe1c0"
+            }
+        ]
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Yeah same, not yet fully convinced but can see why the complexity \u003c\u003e bandwidth trade off might be worth it. No strong opinion.",
+        "created_at": "2025-07-01T05:40:31.018000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Created this report about the \"simplify by removing exceptions\" approach:\nhttp://github.com/nerolation/eth-bal-analysis/blob/main/reports/BAL_Compression_Comparison_Report.md\n\nThe size increase is 1.74 KiB, on avg. This is 4.5% (of BALs with storage locations) and 6.6% (of BAL without storage locations).",
+        "created_at": "2025-07-01T06:25:32.620000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Great work!  This data makes me feel like optimizing the size isn't worth it, but I'm sure others will disagree.  With this data at least we can have a concrete discussion about the tradeoffs (at least on one side of the trade; \"complexity\" is hard to measure).",
+        "created_at": "2025-07-01T06:30:45.996000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I like Simplified Without Reads personally.  This is mostly because I care about the ability to create trustless small-disk clients, and they only need the writes to maintain synchronization, not the reads.",
+        "created_at": "2025-07-01T06:32:24.084000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I also hope we can remove reads.  They become less useful the more we can parallelize tx workload as prefetching them from the BAL doesn't have as much time to run. \n\nIt's something we need to analyze when BAL execution is implemented",
+        "created_at": "2025-07-01T09:02:09.703000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "one other thing that we need adjacent to the main BAL EIP is a separate EIP to cap the max balance an account can have so that it's representable in 12 bytes.",
+        "created_at": "2025-07-01T09:16:36.226000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "it will never happen on mainnet, but might be common in private devnets",
+        "created_at": "2025-07-01T09:18:56.678000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "yeah agree, this is something that should be done in actual client implementations. If we get to a point where storage reads don't give us that much, we can remove them",
+        "created_at": "2025-07-01T10:36:20.898000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "The tx delta was changed to a post-tx balance at some point and is now represented using 16 bytes",
+        "created_at": "2025-07-01T10:40:04.950000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "The total eth supply can be represented in 11 bytes and this was the next supported SSZ type.",
+        "created_at": "2025-07-01T10:41:37.457000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "re: reads, what is the \"state of discourse\" around them? Are they currently still in the EIP mostly due to inertia, or are there people that really want them in? If so, why?",
+        "created_at": "2025-07-01T13:58:05.270000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "Yeah, I'm waiting for some first production-code tests to be carried out. From a BAL size perspective it'd be great to remove them. I'm unsure if clients how urgent clients would need the state+storage locations (for things like SLOAD, BALANCE, EXTCODESIZE, etc) + post-tx state diff vs only having the post-tx state diff.\ncc \u003c@427903869226582018\u003e \u003c@465903001156976682\u003e \u003c@402853454126776320\u003e \u003c@976542403269910539\u003e",
+        "created_at": "2025-07-01T14:07:20.862000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mirgee",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "I doubt that the benefits of prefetching outweigh the bandwidth costs, but I think we should measure the impact before deciding to remove them.",
+        "created_at": "2025-07-01T14:28:50.341000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,106 @@
+[
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Not exactly the \"full\" verification but it would be the \"post-exec\" verification.\nSo, with FOCIL, you'd do some pre-execution checks such as verifying all tx on the ILs are actually valid (otherwise you wouldn't need to include them). Additionally, you have post-exec checks to make sure that those txs that (1) were on an IL but (2) were not in the block COULD NOT have been appended to the block. If they could have been appended, then you didn't obey the IL and your block turns invalid - \u003e and here's the problem with delayed exec. Essentially, to validate FOCIL you need pre AND post state of the block.\nBALs give you the post state without requiring any execution. So, as an attester, you'd receive the block, you do the pre-exec checks, apply the BAL to the pre-state and get the post state and finally do the post-exec state against this derived post-state.",
+        "created_at": "2025-05-20T06:52:15.139000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "In terms of overhead, computing the BAL is simple. Regarding the state root, this is particularly challenging for zkVMs to do in time. If a block is propagated at second 2 in the slot, they's only have 2 more seconds to execute.",
+        "created_at": "2025-05-20T06:53:19.662000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I saw screenshot by \u003c@905058765022310460\u003e (from a doc by \u003c@764128349488152606\u003e ) showing that 39% of the time is spent on the post state root calculation: https://hackmd.io/@8AY4P2cSSJaZliiRSkWAgw/r1TT4UUC1e",
+        "created_at": "2025-05-20T06:58:13.356000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "daniellehrner",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We were talking about that just yesterday. We see the main advantage of BALs in being able to do transaction execution and state root hash calculation in parallel, because we have already the post state values. This might cut our block procssing time in half, because both of those take roughly the same time.\n\nRunning txs in parallel without conflicts is a nice feature, but at least in Besu the overhead for resolving those conflicts is only around 7% of the block processing, so it is not that much performance improvement. It is mainly reducing complexity in the client, because we can get rid of the conflict detection which is a rather complex part.",
+        "created_at": "2025-05-20T07:22:12.309000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Also, related to BAL, with post tx values, we should be able to execute 100% of the transactions in parallel, which is not the case today, in Besu implementation.",
+        "created_at": "2025-05-20T07:30:59.809000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Imo we should anyway delay the state root, so it shouldn’t be something that blocks the critical path",
+        "created_at": "2025-05-20T08:05:52.733000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "About BALs vs doing it optimistically and resolving conflicts, the main gain should be that we have a guarantee of being able to parallelize the execution, so we can fully rely on it to increase the total execution time/gas",
+        "created_at": "2025-05-20T08:09:20.892000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "daniellehrner",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Delaying the state root, has downsides as well, doesn't it? Wouldn't light clients always be one block behind if we do that? Being able to do execution and state root calculation in parallel could solve most of our issues.\n\nWith BALs in the worst case we still would need to execute the txs one after the other because they could all depend on each other, no?",
+        "created_at": "2025-05-20T08:34:22.804000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The \"delaying the state root\" idea originally came up with zkVMs requiring it to get closer to real-time proving. Idk if the BAL is enough for them to get there.\n\nWith BALs in the worst-case (every tx dependend on the previous one), you can perfectly parallelize all tx such that with infinite cores, the execution time becomes the execution time of the heaviest tx.",
+        "created_at": "2025-05-20T08:48:48.359000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Regarding light clients lagging a slot behind, this is true yeah.",
+        "created_at": "2025-05-20T08:49:27.445000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "With BALs you get the post state root without executing any txs because BALs consist of (1) storage location, (2) post-tx values (a post-tx value of a tx that is a dependency for another is the pre-tx value for the dependent tx) and a minimal state diff (nonces and balances for some edge cases). So, one do.something like `apply_bal(pre_state, bal) -\u003e post_state`.",
+        "created_at": "2025-05-20T08:53:21.221000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think there's three issues with not delaying the state root:\n1. Obstacle to real time proving like Toni said\n2. More work in the critical path for attesters, though can be done if parallel as long as we have a state diff of some kind, as you said \u003c@905058765022310460\u003e \n3. More work in the critical path for the builder. Right now we don't worry about this too much because we assume that the builder is much more powerful than the attesters etc... but I don't think we should entirely discount this.",
+        "created_at": "2025-05-20T09:11:33.765000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Re: light clients, can't you in principle do anything that you can do with the post state root with the pre state root + state diff? E.g. if the light client wants to know a value in the post state, you provide it in the pre state, and then it applies the state diff to update it",
+        "created_at": "2025-05-20T09:13:46.933000+00:00",
+        "attachments": null
+    }
+]
