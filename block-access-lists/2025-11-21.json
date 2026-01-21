@@ -1,0 +1,154 @@
+[
+    {
+        "author": "ethpandaops-devnet-pulse-v2",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "",
+        "created_at": "2025-11-21T01:00:00.604000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It turns out that defining the BAL StorageKey and StorageValue as UInt256 is more space efficient than Bytes32 for small value storage keys. For example the rlp encoding of slot 1 when encoded as UInt256 takes only a single byte where as rlp encoding the same value as bytes32 takes 33 bytes. If I am not mistaken, the BAL sizes will be lower if we use UInt256 instead.",
+        "created_at": "2025-11-21T02:38:04.045000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The difference is due to encoding the leading zeros into the bytes32 value. The leading zeros are omitted when encoding the data as a number.",
+        "created_at": "2025-11-21T08:21:01.546000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@902806914252021830\u003e my understanding is that RLP doesn't have types outside of strings and lists.  It doesn't matter if it's specified as a bytes32 or a uint256, it's just an opaque byte-string from rlp's pov",
+        "created_at": "2025-11-21T08:29:52.126000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "True but I found that in the bal EEST tests we appear to be encoding 32 bytes of data for these small slots when we shouldn't be encoding the leading zeros which don't provide any meaningful infomation.",
+        "created_at": "2025-11-21T08:34:23.108000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "hmm yeah that's weird.  maybe there's a bug in EEST",
+        "created_at": "2025-11-21T08:35:04.656000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://ethereum.org/developers/docs/data-structures-and-encoding/rlp#definition",
+        "created_at": "2025-11-21T08:35:13.838000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The RLP encoding function takes in an item. An item is defined as follows：\na string (i.e., byte array) is an item\na list of items is an item\na positive integer is an item",
+        "created_at": "2025-11-21T08:35:56.628000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think a string of 32 bytes is different from a number which may or may not use 32 bytes depending on its value.",
+        "created_at": "2025-11-21T08:36:45.728000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "For storage keys (which i assume would be spec'd as 32 byte strings), the protocol already strips the leading zeroes before encoding them.  So I think the same rule would apply here.",
+        "created_at": "2025-11-21T08:40:24.256000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "we just need to be explicit I guess",
+        "created_at": "2025-11-21T08:42:08.702000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I don't think it's proper to say that storage values are numbers in the spec.  They aren't",
+        "created_at": "2025-11-21T08:42:17.935000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I looked this up previously and seems like the yellowpaper defines storage slots as uint256 (numbers).",
+        "created_at": "2025-11-21T08:42:40.298000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "ahh",
+        "created_at": "2025-11-21T08:42:49.012000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "well then we should go with whatever the existing precedent is for this situation",
+        "created_at": "2025-11-21T08:43:20.112000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think its bytes32 in the python execution specs. Either way the leading zeros shouldn't be included.",
+        "created_at": "2025-11-21T08:43:54.344000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The problem I found is that in nim the rlp encoding of a bytes32 value is always 33 bytes while the rlp encoding of a uint256 type can be a single byte for small values.",
+        "created_at": "2025-11-21T08:45:53.331000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Anyway here is my suggested update to the EIP \u003c@792404665068158998\u003e(second try but for different reasons this time): https://github.com/ethereum/EIPs/pull/10817",
+        "created_at": "2025-11-21T08:47:53.958000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Thanks! Will look into it asap 🙂",
+        "created_at": "2025-11-21T14:03:32.843000+00:00",
+        "attachments": null
+    }
+]

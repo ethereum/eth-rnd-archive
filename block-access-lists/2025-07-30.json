@@ -1,7 +1,7 @@
 [
     {
         "author": "nero_eth",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "Based on discussions with \u003c@427903869226582018\u003e , we figured that we may need some post-state updates that are not attached to transactions (=system contract calls).\nFirst, we may want the parent hash and the beacon block root in the BAL. Then we need the post states of the consolidation and withdrawal contracts after dequeing. Withdrawals from the CL come with balance diffs. We don't need to care about deposits since al state changes are attached to transactions. For those system calls, we propose useing `transaction_count + 1` as the transaction index.\nCommit here:\nhttps://github.com/ethereum/EIPs/compare/master...nerolation:EIPs:add-system-contract-logic",
         "created_at": "2025-07-30T08:59:58.995000+00:00",
@@ -9,7 +9,7 @@
     },
     {
         "author": "jwasinger",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "mostly looks good to me!  although for the sake of simplifying the client implementation, I'd suggest that we separate out system contract executions that happen pre vs post tx execution (use a tx index of 0 for pre-tx system contracts and `len(transactions)+1` for post-tx ones).",
         "created_at": "2025-07-30T11:07:30.390000+00:00",
@@ -17,7 +17,7 @@
     },
     {
         "author": "jwasinger",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "we could imagine some future system contract that is executed pre and post tx execution, and this format wouldn't work with that hypothetical contract.",
         "created_at": "2025-07-30T11:11:15.252000+00:00",
@@ -25,7 +25,7 @@
     },
     {
         "author": "nero_eth",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "Is that really simpler than having them all eith the index of last tx + 1?\nThe BAL doesn't need to know that the beacon root is written there pre-execution.\nI'm not a fan of shifting the tx indices by one such that tx at index 0 in the block becomes index 1 in the BAL.",
         "created_at": "2025-07-30T11:11:35.559000+00:00",
@@ -33,7 +33,7 @@
     },
     {
         "author": "nero_eth",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "For a system contract that changes state twice, I'd just add len(txs) +2 but keep.the consistency of tx indices",
         "created_at": "2025-07-30T11:12:23.667000+00:00",
@@ -41,7 +41,7 @@
     },
     {
         "author": "jwasinger",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "this works as well.  With what I'm suggesting, the indices reflect the order of the state changes in the block.",
         "created_at": "2025-07-30T11:13:44.359000+00:00",
@@ -49,7 +49,7 @@
     },
     {
         "author": "jwasinger",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "so it's a tradeoff either way",
         "created_at": "2025-07-30T11:13:58.624000+00:00",
@@ -57,7 +57,7 @@
     },
     {
         "author": ".fjl",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "But what if a pre-block call affects txs within the block?",
         "created_at": "2025-07-30T16:57:11.398000+00:00",
@@ -65,7 +65,7 @@
     },
     {
         "author": ".fjl",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "Ahh, right, I guess we would run the system calls sequentially and then exec transactions in parallel based on that state",
         "created_at": "2025-07-30T16:58:39.099000+00:00",
@@ -73,7 +73,7 @@
     },
     {
         "author": "jwasinger",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "the latest proposed change that we are talking about is to include the pre/post tx execution state accesses/modifications (system calls + eip-4895 withdrawals) in the BAL.  So it would not be required to execute them before txs or state root computation.",
         "created_at": "2025-07-30T17:09:48.118000+00:00",
@@ -81,7 +81,7 @@
     },
     {
         "author": ".fjl",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "Yeah but what about pre-txs calls?",
         "created_at": "2025-07-30T17:26:01.869000+00:00",
@@ -89,7 +89,7 @@
     },
     {
         "author": "jwasinger",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "reading back, I think I misread \u003c@1126229231572094976\u003e 's proposal here.\n\nwhat I'm proposing is that the BAL indexes state changes in the order that they occur in the block.  an index of `0` means pre-tx, `1-len(block.transactions)` correspond to the changes in each transaction and `len(block.transactions)+1` corresponds to the state changes that occur post-tx execution.\n\nI don't think that having pre-post tx execution changes referenced by the same index is simpler than separating them out:\n\n1. the geth implementation builds a list of ordered state diffs from the BAL in order which they would be sequentially applied to perform block execution.  If the index reflects the order that they need to be applied, this makes the logic for constructing these diffs simpler (then they exist in the encoding format in the order which they would be applied)\n\n2. if pre/post execution state changes are crammed into the same index, then the implementation of the diff construction has to separate out those changes into pre-post diffs based on knowledge of when each system contract is applied in the block (and also be aware of which system contracts are activated based on the current fork).  on the other hand, if they are ordered like I'm suggesting, there is no such logic:  \n\nI simply compute a state diff from all the BAL-reported changes at index 0, and validate that executing the pre-tx system contracts against the prestate+header produced exactly these changes.  And likewise with computing and verifying the post-tx-execution state diff against the BAL.",
         "created_at": "2025-07-30T17:53:48.314000+00:00",

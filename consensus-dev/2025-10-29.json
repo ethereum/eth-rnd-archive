@@ -1,0 +1,234 @@
+[
+    {
+        "author": "dgusakov",
+        "category": "general",
+        "parent": "",
+        "content": "Gm consensus devs!\n\nWe faced an issue with `eth/v1/validator/duties/proposer/{epoch}` on Hoodi after Fulu fork for Lighthouse:\nFor example, `/eth/v1/validator/duties/proposer/50700` returns \"dependent_root\": `0x136c16abf7ed785f6babd0ff2b779d29a3c174355c22fafd5eb801c1d81a63ac` (the last slot of {epoch} - 2) in body, but it should be `0xd2b43eb8f039f728881167d117bf939a03d3e0e824c61402d76045eed28bcfa5` (the last slot of {epoch} - 1) due to https://ethereum.github.io/beacon-APIs/#/Validator/getProposerDuties. \n\nAs a second source, we used Nimbus - http://unstable.hoodi.beacon-api.nimbus.team/eth/v1/validator/duties/proposer/50700\n\nVersion: Lighthouse/v8.0.0-rc.2-b59feb0/x86_64-linux\n\nWe found no changes for this response in other nodes' source code:\nPrysm - https://github.com/OffchainLabs/prysm/blob/develop/beacon-chain/rpc/eth/validator/handlers.go#L1473\nLodestar - https://github.com/ChainSafe/lodestar/blob/rc/v1.36.0/packages/state-transition/src/util/shufflingDecisionRoot.ts#L13\nNimbus - https://github.com/status-im/nimbus-eth2/blob/unstable/beacon_chain/spec/beaconstate.nim#L2814\n\nThe question is whether Lighthouse is the only one to correctly make a change to the Beacon API that has outdated specs, or the API should not be changed, and Lighthouse is now returning the wrong response\n\n\u003c@1000001410538151996\u003e",
+        "created_at": "2025-10-29T10:16:17.593000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dgusakov",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@755590043632140352\u003e \u003c@578356786889752586\u003e \u003c@881905303011086387\u003e \u003c@680234424037670912\u003e FYI",
+        "created_at": "2025-10-29T10:17:18.509000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "danielknopik",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@602753420033785856\u003e",
+        "created_at": "2025-10-29T10:28:37.818000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "IMO Lighthouse is correct, that *is* the dependent root (end of epoch - 2) when the shuffling lookahead is taken into account\n\nAt the epoch transition from N - 2 to N - 1 is when the shuffling for N is computed",
+        "created_at": "2025-10-29T10:38:35.319000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dgusakov",
+        "category": "general",
+        "parent": "",
+        "content": "Then the update to the Beacon API is required, as well as an update for all other CL clients. Now responses for this endpoint are inconsistent between CL clients and that prevents us from using this API endpoint in our Oracles",
+        "created_at": "2025-10-29T10:46:08.575000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "serenita_io",
+        "category": "general",
+        "parent": "",
+        "content": "Can confirm Lodestar also returns a different value (same as Nimbus) vs Lighthouse",
+        "created_at": "2025-10-29T10:48:25.797000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "I agree we should update the spec, just need buy-in from the other clients.",
+        "created_at": "2025-10-29T10:59:35.750000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "Could you add a temporary exception to the Oracle if these patches don't make it for mainnet client releases? Ours (LH) is due any day now",
+        "created_at": "2025-10-29T11:00:38.286000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "i.e. allow `N - 1` or `N - 2` on the same chain, or something like this",
+        "created_at": "2025-10-29T11:01:07.581000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dgusakov",
+        "category": "general",
+        "parent": "",
+        "content": "Can not say that I'm a big fan of this option. Tho we might end up having no other option...",
+        "created_at": "2025-10-29T11:01:37.579000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "from a Nimbus perspective, haven't looked at the details, but changing `dependent_root` _internally_ is ... a 100% nonstarter at this point, for mainnet release. We could look at the beacon API",
+        "created_at": "2025-10-29T11:03:10.637000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "unless it can be shown that there's an internal bug on this that's pretty high-priority (again, haven't looked at the details of this beyond superficially what's discussed). But especially if it's an API issue",
+        "created_at": "2025-10-29T11:04:31.366000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "I don't think it's unsafe to use the `N - 1` root, as that's just more conservative than using `N - 2`. So I don't think there's really any risk to clients from this discrepancy.\n\nI didn't even realise I was creating a discrepancy when I made this change in LH, our code was all fucked up and I assumed all the other clients had already \"fixed\" this 😅",
+        "created_at": "2025-10-29T11:07:27.066000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "The only thing I can think being relevant (aside from things like the Lido Oracle that expect perfect agreement on API responses), is VC's using the dependent root for reorg detection. The LH VC does this and will log loudly if it's connected to BNs with different ideas of what the dependent root is. It will continue to work though.",
+        "created_at": "2025-10-29T11:08:34.550000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dgusakov",
+        "category": "general",
+        "parent": "",
+        "content": "We use this data to ensure that we are getting the correct list of proposers for the current epoch from CL. I'm not sure how safe it will be to allow for both N-1 and N-2. For some clients, only N-1 will be correct, and N-2 in the response will indicate that we got an outdated list of proposers, while for the others, it is N-2 that will be fully correct.",
+        "created_at": "2025-10-29T11:11:49.147000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "I'm not familiar with how the Oracle runs, but is there a consensus element, can you compare shufflings across nodes (ignoring the dependent root)?",
+        "created_at": "2025-10-29T11:13:11.756000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "We _could_ probably add a flag to Lighthouse to serve the old root for backwards-compatibility, if that helps",
+        "created_at": "2025-10-29T11:13:43.380000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "it seems like, yeah, that's the only thing which ends up mattering ultimately? either the CLs agree on the proposers or not?",
+        "created_at": "2025-10-29T11:14:05.921000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "how they get there is beside the point",
+        "created_at": "2025-10-29T11:14:12.921000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "general",
+        "parent": "",
+        "content": "if they share a dependent root but don't share proposers, that's not usable. if they don't share a dependent root but do share proposers, it seems fine",
+        "created_at": "2025-10-29T11:14:57.719000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "This would be kicking the can down the road however (the Oracle would need to reckon with this change at some point)",
+        "created_at": "2025-10-29T11:15:40.152000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dgusakov",
+        "category": "general",
+        "parent": "",
+        "content": "Since Lido Oracles do not use several nodes simultaneously, the only option is not to stop when the root is not as expected, and just spawn a warning to the logs, like LH VC does",
+        "created_at": "2025-10-29T11:18:36.297000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dgusakov",
+        "category": "general",
+        "parent": "",
+        "content": "Can we raise the topic at the next ACDC to figure out the plan for the future? For now, we will change our check from FATAL to WARN so that Lido Oracles can remain operational, but a full-featured fix is definitely required. I'm also wondering if other apps are affected by this API discrepancy.",
+        "created_at": "2025-10-29T11:55:13.213000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kalo9480",
+        "category": "general",
+        "parent": "",
+        "content": "We have found a slight issue in Prysm VC, reporting `electra` in its `Eth-Consensus-Version` header on Hoodi on the following endpoints:\n- POST /eth/v2/beacon/pool/attestations\n- POST /eth/v2/validator/aggregate_and_proofs\n\nhttps://github.com/OffchainLabs/prysm/issues/15945\nGiven the same structure of the signed attestations in both electra and fulu, it shouldn't cause disruptions for most users. In DVs with mixed VCs, nodes can struggle on agreeing on the version though.",
+        "created_at": "2025-10-29T18:58:41.078000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "ok so it looks like `/proposers/{epoch}` was great pre-fulu, and we still use that same logic so its unchanged at fulu for us (parent is the last slot of previous epoch)\nthe better mechanism in fulu is probably looking at `/eth/v1/beacon/states/{state_id}/proposer_lookahead` ? it's got all the data right there...\nAre we saying we want different behaviour in that old api rather than using the new mechanism?\nMaybe the old interface should disappear rather than have new tweaks? its certainly a bit incompatible to randomly start providing an older dependent root...",
+        "created_at": "2025-10-29T21:01:50.979000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "I also noticed that we dont provide proposer_lookahead atm so thats a bug i'll raise on teku",
+        "created_at": "2025-10-29T21:02:26.820000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e Are we saying we want different behaviour in that old api rather than using the new mechanism?\n\nYes, or we need a v2 of the proposers endpoint, now that v1 has broken so soon before the fork and can't be fixed in clients. IMO it's an oversight that the proposer duties API spec wasn't updated for Fulu. It would have been completely fine to change the definition of `dependent_root` at the fork boundary to support the post-Fulu definition.\n\nIf you think about what the `dependent_root` _means_, the spec's current definition is certainly wrong. The true dependent root (post-Fulu) is what Lighthouse returns: the block root at the end of epoch `N - 2`. If we want to keep the old behaviour, we're breaking the meaning of \"dependent root\" in order to smooth over the oversight. I am fine with this temporarily, but eventually I think we should be using the correct definition of dependent_root for Fulu.\n\nI'm not in favour of updating VCs to use `/proposer_lookahead` as that forces them to choose a `state`, and different clients might have different understandings of what the `head` state means (do you advance the head through empty slots or not?) and this could be weird. I think the proposer duties endpoint is a fine concept, we just need to either be willing to fix v1, or introduce a new v2.",
+        "created_at": "2025-10-29T23:06:20.911000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sproul",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@935504619554107392\u003e maybe the Lido Oracle could use the new `proposer_lookahead` endpoint?",
+        "created_at": "2025-10-29T23:11:42.419000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "general",
+        "parent": "",
+        "content": "either way i'll implement lookahead in case, and potentially we'd need a v2 proposers, which is likely to miss mainnet release if we're about to start cutting them in a day or so... so in the first instance im not sure how to make a good solution for the lido scenario",
+        "created_at": "2025-10-29T23:23:18.917000+00:00",
+        "attachments": null
+    }
+]

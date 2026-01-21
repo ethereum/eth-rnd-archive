@@ -1,0 +1,90 @@
+[
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cchfast\u003e re: **@kevaundray**\n\u003e Do you have examples of bugs you've found and cases where they've only worked in optimistic cases?\n\nThe accelerators usually have two components:\n\n- The part written in pure Rust/C/C++ code\n- The part that calls the zkVM specific circuit\n\nI'd be interested in also knowing which of these you've found bugs in\n\n-------\n\nNot sure I understand the JIT approach -- how would this work concretely?\nThe `syscall_secp256k1_decompress` in SP1 panics if the input cannot be decompressed (specifically, if it cannot compute the sqrt). This happens in the Rust code.\n\nThis makes this accelerator useless for the implementation of the ecrecover.",
+        "created_at": "2025-12-09T09:23:46.179000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cchfast\u003e For the ECC we prefer to use the Fp / Fp2 accelerators. Even the point addition accelerators have their own quirks so it feels safer not to use these.\n\nIt is also much easier to integrate the low level accelerators. E.g. for the whole BLS suite of precompiles we had to just change ~6 places where we call Fp / Fp2 accelerators. We we can use \"our\" code for all the rest (point operations, pairing checks, kzg proof verification).\n\nThis feels much better than asking all zkVMs to \"implement\" all EVM precompiles.\n\nSo I see the boundary as this: if there is a need to create a dedicated circuit for some operation, make it an accelerator. If then you need to combine multiple circuits to implement specified EVM precompile with a Rust code, better leave this part to us.",
+        "created_at": "2025-12-09T09:33:13.573000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003ckevaundray\u003e re: **@chfast**\n\u003e The syscall_secp256k1_decompress in SP1 panics if the input cannot be decompressed (specifically, if it cannot compute the sqrt). This happens in the Rust code.\n\nThis makes this accelerator useless for the implementation of the ecrecover.\nAh right, I think this can be changed and tested — one way of viewing these accelerators is that they are an alternative library for the underlying cryptography used in the zkVM precompile that are efficient for a particular cpu, so they would just need to be tested and fuzzed in the same way",
+        "created_at": "2025-12-09T11:38:48.808000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003ckevaundray\u003e re: **@chfast**\n\u003e For the ECC we prefer to use the Fp / Fp2 accelerators. Even the point addition accelerators have their own quirks so it feels safer not to use these.\n\nIt is also much easier to integrate the low level accelerators. E.g. for the whole BLS suite of precompiles we had to just change ~6 places where we call Fp / Fp2 accelerators. We we can use \"our\" code for all the rest (point operations, pairing checks, kzg proof verification).\n\nThis feels much better than asking all zkVMs to \"implement\" all EVM precompiles.\n\nSo I see the boundary as this: if there is a need to create a dedicated circuit for some operation, make it an accelerator. If then you need to combine multiple circuits to implement specified EVM precompile with a Rust code, better leave this part to us.\nThis was something we briefly explored a few months ago, I think this works for certain zkVMs like risc0 who implement “bigint” as one of the zkVM precompiles vs others who have seen benefit in implementing the “full” cryptographic operation.\n\nDid you benchmark the difference between using Fp/Fp2 accelerators vs using the full BLS precompile/ecc precompile?",
+        "created_at": "2025-12-09T11:44:55.674000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cchfast\u003e re: **@kevaundray**\n\u003e This was something we briefly explored a few months ago, I think this works for certain zkVMs like risc0 who implement “bigint” as one of the zkVM precompiles vs others who have seen benefit in implementing the “full” cryptographic operation.\n\nDid you benchmark the difference between using Fp/Fp2 accelerators vs using the full BLS precompile/ecc precompile?\nNo I didn't. They only comparison you can do is Fp vs point addition. SP1 doesn't provide any higher level precompiles so having just basic point addition is not big help. It is not worth investigating unless we see outstanding Mainnet blocks with BN254 ecmul.\n\nBLS are totally unused on Mainnet. Nice that we've shipped a feature two forks ago nobody wanted and now every zkVM has to implement :)",
+        "created_at": "2025-12-09T13:40:17.087000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003ctamirhemo\u003e re: **@chfast**\n\u003e The syscall_secp256k1_decompress in SP1 panics if the input cannot be decompressed (specifically, if it cannot compute the sqrt). This happens in the Rust code.\n\nThis makes this accelerator useless for the implementation of the ecrecover.\nJust to note that this is fixed and no longer the case",
+        "created_at": "2025-12-09T16:24:47.582000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003ctamirhemo\u003e re: **@tamirhemo**\n\u003e Just to note that this is fixed and no longer the case\nTo be more precise we deprecated that AIR for an alternative patch that really just computes the square root as a hint",
+        "created_at": "2025-12-09T16:27:16.115000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003ctamirhemo\u003e re: **@kevaundray**\n\u003e This was something we briefly explored a few months ago, I think this works for certain zkVMs like risc0 who implement “bigint” as one of the zkVM precompiles vs others who have seen benefit in implementing the “full” cryptographic operation.\n\nDid you benchmark the difference between using Fp/Fp2 accelerators vs using the full BLS precompile/ecc precompile?\nThe EC precompiles were quite useful to reduce trace area dramatically and not have to pay a lot of VM overhead for them for moving memory around. In hindsight I think the ideal version would be something like projective addition perhaps, but the current versions are good enough for now. It is true that there are corner cases that need to be handled and indeed they are",
+        "created_at": "2025-12-09T16:28:49.787000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003ctamirhemo\u003e I also know some people only patch the Fp ops which is a good solution too",
+        "created_at": "2025-12-09T16:29:39.660000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003csomnergy\u003e re: **@chfast**\n\u003e The syscall_secp256k1_decompress in SP1 panics if the input cannot be decompressed (specifically, if it cannot compute the sqrt). This happens in the Rust code.\n\nThis makes this accelerator useless for the implementation of the ecrecover.\nAlso, to add to here, we did change the approach to decompress/sqrt and the performance hit isn't significant. This is by making use of some syscall_bigint's and could be further optimized. But if the bug is fixed, it's a great thing too.",
+        "created_at": "2025-12-09T16:36:46.635000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kevaundray",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "zkboost",
+        "created_at": "2025-12-09T19:36:25.665000+00:00",
+        "attachments": null
+    }
+]

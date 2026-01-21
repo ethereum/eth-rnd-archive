@@ -1,0 +1,192 @@
+[
+    {
+        "author": "bharath.vedartham",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "hey folks, i have been continuing my work on the builder-api here: https://github.com/ethereum/builder-specs/pull/138\n\nJust to give a high level of the changes:\n1. We have a get_bid endpoint which the proposer runs to get the execution payload bid from the builder\n2. we have a post_block endpoint which the proposer submits to the builders with the signed beacon block which includes the bid. \n3. Introduced `ValidatorRegistrationV2` which consists of some new fields like `can_accept_trusted_payment` to indicate whether a validator wants to accept trustless payments from the builder and fields like `builder_pubkey` etc... also we can suggest validators to only send registrations if they propose in epoch E+1",
+        "created_at": "2025-12-16T10:36:26.964000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bharath.vedartham",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "this can potentially be the new validator registration struct and we can debate on the fields like `builder_pubkey`, `proposal_epoch` etc",
+        "created_at": "2025-12-16T10:38:00.912000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "Screenshot_2025-12-16_at_16.07.36.png",
+                "content": "2093ac062b0c464677ace590861f619e1fea63652d94bf5ad7ac6b5739988322"
+            }
+        ]
+    },
+    {
+        "author": "bharath.vedartham",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I want to see if we can add a metadata field in the validator registrations to give clients flexibility to communicate per builder preferences",
+        "created_at": "2025-12-16T10:46:46.727000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bharath.vedartham",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "could be a map of `string-\u003e[string|uint64|boolean]` which can give proposers flexibility to communicate builder preferences.. but the builder\u003c\u003eproposer will have to agree on a schema for the preferences tho.",
+        "created_at": "2025-12-16T10:48:05.746000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gd_0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Does this not just nerf p2p bids even more? Especially for larger blocks, builders who aren’t spamming could have genuinely higher bids dropped.\n\nWere people not arguing that the built in rate limiting in the p2p layer would cover any DoS? Did that assumption change recently? \nIf that's not sufficient maybe we could use a capped percentage up to a max absolute value?",
+        "created_at": "2025-12-16T10:50:33.270000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gd_0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "just went through this - looks all good to me",
+        "created_at": "2025-12-16T10:59:06.281000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I would change pubkeys for indices. Remove timestamp and just keep proposal slots. If a validator happens to be proposing in two slots in the same epoch then send two registrations",
+        "created_at": "2025-12-16T14:51:04.525000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "```python\nclass ValidatorRegistration(Container):\n    validator_index: ValidatorIndex\n    builder_index: BuilderIndex\n    proposing_slot: Slot\n    fee_recipient: ExecutionAddress\n    gas_limit: Gwei\n    can_accept_el_payment: bool\nclass SignedValidatorRegistration(Container):\n    message: ValidatorRegistration\n    signature: BLSSignature\n```",
+        "created_at": "2025-12-16T14:53:29.890000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bharath.vedartham",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "why do you prefer to have the proposing_slot over the proposing_epoch? is it so that the validator can express different preferences in different slots?",
+        "created_at": "2025-12-16T15:10:26.797000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Because the builder can check on the lookahead directly with a constant access that the proposer index corresponds to the proposing slot",
+        "created_at": "2025-12-16T15:48:45.609000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "the check in the spec is immediate: \n- Is this index proposing this slot?\n- take the pubkey, validate the signature",
+        "created_at": "2025-12-16T15:49:06.158000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'd argue it's easier to check that it exists in the lookahead than it exists at a specific spot in the lookahead.",
+        "created_at": "2025-12-16T16:39:42.059000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Also, not a fan of the `can_accept_el_payment` name. Maybe `execution_payment_accepted: boolean` (boolean is the ssz type for bool btw)",
+        "created_at": "2025-12-16T16:40:18.236000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The name would mirror `execution_payment` in the bid.",
+        "created_at": "2025-12-16T16:40:34.132000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "What? One is a loop the other is lookahead[32+slot%32] == id",
+        "created_at": "2025-12-16T16:41:28.590000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Lol maybe it is a \"loop\" but most languages it's not. `id in lookahead[32:]`",
+        "created_at": "2025-12-16T16:42:19.293000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Still a loop",
+        "created_at": "2025-12-16T16:42:32.433000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Indeed, but super simple. And wouldn't require multiple messages \u0026 signature verifications.",
+        "created_at": "2025-12-16T16:43:08.571000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "But also, it's super uncommon for a validator to propose multiple times within the same epoch.",
+        "created_at": "2025-12-16T16:44:08.691000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So it doesn't really matter. Whatever y'all prefer!",
+        "created_at": "2025-12-16T16:44:18.247000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Because it's uncommon this makes sense",
+        "created_at": "2025-12-16T16:44:54.736000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "If it were a common occurrence then deduplication would make sense",
+        "created_at": "2025-12-16T16:45:16.776000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Maybe we should use `slot` in the `ProposerPreferences` then too.",
+        "created_at": "2025-12-16T16:45:42.385000+00:00",
+        "attachments": null
+    }
+]

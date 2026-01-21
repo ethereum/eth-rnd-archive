@@ -1,0 +1,138 @@
+[
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@592004585506340885\u003e, copying \u003c@981249983196041218\u003e that has been raising that not having builders after the fork will be too much of an issue. I believe there is a bug in the current `process_pending_deposits` logic of  4788, so probably we are forced to change it anyway, Let me describe what I think is not nice before, and then how to fix it. \n\nIf a validator makes a deposit request for a 0x03 validator before the fork. Then in [process_deposit_requests](https://jtraglia.github.io/eth-spec-viewer/#v1.7.0-alpha.0/functions-process_deposit_request-electra)  we will simply add the pending deposit for this 0x03 validator. If this happens right before the fork, then when the fork comes we we won't have added yet this validator to the registry, and this will be processed as a 0x03 validator later on [process_pending_deposits](https://jtraglia.github.io/eth-spec-viewer/#v1.7.0-alpha.0/functions-process_pending_deposits-electra) when the deposit finalizes. This is regardless of there being a 0x03 builder or not! the problem is that if this validator deposits as again right after the fork, and before the pending deposit has finalized, then the pubkey is added as a builder immediately! and later on when we process the pending deposit we have both a builder and a validator with the same key!\n\nThe fix to this issue should be to change `process_pending_deposits` to also account for builders. This was omitted because we apply deposits immediately for builders, but I think what I described above breaks that assumption.  The good thing about this is that if we do so, then any deposit right before the fork will be applied immediately after the first block as a builder (instead of breaking on finalization we will have to loop looking for 0x03 deposits and apply them immediately). \n\nHaving said so, I think we need to have a discussion about this policy of applying deposits requests for builders immediately. I think this is not acceptable",
+        "created_at": "2026-01-08T11:38:56+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The reason is the same as for validators, a reorg can change the order of the pubkey cache, this is the reason why we wait for finalization before adding to the registry. If we do the fix as I say above, then we can onboard builders right at the fork **and** at the same time we can not take any new deposits requests for builders until they are finalized. The problem with this approach is that any reorg at the fork boundary will be a problem. Perhaps my fix above is already enough and we do not need to worry about reorgs changing the pubkey cache. I am not an expert on this topic but I remember this was pretty heated in Kenya. At any rate I think the situation I describe above is a bug. Just woke up late so may be all wrong, I apologize, will have coffee and reread what I wrote in a bit",
+        "created_at": "2026-01-08T11:41:38.480000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The simplest way of dealing with the pending deposits is to change `fork.md` to onboard them immediately as builders and then not deal with pending deposits for builders. That is, if we are happy about depositing builders immediately without finalization (which is not obvious to me)",
+        "created_at": "2026-01-08T11:43:37.508000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I can write a PR for this latest thing",
+        "created_at": "2026-01-08T11:44:56.629000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://github.com/ethereum/consensus-specs/pull/4817",
+        "created_at": "2026-01-08T14:48:29.919000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e a reorg can change the order of the pubkey cache, this is the reason why we wait for finalization before adding to the registry.\n\nFor validators, it is mandatory that every branch has to have the same index in order to be able to process slashings. This is not the case for builders. It might be convenient for implementations and worth having as a guarantee, but it's not the same problem",
+        "created_at": "2026-01-08T15:53:34.501000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yeah but the problem for validators is beyond spec: we have a cache of pubkeys -\u003e index that is a pain to change",
+        "created_at": "2026-01-08T16:12:52.381000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "which is used in a hot path for signature validation",
+        "created_at": "2026-01-08T16:13:02.183000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pawandhananjay",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Is there any reason why the `ExecutionPayloadBid` contains a `blob_kzg_commitments_root` instead of the full kzg commitments? doesn't that mean we cannot make a getBlobs request until we receive the full payload?",
+        "created_at": "2026-01-08T19:54:34.177000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think it may be an oversight that forgets we could use get globs optimization once you see the kzg commitments in the bid\n\nBut you could still call get blobs once you see the kzg commitments in the payload envelope itself. DA deadline will be later than execution deadline as one example \n\nIs there a strong reason why one would want to call get blobs on a winning bid vs receiving the payload envelope? The timing diff is small here right?\n\nI don't have a strong opinion",
+        "created_at": "2026-01-08T22:25:11.501000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pawandhananjay",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This came up in the context of the partial columns optimisation to getBlobs.  cc \u003c@795439202732867594\u003e \u003c@106441459183423488\u003e \nIf we have the full kzg commitments, we can call getBlobs immediately when the consensus block is available. the builder can push the cells + metadata for the private blobs and all nodes might already have the full columns available by the time the payload arrives. Most columns won't have to take the gossip route and we can save on bandwidth there. \nIf there is no good reason not to have the full commitments, i think it might be better to have it\nAlso cc \u003c@833706406699073536\u003e since he brought it up on the other call",
+        "created_at": "2026-01-08T22:35:05.542000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marcopolo__",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e Is there a strong reason why one would want to call get blobs on a winning bid vs receiving the payload envelope? The timing diff is small here right?\n\nThe sooner we can call getBlobs the sooner we can share with our peers what cells we have and which are missing. Lowering latency in this exchange would be very nice.",
+        "created_at": "2026-01-08T22:38:21.753000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "__kasey__",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think versioned hashes would also work? Also either commitments or versioned hashes would enable proposers to pick bids that include blobs they care about.",
+        "created_at": "2026-01-08T22:44:17.309000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@592004585506340885\u003e I implemented the new `update_next_withdrawal_validator_index()` for capella and it seems to be failing 1.6.1 spec test because the calculated state root mismatches.\nThe old spec doesnt track the sweep count, so it updates `state.next_withdrawal_validator_index` less precise than the new spec.\n```\n    # Update the next validator index to start the next withdrawal sweep\n    if len(expected_withdrawals) == MAX_WITHDRAWALS_PER_PAYLOAD:\n        # Next sweep starts after the latest withdrawal's validator index\n        next_validator_index = ValidatorIndex(\n            (expected_withdrawals[-1].validator_index + 1) % len(state.validators)\n        )\n        state.next_withdrawal_validator_index = next_validator_index\n    else:\n        # Advance sweep by the max length of the sweep if there was not a full set of withdrawals\n        next_index = state.next_withdrawal_validator_index + MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP\n        next_validator_index = ValidatorIndex(next_index % len(state.validators))\n        state.next_withdrawal_validator_index = next_validator_index\n```\nIf we have reached `MAX_WITHDRAWALS_PER_PAYLOAD`, then we get validator index of last withdrawal + 1. Otherwise, we assume we have swept `MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP` and we just increment by that amount.\nNew spec we increment by actual sweep count. \n\nSo the outcome between old spec and new spec will be different if we haven't swept `MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP` and `len(expected_withdrawals) \u003c MAX_WITHDRAWALS_PER_PAYLOAD`. This can happen when `len(state.validators) \u003c 16384` in mainnet due to how we calculate `validators_limit = min(len(state.validators), MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP)`.",
+        "created_at": "2026-01-08T23:11:01.451000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "You can try to run v1.6.1's `capella/transition/core/pyspec_tests/transition_with_deposit_right_after_fork` with 1.7.0-alpha.0 spec and it should fail with mainnet preset",
+        "created_at": "2026-01-08T23:13:20.800000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Hey \u003c@1035747431461167125\u003e we discovered the same thing 😄  There's a thread about it here: https://discord.com/channels/595666850260713488/1458104535695495282/1458170734642856007",
+        "created_at": "2026-01-08T23:27:24.025000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "that makes sense, the current epbs spec is not aware of partial columns optimization",
+        "created_at": "2026-01-08T23:53:56.412000+00:00",
+        "attachments": null
+    }
+]

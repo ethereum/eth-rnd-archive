@@ -1,0 +1,258 @@
+[
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I just opned a PR to rename execution payload header to execution payload bid\nI think it's better we do this sooner or later especially before clients start coding because it can become a tedious change later on",
+        "created_at": "2025-08-25T02:48:02.272000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://github.com/ethereum/consensus-specs/pull/4525",
+        "created_at": "2025-08-25T02:48:15.093000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dgusakov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Where should I start reading to figure out the gist of the change?",
+        "created_at": "2025-08-25T11:14:56.700000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "There's no change, that's the thing: the state roots in the state are still changed in `process_slot` which happens after the Payload is synced",
+        "created_at": "2025-08-25T11:18:06.719000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "And the beacon block `state_root` refers to its post state which happens before the Payload is synced",
+        "created_at": "2025-08-25T11:18:45.965000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dgusakov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So we will still get valid and immutable parent_block_root for the given EL block?",
+        "created_at": "2025-08-25T11:19:28.815000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes that's always the case",
+        "created_at": "2025-08-25T11:20:02.899000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dgusakov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "If there is no change, I think we can live with it. We already deal with the fact that we get parrent block root for the given EL block",
+        "created_at": "2025-08-25T11:20:24.098000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Well there's no change in the processing, but there are now two different states with two different state roots and if you care about proving for one or the other you need different techniques",
+        "created_at": "2025-08-25T11:21:18.829000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dgusakov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "There is no need for us, and hopefully other protocols using EIP-4788, to have the current block root. Parent is fine IMO. But I will ask \u003c@386270194269421580\u003e to double check",
+        "created_at": "2025-08-25T11:21:37.043000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dgusakov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The difference is that one comes with no execution payload, and the other one does?\nAnd via EIP-4788, we can only get the one with the payload?",
+        "created_at": "2025-08-25T11:22:51.515000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This is not about current vs parent. Unfortunately I confused everyone in the ACD call thinking about slot auctions. The full description is above in the message I tagged you",
+        "created_at": "2025-08-25T11:27:39.055000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The difference is that if you need to prove something about the beacon state after executing a consolidation request for example you will use one state root and if you need after processing a consensus block you will use another block root",
+        "created_at": "2025-08-25T11:28:59.418000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Because the former is processed with the Payload",
+        "created_at": "2025-08-25T11:29:11.844000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dgusakov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Currently there is no ability to prove anything before the EL payload is processed. Hence, the case described looks like a new case. Tho I'm confused why we even discuss it since it looks like there is no way to prove anything against the state before EL payload processing anyway",
+        "created_at": "2025-08-25T11:34:47.286000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The chain after executing the payload of N-2 has a beacon state root of `R`. The chain after executing the state transition of the beacon block (with beacon block root `B`) of N-1 has a beacon state root of `S`. The chain after executing the state transition of the payload of N-1 has a beacon state root of `T`. In EVM, during the execution of the payload for block N, EIP-4788 provides the beacon block root `B`.  Contracts that use this beacon block root `B` will see inside the state root `S`, that is the beacon block with root `B` has inside `state_root = S`. Now suppose the contract needs to prove something about the latest `consolidation_request` that was processed. That consolidation request was not processed at the time of the state root `S`, it was processed after, with the payload, to obtain the state root `T`. So the EVM does not have access to the beacon state root `T` at the time of processing the payload of N. The only post-payload beacon block root that it has access to is the state root `R`, this is because it can prove against the `state_roots` object in the beacon state with state_root `S`.",
+        "created_at": "2025-08-25T12:58:04.228000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "when should we rebase block access list on top current Gloas beacon chain spec?\nit's not hard, just add `block_access_list` on top of `ExecutionPayload`",
+        "created_at": "2025-08-25T13:54:53.599000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I've also taken a stab to remove inclusion proof and signed header from data column in gloas here: https://github.com/ethereum/consensus-specs/pull/4527",
+        "created_at": "2025-08-25T15:10:02.436000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "BTW I believe if we do want to fix this, the best for contracts would be to have a new EIP-4788 type EIP that exposes the  latest excecution payload envelop HTR or the latest beacon state HTR on the EVM, rather than the beacon block root.",
+        "created_at": "2025-08-25T16:48:36.744000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "love this! we've been just calling it `ExecutionBid` but can easily rename",
+        "created_at": "2025-08-25T17:29:49.285000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bharath.vedartham",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This is a question i m sure must have been covered already, but will there be any rewards for validators for being part of the PTC Commitee?",
+        "created_at": "2025-08-25T17:31:37.353000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "One thing that's been on my mind.. idk what others are thinking.. but.. do we really need to gossip bids? It adds a lot of work to add the gossip topic and we expect almost everyone to use endpoints anyway becasue of obvious latency and bid privacy advantages..",
+        "created_at": "2025-08-25T17:31:47.055000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "not now",
+        "created_at": "2025-08-25T17:32:18.073000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It's trivial for us to add it that's why we add them and it is very little weight on the p2p stack given how restrictive it is. I do think we need to gossip them as a way to keep liveness, avoid full builder collusions and set a base price as a stepping stone towards mev burn",
+        "created_at": "2025-08-25T17:33:27.983000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e full builder collisions\n\nNot sure what you mean by this. I think the liveness argument is compelling once self-building is no longer viable. Because that's really what I expect will happen here.. competitive builders probably won't use this and the only traffic will be from people providing a builder of last resort.",
+        "created_at": "2025-08-25T17:36:26.066000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "so uhhh why is the `ExecutionEnvelope` Signed?",
+        "created_at": "2025-08-25T19:32:14.126000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ethdreamer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The builder and the proposer already committed to the hash in the `SignedBeaconBlock`",
+        "created_at": "2025-08-25T19:32:48.590000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Because it broadcasts",
+        "created_at": "2025-08-25T23:21:45.518000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I mean with a fully centralized http endpoint builder market, it's easy to end up with the textbook definition of this https://en.wikipedia.org/wiki/Bid_rigging",
+        "created_at": "2025-08-25T23:23:46.780000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "And while self building may be impossible in the future, we do expect node operators to be able to build good blocks, just not competitive with the centralized builders.",
+        "created_at": "2025-08-25T23:24:48.425000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Those bids would be lost if we remove the p2p stack",
+        "created_at": "2025-08-25T23:24:56.970000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "and that is a decentralized set that could easily keep the chain live",
+        "created_at": "2025-08-25T23:25:12.101000+00:00",
+        "attachments": null
+    }
+]

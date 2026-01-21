@@ -1,0 +1,66 @@
+[
+    {
+        "author": "nflaig",
+        "category": "general",
+        "parent": "",
+        "content": "for Lodestar it's 4 seconds, we call FCU with payload attributes at 8 seconds in previous slot, we call getPayload close to 0 second in proposal slot",
+        "created_at": "2025-09-18T14:05:12.063000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@531934490826768418\u003e \u003c@755590043632140352\u003e this is the code path I was referring to in ACD:\nhttps://github.com/OffchainLabs/prysm/blob/499d27b6aec4733ea7f35a28a5d04332b906c6d4/beacon-chain/p2p/broadcaster.go#L385\n\nThis calls: https://github.com/OffchainLabs/prysm/blob/3a3bd3902cd2dba82d9f7f0da33074b9e6042eef/beacon-chain/p2p/subnets.go#L309\n\nThe default value for MinPeersPerSubnet is 6: https://github.com/OffchainLabs/prysm/blob/f4bbe5ca40eee27eafdb743c454357022a4f9693/cmd/beacon-chain/flags/base.go#L275\n\nBut... I'm not sure what Prysm is trying to do in this `min` since it'll effectively make the threshold unconditionally `1`: https://github.com/OffchainLabs/prysm/blob/3a3bd3902cd2dba82d9f7f0da33074b9e6042eef/beacon-chain/p2p/subnets.go#L312\n\nOne more thing though: we are aware of contention in the go-libp2p-pubsub event loop, which can make this ListPeers call stall for longer than it should: https://github.com/OffchainLabs/prysm/blob/3a3bd3902cd2dba82d9f7f0da33074b9e6042eef/beacon-chain/p2p/subnets.go#L314",
+        "created_at": "2025-09-18T14:29:22.449000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "__kasey__",
+        "category": "general",
+        "parent": "",
+        "content": "That min() is definitely a bug",
+        "created_at": "2025-09-18T14:54:10.805000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@833706406699073536\u003e how about moving the discovery to a bg process that sustains baseline peering on all subnets, then having the duty scheduler boost the requirement for specific subnets ahead of time, to then release the boost after the duty elapses?",
+        "created_at": "2025-09-18T15:01:16.030000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@833706406699073536\u003e a mechanism like that would be reusable for attnets (boost our duty attnets) and column subnets (boost all 128 subnetes)",
+        "created_at": "2025-09-18T15:01:51.993000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "__kasey__",
+        "category": "general",
+        "parent": "",
+        "content": "Definitely, we've been planning something along those lines for peering for subscriptions. We should definitely also consider fan out in the mix.",
+        "created_at": "2025-09-18T15:02:52.102000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "manunlp",
+        "category": "general",
+        "parent": "",
+        "content": "@Manu @potuz this is the code path I was",
+        "created_at": "2025-09-18T15:06:35.620000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "general",
+        "parent": "",
+        "content": "a few recent insights, wanted to share at some point, this might be a good time 😉\n- with ~13k peers in the CL network, 300 bytes per ENR + 64 bytes NodeID + some other metadata, we can hold the full view of the network in less than ~7MiB\n- we can run full discv5 crawls and verify connectivity [very quickly](https://ethresear.ch/t/crawling-the-ethereum-discv5-network-fast/20962)\n- for every node we can cheaply compute their subscribed attnets and column subnets, so we can keep an updated view at all times\n- then, as we prepare for duty, we can use this knowledge to directly target specific peers that we already know are servicing the relevant subnets\n- (near future) with QUIC session resumption and 0-RTT we can bypass the handshake and just send a message",
+        "created_at": "2025-09-18T15:14:15.543000+00:00",
+        "attachments": null
+    }
+]

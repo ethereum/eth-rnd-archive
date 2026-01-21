@@ -1,0 +1,176 @@
+[
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I would like to make the v1.7.0-alpha.2 spec release at the end of this week. We should try to get the following PRs merged before then:\n* [Variable PTC deadline](https://github.com/ethereum/consensus-specs/pull/4843)\n* [Remove MIN_BUILDER_WITHDRAWABILITY_DELAY](https://github.com/ethereum/consensus-specs/pull/4826) -- ideally an altered version of this with a shorter delay, rather than a full removal. cc \u003c@755590043632140352\u003e \u003c@981249983196041218\u003e",
+        "created_at": "2026-01-21T02:50:32.085000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think Julian is not available so probably that one will require more input",
+        "created_at": "2026-01-21T02:52:50.475000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'm fine with Francesco's PR but I think it's better to move the wrapping helper to validator.md to use just human language instead of the store. And just add the helper to get the timelines depending on the size. Another honest question: with real life numbers in which the max Payload is much larger than the average one. Wouldn't this result in most Payloads having a very short deadline? In principle there's nothing wrong here, just that we may be allocating the broadcast time to blocks that may never be produced and will force us to compute precisely the windows so that the normal blocks do travel in time to be attested by the PTC",
+        "created_at": "2026-01-21T02:57:28.823000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "When possible, I think it's best to have explicit specs. No strong feelings on this. I'll leave it up to \u003c@520034910149410861\u003e. Re the question, we can adjust the `MIN_PAYLOAD_DUE_BPS` config to make the average what we want. Right now the min is 3.6 seconds and the max is 9.0 seconds, so on average the deadline might be around ~6 seconds. This feels reasonable to me.",
+        "created_at": "2026-01-21T03:09:50.078000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "But we can/should tune this on real-world data 👍",
+        "created_at": "2026-01-21T03:10:31.080000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The point is that the average is not the mid point: most blocks are just a fraction from  the max possible. Anyway, a linear function makes sense. On the other issue: as it stands now it'll be impossible to have the data bit being false and the execution bit being true.  The question is if we want to address this on this PR or in a future one. It's a simple change to add it to this PR though.",
+        "created_at": "2026-01-21T03:14:11.837000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Agree here. We deal with a heavily right-skewed distribution, which should be reflected in the formula.",
+        "created_at": "2026-01-21T06:19:51.956000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Linear interpolation means a payload at 10% of max size only gets 10% of the extra time. Since most payloads are small, they're all near the minimum deadline.\nAn alternative might be doing square root interpolation:\n\n```\ninterpolated_ms = min_ms + integer_squareroot(payload_size * (max_ms - min_ms) ** 2 // MAX_PAYLOAD_SIZE)\n```",
+        "created_at": "2026-01-21T06:26:05.151000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'm thinking if MAX_PAYLOAD_SIZE should even be part of that formula at first place. Today it's assumed to be some more-arbitrary boundary that wasn't questioned much. Instead we've made it a hard constrain in eip-7934 for security reasons but we're still far away from it.\nE.g. with EIP-7623's calldata pricing and 60m gas, you get to 5.7 MiB. With 7976 having the aggressive 64/64 calldata repricing, and 300m gas, we get to 4.5 MiB in the worst case. \nA reference payload size of 1 MiB acting as a floor might be better, and then square root interpolation:\n\n```\ncapped_size = min(payload_size, REFERENCE_PAYLOAD_SIZE)\ninterpolated_ms = min_ms + integer_squareroot(capped_size * delta_ms ** 2 // REFERENCE_PAYLOAD_SIZE)\n```",
+        "created_at": "2026-01-21T07:48:58.634000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "",
+        "created_at": "2026-01-21T07:54:26.809000+00:00",
+        "attachments": [
+            {
+                "type": "image/webp",
+                "origin_name": "ptc_deadline_five.png",
+                "content": "b73d90987bc80315941bb8e45cc31fd852e517809d0f00c8a4adf70f9175c66a"
+            }
+        ]
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "i like the cyan curve:\nhttps://github.com/fradamt/consensus-specs/pull/4",
+        "created_at": "2026-01-21T08:13:21.542000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah, MAX_PAYLOAD_SIZE is not ideal, it's too far from an actual worst case. I just wasn't sure what else to use given the CL has limited knowledge",
+        "created_at": "2026-01-21T09:24:08.050000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I would definitely let this PR stew for a bit \u003c@592004585506340885\u003e, there's some questions to resolve not only on the PR itself but also on the general way we think about the (propagation + execution) time (tldr: 7623 makes it so that only a small portion of block's gas can be used for calldata, so you can have a max payload that still has a lot of execution. This has consequences on what we should be doing here)",
+        "created_at": "2026-01-21T09:25:55.969000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The thing is that linear interpolation is the right thing from a networking perspective. If we get the numbers right. The payload time to propagation is indeed almost  linear. I'm not sure what is the best approach here but given the numbers Kamil posted in the thread, we will need this feature at the fork so we need to figure out the best thing here. Another comment is that if we make these constants tight then the optimal approach would be to derive the formula for the max payload size in terms of the gas limit and then make this max a function of the gas limit. This is something that was discussed before in the CL for other reasons.",
+        "created_at": "2026-01-21T11:02:40.958000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Left another comment on the PR, apologies I hadn't realized before.  I think there's another bug with regards of the current helper: the  PTC attester will not attest to the payload timeliness but also the execution of it, which is not what we want. I don't think that helper should rely on the store to make these attestations.",
+        "created_at": "2026-01-21T11:44:42.442000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "deriving it with from the gas limit works fine as of glamsterdam (assuming eip-7981 will be shipped too). We can then just do gas_limit // CALLDATA_FLOOR (likely 64), have that as our reference/cap, and keep it constant as of there, up to MAX_PAYLOAD SIZE.",
+        "created_at": "2026-01-21T12:51:20.985000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "just in case you guys weren't aware, there was a push to have such a max being enforced even at the gossip level, when we realized that pushing the limit to 60M could create a network split on the CL before Fulu. \u003c@449019668296892420\u003e was pushing for this. If the formula is only dependent on the gas limit I think this is fine since the CL has access to it from the envelope without much work.",
+        "created_at": "2026-01-21T12:53:49.206000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The issue is that we would have to change it anytime calldata gas costs change (which tbf might not be often)",
+        "created_at": "2026-01-21T12:58:35.223000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think that's fine as long as those happen in a hard fork ( we can just coordinate a new constant per fork), if calldata gas cost changes intra fork as the gas limit then this becomes more complicated",
+        "created_at": "2026-01-21T12:59:35.517000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "That's probably not going to be the case",
+        "created_at": "2026-01-21T13:03:43.867000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I would agree that linear interpolation seems like the correct thing to do ultimately, even if it feels odd that the average case payload would get near minimum propagation time",
+        "created_at": "2026-01-21T13:14:23.758000+00:00",
+        "attachments": null
+    }
+]

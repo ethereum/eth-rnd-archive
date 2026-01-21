@@ -1,0 +1,392 @@
+[
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cgr3999\u003e re: **@pk910**\n\u003e Heya @corcoranwill,\ngot a first implementation of the beacon state generator ready too.\nI'm actually not sure if it's really that easy or if I missed something..\nDoes that genesis look right to you? \nhttps://github.com/ethpandaops/eth-beacon-genesis/pull/36\nIt's literally just the validator count and a few empty fields :D\n(json is just for reference, usable state is in SSZ format)\ngave a look, great work , but we need to first agree/merge the containers spec PR",
+        "created_at": "2025-08-14T10:21:30.183000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cgr3999\u003e re: **@postquantum_bot**\n\u003e \u003ccorcoranwill We should see if we can get a group for Zeam and Ream so we can tag the teams rather than individuals.  \n\nThoughts?\nzeam already has a group in R\u0026D discord, got created long time ago thanks to Tim, will get the zeam members added to it",
+        "created_at": "2025-08-14T10:23:29.810000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cgr3999\u003e re: **@unnawut**\n\u003e @gr3999 and all including ream team as well. I've migrated the specs to markdown here while direction on the python specs will be discussed in parallel.\n\nhttps://github.com/leanEthereum/leanSpec/pull/8\n\nPlease have a review when you can so we can start aligning our client impls. A lot of the content especially in networking and validator specs I'm mostly making educated guesses on what we need, so feel free to comment anything!\nwill review this by tomorrow so may be over weekend we can come to an agreement",
+        "created_at": "2025-08-14T10:24:56.117000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cBenewagner\u003e Hey hey 🙂\n\nwanted to follow up with some thoughts on a discussion from yesterday's call (also because @ladislaus0x thought it is interesting for everyone).\n\nContext: \n- secret keys for the hash-based signature scheme are quite large\n- their size scales linearly with the lifetime of the key (think: few gigabytes)\n- these large keys need to be stored on disk and loaded into RAM before one can sign\n- sk's can be derived from a very short seed, but deriving the full sk takes quite long (as long as key gen)\n- yesterday, @justindrake  mentioned that one could derive the relevant parts of the sk on the fly from the seed instead of storing and loading the full key\n\nI think this a reasonable approach that deserves further thought and discussion, but I think this is not something we can and should do for early devnets. \n\nHere are my arguments:\n\n(1) doing this it adds a lot of complexity (you need to think about when and how much of the sk you restore) whereas just storing the key and loading it into memory when we need it is much simpler. \n\n(2) we don't have an implementation of that in the Rust code; as we expect people to use the Rust code as a black box, it is simply not available right now.\n\n(3) even more relevant: it is not clear how the API for the signature scheme would look like if we want to allow this approach (currently it is the standard signature API: gen, sign, verify). But this needs to be clear, as we need to spec it and we don't want client devs to make their own implementations of the cryptography layer; from my perspective, discussing how the API should look like for this approach is a necessary next step before we can proceed with this idea, and before this can be integrated into the Rust lib.\n\n(4) it is not entirely clear when and how you would start recomputing which part of the key. Questions like this should be answered before we can say if it is a good idea. E.g., do we really have \u003cclipped message\u003e",
+        "created_at": "2025-08-14T11:09:15.889000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cbarnabasbusa\u003e 6) there is a difference between needing sata disk (for historical EL data or blob data) or need nvme for state or need ram for signing. \n\nNew gigs of nvme probably won’t hurt anyone but if the whole key needs to be loaded into ram, then ram requirements will increase significantly. Also what’s the expected key size of a validator that has a ~5 yr life?",
+        "created_at": "2025-08-14T11:27:36.180000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cbarnabasbusa\u003e Would be good to have some numbers key size vs time and key generation time speed vs time plots from let’s say 32 slots to 5-10 years",
+        "created_at": "2025-08-14T11:28:37.871000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cbarnabasbusa\u003e each key being ~5gb, you could have an issue with node operators that are running 5-10k keys on a single host…",
+        "created_at": "2025-08-14T11:30:09.656000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cBenewagner\u003e re: **@barnabasbusa**\n\u003e 6) there is a difference between needing sata disk (for historical EL data or blob data) or need nvme for state or need ram for signing. \n\nNew gigs of nvme probably won’t hurt anyone but if the whole key needs to be loaded into ram, then ram requirements will increase significantly. Also what’s the expected key size of a validator that has a ~5 yr life?\nnumber of signatures * 2 * 31 bytes. That's about 2 GiB assuming one sig per slot and 4 second slots",
+        "created_at": "2025-08-14T11:42:48.265000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cladislaus0x\u003e re: **@barnabasbusa**\n\u003e each key being ~5gb, you could have an issue with node operators that are running 5-10k keys on a single host…\nI think in a hypothetical mainnet environment, you could also take the stance and argue that larger key sizes may a) be another incentive to consolidate stake b) minimise economies of scale of larger staking entities and thus c) serve as an implicit anti-correlation penalty",
+        "created_at": "2025-08-14T12:32:06.783000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cladislaus0x\u003e re: **@Benewagner**\n\u003e Hey hey 🙂\n\nwanted to follow up with some thoughts on a discussion from yesterday's call (also because @ladislaus0x thought it is interesting for everyone).\n\nContext: \n- secret keys for the hash-based signature scheme are quite large\n- their size scales linearly with the lifetime of the key (think: few gigabytes)\n- these large keys need to be stored on disk and loaded into RAM before one can sign\n- sk's can be derived from a very short seed, but deriving the full sk takes quite long (as long as key gen)\n- yesterday, @justindrake  mentioned that one could derive the relevant parts of the sk on the fly from the seed instead of storing and loading the full key\n\nI think this a reasonable approach that deserves further thought and discussion, but I think this is not something we can and should do for early devnets. \n\nHere are my arguments:\n\n(1) doing this it adds a lot of complexity (you need to think about when and how much of the sk you restore) whereas just storing the key and loading it into memory when we need it is much simpler. \n\n(2) we don't have an implementation of that in the Rust code; as we expect people to use the Rust code as a black box, it is simply not available right now.\n\n(3) even more relevant: it is not clear how the API for the signature scheme would look like if we want to allow this approach (currently it is the standard signature API: gen, sign, verify). But this needs to be clear, as we need to spec it and we don't want client devs to make their own implementations of the cryptography layer; from my perspective, discussing how the API should look like for this approach is a necessary next step before we can proceed with this idea, and before this can be integrated into the Rust lib.\n\n(4) it is not entirely clear when and how you would start recomputing which part of the key. Questions like this should be answered before we can say if it is a good idea. E \u003cclipped message\u003e",
+        "created_at": "2025-08-14T12:32:34.717000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003ccorcoranwill\u003e re: **@Benewagner**\n\u003e Hey hey 🙂\n\nwanted to follow up with some thoughts on a discussion from yesterday's call (also because @ladislaus0x thought it is interesting for everyone).\n\nContext: \n- secret keys for the hash-based signature scheme are quite large\n- their size scales linearly with the lifetime of the key (think: few gigabytes)\n- these large keys need to be stored on disk and loaded into RAM before one can sign\n- sk's can be derived from a very short seed, but deriving the full sk takes quite long (as long as key gen)\n- yesterday, @justindrake  mentioned that one could derive the relevant parts of the sk on the fly from the seed instead of storing and loading the full key\n\nI think this a reasonable approach that deserves further thought and discussion, but I think this is not something we can and should do for early devnets. \n\nHere are my arguments:\n\n(1) doing this it adds a lot of complexity (you need to think about when and how much of the sk you restore) whereas just storing the key and loading it into memory when we need it is much simpler. \n\n(2) we don't have an implementation of that in the Rust code; as we expect people to use the Rust code as a black box, it is simply not available right now.\n\n(3) even more relevant: it is not clear how the API for the signature scheme would look like if we want to allow this approach (currently it is the standard signature API: gen, sign, verify). But this needs to be clear, as we need to spec it and we don't want client devs to make their own implementations of the cryptography layer; from my perspective, discussing how the API should look like for this approach is a necessary next step before we can proceed with this idea, and before this can be integrated into the Rust lib.\n\n(4) it is not entirely clear when and how you would start recomputing which part of the key. Questions like this should be answered before we can say if it is a good idea. E \u003cclipped message\u003e",
+        "created_at": "2025-08-14T12:44:42.015000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003ccorcoranwill\u003e also, fantastic summary @Benewagner",
+        "created_at": "2025-08-14T12:45:10.308000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003ckhovratovich\u003e One thing to note is that the amount of confidential material needed to sign each slot is small and constant",
+        "created_at": "2025-08-14T12:45:15.801000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cbarnabasbusa\u003e isn't it just one time use signatures? So basically creating a new signature for each epoch.",
+        "created_at": "2025-08-14T12:45:21.140000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cbarnabasbusa\u003e so the more epochs you wanna sign, the longer \"lifetime\" you need, so the more signatures you gotta generate",
+        "created_at": "2025-08-14T12:45:42.905000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003ckhovratovich\u003e re: **@khovratovich**\n\u003e One thing to note is that the amount of confidential material needed to sign each slot is small and constant\nThus one can derive the slot key from the seed quickly and then load the merkle tree part from the disk. The advantage of this approach is that you don't have to protect the latter, only the former. Thus no need to store large confidential data on disk at all",
+        "created_at": "2025-08-14T12:47:20.245000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cBenewagner\u003e re: **@khovratovich**\n\u003e Thus one can derive the slot key from the seed quickly and then load the merkle tree part from the disk. The advantage of this approach is that you don't have to protect the latter, only the former. Thus no need to store large confidential data on disk at all\nThis is essentially what the implementation already does. Otherwise the key would be significantly bigger. The key size above is the non-confidential part. I would still say that any way of opening up the secret key is dangerous.",
+        "created_at": "2025-08-14T12:49:24.159000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cBenewagner\u003e re: **@corcoranwill**\n\u003e can you help me better understand the concept of 'lifetime'?  \n\n\nis this related to the security of the sk?  like X number of years for a classical computer to brute force hack the key?\nLifetime = maximum number of signatures you can create with one key. If we want to sign once per slot, then it is the number of slots until the key expires",
+        "created_at": "2025-08-14T12:50:16.875000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "boma_naps",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This is a very important discussion, and it's great to see we are tackling these practical challenges head-on.\nThe good news is that we are now in a position to get the concrete data that \u003c@412614104222531604\u003e and others\nare asking for. I have just finished a benchmarking framework that allows us to measure key generation time and key size for different lifetimes. With this framework, we can produce the \"key size vs. time\" and \"key generation time vs. time\" plots that were requested.\n\nI've already collected our first data point: 2^10 lifetime takes 12 seconds to generate, and 2^18 lifetime is currently running.\nMy proposed next step is to:\n\nMy proposed next step is to systematically benchmark lifetimes from 2^13 (~8 hours) up to 2^26 (~5 years) to give us the complete scaling picture.\n\nWhat are the specific lifetimes that would be most valuable for the team to see benchmarked first?",
+        "created_at": "2025-08-14T13:04:22.486000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "Screenshot_2025-08-14_at_13.24.42.png",
+                "content": "47803bb056ba6feae658fe22939bfa4d089ffc1664d1e9f0021be2d1c931b046"
+            }
+        ]
+    },
+    {
+        "author": "boma_naps",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "lifetime 10 keys are 71K (secret) and 60 bytes (public)",
+        "created_at": "2025-08-14T13:04:33.584000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "boma_naps",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@836720546842148864\u003e",
+        "created_at": "2025-08-14T13:06:09.223000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "boma_naps",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "For 2^18 took about 1,836 seconds (30.6 minutes)",
+        "created_at": "2025-08-14T13:07:03.221000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cBenewagner\u003e is this the right instantiation? This one: https://github.com/b-wagn/hash-sig/blob/main/src/signature/generalized_xmss/instantiations_poseidon_top_level.rs#L131",
+        "created_at": "2025-08-14T13:12:36.036000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "boma_naps",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So about the RAM requirement question from \u003c@412614104222531604\u003e \u003c@1196861125267030038\u003e \n\nMulti-validator impact: 10k validators × 71 KB = 710 MB RAM (just for 1-hour keys)\nStorage scaling: 71 KB for 1-hour lifetime suggests ~18 MB for 1-week lifetime (if linear)\nTime scaling: Exponential (2x per bit)",
+        "created_at": "2025-08-14T13:14:04.740000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "boma_naps",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes I think so cause that’s what am using",
+        "created_at": "2025-08-14T13:15:33.542000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cBenewagner\u003e re: **@postquantum_bot**\n\u003e \u003cboma_naps So about the RAM requirement question from \u003c@412614104222531604\u003e @benediktwagner_62658 \n\nMulti-validator impact: 10k validators × 71 KB = 710 MB RAM (just for 1-hour keys)\nStorage scaling: 71 KB for 1-hour lifetime suggests ~18 MB for 1-week lifetime (if linear)\nTime scaling: Exponential (2x per bit)\nwhat is time scaling here?",
+        "created_at": "2025-08-14T13:31:44.166000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cBenewagner\u003e I don't see anything that is exponential",
+        "created_at": "2025-08-14T13:31:58.844000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cBenewagner\u003e and what does per bit mean",
+        "created_at": "2025-08-14T13:37:19.916000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cBenewagner\u003e key generation time scales linearly with lifetime. signing time is constant in the current implementation",
+        "created_at": "2025-08-14T13:37:50.368000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "boma_naps",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Sorry it’s linear scaling",
+        "created_at": "2025-08-14T13:39:42.741000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "boma_naps",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@1196861125267030038\u003e The data I have now \n2^10 (1,024 signatures): 12 seconds, 71 KB\n2^18 (262,144 signatures): ~1,800 seconds, 18 MB\nKey generation time - 1,800 seconds ÷ 12 seconds = 150x time increase\n(150x time for 256x lifetime = slightly sub-linear)\nSecret key size - 18 MB = 18,000 KB\n18,000 KB ÷ 71 KB = 253x key size increase\n(253x size for 256x lifetime = nearly perfect linear)\nPublic key size is constant at 60 bytes \nMulti validator storage requirements \n1,000 validators with 2^18 lifetime keys: 18 GB RAM\n10,000 validators with 2^18 lifetime keys: 180 GB RAM",
+        "created_at": "2025-08-14T13:51:57.378000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cbarnabasbusa\u003e nobody on mainnet will run with 2^18 lifetime keys",
+        "created_at": "2025-08-14T13:53:57.754000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "boma_naps",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Am following the the original benchmarking plan from the hackmd will shared the key point is to help decide on pre gen vs on demand and seeing this there is a lot of of security risk attached to it",
+        "created_at": "2025-08-14T14:06:13.736000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cladislaus0x\u003e re: **@barnabasbusa**\n\u003e nobody on mainnet will run with 2^18 lifetime keys\nAgree. If I had to guess, production usecases would be somewhere between 2^24 and 2^27 lifetime slots assuming 4second slot times",
+        "created_at": "2025-08-14T15:10:53.550000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "boma_naps",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I’m a bit confused by this If 2^18 already creates concerning RAM requirements (180 GB for large operators), how would 2^24+ be practical with multi-TB RAM needs per 10k validators?",
+        "created_at": "2025-08-14T15:55:45.496000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003ckhovratovich\u003e where are 10k validators coming from?",
+        "created_at": "2025-08-14T16:15:32.488000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cbarnabasbusa\u003e re: **@khovratovich**\n\u003e where are 10k validators coming from?\nlarge node operators may operate up to 10k keys",
+        "created_at": "2025-08-14T16:20:53.333000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003ckhovratovich\u003e re: **@barnabasbusa**\n\u003e large node operators may operate up to 10k keys\nwith Orbit?",
+        "created_at": "2025-08-14T16:26:11.780000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003ctcoratger\u003e re: **@ladislaus0x**\n\u003e Agree. If I had to guess, production usecases would be somewhere between 2^24 and 2^27 lifetime slots assuming 4second slot times\nI think that we discussed that a bit with @Benewagner to know which lifetime to include in the python spec and it seems like the 2**32 is a good candidate. \n\nWith the recent changes in th rust repo especially some small tricks and usage of Plonky3 for the field, I expect that we have more performant key generation algorithm (and a more performant repo overall) than what we had before but I don't have the precise numbers to confirm that.",
+        "created_at": "2025-08-14T16:37:59.153000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cladislaus0x\u003e re: **@postquantum_bot**\n\u003e \u003cboma_naps [reply]: I’m a bit confused by this If 2^18 already creates concerning RAM requirements (180 GB for large operators), how would 2^24+ be practical with multi-TB RAM needs per 10k validators?\nJust to quickly add to this: There are a lot of moving parts around how many validators the network will have to handle once PQ signatures land on mainnet. Close to perfect consolidation through MaxEB allows an operator with 10k keys to achieve a 64x reduction to ~200 keys today already",
+        "created_at": "2025-08-14T16:49:41.772000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cBenewagner\u003e re: **@tcoratger**\n\u003e I think that we discussed that a bit with @Benewagner to know which lifetime to include in the python spec and it seems like the 2**32 is a good candidate. \n\nWith the recent changes in th rust repo especially some small tricks and usage of Plonky3 for the field, I expect that we have more performant key generation algorithm (and a more performant repo overall) than what we had before but I don't have the precise numbers to confirm that.\nTo clarify: 2^32 max lifetime. Every validator can freely pick its lifetime smaller",
+        "created_at": "2025-08-14T17:09:02.031000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003ctersec\u003e MaxEB is available today and mostly not happening at close to \"perfect\" scale, though?",
+        "created_at": "2025-08-14T17:14:00.951000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cunnawut\u003e After discussing with Ladislaus I think I’m missing something so please ignore this. I was assuming that generating a subset was possible without first generating for the entire lifetime.\n\n=====\n\nWould it be worth looking from throughput perspective than timespan? Then consider just-in-time key generation? \n\nIf it takes a few hours to generate enough keys to sign for multiple years (sorry I couldn’t find the numbers quickly), and we know the max key consumption is` 60/4 = 15 keys/minutes `for 4s slots, then it seems possible to JIT key generation on a fraction of validator’s compute power as long as it can generate 15 keys/min?\n\nThen we also avoid security implication around key storage + continuous key generation sounds more manageable than a once-in-a-big-while operation.",
+        "created_at": "2025-08-14T17:19:17.397000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cladislaus0x\u003e re: **@tersec**\n\u003e MaxEB is available today and mostly not happening at close to \"perfect\" scale, though?\nRight. One reason potentially is around a lack of incentives to do so. Other reasons I can think of are fairly practical: lack of (confidence in) tooling, concerns around touching withdrawal credentials, lack of proper accounting/tracking tooling, tax implications of auto-compounding, ...\n[Some low indices validators may as well never consolidate due to prestige and/or potential airdrop eligibility]\n\nI believe some bigger operators have already signaled their intent to consolidate, but just not executed yet.",
+        "created_at": "2025-08-14T17:24:26.930000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003ctersec\u003e Well, the incentivization question is tricky, because incentivizing it too much would risk to belie a claim by the EF to care particularly about, say, homestakers, which has been the EF's public line for a while. Even the existence of consolidations as a separate, queue-bypassing mechanism is a minor incentivization though.\n\nThat said, sure, there are practical concerns. The broader point is that the fact that a technical mechanism exists which might mitigate the costs of private key storage doesn't mean it will be used. Rainbow staking can help here, to incentivize this",
+        "created_at": "2025-08-14T17:27:51.194000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003cunnawut\u003e re: **@unnawut**\n\u003e After discussing with Ladislaus I think I’m missing something so please ignore this. I was assuming that generating a subset was possible without first generating for the entire lifetime.\n\n=====\n\nWould it be worth looking from throughput perspective than timespan? Then consider just-in-time key generation? \n\nIf it takes a few hours to generate enough keys to sign for multiple years (sorry I couldn’t find the numbers quickly), and we know the max key consumption is 60/4 = 15 keys/minutes for 4s slots, then it seems possible to JIT key generation on a fraction of validator’s compute power as long as it can generate 15 keys/min?\n\nThen we also avoid security implication around key storage + continuous key generation sounds more manageable than a once-in-a-big-while operation.\nAfter discussing with Ladislaus I think I’m missing something so please ignore this. I was assuming that generating a subset was possible without first generating for the entire lifetime.\n\n=====\n\nQuoting Justin’s update in the larger group some time ago.\n\n“* *keygen*: 3.5h on a 10-core Macbook Pro for 8 years of lifetime”\n\nThis is` (8 * 365 * 24 * 60 * 60 / 6) / (3.5 * 60) = ~200000 `slots",
+        "created_at": "2025-08-14T17:31:37.124000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "corcoranwill",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://github.com/leanEthereum/pm/blob/main/breakout-rooms/leanConsensus/pq-interop/meetings/meeting-05.md",
+        "created_at": "2025-08-14T18:58:36.170000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "corcoranwill",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Here are the meeting notes / transcript and link to YT recording of PQ Interop #5 from yesterday",
+        "created_at": "2025-08-14T18:59:00.692000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,202 @@
+[
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "A few comments:\n- ~~Many of the functions in block processing rely on the header being processed before because they access the `state.latest_block_header`  to obtain information. So moving the header processing to later is quite complicated (if not impossible for some operations).~~ Disregard this one I was thinking on something completely separate 🙂\n- This makes block building itself quite complicated because any change in the builder's balance can make the whole block invalid, since `process_execution_payload_header` can revert by not having enough funds if the builder's balance was reduced before in the block processing. This means that the proposer would have to iterate between choosing a bid, then validating the block, then choosing a different one and so on until it finds a valid one. \n- It does not fix the underlying problem which is that the payments have to be churned anyway, and if the builder is slashed in any subsequent block, the proposer can receive less than what it was offered. \n\nThis was a rational decision, we did discuss this situation and decided that chain safety and weak subjectivity is worth the low weakening on trustless payments, because anyway the builder has no incentives to slash himself.",
+        "created_at": "2025-09-04T01:12:02.090000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I am sure this has been discussed/answered somewhere in this channel, but I'll ask anyway: what is the rationale for builder payments being processed ahead of other withdrawals?",
+        "created_at": "2025-09-04T09:10:22.214000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "You mean in process_withrawals? To sweep them before the others?",
+        "created_at": "2025-09-04T09:11:35.476000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "in `get_expected_withdrawals`, yes",
+        "created_at": "2025-09-04T09:11:59.868000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Also, I don't see anything about aborting a payment if the proposer is slashed, which should be the case",
+        "created_at": "2025-09-04T09:12:20.238000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "(for equivocation)",
+        "created_at": "2025-09-04T09:12:30.129000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "No particular reason, the idea was that this slice would be small generally and we didn't want the churn on payments to be longer or less predictable since builders need to redeposit, but I don't see any fundamental reason. Do you want to move it? \n\nAs for proposer equivocations, I was waiting for your work on forkchoice regarding equivocations to merge them together",
+        "created_at": "2025-09-04T09:14:52.416000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It's a bit tricky with the latter cause we don't cache the proposer on the payment",
+        "created_at": "2025-09-04T09:15:32.354000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I (and I know also Barnabe had this concern earlier) don't really like that it can be used as a way to get in front of the queue. All of these mechanisms are already hard to reason about as is, I think it's best to not open any loophole even if it seems far-fetched",
+        "created_at": "2025-09-04T09:22:28.260000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I don't think they really interact",
+        "created_at": "2025-09-04T09:24:20.053000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I see. Can we just add `proposer_index` to `BuilderPendingPayment`?",
+        "created_at": "2025-09-04T09:24:54.991000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We could, I am a freak of trying to minimize structure sizes.",
+        "created_at": "2025-09-04T09:25:36.265000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It's just 0.5 KB in total 😄",
+        "created_at": "2025-09-04T09:28:04.755000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Since the slot is fixed I thought about removing the payment when we process the slashing",
+        "created_at": "2025-09-04T09:28:06.354000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "ah we could that as well",
+        "created_at": "2025-09-04T09:28:44.398000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Does this look right? \n\n```python\ndef process_proposer_slashing(state: BeaconState, proposer_slashing: ProposerSlashing) -\u003e None:\n\n    ...\n\n    slot = header_1.slot\n    proposal_epoch = compute_epoch_at_slot(slot)\n\n    if proposal_epoch ==  get_current_epoch(state):\n        state.builder_pending_payments[\n            SLOTS_PER_EPOCH + slot % SLOTS_PER_EPOCH\n        ] = BuilderPendingPayment()\n    elif proposal_epoch == get_previous_epoch(state):\n        state.builder_pending_payments[\n            slot % SLOTS_PER_EPOCH\n        ] = BuilderPendingPayment()\n\n    slash_validator(state, header_1.proposer_index)\n```",
+        "created_at": "2025-09-04T09:51:20.109000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yep that's right, I think that works fine without adding the proposer data to the structures.",
+        "created_at": "2025-09-04T12:08:38.236000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So now the builder could self-slash to prevent paying?",
+        "created_at": "2025-09-04T12:53:08.529000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "before we had slashed -\u003e pay max(bid, what's left). Now it's slashed -\u003e pay nothing?",
+        "created_at": "2025-09-04T12:54:22.966000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Ah no, the payment is immediately converted to a withdrawal. So this only applies to builders who are withholding",
+        "created_at": "2025-09-04T12:57:32.397000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "this is about the proposer being slashed",
+        "created_at": "2025-09-04T13:00:03.400000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Was there any decision on whether the kzg commitments should stay in the envelope?",
+        "created_at": "2025-09-04T21:07:58.505000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I don't even recall discussing this, where do you want to put them? I would feel pretty badly if these need to come with the bid cause that would bring bid gossiping from a trivial thing to a bothersome thing.",
+        "created_at": "2025-09-04T21:11:37.462000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I just opened a PR to add consensus spec tests for `process_attestation`. Feedback welcome\nI'd love to get this for the next spec release so we can test them in prysm before I open the prysm PR\nhttps://github.com/ethereum/consensus-specs/pull/4564",
+        "created_at": "2025-09-04T21:29:51.138000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think Justin's on vacations for a little longer so we're probably safe, I got two green PRs that are ready to merge. I think we'd want Francesco's (it's already green but would be good to have a test) and presumably we can use the next release as devnet target and just start merging to our develop branch.  The missing forkchoice changes are not really hard forks so it's fine if they are not included or are later added to the devnet target",
+        "created_at": "2025-09-04T21:34:53.755000+00:00",
+        "attachments": null
+    }
+]

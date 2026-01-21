@@ -1,0 +1,66 @@
+[
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I've added a comment about the format of system contract (+eip-4895 withdrawal) state changes in the BAL:  https://github.com/ethereum/pm/issues/1652#issuecomment-3182555773\n\nFrom an implementation perspective, I believe that the current spec for this adds a lot of complexity and that we should consider adopting a simpler approach (which I lay out in my comment, and have also laid out above in this channel).",
+        "created_at": "2025-08-13T07:41:09.600000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Ah, saw your message too late otherwise I'd just responded here but in short. I don't think it's an actual problem and if we ever have system contracts that have changes of the same storage slots / or balance pre- and post-execution, we cann still patch BALs by allowing tx_index `len(transactions) +1` to be used.\nWhat I want to avoid is having different `tx_index` in the BAL than the `tx_index` in the block. Those must match.:\n\nhttps://github.com/ethereum/pm/issues/1652#issuecomment-3182863203",
+        "created_at": "2025-08-13T09:07:59.867000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e Those must match\n\nWhy though?  There's no reason that they must match other than it feels a bit nicer to have them be 0-indexed like the transactions.  There is still a one-to-one correspondence between the index of the changes in the BAL and the transaction that they occur in the block, it's just shifted by one in the BAL with what I'm proposing (there is always a pre-tx system contract state change because those are the parent block and beacon root contracts)",
+        "created_at": "2025-08-13T09:15:31.719000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e In this case, you’d simply see a positive balance for the system contract address with tx_index = len(transactions). That alone tells you enough to know it's a withdrawal [...]\n\nI think that adding specific logic where decoding the BAL into a state diff has to be aware of what the underlying system contracts (+withdrawals) do is kind of dirty.  would rather avoid it",
+        "created_at": "2025-08-13T09:16:53.353000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "If the only point of contention here is that bal indices don't correspond to block transaction indices, we could denote pre/post at `len(block.transactions)`, `len(block.transactions)+1` (i'd still prefer having pre be index 0, but that's not a hill I'd die on here).  IMO it's just really nice to have the be separated:  it reduces the added protocol surface of BALs and makes it easier to add new system contracts in the future without thinking how they will interact with the BAL format",
+        "created_at": "2025-08-13T09:19:07.489000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yeah, I can see the argument but think it's confusing and prune to bugs to have block_tx_indices !=  bal_tx_indices. with doing the compromise, len(txs) and len(txs) +1 with the latter used for post-state values, clients would need to treat the len(txs) entries as tx_index = -1.",
+        "created_at": "2025-08-13T10:38:09.537000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "clients can still shift the indices by one byte and temp. replace len(txs) with 0 under the hood when it comes to processing them",
+        "created_at": "2025-08-13T10:39:52.978000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I don't think it's prone to bugs.  A basic test with multiple transactions and a pre/post state diff can catch any off-by-one errors in the implementation, so it's already effectively covered under the existing (non-BAL) spec tests if the test runner is modified to build and verify BALs.",
+        "created_at": "2025-08-13T13:01:42.196000+00:00",
+        "attachments": null
+    }
+]

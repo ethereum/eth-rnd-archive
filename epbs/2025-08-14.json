@@ -1,0 +1,226 @@
+[
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@520034910149410861\u003e I'm trying to review the PR by \u003c@592004585506340885\u003e on the rebase on Fulu, I never paid attention to the KZG inclusion verification that  changed in Fulu, if I understood it correctly we no longer need to include the Merkle proof in ePBS? the sidecar comes with the list of commitments and the hash of those is already included in the builder's bid, so it's just a matter of checking that the hash matches what's committed in the block? In fact I don't understand why this isn't used in Fulu itself instead of adding a full merkle proof on each column, what am I missing here?",
+        "created_at": "2025-08-14T16:36:45.186000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@833706406699073536\u003e is explaining me that all this is to be able to verify the column before seeing the block, but presumably this is not an issue in ePBS?",
+        "created_at": "2025-08-14T16:41:13.769000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "since you do not need to attest to them anyway you can wait for the block before seeing all this, so it could be possible to drop the block header and the merkle proof and all that from Fulu right?",
+        "created_at": "2025-08-14T16:41:52.664000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e drop the block header and the merkle proof and all that from Fulu right?\nhow would we deal with column equivocations?",
+        "created_at": "2025-08-14T16:52:28.270000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "__kasey__",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e how would we deal with column equivocations?\n\nOne sidecar would be invalid, containing a commitment that was not included in the signed bid.",
+        "created_at": "2025-08-14T16:54:16.696000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "__kasey__",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So they would just be filtered out by gossipsub verification, based on the signed bid.",
+        "created_at": "2025-08-14T16:55:36.947000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "__kasey__",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I’m sorry I missed “from Fulu”",
+        "created_at": "2025-08-14T16:56:28.663000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I see, makes sense to me, thanks",
+        "created_at": "2025-08-14T17:01:30.810000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "__kasey__",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@755590043632140352\u003e clarifying one thing, in Fulu the sidecar messages for all columns for a given block have the exact same merkle proof, to the root of the commitment list.",
+        "created_at": "2025-08-14T17:04:26.058000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes and the point is that you don't need to send it if you already have the block with the hash of the kzg commitment list",
+        "created_at": "2025-08-14T17:05:24.195000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Which the current version of ePBS guarantees",
+        "created_at": "2025-08-14T17:05:39.846000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah, if we're fine waiting for the block we could drop them. Would have to add a `beacon_block_root` though",
+        "created_at": "2025-08-14T18:09:23.303000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "if the block ended up still having the full commitments (like you mentioned you were considering), it could even just be:\n\n```python\nclass DataColumnSidecar(Container):\n    index: ColumnIndex\n    column: List[Cell, MAX_BLOB_COMMITMENTS_PER_BLOCK]\n    kzg_proofs: List[KZGProof, MAX_BLOB_COMMITMENTS_PER_BLOCK]\nKZG_COMMITMENTS_INCLUSION_PROOF_DEPTH]\n    beacon_block_root: Root\n```",
+        "created_at": "2025-08-14T18:11:50.198000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Actually what I hope we can do in Glamsterdam is propagate cells. In that case putting a `kzg_commitment` and `kzg_commitment_inclusion_proof` in each cell is quite heavy, so I was anyway thinking it would look like this:\n\n```python\nclass CellSidecar(Container):\n    cell: Cell\n    kzg_proof: KZGProof\n    column_index: ColumnIndex\n    row_index: RowIndex\n    beacon_block_root: Root\n```\n\nAnd then there was supposed to be a single global sidecar with the `kzg_commitments`, `kzg_commitments_inclusion_proof` and `signed_block_header`. I guess in epbs it's a bit more natural to not have this and just have the block do this function (unless we want to have the ability to start propagating cells before the block has even propagated)",
+        "created_at": "2025-08-14T18:16:47.170000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'll add this to the agenda tomorrow, at least to point people to think about these. It's a Pitty ePBS wasn't before peer DAS apparently a huge refactoring of verification was put in order to cache the signature and deal with columns before the block.",
+        "created_at": "2025-08-14T19:00:25.839000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@755590043632140352\u003e should I merge the rebase PR \u0026 deal with necessary changes later?",
+        "created_at": "2025-08-14T19:01:05.782000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Ah wait. You said you were going to do another review tonight. Can wait.",
+        "created_at": "2025-08-14T19:01:36.090000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah definitely, but can it wait just like 3/4 hours? My wife brings the kids to a bday tonight and I'm left alone to review in peace",
+        "created_at": "2025-08-14T19:01:51.402000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Jinx",
+        "created_at": "2025-08-14T19:02:03.996000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes, it definitely can wait. And haha.",
+        "created_at": "2025-08-14T19:10:37.080000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I approved it but you got conflicts, if you already merged 7805 that must be it cause there's one line close to 7732.",
+        "created_at": "2025-08-14T21:52:45.531000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Awesome. Already fixed the merge conflicts; no problem there.",
+        "created_at": "2025-08-14T22:05:37.443000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I will merge this when the CI checks pass.",
+        "created_at": "2025-08-14T22:05:44.871000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Then I'll start working on renaming eip7732 to gloas 🙂",
+        "created_at": "2025-08-14T22:05:55.331000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Thanks so much for this",
+        "created_at": "2025-08-14T22:06:00.502000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Of course! Happy to help.",
+        "created_at": "2025-08-14T22:06:09.160000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@592004585506340885\u003e sorry for the delay but pending payment epoch processing tests are ready again: https://github.com/ethereum/consensus-specs/pull/4475 (previously approved by Potuz)",
+        "created_at": "2025-08-14T22:53:26.403000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Merged 🙏",
+        "created_at": "2025-08-14T23:12:33.564000+00:00",
+        "attachments": null
+    }
+]

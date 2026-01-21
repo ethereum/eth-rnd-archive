@@ -1,0 +1,662 @@
+[
+    {
+        "author": "zsfelfoldi",
+        "category": "general",
+        "parent": "",
+        "content": "I am looking into implementing EIP-7708 and I am not sure whether some kind of consensus has been achieved already about the open questions.\nAfter reading through the Magicians forum, so far my impressions are:\n\n- Using `0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee` for address and `0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef` for topic[0] seems to make the most sense\n- Backfilling is nice but should not be done in this EIP, reprocessing the whole chain is super expensive. We can of course reprocess the whole chain up to the fork block after the fork and publish a root hash of the reprocessed receipts or something but it should not technically be part of the EIP.\n- Withdrawals should probably also emit a log\n- I am not sure about fee payments, might be nice for complete ETH tracking with logs but also expensive. Also, would that mean two logs? (one for base fee burn, one for priority fee payment)\n- Is there a decision about keeping or raising gas prices?",
+        "created_at": "2026-01-19T05:19:02.944000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samyxandy",
+        "category": "general",
+        "parent": "",
+        "content": "Fee payment and withdrawal logs are actually part of the sister eip",
+        "created_at": "2026-01-19T07:32:35.413000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samyxandy",
+        "category": "general",
+        "parent": "",
+        "content": "https://eips.ethereum.org/EIPS/eip-7799",
+        "created_at": "2026-01-19T07:32:52.435000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "zsfelfoldi",
+        "category": "general",
+        "parent": "",
+        "content": "Right, but that hasn't even been proposed yet. So the rough consensus here is that we're going with 7799 later and therefore fees and withdrawals are not logged by 7708?",
+        "created_at": "2026-01-19T08:55:24.982000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samyxandy",
+        "category": "general",
+        "parent": "",
+        "content": "Yup\nIt would have been better to have it together but we do 7799 later and also retro fit the logs which should be backfilled",
+        "created_at": "2026-01-19T10:38:56.287000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samyxandy",
+        "category": "general",
+        "parent": "",
+        "content": "Cc \u003c@881905303011086387\u003e that’s the plan right",
+        "created_at": "2026-01-19T10:39:11.232000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "general",
+        "parent": "",
+        "content": "https://github.com/ethereum/EIPs/pull/9003 discussion about 7708 is currently being here, with a comment highlighting the limists here: https://github.com/ethereum/EIPs/pull/9003#issuecomment-3755421215",
+        "created_at": "2026-01-19T11:23:00.153000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "general",
+        "parent": "",
+        "content": "Just to be sure I'm following. Where does 2300 come from here ? We don't see it in the EIP. By doing some basic maths, we see that we can fit a whole block at 60 mgas gas limit with  1 transaction with EIP-8037. Let's focus on the case of SSTORE and create a new slot :\nSSTORE pricing (compute + storage) : Today\n- Create a new slot : 20000 (from 0 to non 0)\n\nSSTORE pricing with EIP-8037\n\n- Create a new slot : \n    - 2300 compute (regular_gas) -\u003e capped by 16.7 Mgas from EIP-7825 \n    - 32 * (cost_per_byte) = 32 * np.ceil(((gas_limit/2) * 7200 * 365) / TARGET_STATE_GROWTH_PER_YEAR) = np.ceil((30000000 * 7200 * 365) / 100 x 1024^3) = 23,520 (state_gas).   \nstate_gas is 10 times bigger than regular_gas, so can create 10 times the existing cap on compute by EIP-7825.\nWith EIP-7825, we can create one state transaction that is filling the whole block of 60 mgas. Is not capping the state transactions related to backward compatibility issues ?\nWith 20 mgas limit on state transactions, contract deployment will still work,  and we can still fit 3 transactions in one block and 9 transaction in 180 mgas gas limit.",
+        "created_at": "2026-01-19T11:34:19.158000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, the eip does not have the 2300 in it yet. Its for an cold slot load. We can choose to increase the cap on the tx layer instead of fully removing it, but that might need adjustments too if we 10x the gas limit (and by that 10x the storage costs)",
+        "created_at": "2026-01-19T11:39:23.509000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "general",
+        "parent": "",
+        "content": "Right, I think the gas tx limit (for state) should go in hand with gas limit as the gas cost per byte is impacted by gas limit. We can think about it this way : for a gas limit x, we must have at least 3 or 4 possible parallel transactions. With the current EIP-8037, we can have one transactions per block and it is regression compared to Fusaka.",
+        "created_at": "2026-01-19T11:52:11.617000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "general",
+        "parent": "",
+        "content": "Cc \u003c@968526635735326741\u003e",
+        "created_at": "2026-01-19T11:52:45.911000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvb271828\u003e the way it works today is:\n\n* SSTORE costs 2100 to load state if that state is not yet loaded\n* SSTORE costs another 2900 to write to state if the state is not yet edited\n* to set from zero to nonzero, charge an extra 15000 on top of that",
+        "created_at": "2026-01-19T11:55:35.834000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvb271828\u003e https://eips.ethereum.org/EIPS/eip-2929 and https://eips.ethereum.org/EIPS/eip-2200 are good to read for reference",
+        "created_at": "2026-01-19T11:55:42.940000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvb271828\u003e",
+        "created_at": "2026-01-19T11:56:10.977000+00:00",
+        "attachments": [
+            {
+                "type": "image/jpeg",
+                "origin_name": "file_26.jpg",
+                "content": "90f3e644ffd291912c006b063e045bd57ffc68648c45bf62427e645b08b7e719"
+            }
+        ]
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvb271828\u003e",
+        "created_at": "2026-01-19T11:56:30.419000+00:00",
+        "attachments": [
+            {
+                "type": "image/jpeg",
+                "origin_name": "file_27.jpg",
+                "content": "f4258129d5c589f88e3ef4e3c30931aa0ab865fb2d16e5fc9a4baab90ef0aff6"
+            }
+        ]
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvb271828\u003e COLD_SLOAD_COST = 2100",
+        "created_at": "2026-01-19T11:56:33.209000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvb271828\u003e And so the principled way to do multidim is basically take that extra 15000, and turn it into a new type of gas",
+        "created_at": "2026-01-19T11:56:49.538000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvb271828\u003e state creation gas",
+        "created_at": "2026-01-19T11:56:51.792000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e With EIP-7825, we can create one state transaction that is filling the whole block of 60 mgas\n\nYou can, but this tx could not consume more than 16.7 Mgas in regular gas, which (if costs are set correctly) keeps its execution time in check, so you don't actually need to parallelize the execution. \n\nGas costs for operations that consume state gas do need to be correctly split up in state gas and regular gas like Vitalik mentioned. The EIP does this in some cases, but I think we need to update SSTORE 0-\u003enew (need to charge the extra 2900 for a write in regular gas and the rest in state gas), CREATE (need to split GAS_CREATE, in particular agree on what the regular gas component of it should be) and PER_AUTH_BASE_COST (need to split out code deployment cost in state gas and the keep the rest, ~7500, in regular gas).",
+        "created_at": "2026-01-19T12:30:41.348000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e You can, but this tx could not consume more than 16.7 Mgas in regular gas, which (if costs are set correctly) keeps its execution time in check, so you don't actually need to parallelize the execution. \nI agree that having 16.7 mgas limit and the extra state cost will keep the execution time in check, but if we want higher gas limit and make benefit of BAL in next gas limit increases, we need to keep a certain parallelism in Etherem blocks.",
+        "created_at": "2026-01-19T12:38:13.670000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "general",
+        "parent": "",
+        "content": "I don't think I quite understand your concern. A block with 4 max size txs whose execution is fully parallelized is not faster to execute than a block with a single max size tx that consumes all of the state gas available. We are not prevented from increasing the gas limit because the worst case does not change: the worst case sequential execution is still 16.7 Mgas",
+        "created_at": "2026-01-19T12:49:21.451000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "general",
+        "parent": "",
+        "content": "Another way to think about it is, we capped the tx gas because we can parallelize execution, but there's no such parallelization equivalent for state growth, so there doesn't seem to be any benefit in capping the state gas per tx",
+        "created_at": "2026-01-19T12:49:45.216000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e A block with 4 max size txs whose execution is fully parallelized is not faster to execute than a block with a single max size tx that consumes all of the state gas available. \nand \n\u003e but there's no such parallelization equivalent for state growth\n\nI don't agree with both statements in the case of BAL and Sstore use case. With BAL, my understanding is that we can parallelize even state creation transactions, and even conflicted ones. So executing 4 transactions in parallel will be faster than executing one bigger transaction.",
+        "created_at": "2026-01-19T12:55:29.191000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvb271828\u003e yes but the issue is what is the worst case",
+        "created_at": "2026-01-19T12:57:12.966000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvb271828\u003e the goal of having gaslimits at all is to limit how many seconds each block can be processes in",
+        "created_at": "2026-01-19T12:57:33.681000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvb271828\u003e BALs enable parallel verification, which greatly increases capacity there",
+        "created_at": "2026-01-19T12:58:16.865000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvb271828\u003e but for state creation, there is no equivalent to a need to keep seconds per block down",
+        "created_at": "2026-01-19T12:58:36.311000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e  With BAL, my understanding is that we can parallelize even state creation transactions, and even conflicted ones.\n\nI think the confusion is that state gas does not account for *everything* related to state creation, it only accounts for the state creation itself, as a way to limit state growth. In particular, it does *not* account for execution time of state creation operations, which is what we care about parallelizing, and which we can still parallelize when there are multiple txs",
+        "created_at": "2026-01-19T12:58:49.155000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvb271828\u003e it's ok if the state blows up 1 gb in one slot if it then flatlines for a few days",
+        "created_at": "2026-01-19T12:58:52.189000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvb271828\u003e the only risk of such a situation is that processing the 1 gb delta to the state will take a long time, but that is precisely what the 5000 regular gas component is there for",
+        "created_at": "2026-01-19T12:59:37.033000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "daniellehrner",
+        "category": "general",
+        "parent": "",
+        "content": "90% of the time for SSTORE is spent to look up the current value to calculate the gas cost. With 4 tx in parallel I can look up 4 values at once, with 1 tx that is strictly serial. So in practice the execution time is slower, even though the state gas might be the same.\n\nBALs gives us batch lookups, that might help, but those are not yet properly benchmarked to know how much that helps",
+        "created_at": "2026-01-19T12:59:47.683000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvb271828\u003e ok here is another way to think about it",
+        "created_at": "2026-01-19T13:00:13.232000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvb271828\u003e imagine two txs",
+        "created_at": "2026-01-19T13:00:17.476000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvb271828\u003e both have 16m exec gas, all made up of sstores",
+        "created_at": "2026-01-19T13:00:30.445000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvb271828\u003e but one is nonzero to nonzero, the other is zero to nonzero",
+        "created_at": "2026-01-19T13:00:47.513000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvb271828\u003e the processing time of the two is the same",
+        "created_at": "2026-01-19T13:00:57.156000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "general",
+        "parent": "",
+        "content": "\u003cvb271828\u003e so allowing the latter to fit within the 16m exec gas limit even if it costs an extra 40m in state creation gas is fine",
+        "created_at": "2026-01-19T13:01:34.434000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e 90% of the time for SSTORE is spent to look up the current value to calculate the gas cost.\n\nThis is what the \"regular gas\" part of SSTORE will account for, same as gas does today 🙂 What state gas will account for is only differentiating between nonzero to nonzero or zero to nonzero, as in the example above\n\nConcretely, ignoring any of the ongoing repricings and assuming a cold access, nonzero to nonzero would keep costing 5000 gas (ignoring eip-8038 repricings here), but zero to nonzero would cost 17100 *state gas* + 5000 gas. Importantly, the regular gas cost stays the same, so we're correctly accounting for execution time",
+        "created_at": "2026-01-19T13:13:54.582000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e I think the confusion is that state gas does not account for everything related to state creation, it only accounts for the state creation itself, as a way to limit state growth.\nYes, but it is using the same gas that is used to do other (compute) operations, because there is only one gas limit. Both dimensions are participating to the same gas limit. The extra gas used by state creation is a gas that is not used on other transactions for other compute opcodes.",
+        "created_at": "2026-01-19T13:18:48.827000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "misilva73",
+        "category": "general",
+        "parent": "",
+        "content": "I fully agree with \u003c@520034910149410861\u003e 's points. The idea of the current design for EIP-8037 is to differentiate between the execution and IO costs of state operations and the cost of \"increasing the state\", or state growth. Only the execution + IO component should be considered for the 16M tx limit. Then, for the block limit, we use the max between the two resources types (i.e., state growth versus all others).",
+        "created_at": "2026-01-19T13:22:54.399000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "misilva73",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e Yes, but it is using the same gas that is used to do other (compute) operations, because there is only one gas limit. Both dimensions are participating to the same gas limit\nCan you explain a bit better what is your concern on metering both resources independently \u003c@764128349488152606\u003e ?",
+        "created_at": "2026-01-19T13:26:48.549000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e Both dimensions are participating to the same gas limit. The extra gas used by state creation is a gas that is not used on other transactions for other compute opcodes. \n\nThere is a single gas limit, but it is separately enforced for state gas and regular gas (max(state gas, regular gas) \u003c block gas limit is just saying that both need to be within the limit). State gas does *not* take away from regular gas *within a single block* (it does over the long term if state gas utilization causes base fees to increase)",
+        "created_at": "2026-01-19T13:29:06.709000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "general",
+        "parent": "",
+        "content": "I think this is the right way to go. I was just trying to explain my point, that state creation transactions should be capped in the same way that compute ones, even if I get the point that they're already participating to compute, and it is a different dimension that is not related to execution time.",
+        "created_at": "2026-01-19T13:29:37.592000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "anderselowsson",
+        "category": "general",
+        "parent": "",
+        "content": "The two dimensions are metered separately.",
+        "created_at": "2026-01-19T13:29:47.096000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e state creation transactions should be capped in the same way that compute ones\n\nI don't think this is useful 🙂 Yes, it means that the block is guaranteed to fit more than one tx, but what are we actually gaining from having this property?",
+        "created_at": "2026-01-19T13:31:19.347000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "general",
+        "parent": "",
+        "content": "This is the good question for me. My understanding is that with BAL, we will go from singled threaded EVM, to multithreaded as we have a clear support, in protocol, to execute multiple transactions. If that is the case, we need clear properties of the system, i.e a block should have more than 1 transaction.",
+        "created_at": "2026-01-19T13:34:24.049000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "misilva73",
+        "category": "general",
+        "parent": "",
+        "content": "This is good question. I am not sure what the property of having more than one transaction in a block gives us. Why is this desired?",
+        "created_at": "2026-01-19T13:36:15.992000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "general",
+        "parent": "",
+        "content": "To enable parallelization.",
+        "created_at": "2026-01-19T13:37:36.814000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e If that is the case, we need clear properties of the system, i.e a block should have more than 1 transaction.\n\nWe wouldn't have this property, but what we would have is: if the block contains \u003e Nx16.7M  *regular gas*, it has at least N txs. Ultimately this is what we care about, because regular gas meters compute and IO, which is what we want to parallelize",
+        "created_at": "2026-01-19T13:38:48.221000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "general",
+        "parent": "",
+        "content": "If a block is full of state gas but contains little regular gas, no problem, we don't even need to parallelize anything",
+        "created_at": "2026-01-19T13:39:17.075000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "misilva73",
+        "category": "general",
+        "parent": "",
+        "content": "In that case, the property we need is how much we can paralelize in the worst-case, right? Because that is how we price operations and the prices relative to the block limit is what defines how much throughput we get out of the system. Are we in agreement on this?",
+        "created_at": "2026-01-19T13:39:19.296000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "general",
+        "parent": "",
+        "content": "I don't agree 100% with this statement TBH. I don't think it is only on how much we can parallelize worst cases. I think it is about how much we can parallelize. I have to rely on BAL experts related to this cc. \u003c@1126229231572094976\u003e. This is only my point of view.",
+        "created_at": "2026-01-19T13:44:31.320000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "misilva73",
+        "category": "general",
+        "parent": "",
+        "content": "Ok, then this is the point we need to reach an agreement on. Let's think more generally. Whenever we priced operations (e.g., the recent gas increase for modexp), we always priced them according to the worst-case. This is because we want to ensure that the price of a given operation does not introduce the possibility of having a block that takes more than 3s to run under a given gas limit. Can you think of any scenario where we would not price the operation on the worst-case?",
+        "created_at": "2026-01-19T13:48:04.914000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "general",
+        "parent": "",
+        "content": "Repricing based on worst case scenarios is good approach for. The question is more of wether we want to have the property of multiple transactions per block. It is a more design choise that enforces what BAL aims to do.",
+        "created_at": "2026-01-19T13:53:57.295000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "general",
+        "parent": "",
+        "content": "i didnt read all of it, but if its about 8037 - then its being discussed at ACDT that starts in the next ~6 mins. Please be there for a sync discussion!",
+        "created_at": "2026-01-19T13:54:58.339000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "misilva73",
+        "category": "general",
+        "parent": "",
+        "content": "IMO, parallelization is only helpful if it allows us to fit more transactions in block. For instance, if we parallelize, but we don't increase the gas limit, then it is not fundamentally changing our scaling. This point is important because we are planning to change the price of state operations in Glamsterdam taking into account the gains we get from BALs and, in that case, we will do it on the worst case block. Does this make sense?",
+        "created_at": "2026-01-19T13:58:16.996000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lu_pinto",
+        "category": "general",
+        "parent": "",
+        "content": "I think we need a gas limit just for state creation that is much higher than the `compute` gas limit. We will hit the gas limit ceiling much faster than compute txs with this kind of pricing for state. And this will damage tx paralellization.",
+        "created_at": "2026-01-19T15:12:03.879000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "general",
+        "parent": "",
+        "content": "There is an interesting comment from \u003c@316280621783580673\u003e in the ACDT zoom chat. \nI understand from his comment that even with a state transaction that is using the whole block, builders still can include more (100%) compute transactions if there is room on compute size. Is this correct ?\n\u003c@520034910149410861\u003e I haven't replied on zoom chat in time, but the above is true, it will address the issue I raised.",
+        "created_at": "2026-01-19T15:17:58.634000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lu_pinto",
+        "category": "general",
+        "parent": "",
+        "content": "MGas/s is being kept the same like this but Transactions/s is going down",
+        "created_at": "2026-01-19T15:18:25.593000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "misilva73",
+        "category": "general",
+        "parent": "",
+        "content": "This is correct, yes",
+        "created_at": "2026-01-19T15:18:36.930000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "Also txs that change state; just not txs that create new state\n\nSo dex swap from token you already have to token you already have creates no state",
+        "created_at": "2026-01-19T15:18:54.446000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "general",
+        "parent": "",
+        "content": "So in theory, we can't create a block of 1 transaction, correct ?\nHow do builders can do that ? they still need to try to select new transactions until finding a transactions that doesn't create state, correct ?",
+        "created_at": "2026-01-19T15:24:37.532000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "anderselowsson",
+        "category": "general",
+        "parent": "",
+        "content": "The builder would in this scenario first have selected the transaction that fills up all state. But it could have just selected some other transaction if it wanted to. In general, the builder will simply build the block that is most profitable, just like today. Since FOCIL is conditional, there is also no concern as it pertains to the ILs crowding out regular transactions, and due to the base fee update rule as currently specified, censorship by targeting state is neither a concern.",
+        "created_at": "2026-01-19T15:31:26.587000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lu_pinto",
+        "category": "general",
+        "parent": "",
+        "content": "Also if I was a MEV builder and wanted to optimize for building a block I would optimize for the least effort so I would prioritize transactions with state because they fill up the block much quickly than compute so it will be prioritized instead of compute I would believe.",
+        "created_at": "2026-01-19T15:32:20.876000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "general",
+        "parent": "",
+        "content": "How does this play out  with this algorithm from the EIP ? The gas metered from the first (state) transaction is already hitting gas limit because of state creation opcodes. We should stop as one of the limits is reached (block_state_gas_used = gas_limit). What am I missing here ?\n```\ndef compute_block_gas_metered(block: Block) -\u003e int:\n    transactions = self.transactions(block)\n    block_gas_used_vector = array(0, 0)\n    for transaction in transactions:\n        gas_used, gas_used_vector = self.execute_transaction(transaction, effective_gas_price)\n        block_gas_used_vector += gas_used_vector\n    block_regular_gas_used = block_gas_used_vector[0]\n    block_state_gas_used = block_gas_used_vector[1]\n    gas_metered = max(block_regular_gas_used,  block_state_gas_used)\n    return gas_metered\n```",
+        "created_at": "2026-01-19T15:39:22.238000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "general",
+        "parent": "",
+        "content": "It seems that it is possible to create a block of multiple transactions, only if the builder starts by selecting compute transactions, then the biggest state creation one as the last selected transaction.",
+        "created_at": "2026-01-19T15:42:18.826000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "misilva73",
+        "category": "general",
+        "parent": "",
+        "content": "Good question. My understanding is that if the builder could find another transaction that only spends regular gas, then it could be added. The block validity condition would still be met as `gas_metered = max(block_regular_gas_used,  block_state_gas_used)` would be the same with or without this last transaction that only uses regular gas. Does this make sense?",
+        "created_at": "2026-01-19T15:44:39.265000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "misilva73",
+        "category": "general",
+        "parent": "",
+        "content": "On this point, the current form of 8037 says that the tx limit for state gas is the block limit. What do you think would be a good transaction limit there?",
+        "created_at": "2026-01-19T15:46:30.997000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, I was thinking about it from a builder PoV and the case of 1  state creation transaction that is filling the whole gas limit (for state dimension). In this case, it needs to start with compute transactions, and select the state creation transaction as the last one, to be able to fit more than 1 transaction in the block.",
+        "created_at": "2026-01-19T15:52:02.762000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "general",
+        "parent": "",
+        "content": "This can be an implementation detail BTW",
+        "created_at": "2026-01-19T15:53:47.955000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lu_pinto",
+        "category": "general",
+        "parent": "",
+        "content": "quote from the EIP:\n```\nThe transaction gas limit set in EIP-7825 only applies to the gas dimension, while state_gas is uncapped at transaction level.\n```\nWhat I read from there is that there's no tx cap for state. It is a block cap not a tx cap.",
+        "created_at": "2026-01-19T16:02:16.615000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "Is `max(block_regular_gas_used,  block_state_gas_used)` so even if you filled `block_state_gas_used` to max; you can keep stuffing txs that only fill regular gas (and state ***updates*** don't consume state_gas)\n\nSo would only be some txs you can't add.",
+        "created_at": "2026-01-19T16:03:00.957000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "Also from parallelization point of view can still do the I/O from the tx in parallel with BALs (for validator); and the block builder who makes the BAL, well they chose to make it hard for themselves",
+        "created_at": "2026-01-19T16:05:19.462000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "But in all likelyhood will be lots of tx that don't create state (but update); so they can still fill rest of the block",
+        "created_at": "2026-01-19T16:07:38.392000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "buying token onto existing dust in your wallet will count as update rather than create for example",
+        "created_at": "2026-01-19T16:09:08.396000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "Might be bad for airdrops and new tokens though",
+        "created_at": "2026-01-19T16:09:51.911000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "general",
+        "parent": "",
+        "content": "That makes sens, do we want to track the gas used on both dimensions instead of having only the maximum, as it gives some insights on the block ? I'm saying this because we can have different blocks of 60 mgas with this configuration (state_gas_used,compute_gas_used) : (60 mgas,60 mgas) vs (60 mgas, some mgas) or ( some mgas, 60 mgas). I'm not sure if you were refering to this during ACDT \u003c@520034910149410861\u003e (zoom chat)",
+        "created_at": "2026-01-19T16:11:51.416000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "misilva73",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e What I read from there is that there's no tx cap for state. It is a block cap not a tx cap.\nThis is correct. What I was asking is what you think should be the tx cap?",
+        "created_at": "2026-01-19T16:14:36.667000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ben_a_adams",
+        "category": "general",
+        "parent": "",
+        "content": "This is why I suggested we should add `state_gas_used` to block header; or will loose good info; which will be useful to base future decisions on (though I guess could just sum all the txs from receipts)",
+        "created_at": "2026-01-19T16:21:51.692000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "general",
+        "parent": "",
+        "content": "and change gas_used to compute_gas_used",
+        "created_at": "2026-01-19T16:46:21.769000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lu_pinto",
+        "category": "general",
+        "parent": "",
+        "content": "Ok my bad this formula makes sense to me now:\n```\ngas_metered = max(block_regular_gas_used,  block_state_gas_used)\n```\nFor some reason I thought this was a sum but it is an AND in disguise (state_gas \u003c= gas_limit \u0026\u0026 regular_gas \u003c= gas_limit). Ben explained it nicely above 😛",
+        "created_at": "2026-01-19T17:16:26.003000+00:00",
+        "attachments": null
+    }
+]

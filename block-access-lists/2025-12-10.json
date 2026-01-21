@@ -1,0 +1,74 @@
+[
+    {
+        "author": "ethpandaops-devnet-pulse-v2",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "",
+        "created_at": "2025-12-10T01:00:00.323000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I have a question about what validation should be applied to BALs. In the EIP under the state transition function section here https://eips.ethereum.org/EIPS/eip-7928#state-transition-function it suggests that we need to generate the BAL and check that it matches the balHash in addition to validating the supplied BAL in the block body. Is this rule only for non-finalized blocks? Or is this only for when validating via newPayload? Asking because it's possible to receive non-finalized blocks when syncing for example.\n\nIf a block header is considered finalized then I assume we don't need to generate the BAL, all we need to do is check the provided BAL in the block matches the balHash? \n\nAlso if a block header is not finalized do we always need to apply the full validation (BAL generation included)? If so then clients can't simply apply the BAL state diff without executing the block in this case. This might effect the performance of snap sync near the head. Also if there is a period of non-finalization then there is an even larger range of blocks where this applies.",
+        "created_at": "2025-12-10T04:30:16.475000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "My stance is that we should keep BALs visible at the EL, but there is no need to integrate them into the block body. They can be passed alongside the payload through the engine API, similar to how requests work. BALs are not essential for block execution, instead they serve as an acceleration structure.\n\nSeparating BALs from the block body provides several advantages:\n\n1. Decoupling BALs from block bodies\n\nMessage `BlockBodies (0x06)` no longer needs to include BAL data, which is non-trivial in response size.\n\n2. Independent retrieval over devp2p\n\nWe can introduce `GetBlockLevelAccessList (0x12)` and `BlockLevelAccessList (0x13)` to the ETH protocol, allowing BALs to be fetched directly from the local database without touching block bodies at all. To be fair, this remains possible even if BALs were embedded in the body.\n\n3. Independent retention policy\n\nBALs can adopt a different retention strategy from bodies and receipts. A node that only cares about maintaining a live Ethereum state may keep just the last 128 bodies/receipts for handling mini reorgs and throw all others away. However, BALs are different from this perspective. Keeping roughly the last two weeks of BALs can benefit the robustness of snap sync. As I mentioned here https://github.com/ethereum/pm/issues/1822#issuecomment-3631844801\n\n4. Optional for full-history nodes\n\nNodes that retain the entire historical chain (all headers and all block bodies back to genesis) do not strictly require receipts or BALs. These nodes are crucial for supporting users who need to perform a full sync from genesis or from any historical point for purposes such as (a) fully trustless chain verification, or (b) reconstructing historical state for archive nodes and so on.\n\nSuch full-history nodes can continue to be operated by the EF or other advanced users even after dynamic chain pruning is introduced. By omitting BALs, these nodes can significantly reduce their overall storage footprint.",
+        "created_at": "2025-12-10T12:13:21.849000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "gurukamath",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Should the BALs also record the contract address of a contract creation transaction? Not sure if I missed this bit but the EIP does explicitly mention `Target addresses of CREATE/CREATE2 (even when creation fails)`. Does this apply to contract creation tx as well?",
+        "created_at": "2025-12-10T13:01:54.428000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "My reading of this channel makes me worried about a general possible incompatibility with ePBS. I keep listening to words like payload body and the \"rest\" as if it goes in the engine API. Would an EL dev have time to jump with me on a quick call to explain me these concepts?",
+        "created_at": "2025-12-10T13:28:56.093000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah it should and does based on the specs and client implementations.  \nDo you see that it should be treated differently or more that this should be added to complete the eip?\nSomething along the lines that calls with the initcode-on-empty-address path are treated the same?",
+        "created_at": "2025-12-10T15:50:41.914000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "ahh thank you, dming you my seed sir. \u003c@\u0026595685821026271242\u003e",
+        "created_at": "2025-12-10T15:57:55.750000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Small update to the EIP:\nhttps://github.com/ethereum/EIPs/pull/10895\n\nIt's clarifying that the system contract caller, `SYSTEM_ADDRESS` (`0xfffffffffffffffffffffffffffffffffffffffe`, MUST NOT be included in the BAL unless it experiences a state access itself.\n\nClients should all fine and are handling this correctly already.",
+        "created_at": "2025-12-10T20:51:18.370000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I thought of it as builders commit to the access list via block_access_list_root in their bids, the delivered payload's access list must match the committed root and the bal itself is included in the `ExecutionPayloadEnvelope`?",
+        "created_at": "2025-12-10T23:49:08.351000+00:00",
+        "attachments": null
+    }
+]

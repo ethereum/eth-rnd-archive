@@ -1,0 +1,242 @@
+[
+    {
+        "author": "austonst",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Are there any current expectations for the way `ExecutionPayloadBid.execution_payment` will be utilized beyond the \"`execution_payment` must be zero in order to propagate over p2p\" rule? I see the above discussions  not much else in search results or otherwise set in stone.\n\nWould we expect CL clients to implement sufficient options for performing `execution_payment` vs `value` comparisons, with various min-bid-esque thresholds and boost factors and (situational) ignoring of p2p bids? I've been under the impression that CL clients would be hesitant to encode acceptance of trusted bids over trustless, but maybe it's a fine place for that logic to live.\n\nBecause the other option is a mev-boost-like sidecar listed as the single builder endpoint, multiplexing to a number of sources providing both trusted and trustless payments, and letting the sidecar implement whatever fancy math it wants for bid selection. Eventually it would pass a single bid to the CL client, whose role in bid selection would be reduced.",
+        "created_at": "2025-12-18T01:13:54.281000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "over P2P we cannot broadcast a promise of payment, that's a DOS",
+        "created_at": "2025-12-18T01:16:16.167000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "trusted payment has to be zero for p2p propagation, and only the trustless one is sent",
+        "created_at": "2025-12-18T01:16:31.387000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "austonst",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah, that's fair, I wouldn't expect trusted payments to go over p2p. I was wondering more about where the logic for using `execution_payment` as an option for bid selection will live, since there will be proposers who want to consider it as an option.",
+        "created_at": "2025-12-18T01:18:17.899000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "austonst",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "When using direct connections",
+        "created_at": "2025-12-18T01:18:35.367000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Bid selection is open for clients to decide, I assume that clients will provide tons of options, and some will allow the proposer to consider the `execution_payment` value from whitelisted builders and selet them if they are higher than other bids.",
+        "created_at": "2025-12-18T01:20:00.393000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "austonst",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Okay, that matches where my reasoning was heading too. As long as clients offer sufficiently expressive options, that should be enough for most node operators. A sidecar with custom logic would still be a hypothetical option if client logic were lacking, but it should be a pretty rare case.",
+        "created_at": "2025-12-18T01:22:38.759000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We want to avoid any type of sidecars, so if there's any reasonable option that needs to be expressed, it would be nice to add it to the builder API so that we avoid forking clients and/or sidecars.",
+        "created_at": "2025-12-18T01:26:03.981000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Now is a good time to standardize these flags/options and get them to be expressive and avoid the same mistakes we did with Mev Boost",
+        "created_at": "2025-12-18T01:26:29.530000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@755590043632140352\u003e regarding proposer preferences, could you review this change?\nhttps://github.com/ethereum/consensus-specs/pull/4777/commits/079686cf6bab4354cf7f0177ef473ed721f2e71e",
+        "created_at": "2025-12-18T02:15:41.158000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "couple of questions:\n1) Did we consider `payment.weight` computations during payments processing at the epoch boundary? this will allow to avoid keeping and updating `weight` in the state. There might be some obstacles to do that -- haven't thought about this approach much.",
+        "created_at": "2025-12-18T05:30:31.684000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "2) Why do we need PTC votes in a block if they aren't modifying state anyhow but just being validated?",
+        "created_at": "2025-12-18T05:31:00.739000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bharath.vedartham",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://github.com/ethereum/builder-specs/pull/138/files#diff-221ca7d5a71aa06ecab51f0872030eb8ba2217afd79b1dd24f4987e0282b9004R68 i have a `BuilderPreferences` container in the `ValidatorRegistrations` for the builder-specs. like:\n```python\nclass BuilderPreferences(Container):\n    execution_payment_accepted: boolean\n```\nwhich makes the `ValidatorRegistration` look like:\n```python\nclass ValidatorRegistrationV2(Container):\n    builder_index: BuilderIndex \n    validator_index: ValidatorIndex\n    fee_recipient: ExecutionAddress\n    proposal_slot: Slot\n    gas_limit: uint64\n    builder_preferences: BuilderPreferences\n```\nwe should be able to extend the BuilderPreferences struct with more options like min-bid etc if needed",
+        "created_at": "2025-12-18T06:30:18.604000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Doing this computation in the transition is rather impossible: how do you grab the weight, it needs to be from committee members from that exact committee and they need to have voted for that exact block. We don't keep this info.",
+        "created_at": "2025-12-18T10:06:44.482000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So, TIMELY_HEAD flag and information about whether the block in that slot has a different root than the block from the previous slot won't help?",
+        "created_at": "2025-12-18T10:09:00.912000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The reason to put PTC votes in the block is so that the proposer can asset it's view. If there are enough votes say for missing then he will be allowed to reorg, if there are enough for present then he will be canonical binding on top of the Payload. Even if for example the attester hadn't received all columns for the previous payload for example and hadn't received all PTC votes",
+        "created_at": "2025-12-18T10:09:35.360000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Timely head doesn't work cause the next proposer can simply not include those attestations",
+        "created_at": "2025-12-18T10:10:14.681000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The flag is set regardless of the distance, but the reward is then computed with the knowledge of the distance. However, to get validators that has voted for that particular block you will have to use shuffling of the committees of the slot of that block, not sure if it is good idea to read shuffling inside of epoch processing",
+        "created_at": "2025-12-18T10:13:03.780000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://github.com/ethereum/consensus-specs/blob/master/specs/altair/beacon-chain.md#get_attestation_participation_flag_indices\n\n```\n    participation_flag_indices.append(TIMELY_TARGET_FLAG_INDEX)\n    if is_matching_head and inclusion_delay == MIN_ATTESTATION_INCLUSION_DELAY:\n        participation_flag_indices\n```",
+        "created_at": "2025-12-18T10:18:06.428000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Sorry, doing this on a cell is hard 🙂",
+        "created_at": "2025-12-18T10:18:37.783000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "i see now, sorry, got confused for the moment, then there is no way to do that with that flag. introducing another flag doesn't sound about right as this change alone won't help, in addition we will have to read validators that were assigned to the committees of that specific slot",
+        "created_at": "2025-12-18T11:02:20.326000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Keeping this in the state is not that problematic also",
+        "created_at": "2025-12-18T11:33:44.042000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So, in the case when an attester haven't seen some PTC votes, a proposer has a chance to heal that attester's view. Continuing on that, how is `blob_data_available` supposed to be used?",
+        "created_at": "2025-12-18T11:51:12.400000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "this is because the next proposer may not be a supernode, and doesn't yet have attestation to know if the payload was available. So the PTC votes on their view of DA and if there are enough votes for blob_data_available then the payload must be available.",
+        "created_at": "2025-12-18T11:54:38.147000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "And then if the payload isn't available while it was according to PTC votes, attesters of the next slot won't support it and the block built on top of the payload will be re-orged out. Btw, what proposer is supposed to do if payload is present but blob data aren't available according to the PTC view?",
+        "created_at": "2025-12-18T12:01:23.131000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "depends on the proposer, if the proposer knows that the data is available, then it can build on top of the payload. If it doesn't then it should reorg the payload, the PTC vote will guarantee that his block is canonical even if the data was indeed available",
+        "created_at": "2025-12-18T15:17:29.606000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Apologies can login to github now, but   `MAXIMUM_GOSSIP_CLOCK_DISPARITY` allowance) -- i.e.` for the proposal slot doesn't matter since it's deterministic on the slot and the state, there's no clock for this",
+        "created_at": "2025-12-18T15:20:30.702000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "the rest of the PR LGTM",
+        "created_at": "2025-12-18T15:21:33.279000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Thanks for the review. You're right. Fixed that here: https://github.com/ethereum/consensus-specs/pull/4777/commits/3978a2a632a2f8c72c55f8488c3629a25dec68d0",
+        "created_at": "2025-12-18T15:34:36.629000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Reminder that the ePBS breakout call is \u003ct:1766152800:R\u003e\nAgenda: https://github.com/ethereum/pm/issues/1835\nZoom: https://ethereumfoundation.zoom.us/j/85062829915?pwd=a9ztz25t4VLbsbwfFfCadoEmdhngSG.1",
+        "created_at": "2025-12-18T22:17:59.287000+00:00",
+        "attachments": null
+    }
+]

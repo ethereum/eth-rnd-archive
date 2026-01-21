@@ -1,0 +1,250 @@
+[
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "isn't this the case where it was created in the same transaction?",
+        "created_at": "2025-09-24T04:41:53.671000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "if so, its existence is only relevant within the transaction that created/destroyed it.  The other txs don't care because the state of the account is the same before/after the tx:  it might as well have never have existed from their perspective.",
+        "created_at": "2025-09-24T04:45:40.624000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "right yeah, this only concerns same-transaction self-destructs. We would need the address that is self destructed in the BAL anyway (the minimum would be to include it without any `changes`. But it makes sense to also have nonce=0 in the BAL as this is what actually happens in the state",
+        "created_at": "2025-09-24T06:44:19.303000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "but the nonce isn't changed",
+        "created_at": "2025-09-24T06:44:44.765000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I can see that having it present like this is a signal that the account has been self-destructed, but I'm trying to understand why signalling that is useful",
+        "created_at": "2025-09-24T06:45:21.418000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "but you wouldn't know if it's a selfdestructed contract or one with empty bytecode",
+        "created_at": "2025-09-24T06:45:34.941000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "for that the nonce helps",
+        "created_at": "2025-09-24T06:45:50.628000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "you're talking about distinguishing between an account that is non-existent (but read) vs one that is created and self-destructed right?  that's why the nonce is there?",
+        "created_at": "2025-09-24T06:46:45.733000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "contract where the byte code is 0x (empty) vs one that is self-destructed in the same transaction",
+        "created_at": "2025-09-24T06:47:25.548000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "if you deploy a contract with empty bytecode, you get nonce=1 at the deployed account. If you see the same but with nonce=0, you know it's a self-destruct",
+        "created_at": "2025-09-24T06:48:20.526000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "why does the fact that it's a self-destruct need to be explicitly signalled?",
+        "created_at": "2025-09-24T06:50:05.465000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "we don't care the reason why there was no state change in the target account.",
+        "created_at": "2025-09-24T06:50:47.364000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "and it's also inconsistent.  entries for the account fields reported in the BAL correspond to state changes (other than where they are explicitly for storage reads)",
+        "created_at": "2025-09-24T06:51:56.535000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I mean this for the purpose of block execution",
+        "created_at": "2025-09-24T06:53:52.084000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah I see that argument too. I don't have a strong opinion on it. I'm also fine with having those accounts (and the self-destruct targets) on the BAL with no changes recorded",
+        "created_at": "2025-09-24T06:54:26.259000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We won't be able to tell which transactions were in-transaction self destructs but we may not need that info to begin with.",
+        "created_at": "2025-09-24T06:56:07.303000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah, I lean towards not explicitly signalling the in-tx-selfdestructs in this case.\n\nbtw, unrelated but \u003c@402853454126776320\u003e brought up a good point the other day:  if we commit to the post-state storage root for accounts in the BAL, we can completely parallelize the account trie and storage trie hashing.  Whereas now, we need to wait for all the storage tries to be hashed before proceeding to the account trie hashing.\n\nWe can ofc parallelize the fetching of the intermediate nodes that will be needed as input for the hashing.  But the actual hashing computation would have to be somewhat sequential.\n\nI don't have any numbers for how much of a speedup this would possibly give, but just throwing it out there as something we can keep under consideration.",
+        "created_at": "2025-09-24T07:02:15.883000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Iiuc, this would require a single 32 byte root per account in the BAL?",
+        "created_at": "2025-09-24T07:03:43.613000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yes.  but only if the storage was modified",
+        "created_at": "2025-09-24T07:03:58.221000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Re the self destruct:\nLet's discuss this on todays breakout call, which will have many interesting topics it seems:\n* bal hash vs bal root\n* self-destruct\n* adding account storage roots as a potential speed-up(?)",
+        "created_at": "2025-09-24T07:05:10.996000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "## EIP-7928 Breakout call happening today \u003ct:1758722400:F\u003e\nhttps://github.com/ethereum/pm/issues/1738",
+        "created_at": "2025-09-24T07:07:59.355000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Let's try to optimize it at the engineering level first, parallelizing the storage trie hashing and account trie hashing as much as possible.\n\nI guess it should be sufficient for us",
+        "created_at": "2025-09-24T07:40:51.576000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Q: Are calls to precompiles tracked by BAL? Specs doesn't address this",
+        "created_at": "2025-09-24T09:01:17.976000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "no because precompiles aren't contracts and don't have persistent state.",
+        "created_at": "2025-09-24T09:34:06.621000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "but e.g. if you send value to a precompile via `SENDALL`, then it would be tracked.  calls to the precompiles will revert if not static-called iirc",
+        "created_at": "2025-09-24T09:34:34.298000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think it's worth speccing tho, and also stating that the target of a call to a precompiled contract isn't considered an account read in the BAL",
+        "created_at": "2025-09-24T09:36:45.546000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I agree with Jared for the moment I don't understand why we need to have the selfdestruct contract in the BAL . I feel this field will be never used",
+        "created_at": "2025-09-24T11:23:32.477000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "+1 for the storate root of the modified contract in BAL. If we can optimize the state root computation thanks to that I think we should add it. for the moment this is the biggest part of the block processing",
+        "created_at": "2025-09-24T11:28:14.741000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Will specify precompiles in the EIP - good poing 🙂",
+        "created_at": "2025-09-24T12:27:52.461000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "BAL Breakout happening now:\nhttps://ethereumfoundation.zoom.us/j/88902627473?pwd=lP4ukflb96wx8f0jc4EWaSUPbr7adn.1",
+        "created_at": "2025-09-24T14:01:12.299000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m0_ox",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "For client teams, I'd like to get the updates to same-transaction self-destruct in the next EEST `bal` test release so we will cut a new release when the changes discussed on the call today are in and updated on the test side. Likely possible by tomorrow.",
+        "created_at": "2025-09-24T17:00:41.443000+00:00",
+        "attachments": null
+    }
+]

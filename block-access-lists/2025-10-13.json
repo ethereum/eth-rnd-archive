@@ -1,0 +1,160 @@
+[
+    {
+        "author": "m0_ox",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Thanks for flagging this 🙏🏽! We have some updates for this. We'll put out a patch release for the tests early this week when these are reviewed and merged. For now, the affected tests are `CALL` and `DELEGATECALL` oog cases I believe.",
+        "created_at": "2025-10-13T02:05:13.491000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I don't think [this](https://github.com/ethereum/execution-spec-tests/blob/main/tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_opcodes.py#L47-L50) test is correct.  The sstore in the test has enough gas to load the value of the slot: it has 5653 gas left before the SSTORE which is greater than stipend of 2300 gas required to load the slot (according to EIP-2200).  However, it goes OOG afterwards because of the cold storage load cost that it incurs.\n\nFor this scenario where a storage read would cause the execution to go OOG:\n* if the gas left is greater than the 2300 stipend, the read should be included in the BAL\n* if it is less, than it should be omitted (the client should never perform the read per EIP 2200)\n\nWe should have test coverage for both of these situations",
+        "created_at": "2025-10-13T05:38:06.168000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Please review if this looks okay \u003c@792404665068158998\u003e \u003c@796570016966770688\u003e \u003c@427903869226582018\u003e",
+        "created_at": "2025-10-13T06:23:14.564000+00:00",
+        "attachments": [
+            {
+                "type": "image/webp",
+                "origin_name": "image.png",
+                "content": "0505aa0bfb68de06ccca6cdfc1efba158e25717a031a429ec4777e03c6b5c261"
+            }
+        ]
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "lgtm",
+        "created_at": "2025-10-13T06:35:12.866000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "You have linked to `test_bal_sload_and_oog`  (`SLOAD`)  do you mean the `SSTORE` variant instead `test_bal_sstore_and_oog`?",
+        "created_at": "2025-10-13T07:23:23.753000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "qu0b",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@427903869226582018\u003e are you removing the blobschedule need for amsteram, since this was decided in the ACDE and we are not updating the genesis generator (we will not add blobschedule amsteredam since its not required now)",
+        "created_at": "2025-10-13T07:27:47.887000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "oops.  yeah it's the `bal_sstore_and_oog` with the `oog_at_sstore` case that I'm talking about.  updated the link in my original message",
+        "created_at": "2025-10-13T07:52:22.543000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah, I will look into it.",
+        "created_at": "2025-10-13T07:56:32.249000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "If I understand correctly for cold storage,\n\n- For case: `gas \u003e= 22100`   ➡️ BAL records an `SSTORE` i.e `storage_changes` \n- For case `gas in [2300,22099]`   ➡️ BAL records an `SLOAD` instead of `SSTORE` i.e `storage_reads`\n- For case `gas \u003c2300`   ➡️  No storage related changes recorded in BAL.\n\nAnd a similar case for hot storage\n\n- For case: `gas \u003e= 20000`   ➡️ BAL records an `SSTORE` i.e `storage_changes` \n- For case `gas in [2300,19999]`   ➡️ BAL records an `SLOAD` instead of `SSTORE` i.e `storage_reads`\n- For case `gas \u003c2300`   ➡️  No storage related changes recorded in BAL.",
+        "created_at": "2025-10-13T08:38:33.298000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah sgtm",
+        "created_at": "2025-10-13T10:59:56.142000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yeah looks good. very clearly formulated!",
+        "created_at": "2025-10-13T11:36:55.178000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I just merged the PR by \u003c@348512261955911691\u003e and \u003c@796570016966770688\u003e , further clarifying unaltered balances:\nhttps://github.com/ethereum/EIPs/pull/10527",
+        "created_at": "2025-10-13T11:38:20.391000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@792404665068158998\u003e We need to work this into  EIP. The TLDR; the outcome for OOG for SSTORE is not binary. The suggestion is that over a gas certain threshold (2300) we record an `SLOAD`  operation.  `SSTORE` does an implicit `SLOAD` for computing gas cost dynamically and we need to record if this `SLOAD` has executed.",
+        "created_at": "2025-10-13T11:42:21.136000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Isn't this covered in the section on reverts:\n```\n State changes from the reverted call are discarded, but all accessed addresses MUST be included. If no changes remain, addresses are included with empty lists; if storage was read, the corresponding keys MUST appear in storage_reads.\n```",
+        "created_at": "2025-10-13T11:46:28.587000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e if storage was read, the corresponding keys MUST appear in storage_reads\n\nI think this covers it. Id prefer we stick to broad guidelines than listing out every single edge case, wdyt \u003c@427903869226582018\u003e ? We'll ensure we have this covered in the test.",
+        "created_at": "2025-10-13T11:49:53.400000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yeah agree, having things included based on their gas cost is not really an option",
+        "created_at": "2025-10-13T11:50:44.954000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think it's fine to omit something like this from the EIP as long as it has test coverage",
+        "created_at": "2025-10-13T12:01:30.594000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m0_ox",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Thanks for the updates here. We needed an update to the specs to track the read (added [here](https://github.com/fselmo/execution-specs/pull/18)) and I updated the test cases [here](https://github.com/ethereum/execution-spec-tests/pull/2297) which all fill with this specs update.\n\n\u003c@792404665068158998\u003e spec change is a simple one-liner but if you could sanity check, I can merge and update the resolver for the test side so we can get that merged too.",
+        "created_at": "2025-10-13T19:16:34.971000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m0_ox",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "also \u003c@762919002196410400\u003e, if you could review the test cases here when you get a chance",
+        "created_at": "2025-10-13T19:33:04.999000+00:00",
+        "attachments": null
+    }
+]

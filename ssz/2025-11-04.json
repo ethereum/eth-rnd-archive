@@ -1,0 +1,218 @@
+[
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://pureth.guide/glamsterdam/ Glamsterdam scope proposal from light client perspective",
+        "created_at": "2025-11-04T16:26:27.741000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "txtiger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@881905303011086387\u003e Does EIP-6404 (https://github.com/ethereum/EIPs/commit/c819006033b6b344fd87f86f64d982da311d1b80) now handle EIP-7932esk algorithms natively? If so would it be worth linking to 7932 for the algorithm registry and me moving EIP-7932 to be RLP-only, at least for the wrapper tx?",
+        "created_at": "2025-11-04T18:34:49.664000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "true, 6404 advanced a bit into that direction, indeed (based on feedback from danno ferin)! It combines `algorithm_type`+ `signature_info` into a single `ProgressiveList[byte]` though. this could also be applied to existing transaction types (as in, anywhere where a signature is present, could just give it a different prefix). for signature algos that don't support something like ecrecover, one could also just put the pubkey into the signature as well (it's opaque after all). it's also possible to have sub-algo types (it doesn't have to be 1-byte prefix, can also be longer, if needed).\n\nin your eip the 7932 `additional_signatures` probably should be a `ProgressiveList[AdditionalSignature]` to reduce hashcount at low signature counts (otherwise you end up hashing the full 256 capacity tree), and then just have `MAX_ADDITIONAL_INFO` as a validation rule. what is the usage here, is it for nested authorizations in 7702 transactions? if that's the case, with 6404 it's possible to just apply the algos to the inner signatures as well, rather than \"overriding\" them in a wrapper.\n\nAlso, applied feedback to move away from `identify_transaction_profile` to a SSZ CompatibleUnion.\nThe `assets/eip-6404` folder in EIPs repo contains some executable Python tests, btw (`convert_tests.py`), if you want to make sure the SSZ type actually works out.\n\nbtw in 7932 the `compute_ssz_sig_hash` in 7932 is actually pulling in 6493 as well (6404 initially only proposes a way to represent RLP txes as SSZ)\n\nRegarding the actual registry, I think it makes sense to have it separate from 6404 so it can be maintained as a living doc. In case 6404 gets accepted, I guess 7932 would _become_ the registry EIP (as then we don't need RLP). Otherwise, EIP-7932 would be RLP-only, and EIP-6404 would have to find a way to represent it in the SSZ world.",
+        "created_at": "2025-11-04T21:18:35.495000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "and yeah, 6493 needs a bump too (it's still based on the old identify_transaction_profile and is not updated for 7702 yet)",
+        "created_at": "2025-11-04T21:23:21.613000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "One question I have is whether EIP-7932 has _extra_ functionality beyond what can be covered by the `ProgressiveList[byte]` style signatures",
+        "created_at": "2025-11-04T21:28:38.035000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Like, for the types",
+        "created_at": "2025-11-04T21:28:51.776000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I understand that it lays out fees, different address derivations and so on",
+        "created_at": "2025-11-04T21:29:03.288000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "txtiger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Thanks for the reply,\n\nIf we make 7932 transactions RLP only, we'd still have the `sigrecover` precompile, gas accounting mechanics, address recovery and the algorithm registry. \n\nI wanted to remove SSZ support, at least for the wrapper, because once SSZ becomes the prevalent TX type, and signatures are `ExecutionSignature`, `ExecutionSignatureAlgorithm` pairs. There wouldn't be any need for the wrapper anymore, so it would not make sense to keep it around. As we could just use the 7932 registry and the `secp256k1` algorithm that is already defined.",
+        "created_at": "2025-11-04T21:30:02.068000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "txtiger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "There is also the ML-DSA draft which implements 7932 support: https://github.com/ethereum/EIPs/pull/10557/files#diff-788a7f8fe28526e767a1c2c716503f6e4bf565a4925dc3ba42964ffaf4d68a01R201",
+        "created_at": "2025-11-04T21:32:36.247000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah, I think getting rid of the SSZ wrapper would be beneficial! While keeping the note that the RLP wrapper is only needed in a non-6404 world.\n\nIs it possible to make the 7932 registry compatible with the 6404 impl? I think including the algorithm as a prefix into the signature is fine, there's not really a point in giving the algo its separate field (extra hash cost, and limited to uint8).",
+        "created_at": "2025-11-04T21:33:27.154000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Then can just link to the 7932 registry from 6404, as you proposed",
+        "created_at": "2025-11-04T21:33:39.009000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "and sure, can change from 0x01 to 0xFF also. doesn't really matter",
+        "created_at": "2025-11-04T21:34:47.551000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "txtiger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "As in the current `secp256k1` impl in 6404 would work with 7932?",
+        "created_at": "2025-11-04T21:36:38.352000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I mean more like, including `algorithm_type` as a prefix into `signature_info`, so that the entire signature is just an opaque blob rather than a pair of two things (of which `algorithm_type` is restricted to uint8)",
+        "created_at": "2025-11-04T21:37:47.939000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "advantage is, could extend the registry with subtypes in the future, without breaking the data type schema",
+        "created_at": "2025-11-04T21:41:16.616000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "txtiger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "That does seem like a better idea and is surprisingly not that much of a change",
+        "created_at": "2025-11-04T21:43:40.879000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "What's your time zone? americas / europe+africa / middle east / far east?",
+        "created_at": "2025-11-04T21:44:34.821000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We could probably clean this up tomorrow, so that by the time teams submit their scope proposals on thursday it's clean",
+        "created_at": "2025-11-04T21:45:40.703000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'll also bump 6493 to the latest specs (remove identify_transaction_profile and update for 7702)",
+        "created_at": "2025-11-04T21:46:07.174000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "txtiger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "GMT. I have a WIP branch for 7932, this should fix the interop problem: https://github.com/ethereum/EIPs/commit/6a9d48c0be3f021c78fe47f3b886b2d836920e7a",
+        "created_at": "2025-11-04T21:49:09.974000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "commit generally looks good to me (maybe the constants need a +1, or there is a len\u003e0 check needed also)\nUTC+1 for me. so yeah, I'll take a look tomorrow morning then, should leave us enough time to clean this up across the EIPs",
+        "created_at": "2025-11-04T21:52:51.708000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "btw",
+        "created_at": "2025-11-04T21:53:34.898000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "for LegacyTransaction, there is EIP-155 style which encodes the chain ID into the v field",
+        "created_at": "2025-11-04T21:53:46.784000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "as you require 0 there, not sure if that's a problem",
+        "created_at": "2025-11-04T21:54:00.376000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "anyway, this is much simpler in the SSZ world haha",
+        "created_at": "2025-11-04T21:54:12.426000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "txtiger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "There was a reason I moved it to SSZ for a bit, but the 155 style was a headache to fix (cleanly) so the chain-id is also present in the wrapper TX.",
+        "created_at": "2025-11-04T21:55:33.558000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "xD",
+        "created_at": "2025-11-04T21:55:43.033000+00:00",
+        "attachments": null
+    }
+]

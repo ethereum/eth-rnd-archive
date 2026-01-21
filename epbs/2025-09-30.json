@@ -1,0 +1,98 @@
+[
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Anyone looking at gloas's light client spec? Couple points from my first look:\n- In case of payload being absent, we need a way to indicate that in LightClientHeader\n- Because blob_kzg_commitments and execution_requests are removed from beacon block body, we need probably need to add root of ExecutionPayloadEnvelope \n- ExecutionBranch currently compute proof that links beacon block body to execution payload which is no longer correct. Need to modify it to proof execution payload is linked to the beacon block",
+        "created_at": "2025-09-30T08:43:18.491000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Also I am wondering if it would be useful to have a field in `ExecutionPayloadBid` to indicate number of kzg commitments? I think it could be useful when we are importing a block so that we know the number of blobs we should expect. What do you guys think?",
+        "created_at": "2025-09-30T08:47:49.769000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Cc \u003c@881905303011086387\u003e",
+        "created_at": "2025-09-30T09:21:22.991000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "still on the 7688 rebase (the pytest infrastructure had some interesting traps that needed time to fix). \nI'll look into the LC after as it becomes cleaner with 7688 to represent, and also after the initial dust on gloas has settled (right now it's not even clear yet what the fork scope will be, headliners aside)",
+        "created_at": "2025-09-30T10:46:48.893000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "etan_status",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@1035747431461167125\u003e",
+        "created_at": "2025-09-30T10:46:56.242000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "stefanbratanov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "By the way this is slightly confusing:\n\n```\ndef get_builder_payment_quorum_threshold(state: BeaconState) -\u003e uint64:\n    \"\"\"\n    Calculate the quorum threshold for builder payments.\n    \"\"\"\n    quorum = (\n        get_total_active_balance(state) // SLOTS_PER_EPOCH * BUILDER_PAYMENT_THRESHOLD_NUMERATOR\n    )\n    return uint64(quorum // BUILDER_PAYMENT_THRESHOLD_DENOMINATOR)\n```\n\nBecause it is `( get_total_active_balance(state) // SLOTS_PER_EPOCH ) * BUILDER_PAYMENT_THRESHOLD_NUMERATOR`",
+        "created_at": "2025-09-30T11:06:20.939000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "aren't they the same in Python?",
+        "created_at": "2025-09-30T12:55:27.331000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "stefanbratanov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "ah yeah could be right, I am just used to multiplication first from primary school haha",
+        "created_at": "2025-09-30T13:15:25.377000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@893667743830802434\u003e before I forget, the current ePBS does actually make it easier to do what you propose of not having to have executed the parent payload by the proposer: As long as you enforce that the builders have escrow on the CL you can always come back and charge them if their payloads are kept and called invalid. However this comes with a bunch of caveats:\n1. You add interactions both ways EL \u003c-\u003e CL to get the DA needed to be charged on the CL. \n2. You still need to deal with DA from blobs since these need to be attested on every slot and you can't build on top of an unavailable block. \n\nI think the easiest ways of pipelining delayed executions in which we take more than one slot to execute a block are to relax the reorg resistance of proposers.",
+        "created_at": "2025-09-30T15:21:12.363000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "quintuskilbourn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "That makes sense! I don't think needing to attest to availability in the same slot is an issue since we aren't trying to move the blob deadline later into the slot.",
+        "created_at": "2025-09-30T21:57:55.748000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah so this continues being sync DA while delayed execution.",
+        "created_at": "2025-09-30T22:02:44.100000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "quintuskilbourn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Since this was posted in the channel I thought I'd share my personal takeaways and the recordings/AI summaries.\n\nThere were two main points raised:\n* free option problem\n* trusted payments introducing a lot of risk for builders (and potentially being bypassed anyway) \n\nThere are basically four proposed solutions:\n* no trustless payments (only pipelining) to remove risk from builders\n* slot auction with merged (late) blob and payload deadlines + something to handle free DA (see \u003c@755590043632140352\u003e's message above) to remove free option incentive\n* earlier blob deadline to reduce free option incentive\n* static/dynamic penalties for missed slots to reduce incentive to exercise the option\n\n\u003c@911437720994324570\u003e or others feel free to correct/add\n\nLinks:\n* [AI summary](https://docs.google.com/document/d/1rB2fab3zAPNb09VYQ41MyOzMevUnrNcXLMMCjmkkoOE/edit?usp=sharing)\n* [video recording](https://drive.google.com/file/d/15ae4gKO0bXQwExiE4gWm-AwP0xbKXTeY/view?usp=sharing) \n* [telegram group](https://t.me/+_e2wpfeCgkNhNTZk) for thinkbois\n* [paper on the free option problem](https://arxiv.org/abs/2509.24849)",
+        "created_at": "2025-09-30T22:06:51.059000+00:00",
+        "attachments": null
+    }
+]

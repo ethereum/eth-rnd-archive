@@ -1,0 +1,122 @@
+[
+    {
+        "author": "blockkshane",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "hey, I'm thinking about this part of the [beacon_block](https://ethereum.github.io/consensus-specs/specs/gloas/p2p-interface/#beacon_block) p2p check:\n```\nIf execution_payload verification of block's execution payload parent by an execution node is complete:\n[REJECT] The block's execution payload parent (defined by bid.parent_block_hash) passes all validation.\n```\nis the intent for client teams to decide how they want to record whether an EL payload was invalid? i.e. when running `on_execution_payload` in fork choice, you could cache the payload's status as invalid. then, when you do `beacon_block` p2p validation, you can check the `bid.parent_block_hash` against that cache to obtain a status? or is there some canonical way that this p2p check should be done?",
+        "created_at": "2025-09-26T00:49:54.940000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "we had a similar situation with the envelope in which we also had the beacon block root, and the signature is self contained anyway. I think the issue is mostly to match it to something you \"expect at this time\". Otherwise it becomes a DOS if you start getting things that you weren't expecting. \n\nIn the case of the payload it ended up being that on devnet it was common to get a payload for which we didn't have the block root. In the case of the sidecar it may be less common, but it still may happen and then knowing it that it is the current slot may help in caching it rather than rejecting something very old.",
+        "created_at": "2025-09-26T00:59:34.168000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'm not sure yet and we'll find out in the next few weeks though. \u003c@641548687813902336\u003e are you facing this right now or is this a hypotetical still? if it can wait I'd say it's better to see if a simple refactor gets rid of the need. Otherwise we can discuss it and even alter this tomorow",
+        "created_at": "2025-09-26T01:00:42.418000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "you cannot cache the payload as invalid in forkchoice: forkchoice does not keep any invalid data, we only add the payload to forkchoice once it has passed validation.  In particular, if you get a beacon block for which you haven't the parent payload in forkchoice, you do not sync that block at all. Same as today for when you get a beacon block for which you don't have the parent block",
+        "created_at": "2025-09-26T01:02:29.850000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "If the EL actually comes back with INVALID on newPayload, then you can immediately reject the child beacon block",
+        "created_at": "2025-09-26T01:03:06.967000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "And yes for this rejection we need to keep a list of invalid blockhashes, just as we do for blocks (we do this outside of forkchoice)",
+        "created_at": "2025-09-26T01:04:07.368000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "it could also be handled by the EL (they already keep this) at the cost of making a call on CL block gossiping.",
+        "created_at": "2025-09-26T01:05:07.332000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@592004585506340885\u003e Just noticed there is `ForkChoiceNode` in the ssz static test in beta.0. Is it intended? Don't think we ever need to ssz `ForkChoiceNode`. I think it should be under `Helpers` instead of `Containers`",
+        "created_at": "2025-09-26T02:53:37.388000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "stefanbratanov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It can wait, it's just an observation that we use the slot from the header of the data column sidecar in a few places, for the moment just ignoring that and focusing on other aspects",
+        "created_at": "2025-09-26T04:55:03.611000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Except perhaps for the forkchoice dump if we ever go that route",
+        "created_at": "2025-09-26T09:21:38.927000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "stefanbratanov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Good start, passing `operations/withdrawals` and `operations/execution_payload_bid`",
+        "created_at": "2025-09-26T11:44:43.048000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Gm. Reminder that the ePBS breakout call is \u003ct:1758895200:R\u003e\nAgenda: https://github.com/ethereum/pm/issues/1735\nZoom: https://ethereumfoundation.zoom.us/j/86537060608?pwd=9jE9RCE0QzbSP43jpkiHajtXYFnXUw.1",
+        "created_at": "2025-09-26T12:56:22.921000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Shared a short recap of the call here:\nhttps://x.com/JustinTraglia/status/1971589863280402721",
+        "created_at": "2025-09-26T14:57:59.207000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "There seems to be a group of people that want to make changes to ePBS. There's an internal flashbots call on Tuesday with a presentation of \u003c@911437720994324570\u003e from Nethermind research. Since many of you are invested in both specifying and implementing, it's probably better to attend. \u003c@893667743830802434\u003e is running it and probably I should have asked before posting here, but since it's about changing the EIP I figured better to let the people working on it know. I have to cancel a seminar to attend so not clear if I can make it but will try my best",
+        "created_at": "2025-09-26T21:30:53.641000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "quintuskilbourn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Heyo. To be clear, this is just a couple of folks (mostly incentives researchers) thinking about shortcomings and potential mitigations coming together to exchange notes. Not necessarily a meeting scoping proposed changes. \n\nThat said, if folks are very keen to attend, happy to accommodate! Just DM me your email",
+        "created_at": "2025-09-26T21:34:27.106000+00:00",
+        "attachments": null
+    }
+]

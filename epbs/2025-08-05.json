@@ -46,5 +46,229 @@
         "content": "It's not clear that this is a problem (e.g. in the case above, we would still have a small set of duplicate indices since selection probability is only 1/64), but I am also not sure it's not",
         "created_at": "2025-08-05T16:11:47.582000+00:00",
         "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah definitely for testing environments we'd get multiple signing, but we already have this issue with sync committees and the such, and in fact ended up being good cause it catches some obscure bugs (like addition not being commutative for unsigned integers was a consensus bug in Capella). I can't think of any security concern on concatenating the current slot committees only and I like that even doing only these you solved the problem of the need for a large validator set to test, \u003c@363800010518822915\u003e will buy you a beer for this PR 🙂",
+        "created_at": "2025-08-05T16:16:09.072000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "ah ok, ill update the spec tests after `4488` is merged to make sure the new edge cases are covered",
+        "created_at": "2025-08-05T16:26:12.798000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "you can disregard my latest comment on the pending payments PR, I think github is acting up, I can't see any changes",
+        "created_at": "2025-08-05T17:16:49.898000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "weird, let me check..\nwhile we are here, can I change the minimal PTC size from 2 to 4?\nim writing fork choice spec tests, and having minimal PTC size 2 is weird because 50% threshold",
+        "created_at": "2025-08-05T17:17:38.811000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "it shouldn't be 2 ever? did I or someone else change it?",
+        "created_at": "2025-08-05T17:19:34.275000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "this is minimal preset PTC size, currently set to 2\nnot sure who changed it, what number should it be?",
+        "created_at": "2025-08-05T17:20:52.110000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yeah it's 2 in the preset, weird",
+        "created_at": "2025-08-05T17:20:56.739000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "git blame says it's you",
+        "created_at": "2025-08-05T17:21:21.297000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "😂",
+        "created_at": "2025-08-05T17:21:28.153000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "ya I think I just chose a random number there",
+        "created_at": "2025-08-05T17:23:02.070000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "minimal sync committee size is 32, is that fair comparison",
+        "created_at": "2025-08-05T17:24:01.568000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "What would be the optimization you have in mind for knowing ptc members are attesting in the same slot? Independently of whether to range over all committees or not, I was thinking about whether to start the indices from committees of a different slot on purpose, just to avoid having double duties in the same slot (though I don't think there's much overlap in the actual work, except perhaps if you happen to be an aggregator).",
+        "created_at": "2025-08-05T18:34:33.271000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "but also, if the concern was mainly about dealing with too many indices, and not about wanting to use same-slot attesters for the ptc, we could do something like take committees up until the list of indices has size at least `PTC_SIZE * MAX_EFFECTIVE_BALANCE_ELECTRA // MIN_ACTIVATION_BALANCE`, i.e, `64 * PTC_SIZE`, which is the expected number to fill the PTC (or `128 * PTC_SIZE` to not have any wrapping around with high probability). This wouldn't guarantee going over only same-slot committees (though it would be true today), but it would cap the number of indices to look at",
+        "created_at": "2025-08-05T18:39:55.566000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah my main concern was simplicity, I'm happy if you take the committees from any slot (not necessarily the same slot) or less than that, having a list with a limit that in theory (but never in practice) can be more than the full committee for any given slot is not good because we'll have to add code to deal with that case that will never happen in practice. So if we can prove that whatever cap of indices is will always be below the committee for one slot I'm happy. As for the validator client side optimization I had in mind is not that useful anyway so I don't really feel strongly about keeping them on the same slot.",
+        "created_at": "2025-08-05T18:47:53.696000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "There's no way to both visit at most a slot's worth of committees while also having low probability of wrap-around, unless the PTC_SIZE is adjusted downward with committee size, which seems like an unnecessary loss of security (whenever we have \u003c 2^20 validators, which is entirely possible we go back to). I think just forcing it to one slot only should be ok, though I'd like to think about it a bit more",
+        "created_at": "2025-08-05T18:53:37.397000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Why is there a problem to wrap around? I don't see this as a fundamental issue",
+        "created_at": "2025-08-05T19:04:48.620000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "you are just giving some validators another dice round. You could argue that committees are not selected based on balances but still, to this to actually make statistical difference I think we would need less than the minimum number of validators.",
+        "created_at": "2025-08-05T19:06:47.857000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "first of many, very basic set of fork choice spec tests, mirroing phase0 basic tests: https://github.com/ethereum/consensus-specs/pull/4489",
+        "created_at": "2025-08-05T19:16:05.354000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "shit you're prodicing these faster than I can review them lol",
+        "created_at": "2025-08-05T19:16:40.635000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "just doing the easy ones first, i dont know how to write complex fork choice spec tests yet, really need to sit down and write every scenario down",
+        "created_at": "2025-08-05T19:17:17.627000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think it's more complex than this, you need to probably specify an anchor envelope, and need to add new steps for payloads as well",
+        "created_at": "2025-08-05T19:20:19.609000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yeah I don't think it's a big deal, just want to give it some more thought. It's definitely not a meaningful bias with all min balance validators, but for example validators with 1024 ETH that happen to be seen twice have selection probability of 3/4 instead of 1/2",
+        "created_at": "2025-08-05T19:20:24.757000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "def, we should figure out what the new test format would look like I think at a minimal, we want to add `empty/full: boolean` to `check`",
+        "created_at": "2025-08-05T19:22:17.264000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Or even more simply, since we allow duplicates, any max balance validator that's seen twice would be selected twice. E.g. if we had committee size 256, any max balance validator (if there isn't many) would be selected twice",
+        "created_at": "2025-08-05T19:23:26.643000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "if this is your worry you can make the loop simply more expensive by throwing a larger maximum number, but I don't see why this is an issue. And definitely is not with the current validator sizes",
+        "created_at": "2025-08-05T19:24:57.003000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "`get_head` now returns a pair so the check should be against this",
+        "created_at": "2025-08-05T19:26:46.603000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "also notice that any max size validator that is seen twice needs to be impossibly lucky, with or without consolidations.",
+        "created_at": "2025-08-05T19:37:34.546000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "That's only true with today's validator set size, which the spec shouldn't assume. With committees of size \u003c 512, it would be normal for some validators to be seen twice",
+        "created_at": "2025-08-05T21:48:40.608000+00:00",
+        "attachments": null
     }
 ]

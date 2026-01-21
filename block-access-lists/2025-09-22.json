@@ -1,0 +1,274 @@
+[
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So I have some bad news about the Geth benchmarks 🫠 :\n\nGeth has this component called a \"state prefetcher\" whose role was, on import of block N in a range of blocks, to speculatively execute N+1 with the parent state of N, concurrently to *actually* executing N.  The point is to try to  warm as much relevant state as possible so that when we go to to actually execute N+1, serial EVM execution won't get totally bottlenecked on state reading.\n\nSo clearly, to measure the client performance executing blocks at the tip of the chain, this optimization was irrelevant, because we cannot know the head+1 block at the time we are importing head.\n\nMy benchmarks have all been based on bulk-importing a range of blocks and explicitly disabling the state prefetcher, so that the performance reflects the execution of blocks at the tip of the chain.\n\n**however**...  somewhat recently the state prefetcher was changed.  Instead of speculatively executing one block ahead, it now speculatively executes the current block's transactions *in parallel* to the actual serial consensus transaction execution.\n\nSo the state prefetcher is now used for speeding up execution of blocks at the tip of the chain.\n\nUnfortunately for BALs, the speedup of my BAL branch vs a baseline geth with the state prefetcher enabled is about 15% right now 🙃 \n\nStill, it's probable that Geth can realize substantial performance improvements with BALs, but we need to figure out how to improve the state root update time.",
+        "created_at": "2025-09-22T05:44:46.221000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "have you double-checked with the simulations of @popopopanda (Po from Ethstorage/Quarkchain)? \nAlso note, you're talking about average cases here. For worst cases, the BALs will give every client that implements parallel execution an 8x improvements in execution time (assuming 8 transactions consuming all gas available).",
+        "created_at": "2025-09-22T05:58:40.021000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Are the percentage only for execution? What about IO and state root calculation?",
+        "created_at": "2025-09-22T05:59:24.895000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "By performance, I meant total block processing speed",
+        "created_at": "2025-09-22T06:00:43.537000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah, we are in contact.  I will need to try and reproduce their results locally, because they've reported better perf than I am seeing now",
+        "created_at": "2025-09-22T06:02:48.302000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Which optimizations does our branch support right now? Do you do state root calc in parallel to execution?",
+        "created_at": "2025-09-22T06:07:27.185000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yes",
+        "created_at": "2025-09-22T06:07:50.443000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I've been trying to run a local devnet, the lodestar validator clients don't seem to be doing anything.  Just get a lot of this in the logs:\n\n`warn: Node is syncing slot=40165, headSlot=0, syncDistance=40165`",
+        "created_at": "2025-09-22T08:01:03.657000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "and this, one time (with a stack-trace, which I've omitted):\n```\nSep-22 07:47:32.481[]                error: Failed to receive head event - Internal Server Error                                                                                                                    \nError: Internal Server Error\n```",
+        "created_at": "2025-09-22T08:02:24.230000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I dont think Lodestar is meant to work with BALs yet. \u003c@845691100072509460\u003e is getting a config ready with prysm that you can use with your own geth image. Also the slot being down there seems wrong, local devnet won't be at slot 40k usually.",
+        "created_at": "2025-09-22T11:08:58.349000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@586161934425128960\u003e also implemented it",
+        "created_at": "2025-09-22T11:10:48.883000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "cc \u003c@199561711278227457\u003e",
+        "created_at": "2025-09-22T11:10:55.584000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "There're two CL clients now that we can use for testing.",
+        "created_at": "2025-09-22T11:12:03.579000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@199561711278227457\u003e can we move this and epbs channel into the `testing`  section?",
+        "created_at": "2025-09-22T11:12:23.117000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pk910",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I've saw your branch 🙂 looks really great 🔥 \nQuick question: Do you already have a branch of go-eth2-client with the bals type changes?",
+        "created_at": "2025-09-22T11:12:43.271000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@427903869226582018\u003e what config are you using?",
+        "created_at": "2025-09-22T11:12:44.638000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Cool!\nAn no, I haven't.",
+        "created_at": "2025-09-22T11:13:29.733000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pk910",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'll gonna start one then 🙂",
+        "created_at": "2025-09-22T11:13:57.811000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Thanks!",
+        "created_at": "2025-09-22T11:16:04.874000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "the one here: https://github.com/jihoonsong/local-devnet-bals\n\nAlthough my local branch wasn't pulled after the prysm addition",
+        "created_at": "2025-09-22T11:22:10.964000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Not sure what caused it but this is a config with the latest images: https://github.com/jihoonsong/local-devnet-bals/blob/main/kurtosis.config.registry.yaml\n\nWhen running it, at the first Gloas slot, it will produce this error:\n```\n[cl-1-lodestar-geth] Sep-22 11:39:08.070[api]              warn: Engine failed to produce the block slot=32, parentSlot=31, parentBlockRoot=0xadfd545630bee9f776e33de61752fa6213f3b8d014cb3682d7e6b230fdbf2541, fork=gloas, builderSelection=executiononly, isBuilderEnabled=false, isEngineEnabled=true, strictFeeRecipientCheck=false, builderBoostFactor=0, durationMs=9 - JSON RPC error: Unsupported fork, engine_getPayloadV6\n[cl-1-lodestar-geth] Error: JSON RPC error: Unsupported fork, engine_getPayloadV6\n[cl-1-lodestar-geth]     at parseRpcResponse (file:///usr/app/packages/beacon-node/src/eth1/provider/jsonRpcHttpClient.ts:317:11)\n[cl-1-lodestar-geth]     at file:///usr/app/packages/beacon-node/src/eth1/provider/jsonRpcHttpClient.ts:173:14\n```\nThis is because Lodestar sends `params.Timestamp` in Osaka at the last slot of Osaka, making Geth returns payload ID made of PayloadVersion 3, and then Lodestar uses `getPayloadV6` at the first slot of Gloas while Geth's `getPayloadV6` requires Payload ID built based on PayloadVersion 4. Not sure what would be an elegant solution for this.",
+        "created_at": "2025-09-22T12:21:13.509000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "FYI, Terence will be working on Prysm today or tomorrow. You can check the latest update [here](https://discord.com/channels/595666850260713488/1418744006166319104). But if other stuff struck him, I can help make it ready.",
+        "created_at": "2025-09-22T12:21:40.374000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "gotcha, okay!  I'm actually fairly busy for the time being with trying to speed up the Geth impl and investigate the performance of the EthStorage team's Geth BAL PoC.",
+        "created_at": "2025-09-22T12:50:54.240000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "No worries! Then let me think about this one in the meantime. Always happy to help :)",
+        "created_at": "2025-09-22T13:00:39.563000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pk910",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It looks like the BAL devnets are using \"gloas\" as fork identifier, is that right?",
+        "created_at": "2025-09-22T14:00:14.779000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes",
+        "created_at": "2025-09-22T14:00:31.561000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pk910",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "but the changeset to the types is eip7928 only, right?  so without other gloas changes\nhttps://github.com/ethereum/consensus-specs/blob/master/specs/_features/eip7928/beacon-chain.md",
+        "created_at": "2025-09-22T14:01:57.125000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes it's basically no-op but fork transition. No ePBS, just fork transition",
+        "created_at": "2025-09-22T14:05:12.897000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Do you prefer to use eip7928 custom fork?",
+        "created_at": "2025-09-22T14:05:30.413000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pk910",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "all good 🙂  just preparing go-eth2-client \u0026 picking up the dora branch 🙂\nhttps://github.com/attestantio/go-eth2-client/pull/268",
+        "created_at": "2025-09-22T14:06:31.240000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "parithosh",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "^ yeah lets keep it as gloas, its just more work to support custom forks and then spend time rebasing it later on when we already know these features are gonna be shipped together. esp when they are so nicely separated between EL and CL.",
+        "created_at": "2025-09-22T14:06:47.227000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jih2nn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Sounds great, thank you guys!",
+        "created_at": "2025-09-22T14:08:21.009000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pk910",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "a BAL compatible dora image should be available at `ethpandaops/dora:eip7928-support` now\nbut haven't been able to test it yet as the geth-lodestar pair linked in the example config gets stuck at fork transition 😄",
+        "created_at": "2025-09-22T15:03:00.373000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "using \u003c@845691100072509460\u003e 's kurtosis config, prysm calling geth at the first slot of Gloas `getPayloadV6`, I got: \n```\n[el-1-geth-prysm] WARN [09-22|22:16:07.073] Served engine_getPayloadV6               conn=172.16.168.13:48060 reqid=136 duration=\"26.958µs\" err=\"Unsupported fork\"\n```\nhas anyone ran into this? perhaps we need to update the genesis file?",
+        "created_at": "2025-09-22T22:22:19.289000+00:00",
+        "attachments": null
+    }
+]

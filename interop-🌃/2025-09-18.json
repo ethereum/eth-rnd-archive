@@ -1,0 +1,104 @@
+[
+    {
+        "author": "samcm",
+        "category": "Testing",
+        "parent": "",
+        "content": "Devnet-5 is pretty stable now, and I'm investigating performance. This is showing *immediate and correct attestation* performance, grouped by the attester node and blob buckets. AFAIK Lodestar is aware of a few nodes misperforming, not sure on the Nimbus side",
+        "created_at": "2025-09-18T00:44:30.011000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "b278e42a2e2ea842ffe0cfef9a1bb778dc7186c415aabfca1bc51911e509af8d"
+            }
+        ]
+    },
+    {
+        "author": "ethpandaops-devnet-pulse-v2",
+        "category": "Testing",
+        "parent": "",
+        "content": "",
+        "created_at": "2025-09-18T01:00:00.523000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "hangleang.eth",
+        "category": "Testing",
+        "parent": "",
+        "content": "Switch between supernode and non-supernode",
+        "created_at": "2025-09-18T02:28:15.386000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "it should generally be doing this only under specific conditions, not every time; it this consistent every fcU/getPayload?",
+        "created_at": "2025-09-18T02:50:40.927000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "siladu",
+        "category": "Testing",
+        "parent": "",
+        "content": "we're looking into various scenarios. Here's one where we think nimbus should be sending an FCU 4 seconds into the previous slot (53198) instead of at the start of the current slot (53199)...\n\nfrom `nimbus-besu-super-3`\n```\nScenario: peer proposed, peer missed, node produced empty block\n\n# Slot 53197 - PROPOSED\n\n2025-09-17 23:19:23.997+00:00 Slot start\n2025-09-17 23:19:26.949+00:00 Send newPayload \n  \u003e\u003e 2025-09-17 23:19:27.197+00:00 Received newPayload response\n2025-09-17 23:19:27.253+00:00 Send FCU\n  \u003e\u003e 2025-09-17 23:19:27.393+00:00 Received FCU response\n\n# Slot 53198 - MISSED\n\n2025-09-17 23:19:35.997+00:00 Slot start\n\n### (No engine logs)\n\n\n# Slot 53199 - nimbus-besu-super-3 PROPOSED EMPTY BLOCK\n\n2025-09-17 23:19:47.997+00:00 Slot start\n2025-09-17 23:19:48.077+00:00 Send FCU + payloadAttributes\n  \u003e\u003e 2025-09-17 23:19:48.093+00:00 Received FCU response\n2025-09-17 23:19:48.597+00:00 Send getPayload\n```\n\nWe think we should have at least 8 seconds to build this block instead of 500ms",
+        "created_at": "2025-09-18T02:57:43.445000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "spingel",
+        "category": "Testing",
+        "parent": "",
+        "content": "\u003c@654267572107083777\u003e Hi, this is Stefan form the Besu team. We noticed that the nimbus-besu-super nodes have produced a lot of empty blocks. I looks like the reason for that is that nimbus does not initiate block building until it is too late. I've looked at a few of the slots where we build empty blocks, e.g. this one: https://dora.fusaka-devnet-5.ethpandaops.io/slot/53276",
+        "created_at": "2025-09-18T08:36:08.042000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "spingel",
+        "category": "Testing",
+        "parent": "",
+        "content": "Looking at the logs it looks like we do get an FCU with no payload attributes 8 seconds before blocktime:\n2025-09-17 23:35:04.801+0000 | vert.x-worker-thread-0 | DEBUG | AbstractEngineForkchoiceUpdated | Payload attributes are null\n2025-09-17 23:35:04.481+0000 | vert.x-worker-thread-0 | INFO  | AbstractEngineForkchoiceUpdated | FCU(VALID) | head: 83ed3.....3d5f8 | safe: 35b3d.....77fbe | finalized: bdc24.....df4bc\n\nThen we get another FCU, this time with payload attributes, but that is already past the block time:\n2025-09-17 23:35:12.084+0000 | vert.x-worker-thread-0 | DEBUG | AbstractEngineForkchoiceUpdated | payloadAttributes: timestamp: 1758152112, prevRandao: 0x0ffbf533bc2b794fd8558018eaddcff7731bd1be1b354ebcc4cfdbbf0d9acad4, suggestedFeeRecipient: 0xf97e180c050e5ab072211ad2c213eb5aee4df134, withdrawals: [], parentBeaconBlockRoot: 0x88fa4eceabf5d946c6c91893370405c9794200922a262126a24bfb0eb9e30b78\n2025-09-17 23:35:12.080+0000 | vert.x-worker-thread-0 | DEBUG | AbstractEngineForkchoiceUpdated | Forkchoice parameters headBlockHash=0x83ed3ec84e74251bc4d0f3b73bafa567b5a77c936b709f18996e1f9b71f3d5f8, safeBlockHash=0x35b3d13883c0f7ce1c5d3ed5b3b8b6008ddb1e093ccd9280bc42632136477fbe, finalizedBlockHash=0xbdc24db5f39bc9a13b242a69cd2445d18b0b40ce8dc9ce572fac1453e95df4bc",
+        "created_at": "2025-09-18T08:36:42.280000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "spingel",
+        "category": "Testing",
+        "parent": "",
+        "content": "Besu starts building a block, but as by default besu takes 500ms to select transactions, we only have an empty block prepared when nimbus is getting the payload:\n2025-09-17 23:35:12.597+0000 | vert.x-worker-thread-0 | INFO  | AbstractEngineGetPayload | Fetch block proposal by identifier: 0x03cd929e28ec084f, hash: 0x6e6b7e710182a519ab8d291743ad4cbf8919b850b7891b93902cb8ac83796cbb, number: 48035, coinbase: 0xf97e180c050e5ab072211ad2c213eb5aee4df134, transaction count: 0, gas used: 0.00% reward: 0 wei",
+        "created_at": "2025-09-18T08:37:00.934000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "spingel",
+        "category": "Testing",
+        "parent": "",
+        "content": "I found these nimbus logs that look suspicous:\nWRN 2025-09-16 08:35:48.077+00:00 Unknown constants in config file           unknowns=\\\"[SYNC_MESSAGE_DUE_BPS_GLOAS, AGGREGATE_DUE_BPS_GLOAS, EIP7441_FORK_EPOCH, EIP7928_FORK_VERSION, ATTESTATION_DUE_BPS_GLOAS, PAYLOAD_ATTESTATION_DUE_BPS, \\\"    MAX_BLOBS_PER_BLOCK\\\", EIP7805_FORK_VERSION, INCLUSION_LIST_SUBMISSION_DUE_BPS, MAX_REQUEST_PAYLOADS, EPOCHS_PER_SHUFFLING_PHASE, MAX_REQUEST_INCLUSION_LIST, \\\"  - EPOCH\\\", PROPOSER_REORG_CUTOFF_BPS, AGGREGATE_DUE_BPS, SLOT_DURATION_MS, CONTRIBUTION_DUE_BPS, EIP7805_FORK_EPOCH, EIP7928_FORK_EPOCH, ATTESTATION_DUE_BPS, PROPOSER_INCLUSION_LIST_CUTOFF_BPS, EIP7441_FORK_VERSION, MAX_BYTES_PER_INCLUSION_LIST, VIEW_FREEZE_CUTOFF_BPS, PROPOSER_SELECTION_GAP, CONTRIBUTION_DUE_BPS_GLOAS, SYNC_MESSAGE_DUE_BPS]",
+        "created_at": "2025-09-18T08:38:50.051000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "spingel",
+        "category": "Testing",
+        "parent": "",
+        "content": "and\nDBG 2025-09-17 23:35:10.999+00:00 Skipping proposal fcU, clearance state not prepared topics=\\\"cman\\\" head=88fa4ece:53275 proposalSlot=53276",
+        "created_at": "2025-09-18T08:39:39.056000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Testing",
+        "parent": "",
+        "content": "this is a non issue. Its just a warn.",
+        "created_at": "2025-09-18T08:40:39.934000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Testing",
+        "parent": "",
+        "content": "oh, yeah, we should clean those up though, they're pretty spammy",
+        "created_at": "2025-09-18T09:38:35.780000+00:00",
+        "attachments": null
+    }
+]

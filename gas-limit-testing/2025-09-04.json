@@ -1,0 +1,354 @@
+[
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cben_a_adams\u003e New EIP: https://github.com/ethereum/EIPs/pull/10275",
+        "created_at": "2025-09-04T02:02:54.087000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "This seems to ignore network costs associated with every transaction.  There is a substantial amount of per-transaction network cost to propagate any transaction, that I think should be covered by intrinsic cost. This is both for public mempool, and propagating the block (in the case of private mempools).",
+        "created_at": "2025-09-04T04:35:58.232000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cKamilChNethermind\u003e Something have stalled yesterday with benchmark gathering so will spend some time and will take an opportunity to switch to a new benchmarking suite from EEST :)",
+        "created_at": "2025-09-04T06:49:21.732000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cmarcin_d_s\u003e We found one transaction which is failing after modexp gas cost increase. Increasing tx gas limit is not helping here.\n\nTransaction: 0x6bc7ca58ebb41fccbf864c6a61df64a5e2d52123192831c643d43d3debc9ba0b\n\nFrom our analysis, it is internally calling the contract: https://etherscan.io/address/0x4a5d61aba7d845bc71d4e2f2dd7c35d9c5fb55b8\n\nWhich is doing loops on modexp and then DELEGATECALL at the end. After EIP-7883 this is failing with \"out of gas\". Increasing transaction gas limit to 10x and 1000x is not helping. Seems like hardcoded gas values, but we still investigate it.\n\nI'm enclosing tx traces for pectra and fusaka (actually only modexp EIPs) with 10x and 1000x initial tx gas limit.\nIs here anyone knowing this contract or having some insights?",
+        "created_at": "2025-09-04T08:56:27.977000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMarekM25\u003e re: **@marcin_d_s**\n\u003e We found one transaction which is failing after modexp gas cost increase. Increasing tx gas limit is not helping here.\n\nTransaction: 0x6bc7ca58ebb41fccbf864c6a61df64a5e2d52123192831c643d43d3debc9ba0b\n\nFrom our analysis, it is internally calling the contract: https://etherscan.io/address/0x4a5d61aba7d845bc71d4e2f2dd7c35d9c5fb55b8\n\nWhich is doing loops on modexp and then DELEGATECALL at the end. After EIP-7883 this is failing with \"out of gas\". Increasing transaction gas limit to 10x and 1000x is not helping. Seems like hardcoded gas values, but we still investigate it.\n\nI'm enclosing tx traces for pectra and fusaka (actually only modexp EIPs) with 10x and 1000x initial tx gas limit.\nIs here anyone knowing this contract or having some insights?\nFYI \u003c@792404665068158998\u003e @parithoshj",
+        "created_at": "2025-09-04T09:10:32.573000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cparithoshj\u003e I’m ooo, but perhaps \u003c@808969530608451584\u003e  and or @vdWijden can have a look?",
+        "created_at": "2025-09-04T09:29:07.443000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cvdWijden\u003e might be this? https://alignedlayer.com/",
+        "created_at": "2025-09-04T09:39:17.432000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cmarcin_d_s\u003e Some insights form AI (gemini deep research):\nThe sequence of operations is as follows:\n1. The address of the implementation contract is pushed onto the stack.\n2. Memory pointers for calldata and return data are configured.\n3. *Crucially, a constant value is pushed onto the stack using a PUSH opcode (e.g., PUSH32 0x...). This constant represents the amount of gas to be forwarded to the DELEGATECALL context.*\n4. The DELEGATECALL opcode is executed, consuming these values from the stack.\n\nThe presence of a PUSH opcode to specify the gas stipend, rather than the GAS opcode (0x5A), is definitive proof of a hardcoded gas limit. The contract is not dynamically calculating how much gas is available to forward; instead, it is attempting to forward a fixed, predetermined amount.\nThis finding provides the direct explanation for why increasing the parent transaction's gas limit is futile. The total gas available to the transaction is irrelevant if the contract itself is hardwired to only ever forward a specific, fixed amount to its sub-call. The failure is not a lack of gas in the transaction, but the contract's inability to provide the static amount of gas it has promised to the delegated call.",
+        "created_at": "2025-09-04T09:55:28.865000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cmarcin_d_s\u003e More info: contract is working fine after reverting the last-minute modexp 3x pricing.",
+        "created_at": "2025-09-04T10:14:30.033000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMarekM25\u003e re: **@vdWijden**\n\u003e might be this? https://alignedlayer.com/\nFYI @fede_intern",
+        "created_at": "2025-09-04T10:16:32.060000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003clferrigno\u003e I added @MauroT from Aligned. Not sure if he can see previous messages",
+        "created_at": "2025-09-04T10:36:37.680000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003clferrigno\u003e I sent him the info",
+        "created_at": "2025-09-04T10:39:47.291000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e re: **@marcin_d_s**\n\u003e We found one transaction which is failing after modexp gas cost increase. Increasing tx gas limit is not helping here.\n\nTransaction: 0x6bc7ca58ebb41fccbf864c6a61df64a5e2d52123192831c643d43d3debc9ba0b\n\nFrom our analysis, it is internally calling the contract: https://etherscan.io/address/0x4a5d61aba7d845bc71d4e2f2dd7c35d9c5fb55b8\n\nWhich is doing loops on modexp and then DELEGATECALL at the end. After EIP-7883 this is failing with \"out of gas\". Increasing transaction gas limit to 10x and 1000x is not helping. Seems like hardcoded gas values, but we still investigate it.\n\nI'm enclosing tx traces for pectra and fusaka (actually only modexp EIPs) with 10x and 1000x initial tx gas limit.\nIs here anyone knowing this contract or having some insights?\nYes, this a tx from Aligned",
+        "created_at": "2025-09-04T13:54:02.394000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e If we can help do tell",
+        "created_at": "2025-09-04T13:55:35.477000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cvdWijden\u003e What is it and can you change the contracts to properly forward the gas?",
+        "created_at": "2025-09-04T13:56:27.525000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cmarcin_d_s\u003e Are you able to somehow fix this contract or workflow? In current shape it will be constantly failing after Fusaka hard fork",
+        "created_at": "2025-09-04T13:56:42.864000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e Uhm. I’m not sure. It’s mostly calling EigenLayer contracts, did any other service using eigenlayer failed ?",
+        "created_at": "2025-09-04T13:58:24.128000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e What is the problem ?",
+        "created_at": "2025-09-04T13:58:35.207000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cmarcin_d_s\u003e In our sample only this 1 tx is failing, but we tested only 800 blocks",
+        "created_at": "2025-09-04T14:01:33.040000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cmarcin_d_s\u003e The problem is that in Fusaka there is an EIP-7883 which is increasing the proce of modexp precompile. Other failing transactions (out of gas) are fine when transaction gas limit is increased, so we don't consider it as an issue. This transaction is failing even after increasing gas limit 10x and 1000x, because it has some hardcoded gas limits (not dynamic) so increasing general gas limit of transaction is not able to fix this. This contract will be failing after Fusaka hardfork",
+        "created_at": "2025-09-04T14:04:08.989000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e Ohhhh. I see. Yes we hardcoded the gas limit since estimation was being kinda clunky. We can set it higher to test. Do you know how much is needed ?",
+        "created_at": "2025-09-04T14:05:40.422000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e If this is a problem it’s simple to address",
+        "created_at": "2025-09-04T14:06:03.504000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e We can double it as a test and check later, I assume it should be enough",
+        "created_at": "2025-09-04T14:06:25.924000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e (It was already over estimating)",
+        "created_at": "2025-09-04T14:06:58.547000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cKamilChNethermind\u003e Modexp will be at least 3x higher? SO likely need more?",
+        "created_at": "2025-09-04T14:07:21.680000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cmarcin_d_s\u003e Most likely every modexp call will be 3x more expensive",
+        "created_at": "2025-09-04T14:07:23.769000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cmarcin_d_s\u003e we tested it without 3x (which was last-minute change) and it is passing",
+        "created_at": "2025-09-04T14:07:45.425000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cmarcin_d_s\u003e so giving it 3x more gas will solve the issue",
+        "created_at": "2025-09-04T14:07:53.127000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cvdWijden\u003e Please just make it automatic, we plan to significantly change a bunch of gas costs for operations and these things might break in the future. If there's an issue with gas estimation, that should be addressed by node implementations, not smart contracts",
+        "created_at": "2025-09-04T14:08:14.765000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e Let me check the code. It’s actually not being hardcoded there",
+        "created_at": "2025-09-04T14:10:01.161000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e It’s simulating the txs*",
+        "created_at": "2025-09-04T14:10:17.556000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e So it should be fine",
+        "created_at": "2025-09-04T14:11:24.088000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e If the nodes gives the right gas limit it should work",
+        "created_at": "2025-09-04T14:11:37.517000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e Do you still need us to make any change to help testing ? I can 3x it for you to test if needed",
+        "created_at": "2025-09-04T14:11:58.893000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cvdWijden\u003e Could you share a link to the code?",
+        "created_at": "2025-09-04T14:12:17.296000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e Sure",
+        "created_at": "2025-09-04T14:12:22.924000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e https://github.com/yetanotherco/aligned_layer/blob/testnet/core/chainio/avs_writer.go#L79-L207",
+        "created_at": "2025-09-04T14:13:48.877000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cvdWijden\u003e Ah I mean the call in the smart contract that calls the modexp precompile",
+        "created_at": "2025-09-04T14:15:22.894000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e So this our respondToTask\n\nhttps://github.com/yetanotherco/aligned_layer/blob/testnet/contracts/src/core/AlignedLayerServiceManager.sol#L155-L232",
+        "created_at": "2025-09-04T14:16:52.582000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e Let me dig a bit on the Eigen calls to find the modexp",
+        "created_at": "2025-09-04T14:17:03.985000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e https://github.com/Layr-Labs/eigenlayer-contracts/blob/2c908539863578e3fdf1bd004705c802877f0350/src/contracts/libraries/BN254.sol#L360",
+        "created_at": "2025-09-04T14:36:17.016000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e I think it’s only called 1 or 2 times, I’m surprised it’s a problem. Most of the gas cost should be in other operations",
+        "created_at": "2025-09-04T14:40:25.817000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e Maybe people from Eigen could confirm, but it’s mostly verifying an aggregated bls signature",
+        "created_at": "2025-09-04T14:42:36.677000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cMauroT\u003e There is some comment of //use invalid to make gas estimation work, maybe that’s a hacky solution for something and its breaking stuff ? \n\nSorry for the clunky initial response. I lacked some context of what was going on. If there is any other way for us to help do tell",
+        "created_at": "2025-09-04T14:50:48.899000+00:00",
+        "attachments": null
+    }
+]

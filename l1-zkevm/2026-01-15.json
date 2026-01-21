@@ -1,0 +1,82 @@
+[
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cchfast\u003e re: **@ben_a_adams**\n\u003e I'd recommend:\n\n\u003e Support unaligned accesses in hardware - handle them correctly and transparently within the VM.\n\nOr will make push2-push32 opcodes very complicated and only for RiscV (as x64 and Arm happily are unaligned, and the code section that the push data comes from is not aligned for these opcodes)\nWhat do you mean by \"very complicated\" exactly? (honest question)\n\nTo my understanding, implementation of these opcodes may require more instructions, but this is a compiler job, unless you want to implement these in assembly yourself.\n\nIn the end there is either more instructions in the guest program, or zkVMs support unaligned memory access with execution time penalty.\n\nEven now there is a penalty of access addresses not aligned to some zkVM specific value (4? 8?).",
+        "created_at": "2026-01-15T13:29:33.952000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003camvlasov\u003e Spec allows unrecoverable trap (from the program perspective - it control was not returned as it was terminated), so just provable trap (== unsatisfiable constraint) is enough",
+        "created_at": "2026-01-15T17:08:43.339000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003camvlasov\u003e For pushX - it's memcopy + change of endianess, and it doesn't really show up in flamegraphs (much less so than even dup/swap in practice)",
+        "created_at": "2026-01-15T17:09:49.251000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cben_a_adams\u003e re: **@chfast**\n\u003e What do you mean by \"very complicated\" exactly? (honest question)\n\nTo my understanding, implementation of these opcodes may require more instructions, but this is a compiler job, unless you want to implement these in assembly yourself.\n\nIn the end there is either more instructions in the guest program, or zkVMs support unaligned memory access with execution time penalty.\n\nEven now there is a penalty of access addresses not aligned to some zkVM specific value (4? 8?).\nI just mean practically what's executed; do you read a single ulong or do you do negation on address a bunch of  bitshifts and ors (in riscv 12 instructions to 22; maybe a branch)",
+        "created_at": "2026-01-15T19:31:24.808000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cben_a_adams\u003e If its unaligned reads is compiled in then the zkVM _has_ to execute it; if the zkVM \"supports\" unaligned reads then the VM can always come up with more optimal ways over time (i.e. do you want your hands tied into something forever inefficient?)",
+        "created_at": "2026-01-15T19:35:59.282000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cchfast\u003e Ok, I get it. But this is quite different topic. The original motivation was: Go doesn't work on rv32im because it uses unaligned access. So the main reason is: Go doesn't know what's doing, let's fix it in zkVM.\n\nIn terms of code efficiency, yes, maybe adding this extension will benefit performance long-term (zk figures out how to do it better). But also, the list of requests will probably never end.\n\nI can very much argue that we should also include the B (bit manipulation) extension because EVM desperately needs the bswap instruction.\n\nOh, and the Cryptography Extension obviously.",
+        "created_at": "2026-01-15T19:50:20.382000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cben_a_adams\u003e Most important thing though is to specify which way (read or fail); undefined or junk reads would be a bad route",
+        "created_at": "2026-01-15T19:52:36.253000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003cmarcinbugaj\u003e \u003c@316280621783580673\u003e , thanks for pointing this out! EVM execution inside of RISCV zvkVM would benefit significantly from unaligned access support - the PUSH2-PUSH32 opcodes pulling immediate data from non-aligned bytecode positions would otherwise require complex decomposition into multiple aligned loads with masking/shifting operations. This is yet another strong argument for supporting unaligned loads and stores in the hardware.\n\n@chfast, thanks for the context, Paweł. To clarify: Go should not be emitting unaligned accesses in theory. The issue is that historically there have been bugs in the Go RISCV backend, and unaligned access behavior doesn't appear to be well-tested in the compiler. The status with the C# compiler and unaligned accesses is similarly unclear.\n\nThe original motivation wasn't \"let's add features to accommodate compiler bugs\" - it was about hardening the software stack and reducing the attack surface. When compilers have bugs or sloppy software makes assumptions, having undefined behavior (like silently masking address bits) creates security vulnerabilities that are extremely difficult to detect and debug. And aborting execution on unaligned accesses is also problematic because it can render Ethereum blocks unprovable. I've heard the proposal of testing zkVM client programs with millions of Ethereum blocks and watching for unaligned accesses, but I'm not entirely sold on that argument as a sufficient safeguard.\n\nSupporting unaligned accesses is quite different from requests for the B or Cryptography extensions:\n- no new instructions required - the existing load/store instructions would simply handle unaligned accesses\n- no proving penalty for aligned accesses - zkVMs can implement this such that aligned accesses (the common case) maintain their current low cost, while only unaligned accesses trigger more complex cryptographic constraints (to be confirmed with zkVM companies)\n- crypto \u003cclipped message\u003e",
+        "created_at": "2026-01-15T20:59:25.360000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003camvlasov\u003e Go doesn’t work with 32im because there is no such backend. But Go does not issue unaligned loads on 64im (and on x86/arm64 they are only result of very special optimizations for specific loading patterns)",
+        "created_at": "2026-01-15T21:47:58.767000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bridge-bot",
+        "category": "Execution Layer",
+        "parent": "",
+        "content": "\u003camvlasov\u003e There is no sufficient control on feature flags for Go’s backend, while for LLVM based compilers one can decide whether to allow or not to issue unaligned loads by choosing feature flag. Most likely same is valid for C#",
+        "created_at": "2026-01-15T21:48:59.656000+00:00",
+        "attachments": null
+    }
+]

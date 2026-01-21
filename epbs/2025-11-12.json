@@ -1,0 +1,194 @@
+[
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Just curious what's the benefit of this? Why can't we process the payment as long as the block that the bid belongs to is canonical? Regardless of participation, regardless whether the payload is revealed",
+        "created_at": "2025-11-12T00:01:51.046000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "One of many: proposer has two blocks in a row, submits both of them together during the second slot. The builder didn't get a chance to even know he was selected and the block is canonical. He has to pay for an auction he couldn't have known he won",
+        "created_at": "2025-11-12T00:05:27.905000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "There's plenty of variations of that motif",
+        "created_at": "2025-11-12T00:05:38.059000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Thanks",
+        "created_at": "2025-11-12T00:06:38.682000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "stefanbratanov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "In Gloas state upgrade, I think we should set `pre.latest_execution_payload_header.withdrawals_root` instead of\n```\n# [New in Gloas:EIP7732]\nlatest_withdrawals_root=Root(),\n```\n\nOtherwise, the first execution payload processed in Gloas will fail at:\n\n```\n# Verify the withdrawals root\nassert hash_tree_root(payload.withdrawals) == state.latest_withdrawals_root\n```\n\nIt's because `is_parent_block_full` will return `false` for first block in Gloas (because of the default bid and using the block hash from the header) and `latest_withdrawals_root` is not set for the first block. We are ok with not processing withdrawals in the first Gloas block? Why do I think we discussed this topic before haha",
+        "created_at": "2025-11-12T11:27:08.854000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yeah we did talk about this before, I thought the first CL block will set it though",
+        "created_at": "2025-11-12T12:33:07.757000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "stefanbratanov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "No, because the bid is defaulted during the fork state upgrade and we have a check which doesn't match for the first block\n\n```\ndef is_parent_block_full(state: BeaconState) -\u003e bool:\n    return state.latest_execution_payload_bid.block_hash == state.latest_block_hash\n```",
+        "created_at": "2025-11-12T12:37:59.439000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Ahh  probably we changed how we check for parent being full, my recollection of this issue is that the CL block would just override whatever we set in the state.  At any rate, what needs to be fixed is that the parent should be full for the first block, we have this even hardcoded in Prysm that any previous fork  block is full",
+        "created_at": "2025-11-12T12:44:47.010000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We can also update the latest withdrawals root, but that one is not that important if the CL block anyway will override it",
+        "created_at": "2025-11-12T12:45:41.014000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "stefanbratanov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We can have `return state.latest_execution_payload_bid == ExecutionPayloadBid() or state.latest_execution_payload_bid.block_hash == state.latest_block_hash`. I am not in love with having this logic running all the time when it's only for the first block, but the negative of setting the latest withdrawals root is we don't process withdrawals the first block, not sure if that has any consequences.",
+        "created_at": "2025-11-12T12:51:58.225000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "why not set the latest bid hash to be the latest block hash?",
+        "created_at": "2025-11-12T12:52:27.307000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "stefanbratanov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yeah, that's the other alternative and default everything else, probably cleaner",
+        "created_at": "2025-11-12T12:53:34.243000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "stefanbratanov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I will raise a PR",
+        "created_at": "2025-11-12T12:57:19.230000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "stefanbratanov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://github.com/ethereum/consensus-specs/pull/4739",
+        "created_at": "2025-11-12T15:30:00.886000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "stefanbratanov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Another thing I noticed during my testing on current specs:\n\nWhen I have 64 validators setup, and having payload attestations in a block, the same validator is many times in the PTC and we have the aggregate verification check:\n\n```\npubkeys = [state.validators[i].pubkey for i in indices]\nreturn bls.FastAggregateVerify(pubkeys, signing_root, indexed_payload_attestation.signature)\n```\n\nIt fails for me when I implement the code with repeated pubkeys since indices are not unique, I have to make the pubkeys unique to make it work:\n\n```\npubkeys = set([state.validators[i].pubkey for i in indices])\n```\n\nAny idea? When aggregating, I set the aggregation bits multiple times for the same validator which is correct, but the aggregated signature is from the unique PayloadAttestationMessage per validator, so I assume we should actually makes pubkeys unique in the spec to tackle the case when `indices` has repeated values.",
+        "created_at": "2025-11-12T16:17:08.062000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "hmmm, there's something wrong there, we should be summing the signatures so we should need the same pubkey as many times as it was voted",
+        "created_at": "2025-11-12T18:02:30.909000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "probably the testvectors are wrong? or this is in your own implementation?",
+        "created_at": "2025-11-12T18:02:53.002000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "If it's your own please check that the validator is actually signing twice",
+        "created_at": "2025-11-12T18:03:11.969000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "stefanbratanov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "But it's the exact same payload attestation message, how can you sign twice? Or you mean during aggregation you duplicate it depending on the PTC?",
+        "created_at": "2025-11-12T19:45:12.822000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yeah it should appear twice in the aggregation it is as if they were two different validators",
+        "created_at": "2025-11-12T20:17:59.856000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "so I don't see how it could be that it passes if you deduplicate, so my guess is that the aggregate is wrong",
+        "created_at": "2025-11-12T20:18:19.967000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "stefanbratanov",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Ok thanks, that makes sense. I will change the aggregation and retest",
+        "created_at": "2025-11-12T21:19:45.957000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Fwiw this will definitely appear on interop when we get there so I'm not that worried about this kinds of bugs. The withdrawal one you found up there worries me cause we didn't change the full block check. It seems we didn't have withdrawals at all on our Kurtosis tests so that's why we were passing",
+        "created_at": "2025-11-12T21:32:19.954000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Regarding withdrawals, I think we need to increase the limit per block in Glamsterdam and this shouldn't need a new EIP.. cc \u003c@520034910149410861\u003e can I squeeze this in 7732?",
+        "created_at": "2025-11-12T21:34:07.229000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,338 @@
+[
+    {
+        "author": "ethpandaops-devnet-pulse-v2",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "",
+        "created_at": "2025-10-31T01:00:00.299000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m0_ox",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "PR created against `ethereum/execution-specs` with appropriate feature branch [here](https://github.com/ethereum/execution-specs/pull/1719). Just need to iron out the remaining questions around the specs and we can re-fill and make a new release soon. We're all caught up with the recent updates there and should use this as the development for both specs and tests now.",
+        "created_at": "2025-10-31T02:56:16.038000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I've opened this topic a while ago but it might make sense to revive the discussion.\n\nEssentially, should we add a list with gas_used values for transations into the BAL.\nThis would allow clients to prioritize big transactions during parallel execution avoiding that they are scheduled late in the process.\n\nCurious to hear client teams' thought on this topic.",
+        "created_at": "2025-10-31T11:02:42.151000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "it feels like it would be useful:  if we had this information, we would prioritize the heavy txs for scheduling.",
+        "created_at": "2025-10-31T11:21:24.714000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "but it's also something where it would be nice to have supporting pathological benchmarks to quantify the speedup in worst case blocks",
+        "created_at": "2025-10-31T11:22:06.814000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "right now in Geth, I just blindly schedule every tx at the same time and let the Go runtime decide how they are actually executed.  For the general case, that's \"ok\" (the state root calculation is the bottleneck I am trying to address atm)",
+        "created_at": "2025-10-31T11:24:13.205000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "imagine a gas limit of 30M, you have 8 cores for execution and there's a block with 466 30k gas transaction + one 16M transaction.\nWhat you would want to avoid is using all 8 cores to execute the 1450 light-weight transactions to only then start executing the heavy transaction.\nEssentially, instead of getting an execution time of `max([16M, 66x30k, 66x30k, ...])` you would get `max([58x30k + 16M, 58x30k, 58x30k, ...])`.\nHere, because the big transaction was scheduled last, it's executed on core 1 that already executed 58 light weight-transactions.\n\nWhat you want to do is applying a greedy mechanism to tx sequencing starting from a list of transaction ordered by size desc.",
+        "created_at": "2025-10-31T11:33:51.038000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "you can play around with it:\n\n```python\ngas_used = [30_000]*466 + [16_000_000]  # example block\nM = 8  # number of cores\n\n# Sort txs by gas_used descending\ntxs = sorted(gas_used, reverse=True)\nloads = [0]*M  # total gas per core\n\nfor g in txs:\n    # assign tx to the currently least-loaded core\n    i = loads.index(min(loads))\n    loads[i] += g\n\nprint(\"Per-core gas:\", loads)\nprint(\"Estimated execution time:\", max(loads))\n```",
+        "created_at": "2025-10-31T11:38:57.795000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "qu0b",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Would it be a possibility to encode this information positionally in the BAL instead of adding a integer with the gas amount?",
+        "created_at": "2025-10-31T11:41:45.023000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "not really. You could track gas_used but since we map from address -\u003e change -\u003e (tx_id, post_value), we cannot just sort addresses by the time they are needed in a tx. This would work if we did tx_id -\u003e address -\u003e (change, post_value), for example.",
+        "created_at": "2025-10-31T11:50:31.633000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It is interesting, but this becomes less relevant with 100M blocks (or more) and limit on 16M per transaction. The worst case (If my thinking is okay) in this setup of 8 threads is if exec core does two big 16M txs",
+        "created_at": "2025-10-31T11:52:35.030000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I would assume a greedy distribution over cores based on their gas used would always be helpful no matter of the gas limit. You could always end up with transactions being well parallelized but suddenly a single big transaction blocking a core at the end while other cores finished already.",
+        "created_at": "2025-10-31T11:54:53.744000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "If there is stealing task scheduler, worst case would be if last task that can be executed is a big one (takes most to execute) but as limit per task is 16M, granularity of task is small enough so that delay on this task can be 16% on 100M gas block ( 25% for 60M block)",
+        "created_at": "2025-10-31T11:59:15.075000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Imagine having a quee where core pops the task and execute it, the problem is only if last task is the big one as it will not be schedules in nice way.",
+        "created_at": "2025-10-31T12:01:21.305000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Right, but with having the gas_used, we could do better:\nImagine a block with 8x 10M transactions and 1x 16M:\nWorst-case you end up with 10 + 16 load on one core, best case would be 10 + 10.",
+        "created_at": "2025-10-31T12:03:17.621000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Lets go thought this example.\nDepending on how much cores you have:\n4 cores, worst case (biggest core has 36M gas):\n* 3 cores 2 x 10M\n* 1 core 2x 10M + 16M\n4 cores, best case (biggest core has 30M gas):\n* 2 core 2x 10M\n* 1 core  3x 10M\n* 1 core 10M + 16M\nSo diff on worst/best case cores is 17%\n(Edited with correct numbers)",
+        "created_at": "2025-10-31T12:06:41.344000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We can use the Gas-limit field in the tx for the heuristic? It's not accurate, but should be valuable",
+        "created_at": "2025-10-31T12:08:07.855000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "we could but this can then be tricked and wouldn't help us in the worst-case",
+        "created_at": "2025-10-31T12:08:31.470000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "it becomes more effective with more cores, yeah.",
+        "created_at": "2025-10-31T12:09:19.659000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "well, it's hard to trick this field. We apply the block gas limit on the sum of tx.Gaslimit. If someone crafts the tx with huge gas limit but 0 gas used, it won't hurt us too much",
+        "created_at": "2025-10-31T12:10:01.011000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The block is lightweight as well",
+        "created_at": "2025-10-31T12:10:33.902000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "qu0b",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "doesn't work stealing in most implementations or lightweight go co-routines keep the effectiveness consistent no matter the core count?",
+        "created_at": "2025-10-31T12:12:22.799000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "qu0b",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "or can we not leverage that effectively because transactions need to be executed sequentially (within one tx)?",
+        "created_at": "2025-10-31T12:13:34.537000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "but in the above example you could specify 16m gas limit (and consume 10M) while another transaction specifies 15M and consumes that. Your 15M transaction would be scheduled after the 10M one. \nI mentioned the gas limit as a heursitic in the post I replied to above. Furthermore you can use the BAL size for that tx (convert bal to tx -\u003e bal entries mapping and check the size), which gives you better results than the gas limit (I checked that once).\nEven better but complex, you use the balance diff in the BAL to approximate the gas used for each transaction.\n\nEventually we need a mechanism that also works in the worst-case and my feeling is that using the gas_limit might just leave efficiency on the table or we get to weird edge cases where tricking execution with too-high gas limits becomes a worst-case block.\nThe simpler solution would be just adding the gas used values, even though this adds additional data to the BAL.",
+        "created_at": "2025-10-31T12:17:46.824000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "btw gas pricing on storage with bal becomes a lot different so 10M does not mean N amount of ms to execute",
+        "created_at": "2025-10-31T12:22:16.205000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Would agree that gas limit is not great heuristics as a hint as it can give you false info",
+        "created_at": "2025-10-31T12:23:04.235000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e but in the above example you could specify 16m gas limit (and consume 10M) while another transaction specifies 15M and consumes that. Your 15M transaction would be scheduled after the 10M one. \n\u003e \nI don't think it matters. Given that we can utilize multiple cores and these two transactions are all \"heavy\" ones. They will be scheduled with basically same priority. \n\nIf the transaction allocates a significant amount of gas limit, it should be scheduled with high priority. It doesn't really matter how much it eventually consumes. \n\nThe worst case is: if the tx claims x gas and uses all of them, then the block execution time is long. But for the case the tx claims x gas and only use 1/10x, it's an additional bonus to execute block faster than your expectation",
+        "created_at": "2025-10-31T12:23:31.045000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We try to limit the block execution time with block.GasLimit, and the worst case is block.GasUsed == block.GasLimit. The worst case matters at the protocol level.\n\nIf block.GasUsed \u003c block.GasLimit, then it's a bonus for the block execution",
+        "created_at": "2025-10-31T12:24:49.006000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I feel adding an extra field \"gasUsed\" to BAL is a bit redundant and not that worthwhile",
+        "created_at": "2025-10-31T12:25:41.642000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I can see that argument, but you're not actually faster than your expectation in executing if the 9/10 of the gas are consumed by another txs.",
+        "created_at": "2025-10-31T12:26:21.113000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I do see the argument it being not worth the data footprint it would add compared to gas_limit doing good enough(?)",
+        "created_at": "2025-10-31T12:27:46.326000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "How? If the gas limit is already claimed by tx_a, then we have deducted it from the global block gas limit.",
+        "created_at": "2025-10-31T12:28:00.905000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It's free'd for consecutive transactions again",
+        "created_at": "2025-10-31T12:28:31.579000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I assume 1/10 is actually consumed, then, after executing the tx, we have 9/10 gas available again for the rest",
+        "created_at": "2025-10-31T12:29:18.666000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "No? When a block is constructed, if the sum_of_gasLimit of txs exceeds the block.GasLimit, then no more txs can be added, regardless of how much gas is actually used",
+        "created_at": "2025-10-31T12:29:34.814000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Tx must fit into blocks counted against the cumulative gas used up to that point but not against the sum of tx gas limits.\nMany blocks have `sum([tx.gasLimit for tx in txs]) \u003e block_gas_limit`",
+        "created_at": "2025-10-31T12:30:35.548000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "oh shit, you are right.",
+        "created_at": "2025-10-31T12:33:49.738000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Okay, then ignore my comments",
+        "created_at": "2025-10-31T12:34:01.467000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Does this change your opinion on the gas_used in the BAL?\nMy feeling is that adding gas_limit allows us, for every block, to get to the same (most-efficient) distribution over cores across clients by using a greedy distribution mechanism.",
+        "created_at": "2025-10-31T12:37:56.693000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah, gasUsed is probably the most accurate way to identify the heavy txs. It introduces 8bytes for each txs I guess the overhead should be acceptable. It just feels a little bit redundant with the ones in the receipts",
+        "created_at": "2025-10-31T12:49:22.896000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This would be the EIP change if we would go with gas_used values in the BAL:\nhttps://github.com/ethereum/EIPs/commit/6c56dd3944ad9c75d40f02d4b19544f44fe14b97\n\nAnd here're the spec changes:\nhttps://github.com/fselmo/execution-specs/pull/32/files\n\nI will put this PR on the agenda of [next week's breakout call](https://github.com/ethereum/pm/issues/1787). \n\ncc \u003c@796570016966770688\u003e \u003c@762919002196410400\u003e",
+        "created_at": "2025-10-31T12:57:17.805000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m0_ox",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Will take a look. I left a note on there, can you PR this to `ethereum/execution-specs` branch with the same name? We moved over there, instead of my fork of EELS, so we can make releases when we are ready to now.",
+        "created_at": "2025-10-31T17:08:32.420000+00:00",
+        "attachments": null
+    }
+]

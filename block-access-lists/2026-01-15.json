@@ -1,0 +1,162 @@
+[
+    {
+        "author": "ethpandaops-devnet-pulse-v2",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "",
+        "created_at": "2026-01-15T01:00:00.278000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "it's not necessary.  the name change for the methods and moving them to the eth namespace will be included in the `bal-devnet-2` branch soon",
+        "created_at": "2026-01-15T04:38:49.223000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "PR'd a couple of EIP changes:\n* coinbase inclusion rule was outdated in the EIP.  I've updated it based on what we agreed upon a couple of calls ago\n* small clarification that withdrawals of zero value trigger a read of the target account.\n\nhttps://github.com/ethereum/EIPs/pull/11086",
+        "created_at": "2026-01-15T04:50:09.324000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "something I want to get clarification on:  I am assuming with the decoupling of BAL from block body, we cannot assume that `NewPayload` will always contain the BAL.  If it doesn't, we need to fetch the BAL from the network, which implies that the new devp2p messages for sending BALs will be required for devnet 2.\n\nIs this the case?  if so, this is a potentially substantial change as it changes the semantics of `NewPayload`: the payload is not actually verifiable until we can retrieve the corresponding BAL.",
+        "created_at": "2026-01-15T05:10:54.913000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "b.hartnett",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "My understanding is that newPayload will/should always contain the BAL (after Amsterdam). The BAL is removed from the block body but not from the execution payload. BALs will also be available to speed up sync but only within the BAL retention period which should align with the WSP. There is a new devp2p eth protocol version (eth/70) which includes new message types/flows to request and receive a list of BALs by bal hashes separate from the block body.",
+        "created_at": "2026-01-15T05:38:34.697000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "that was my understanding until the call yesterday, where it was claimed that the CLs aren't obligated to persist the BAL for blocks beyond the head and also that we will need to add engine api methods to retrieve BALs from the EL.  And now my mental model of it is a bit confused.\n\n\u003c@792404665068158998\u003e maybe you could clarify here?",
+        "created_at": "2026-01-15T06:07:17.260000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It does seem that any data needs to be retained at least for a while in order for it to be relied on and useful.  Something that exists on the network for 12 seconds or less is not meaningful.  At best, something that exists for 12 seconds could be thought of as an optimization for the narrow case of people who are on reliable high bandwidth connections following head.",
+        "created_at": "2026-01-15T06:30:49.925000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The CL does store the execution payload it replaces the BAL with the BAL root to deduplicate data. The same is done for transactions. Thus, if the CL wants to provide the execution payload to another peer, it must first fetch the BAL from the EL, replace BAL root with the actual BAL and only then send the block.",
+        "created_at": "2026-01-15T07:47:31.693000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I pushed a `bal-devnet-2` branch for geth.  We're failing a lot of blockchain tests, some of them eip-4844 related that I am looking into (seemingly not a blob config issue).\n\nWe also fail some of the converted legacy tests due to a mismatch between the BAL hash geth computes and what's reported in the test fixture.  However, as bhartnett mentioned, these tests don't contain a BAL so it's kind of impossible to debug those failures atm.",
+        "created_at": "2026-01-15T07:47:49.739000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "okay that makes sense.  Instead of adding new engine api methods for retrieving BALs, we probably can just expand on the existing `GetPayloadBodies*` methods?",
+        "created_at": "2026-01-15T07:54:08.691000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We could but since BALs are now stored separately, it might make sense to have a separate engine api method for them?",
+        "created_at": "2026-01-15T08:04:48.775000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "are you thinking that because the retention period for BALs ~~may~~ will be less than the other parts of the block body?",
+        "created_at": "2026-01-15T08:10:23.606000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yeah this, and keeping it separated, thus more flexible, but I don't have a strong opinion on this.",
+        "created_at": "2026-01-15T09:06:26.003000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m0_ox",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The latest release has BPO2 blob params (what is active on mainnet). Can this be causing the issue?",
+        "created_at": "2026-01-15T15:13:24.980000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m0_ox",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e We also fail some of the converted legacy tests due to a mismatch between the BAL hash geth computes and what's reported in the test fixture.  However, as bhartnett mentioned, these tests don't contain a BAL so it's kind of impossible to debug those failures atm. \n\n`consume-engine` should be unaffected. If you have a list of failing tests I can try to help debug. But perhaps looking at the the test names and descriptions can help.",
+        "created_at": "2026-01-15T15:15:21.813000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "posted a response and deleted because I misread your comment",
+        "created_at": "2026-01-15T15:55:59.731000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "would still be nice to not omit the block access lists from the blockchain tests but it's not a big deal as long as they are available in at least one of the suites",
+        "created_at": "2026-01-15T15:56:26.569000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m0_ox",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah we need to figure out how to debug this from here on out anyhow. This is how consume rlp will work from now on so we should figure out the best approach here for testing moving forward.",
+        "created_at": "2026-01-15T15:56:43.774000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'm not sure.  I'm getting merkle root mismatches on some 4844 tests.  The bpo config seems correct as most of them pass",
+        "created_at": "2026-01-15T15:57:06.627000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m0_ox",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think the hive vars need to be updated in the simulator actually. I'm looking into this. I'll lyk what I find.",
+        "created_at": "2026-01-15T22:15:17.688000+00:00",
+        "attachments": null
+    }
+]

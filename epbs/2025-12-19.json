@@ -1,0 +1,306 @@
+[
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I won't be able to make it, please do not remove trustless payments 😜",
+        "created_at": "2025-12-19T01:06:51.588000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Summarizing:\n* `payload_present` is FC enforced and the next slot proposer and attesters must adhere to it\n* `blob_data_available` is a hint for the next slot proposer, attesters of the next slot doesn't pay attention to that flag and attest according to their own view on DA:\n    * `blob_data_available = False`, `proposer_is_data_available = True` -\u003e proposer can ignore `blob_data_available`\n    * `blob_data_available = True`, `proposer_is_data_available = False` -\u003e proposer is safe to build on top of the payload as likely the blobs are available\n\nIs the above summary correct?",
+        "created_at": "2025-12-19T03:42:52.536000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "My another question is about PTC votes equivocation. They are slashable but we don't have a mechanism in the spec to process those equivocations neither in the FC nor in the ST. are there plans to work on equivocation processing?",
+        "created_at": "2025-12-19T03:46:22.567000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Put up a PR [#4800](https://github.com/ethereum/consensus-specs/pull/4800). Would love to get some opinion on this [change](https://github.com/ethereum/consensus-specs/pull/4800/files#r2633505996) in `is_supporting_vote`. I find this change is more intuitive to read",
+        "created_at": "2025-12-19T03:47:04.742000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e payload_present is FC enforced and the next slot proposer and attesters must adhere to it\nAre you talking about `payload_present` in `PayloadAttestationData` and thus `Store.ptc_vote`, or `LatestMessage.payload_present`?",
+        "created_at": "2025-12-19T03:51:57.682000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I am thinking about a product of `blob_data_available` and `payload_present` from all `PayloadAttestationMessage` received",
+        "created_at": "2025-12-19T03:53:28.731000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "i.e. if more than a half of messages has `payload_present == True` then the proposer must build on top of the payload. While there is no such strict definition of how `blob_data_available` will be used, hypothetically the proposer may have a different threshold when the majority of `blob_data_available` flags diverge from its own view, i.e. build on top of payload only if `\u003e3/4` of PTC members indicates data availability",
+        "created_at": "2025-12-19T04:00:48.007000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e i.e. if more than a half of messages has payload_present == True then the proposer must build on top of the payload\nI am curious about this as well. Looking from the spec, the `ptc_vote` only matters in the `get_head()`'s tie breaker in the event that two nodes having the same weight and same block root [here](https://github.com/ethereum/consensus-specs/blob/f2e0db481af9f49975b30972f2b275f2b26c916c/specs/gloas/fork-choice.md?plain=1#L427)",
+        "created_at": "2025-12-19T04:10:48.939000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "i need to carefully review the FC changes, don't have a strong intuition behind it yet",
+        "created_at": "2025-12-19T04:17:19.898000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "i am not sure if  you want to extend the payload if `blob_data_available = False`  even you have the payload. That means rest of the network may not see it . I think the attesters do look at `blob_data_availble` at least that's my understanding from Francesco's original document: https://hackmd.io/UX7Vhsv8RTy8I49Uxez3Ng which influenced current fork choice design. I very well could be wrong though",
+        "created_at": "2025-12-19T05:19:05.228000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "if attesters look at the `blob_data_available` then it means that PTC decides on the blob availability and not the attesters which I guess affects the DAS security assumption",
+        "created_at": "2025-12-19T05:22:28.347000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bharath.vedartham",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "a minor fix to the spec: https://github.com/ethereum/consensus-specs/pull/4801 the payload attestation deadline was specified as `get_attestation_due_ms` instead of `get_payload_attestation_due_ms`",
+        "created_at": "2025-12-19T06:30:26.106000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Btw there are fork-choice changes that I posted here a long time ago that I still need to make in the main spec, so maybe wait until there is a PR with those to review the fork-choice specifically. Still, one thing that's going to stay true is that attesters only use the ptc's vote in order to decide whether to *enforce* that a payload is extended by the proposer, *as long as the payload is locally available*. Meaning, the attesters will always prioritize their own availability view over the ptc, so they are ultimately the source of truth.",
+        "created_at": "2025-12-19T07:59:47.687000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e Btw there are fork-choice changes that I posted here a long time ago that I still need to make in the main spec\nDo you mind forwarding those changes?",
+        "created_at": "2025-12-19T08:04:16.243000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nc1234",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So if an attester:\n- has payload locally available -\u003e always enforce this view and disregard ptc votes\n- has no payload locally available -\u003e vote according to ptc votes the attester receives\nAm I understanding this correctly?",
+        "created_at": "2025-12-19T08:10:48.986000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This is my reading as well. \u003c@363800010518822915\u003e I think with regards to DA it's just like \u003c@425572898787426305\u003e is saying: next attesters enforce it and the PTC is just hinting the proposer. \n\nThe *only* place where I think leniency may be better is in the situation that the PTC votes for the payload not being timely but the proposer decides to build on top of it anyway. I think attesters that had their Payload validated (at time of attest, probably not even timely, that is that can sync the current CL block) should attest to this block. \n\nThis favors chain liveness. The one danger I see from this is builder centralization if they start colluding with next proposers to distribute late their payload, but 1) this is something they can do today anyway and we aren't seeing this and 2) the next proposer can always reorg the Payload for free if they wish to",
+        "created_at": "2025-12-19T10:23:35.712000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "*locally available* doesn't imply timely, right?",
+        "created_at": "2025-12-19T10:26:16.197000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "If builder releases a payload later then the pipelining will be affected because proposer and attesters will have less time to execute payload. What other adverse effects there can be?",
+        "created_at": "2025-12-19T10:34:11.358000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It also may affect next builders, giving the delaying builder advantage of information by monopolizing the post state of it's own payload and making it more likely to win the next auction. But I think this exist today in the exact same form",
+        "created_at": "2025-12-19T10:36:23.360000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It makes sense to me to improve on monopolizing to reduce the centralization vector",
+        "created_at": "2025-12-19T10:40:09.711000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah but I don't buy this is a meaningful vector. And preserving liveness in the event of late blocks seems much more important",
+        "created_at": "2025-12-19T10:41:08.973000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We're reorging late blocks today which isn't too bad for liveness. Also it will be possible to blame specific builders for publishing payloads late if they do it constantly",
+        "created_at": "2025-12-19T10:48:36.609000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We aren't reorging them: we allow the proposer to reorg then if they want. The question is if we want to do it the same in ePBS or we want to switch to forcing the next proposer to reorg",
+        "created_at": "2025-12-19T10:57:18.075000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'm not sure there's a strong case to forcing the next proposer",
+        "created_at": "2025-12-19T10:57:52.038000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I believe late block reorgs are enabled by all clients today. If this is true, then late block reorgs are effectively happening even though proposers are not enforced to do it today and there doesn't seem to be serious liveness issues because of that",
+        "created_at": "2025-12-19T11:13:30.835000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The other difference is that late blocks affect consensus, late payloads don't",
+        "created_at": "2025-12-19T11:16:20.666000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Anyway this whole thing may be a mute argument if we implement reorg by default",
+        "created_at": "2025-12-19T11:18:00.166000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "If we don't, we may see forks that do",
+        "created_at": "2025-12-19T11:18:15.052000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "What if PTC member equivocates? Should we attempt to make it slashable?",
+        "created_at": "2025-12-19T12:52:45.426000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "late block reorg is only enabled if we have recent finalization, so it shouldn't be a liveness issue?",
+        "created_at": "2025-12-19T12:58:40.830000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Good point. I believe we were talking about EL liveness above, not a CL liveness. ePBS makes these two things decoupled",
+        "created_at": "2025-12-19T13:01:06.378000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "One more reminder about this ^",
+        "created_at": "2025-12-19T13:33:00.020000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://discord.com/channels/595666850260713488/874767108809031740/1399868051280625694",
+        "created_at": "2025-12-19T14:49:51.497000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "These are the changes that I still plan to make, and the rationale for them",
+        "created_at": "2025-12-19T14:51:02.110000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Otherwise, I'll go through the questions on the current fork-choice and answer them at some point soon 🙂",
+        "created_at": "2025-12-19T14:51:28.178000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bharath.vedartham",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "i would assume clients will implement different heuristics for bid selection from p2p bid pool and builder-api bids. Do we want to have a specification for these as well to standardize them amongst clients?",
+        "created_at": "2025-12-19T15:54:06.860000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I don't like new slashing conditions unless it's necessary for the core security properties of the chain. It doesn't make sense to fork clients to equivocate since you can't gain more than a short term grieving of the next proposer/attester. You can't even  replay transactions nor steal MEV",
+        "created_at": "2025-12-19T16:33:13.771000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "dapplion",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Has someone thought about how payload separation affects the `depedant_root`? I have writen a doc about the topic, would appreciate some eyes on it as we may have to change the spec to keep the shufflings stable given a dependant_root\n\nhttps://hackmd.io/@dapplion/gloas_dependant_root",
+        "created_at": "2025-12-19T23:41:11.149000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,122 @@
+[
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "### **EIP-7928 Breakout #5** call — [Oct 22, 2025, 14:00 UTC](https://github.com/ethereum/pm/issues/1771)\nCountdown: \u003ct:1761141600:R\u003e\nLocation: Zoom (livestreamed on YouTube)\n\nAgenda:\n* Coinbase handling in BALs\n* Testing and Specs updates\n* Client updates",
+        "created_at": "2025-10-20T14:03:48.893000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pk910",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Heya,\nI've been testing the latest BAL images and noticed some empty entries in the access list. The EIP does mention a few edge cases that could lead to these, but those edge cases actually raise some bigger questions.\nFollowing the access list edge cases, we seem to allow untracked reads of balance or code via the `BALANCE` or `EXTCODE*` opcodes.\nBut opcodes like these clearly have side effects. It matters if a transaction that reads the balance of addr X is executed before or after a tx that modifies the balance as the result of the opcode will be different.\nso, when allowing such \"untracked reads\" from any tx, how can we parallelize any tx later on?\nit feels like this should be threated like a storage read in a separate section (balanceRead / codeRead), as it otherwise breaks the parallelization intend that BALs should provide?",
+        "created_at": "2025-10-20T14:58:50.553000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m0_ox",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "If the balance is modified, then it wouldn't have an empty account access list. It would have an index pointing to which transaction modified the balance. In that case it wouldn't have only been read throughout the whole of the block execution. Am I missing some part of the scenario you are describing?",
+        "created_at": "2025-10-20T15:07:08.558000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pk910",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "right,  but you still don't know which transaction read the balance before or after the balance was updated.\nso you still have to execute all transactions in order to not cause any diffs in transactions that read balances?\nWasn't the intend of BALs to allow parallel execution by separating the txs into \"access groups\" that don't interfere with each other?",
+        "created_at": "2025-10-20T15:12:56.777000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pk910",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "why do we track storage reads,  but no balance reads?  that's basically the same, no?",
+        "created_at": "2025-10-20T15:17:23.958000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Could you elaborate what you mean by:\n\u003e we seem to allow untracked reads of balance or code via the BALANCE or EXTCODE* opcodes.",
+        "created_at": "2025-10-20T15:21:11.428000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pk910",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "any transaction could read the balance or code of arbitrary addresses via the BALANCE or EXTCODECOPY opcodes.\nthat's currently not recorded in the access list as we do for storage reads,   that what I mean by \"untracked reads\"",
+        "created_at": "2025-10-20T15:22:39.857000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Address target of opcodes are included in BAL. Does this test case cover what you mean? https://pokebal.raxhvl.com/?test=test_bal_account_access_target",
+        "created_at": "2025-10-20T15:25:33.315000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Here `TargetContract` is included in bal.",
+        "created_at": "2025-10-20T15:26:29.594000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pk910",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "no.  these addresses are included in the BAL with empty changes.\nso they do not link to any transaction. from the BAL we only know that something accessed these addresses,  but not which tx.\nthis breaks the parallelization idea, because we cannot ensure reads are done in correct order without tracking the txs?",
+        "created_at": "2025-10-20T15:28:10.661000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pk910",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "let's do an example:\nwe have 10 transactions,   tx index 5 updates the balance of addr x.   some of the other txs read the balance of addr x via the BALANCE opcode.\nWe get a BAL with addr x and a single balance update now.\n\nfor parallelization we now want to group all transactions, so the accessed state does not interfere,   but we can only see that tx 5 updated the balance of addr x,   we don't know about any balance reads.    so  we still need to execute all txs in order to be sure all balance reads are fine?",
+        "created_at": "2025-10-20T15:35:09.852000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The builder executes tx in cannonical order to generate BAL. In this case [Say tx(5) updates balance of x from 3-\u003e5.] All tx before 5 will read balance as 3 and after 5 will read balance as 5. The value of the balance of x for a transaction is determined by the tx_index, and the transaction itself can be executed in any arbitrary order.",
+        "created_at": "2025-10-20T15:41:48.325000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m0_ox",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@808969530608451584\u003e was trying to find a previous conversation about this. It's all in how the client parallelizes because the transactions should still be ordered as per the block ordering. I think this is a relevant conversation on this here: https://discord.com/channels/595666850260713488/1364000387195076608/1374639197998026833 and conversation before it.",
+        "created_at": "2025-10-20T15:43:35.564000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The assumption for parallelization is that *regardless* of order of execution, the state required for executing a transaction can be derived from BAL+Disk. Do you see this being not true?",
+        "created_at": "2025-10-20T15:47:13.248000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pk910",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yea, I think I got the concept now.  I wasn't thinking about using the BAL as data source for actual opcodes.\norder doesn't matter when always using the pre-state + BAL values on top",
+        "created_at": "2025-10-20T15:49:45.654000+00:00",
+        "attachments": null
+    }
+]

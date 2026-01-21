@@ -1,7 +1,7 @@
 [
     {
         "author": "jwasinger",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "We have to consider 7702 auths as code changes in block access lists.  As a result, it's pretty trivial to create blocks with gigantic access lists because 7702 auths only cost 12500 gas.",
         "created_at": "2025-06-07T07:38:48.970000+00:00",
@@ -9,7 +9,7 @@
     },
     {
         "author": "jwasinger",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "I guess we could only denote code changes with the code hash, and then only include bytecode if it stems from a contract creation.",
         "created_at": "2025-06-07T07:44:59.112000+00:00",
@@ -17,7 +17,7 @@
     },
     {
         "author": "jochembrouwer",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "Would this lead to worse blocks than without 7702? I thought about this but I think it is not worse. We also have to realize that the 7702 authorizations yield 23 bytes of code. A storage slot writes 32 bytes. For new slots, this costs 20k, for existing slots, this costs 2900 gas. So for 2900 gas we write 32 bytes (value only, serialization not taken into account) vs 12500 gas to write 23 bytes of code and to update the account nonce (fits in 8 bytes). So I don't think 7702 makes the worst case BALs worse.\n\nWe could however optimize this, since to write 7702 delegations we only have to check the nonce. So if we don't want a net output of all state changes (which I think we should do, we should aggressively prune the BAL and only keep items we really need) then code delegations from 7702 should not be added to the BAL at all, since they are implicit: we only have to check the nonce of the target account (and this nonce we read this either from the BAL or from disk)",
         "created_at": "2025-06-07T08:10:35.906000+00:00",
@@ -25,7 +25,7 @@
     },
     {
         "author": "jochembrouwer",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "These also gives theoretical upper bounds to the BAL size for, for instance, storage slots. If 2900 is indeed the lowest gas (I don't think this takes into account if it's warm/cold yet) to change a storage slot then `block.gasLimit // 2900` is thus the upper bound for the size of the storage slots. However we also have to be aware of \"tricks\" like gas smuggling which adds at most 1/5 to it. So if we want to make reasoning easier we should also ship https://eips.ethereum.org/EIPS/eip-3298 or https://eips.ethereum.org/EIPS/eip-7778 🙂",
         "created_at": "2025-06-07T08:32:50.412000+00:00",
@@ -33,7 +33,7 @@
     },
     {
         "author": "jochembrouwer",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "7778 is likely a good idea to do in general because the effective gas limit of a block is thus 20% higher than what it advertises",
         "created_at": "2025-06-07T08:33:38.588000+00:00",
@@ -41,7 +41,7 @@
     },
     {
         "author": "jwasinger",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "So I thought about it more and it's not necessary to include the code of the authority.  I was thinking that it would be necessary for parallelization.  but the authority code is either a) already deployed at the start of the block or b) deployed by a create transaction, in which case it's already in the access list.",
         "created_at": "2025-06-07T08:41:51.500000+00:00",
@@ -49,7 +49,7 @@
     },
     {
         "author": "jochembrouwer",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "Yes I agree 🙂 If we however want all changes of the block in the BAL, we should add it, but I think we should only put in the BAL wat is really necessary (and yes, really necessary for the parallelization)",
         "created_at": "2025-06-07T08:43:05.642000+00:00",
@@ -57,7 +57,7 @@
     },
     {
         "author": "jochembrouwer",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "So for 7702 only need to check nonce of target account (and this nonce map is there)",
         "created_at": "2025-06-07T08:43:18.618000+00:00",
@@ -65,7 +65,7 @@
     },
     {
         "author": "jochembrouwer",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "(for your point (b) it is thus not a create tx, but a 7702 tx with these delegations in the authority list)",
         "created_at": "2025-06-07T08:44:22.453000+00:00",
@@ -73,7 +73,7 @@
     },
     {
         "author": "jwasinger",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "for b, i meant the code the account being delegated to was deployed in the same block by another transaction",
         "created_at": "2025-06-07T08:44:41.581000+00:00",
@@ -81,7 +81,7 @@
     },
     {
         "author": "jwasinger",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "sorry, the phrasing was a bit unclear there",
         "created_at": "2025-06-07T08:45:05.170000+00:00",
@@ -89,7 +89,7 @@
     },
     {
         "author": "jochembrouwer",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "Oh right. You mean the code the delegated account now points to? Authority list / 7702 only writes the delegation code (23 bytes) and it does not care what the target is. We do not include code reads in the BAL because these can be fetched from disk (only if code is indeed deployed during that block). Which is limited by cost 200 gas/byte (to deploy code via create tx or via CREATE(2) opcode)",
         "created_at": "2025-06-07T08:47:55.564000+00:00",
@@ -97,7 +97,7 @@
     },
     {
         "author": "jwasinger",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "\u003e You mean the code the delegated account now points to?\n\nYeah, this",
         "created_at": "2025-06-07T08:48:49.703000+00:00",
@@ -105,7 +105,7 @@
     },
     {
         "author": "jochembrouwer",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "Ah ok right yes re-reading your sentence you are correct, (a) read from disk (b) it got deployed this block (before current tx) and is thus in the BAL",
         "created_at": "2025-06-07T08:52:22.941000+00:00",
@@ -113,7 +113,7 @@
     },
     {
         "author": "jochembrouwer",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "Read it in wrong context first 😅",
         "created_at": "2025-06-07T08:55:05.585000+00:00",
@@ -121,7 +121,7 @@
     },
     {
         "author": "draganrakita",
-        "category": "Execution Layer",
+        "category": "Cross-layer",
         "parent": "",
         "content": "BAL should probably contain hash (root) over access list in header, so data is fixed. Couldn't find this in EIP.",
         "created_at": "2025-06-07T21:58:44.634000+00:00",

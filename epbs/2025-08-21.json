@@ -1,0 +1,218 @@
+[
+    {
+        "author": "bharath.vedartham",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "hey folks, i just started to look into the ePBS specs. I have a question:\nIn the validator spec(https://github.com/ethereum/consensus-specs/blob/master/specs/gloas/validator.md), when the validator packs `PayloadAttestations` in it's block, it has to ensure that the slot of the parent block is exactly one slot before the proposing slot. I am curious about the case where there is a missed slot before the proposing slot, there would be payload attestations from 2 slots away. It looks like we shouldn't be packing them into the block?",
+        "created_at": "2025-08-21T10:26:57.351000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah PTC attestations are only useful for one slot, normal attestations work when there's a missed slot since they will be attesting for the Payload or not",
+        "created_at": "2025-08-21T12:09:33.921000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So I think this is the right place to post this but we also need some more visibility from EL devs, so tagging just two to not spam for now \u003c@543900561460822016\u003e \u003c@628018527470616606\u003e and \u003c@539495253418180618\u003e .  The original issue came from Lido's observations which I think don't really apply cause withdrawals can be proven against the last beacon block root. But in general, the issue is this: currently the beacon block root has a `state_root` commitment that is the post-state to processing the full block. EIP-4788 gives access to the beacon block root on the EVM. So any payload can make statements about the post-state of the latest block. \n\nAfter ePBS, this changes, with the exact same mechanics, any payload  say for slot N, can make statements about the post-state of the latest consensus block (say slot N-1) but not about the post-state of the payload envelope of slot N-1. For example, you can't make statements about the post state of what happened with execution requests since those are only processed with the payload. \n\nTechnically we could add this feature to the beacon block now because the post-state root is known at the bid selection time, so we could move the `state_root`from the payload envelope to the bid and that's it. But I would like to avoid this since it will preclude to moving to slot auctions in the future (if you follow the discussion above I have been arguing that we should try to commit the minimum possible to the payload in the beacon block so as to have maximum separation of concerns). \n\nAnother way of solving this issue is if the beacon block also contains the `pre_state` because this will be the post-state of the latest payload.  Another thing is just leave this as-is and see if there is an actual need to prove against this post-state on-chain. I haven't thought much about this problem but wanted to raise it more generally. Will add it to the next call agenda",
+        "created_at": "2025-08-21T14:52:13.424000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e EIP-4788 gives access to the beacon block root on the EVM. So any payload can make statements about the post-state of the latest block. \ni think this is \"gives access to the previous beacon block root; and so any payload can make statements about the pre-state of the latest block\"",
+        "created_at": "2025-08-21T15:02:24.928000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "oh, you are saying the same thing; nevermind",
+        "created_at": "2025-08-21T15:03:09.861000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yeah, i am not sure why we need to be concerned with proving inside the current slot",
+        "created_at": "2025-08-21T15:04:00.119000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "slot - 1 seems fine?",
+        "created_at": "2025-08-21T15:04:04.846000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "things are designed so you don't need that much resolution -- most of the actual use cases are only going to able to observe things at epoch boundaries anyway",
+        "created_at": "2025-08-21T15:04:46.677000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "even slot -1 the problem is that we can't",
+        "created_at": "2025-08-21T15:05:48.032000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "apologies for confusing people with the wrong idea on ACD, the issue is that there's no visibility of the poststate on the EVM, even from previous slots",
+        "created_at": "2025-08-21T15:06:19.604000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "ah, you are saying that given the changes of 7732, we can't provide slot - 1 anymore?",
+        "created_at": "2025-08-21T15:07:06.060000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "but i would think then that slot-2 is still fine",
+        "created_at": "2025-08-21T15:07:21.026000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "and by my previous stmt, i think this is ok _enough_ as-is",
+        "created_at": "2025-08-21T15:07:30.924000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "if we find a better solution to retain the previous behavior the better, ofc",
+        "created_at": "2025-08-21T15:07:44.429000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "no, I am saying that ePBS has two different state transitions, and therefore two different state roots, and the beacon block only commits to one",
+        "created_at": "2025-08-21T15:08:02.815000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "so EIP-4788 only gives access to one of two different state roots",
+        "created_at": "2025-08-21T15:08:14.591000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "hm ok",
+        "created_at": "2025-08-21T15:08:19.004000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "i dont see how this works unless we are doing slot auctions",
+        "created_at": "2025-08-21T15:08:37.558000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "but i am also out of sync on the latest 7732 specs, so i may need to start there",
+        "created_at": "2025-08-21T15:08:49.159000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "this has nothing to do with the auction type",
+        "created_at": "2025-08-21T15:08:50.693000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This has to do with the fact that there are two processing functions that change the state independently, and someone may want/need to prove against the latest change on either of these transitions",
+        "created_at": "2025-08-21T15:09:38.128000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "we could easily solve this by adding the previous stateroot on the beacon block, which is just a trivial addition from the client perspective and we are already changing the block",
+        "created_at": "2025-08-21T15:10:06.561000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "but not sure if it's worth it",
+        "created_at": "2025-08-21T15:10:11.852000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "gotcha, i think i should go look at the specs before i just keep piecemealing relatively basic questions, but yeah let's track this for discussion",
+        "created_at": "2025-08-21T15:10:32.097000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "can you point me to these two functions that change the state independently? i see in the eip there are \"no EL changes\" so I'm not sure how you would change the EL state root another time?",
+        "created_at": "2025-08-21T19:50:00.912000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This is the CL state, not the EL state. Let me give a more extense explanation then. \n\nAfter ePBS the beacon state changes:\n- when processing the beacon block, \n- when processing the payload\n\nThe beacon block root contains a `state_root` field that is the post-state **after** processing the beacon block, but **before** processing the execution payload. \n\nEIP 4788 exposes the beacon block root of the parent block, that means that I can prove anything about the beacon state with root `state_root`  beacuse I can give a merkle proof from the state up to that root, and from that root up to the beacon block root of the beacon block that included it. \n\n**But I cannot** prove anything about the beacon state obtained after processing the execution payload, because there is no commitment made that is exposed in the EVM. \n\n\nPossible solutions:\n- Expose the other commitment in the EVM as well as the beacon block root. The execution payload envelope contains a field `state_root` that is the beacon state root after processing the payload. We can have a new EIP like 4788 that exposes the root of the payload envelope and people can prove against the state in the same way they do with beacon blocks. \n- Expose the other commitment in the beacon block: In addition to `state_root` expose also `pre_state_root` in the beacon block. This way if I need to know anything about the post-state of the payload of slot N-2, I would use the `pre_state` of the beacon block at N-1 which is exposed at slot N by EIP-4788 without any changes.",
+        "created_at": "2025-08-21T20:07:13.928000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "oh sorry i was confused thinking it was 2935 EL state root - i see the issue",
+        "created_at": "2025-08-21T20:20:15.982000+00:00",
+        "attachments": null
+    }
+]

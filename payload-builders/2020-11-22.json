@@ -1,0 +1,402 @@
+[
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I was trying something in one of the comments to your note (https://hackmd.io/@matt/HJ4YbvNcw). Volatility is a good variable to track, i suggested using the moving average to catch most of the cases you have in mind. reproducing the rule here with some updates:\n```\ndelta = basefee - moving_average(basefees, 10) # delta is the deviation from recent behaviour, negative =\u003e basefee tends to decrease\nif (1+delta) * (1-mu) * basefee \u003e tx.fee_cap: evict(tx)\n```\n\nI introduce `mu` as the \"strictness\" of the rule, that way there is only one parameter and moving averages are computationally easy to track.\n- If `mu = 0`, then if `delta = 0` (basefee is stable) you evict as soon as `basefee \u003e fee_cap`\n- This may be too strong, so setting `mu = 0.1`, if `delta = 0`, you evict as soon as `0.9 * basefee \u003e fee_cap`\n- Suppose basefee is trending upwards, so `delta \u003e 0`. Now the previous condition is strengthened. The intuition is that if your `fee_cap` is close to `basefee` at some point where `basefee` is trending upwards, we can probably safely evict your transaction\n- Suppose basefee is trending downwards, so `delta \u003c 0`. Now the previous condition is loosened. For some `fee_cap`s that are inferior to basefee but not too inferior either (since `1+delta \u003c 1` and `1-mu \u003c 1`, you allow some feecaps between basefee and `(1+delta) * (1-mu) * basefee`), you could expect that these transactions would be included when basefee becomes lower, so you keep them. The ones that are too low (`feecap \u003c (1+delta) * (1-mu) *  basefee`) are evicted. Note too that the faster basefee decreases, the more tolerant the eviction rule is (and same for basefee increases, in which case it is less tolerant)",
+        "created_at": "2020-11-22T03:19:34.394000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I haven't worked out how such a rule could be adapted to replace by fee operations",
+        "created_at": "2020-11-22T03:21:02.037000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "but possibly it could",
+        "created_at": "2020-11-22T03:21:08.907000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Do we have reason to believe that base fee will trend rather than just be noisy?",
+        "created_at": "2020-11-22T03:29:57.634000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "The only time it should be trending is when there is a sudden very large spike (over 2x) in blockspace demand.",
+        "created_at": "2020-11-22T03:30:34.055000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Which *should* be rare.",
+        "created_at": "2020-11-22T03:30:36.842000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I suppose block space demand is seasonal, so it would trend in those cases as well (but over larger period).",
+        "created_at": "2020-11-22T03:30:56.831000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "with a large enough window size i expect to pick up some trend yes. price movements or token launches have significant spikes with them",
+        "created_at": "2020-11-22T03:31:20.240000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "but i do think it's rare too",
+        "created_at": "2020-11-22T03:32:05.016000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "To get daily and weekly seasonality trends you would need a very large time window, and I worry that such trends won't be useful to end-users or eviction strategies.",
+        "created_at": "2020-11-22T03:32:41.719000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the rule above works well too if delta is zero most of the time",
+        "created_at": "2020-11-22T03:32:52.251000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think delta will almost never be 0.",
+        "created_at": "2020-11-22T03:33:06.858000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "But I also think that most of the time for the windows we are talking about it will not trend.",
+        "created_at": "2020-11-22T03:33:18.614000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It will instead just be very noisy.",
+        "created_at": "2020-11-22T03:33:22.572000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "this i agree, i meant windows larger than 10 blocks, which i used in the example",
+        "created_at": "2020-11-22T03:33:28.269000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "As an example, we frequently see empty blocks (for reasons).  With 1559 these would likely be followed by a full block.",
+        "created_at": "2020-11-22T03:34:00.127000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Also, the poisson distribution of block times means that we may have a long wait resulting in a full block, followed by a short wait resulting in a nearly empty block.",
+        "created_at": "2020-11-22T03:34:30.354000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the net result is a massively noisy base fee.",
+        "created_at": "2020-11-22T03:34:56.255000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "hmm maybe the delta isn't the best, i guess i had a different mental model in mind. i think a `delta` expression that is close to zero whenever basefee has been relatively stable is what i was looking for",
+        "created_at": "2020-11-22T03:35:13.690000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yes the case where basefee jumps from 10 to 20 to 10 to 20 etc. means the average is 15 but you have delta equal to 5 or -5 on odd and even steps, that's not ideal",
+        "created_at": "2020-11-22T03:36:28.788000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "(i am assuming basefee can 2x for the sake of the example)",
+        "created_at": "2020-11-22T03:37:02.354000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Base fee can change by 1/8 per block.",
+        "created_at": "2020-11-22T03:37:34.405000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i know this was just to have nice numbers 🙂",
+        "created_at": "2020-11-22T03:37:47.688000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Thinking on this, I think \u003c@!543900561460822016\u003e's argument that the pending pool should strive to keep some below-current-base-fee transactions in queue is growing on me.",
+        "created_at": "2020-11-22T03:39:06.375000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "ok assuming we have a `delta` we are happy with, the rule I suggest is really a more general version of the fixed band rule \"evict if `(1-mu) * basefee \u003e fee_cap`\"",
+        "created_at": "2020-11-22T03:39:20.779000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If we are expecting high between block volatility in base fee, then we should keep the pending pool full of enough transactions that we can weather that volatility.",
+        "created_at": "2020-11-22T03:39:39.297000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Alternatively, we can just tell people not to low-ball fee cap.",
+        "created_at": "2020-11-22T03:39:53.513000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the question might be do we care to have a more complex rule that picks up trends or do we think the fixed band is enough",
+        "created_at": "2020-11-22T03:40:09.520000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "This is specifically for eviction strategies?",
+        "created_at": "2020-11-22T03:44:48.573000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yes only looking at that for now",
+        "created_at": "2020-11-22T03:45:03.521000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I'm still a fan of optimistically using eviction as a time bounding strategy, and that argument depends on the implementation being simple.",
+        "created_at": "2020-11-22T03:45:39.326000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "If implementing it is complex, then my argument for eviction as a transaction time bounding strategy loses strength because it really does assume miners are either altruistic or lazy.",
+        "created_at": "2020-11-22T03:46:10.828000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "time bounding strategy?",
+        "created_at": "2020-11-22T03:47:07.714000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "the implementation is simple in both the fixed band (`(1-mu) * basefee \u003e fee_cap`) and the trend-picking policies (`(1+delta) * (1-mu) * basefee \u003e fee_cap`), by complex i only meant that the second one is less crude",
+        "created_at": "2020-11-22T03:48:00.448000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Meaning using eviction as a way to give users some weak guarantees that their transaction probably won't be included at all if it isn't included soon.",
+        "created_at": "2020-11-22T03:51:36.541000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It solves some UX problems around pending transactions causing users to get into a bad state that is quite a pain to recover from.",
+        "created_at": "2020-11-22T03:51:50.888000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "It is purely an optimistic strategy, where we are relying on miners running stock software that is *technically* against their interest.  The hope is that the cost of maintaining a fork is higher than the benefits they gain from the marginal advantage of including a few extra transactions every now and then.",
+        "created_at": "2020-11-22T03:52:47.885000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i'll write some notes on the rule above. i think it achieves what you want. the keyword is \"weak guarantees\", because i don't think any rule that isn't time-based (e.g., \"if this transaction has been pending for more than x blocks, evict\") can achieve the time bounding you describe. but it can get close enough with the eviction rule",
+        "created_at": "2020-11-22T03:56:42.851000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I think in my ideal world a transaction is either included in the first non-full block or it is evicted.",
+        "created_at": "2020-11-22T03:59:37.942000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "🤔 I wonder if we could just make *that* the eviction strategy?",
+        "created_at": "2020-11-22T03:59:51.473000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Anytime a non-full block is mined, the entire pending pool is wiped out.",
+        "created_at": "2020-11-22T04:00:05.360000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Probably not since gossip isn't instant.",
+        "created_at": "2020-11-22T04:00:19.362000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "what if that block ends up being an uncle?",
+        "created_at": "2020-11-22T04:00:37.403000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "Yeah, good point.  I think an \"evict everything as soon as block is mined\" strategy won't work.  So the closest we can get to that would be nice.",
+        "created_at": "2020-11-22T04:02:20.914000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "sky.cactus",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "I personally like:\n* Don't accept any **new** transactions that cannot be mined in the next block.\n* Evict transactions that have a fee cap less than `latest_block_base_fee * (1-(1/8)^n)`\n* Disconnect any peers that send you transactions that have a fee cap less than `latest_block_base_fee * (1-(1/8)^m)`",
+        "created_at": "2020-11-22T04:04:48.692000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "yes that's possible too. this is a fixed band policy where the size of the band is explicitly computed from the largest possible basefee deviations",
+        "created_at": "2020-11-22T04:23:27.262000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "for reference I just added a note here: https://github.com/barnabemonnot/abm1559/blob/master/notebooks/eviction.ipynb",
+        "created_at": "2020-11-22T04:23:39.551000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "i am not sure i have an opinion yet, but it's an interesting design space to explore",
+        "created_at": "2020-11-22T04:24:05.135000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabemonnot",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "need to run though 🙂 will try to look at how this all jives with replace-by-fee operations later",
+        "created_at": "2020-11-22T04:24:30.669000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "halfinney.",
+        "category": "Execution R\u0026D",
+        "parent": "",
+        "content": "thanks! I ll go through the links",
+        "created_at": "2020-11-22T08:20:48.853000+00:00",
+        "attachments": null
+    }
+]

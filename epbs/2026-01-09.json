@@ -1,0 +1,162 @@
+[
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The original reason and I believe it's still valid is that when we scale this will make the bid very large",
+        "created_at": "2026-01-09T00:01:51.230000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Bids are in the hot path for propagation, we don't want to have them very large",
+        "created_at": "2026-01-09T00:03:16.307000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marcopolo__",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Does each bidder submit a `SignedExecutionPayloadHeader` per bid? and does it submit this by broadcasting it on gossipsub? If so, I think I agree we don't want to put the kzg commitments there since there will be many bids that aren't accepted and those commitments are just wasted bandwidth.\n\nIs there a way we can move the `kzg_commitments` out of the data column sidecar? It's redundant across data columns. Is there a small message they could propagate on?",
+        "created_at": "2026-01-09T00:48:45.248000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It submits a `SignedExecutionPayloadBid` which is I think what you have in mind. The reason there's a root is just to commit to the kzg commitments on the block in case of equivocations. It can be removed entirely (going in the opposite direction of what's being suggested here) but I think adding them all is a bad idea",
+        "created_at": "2026-01-09T00:57:25.951000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marcopolo__",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "sorry, I was looking at an older version of the spec. `SignedExecutionPayloadBid` is what I meant. And every bidder submits one, correct? Or is there just one per slot?",
+        "created_at": "2026-01-09T01:00:55.951000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Every bidder on P2P, but most importantly the proposer will request this over http on the hot path to trusted builders",
+        "created_at": "2026-01-09T04:49:49.213000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "pawandhananjay",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "ahh i did't realise it was the same container we use for the actual bids too. Yeah adding the full commitments there doesn't seem ideal then",
+        "created_at": "2026-01-09T05:01:16.860000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Continuing the ACDC discussion on whether ELs should return a “censored block” flag in `engine_notifyNewPayload`, i.e. signal if a block built by someone else appears to censor transactions based on the node’s *local* mempool view, those were the main thoughts I had:\n\n1. Today this flow is deterministic across nodes: the same payload yields the same response. Nothing dynamic like the mempool is involved. Block validation and the mempool are intentionally separated; you can fully validate blocks without even running a mempool.\n\n2. There is no such thing as a “standard” mempool. Clients differ widely in defaults and configs (min tip, max tx size, pool size, tx lifetime, max txs per account, nonce gap handling, etc.). This means a block can *look* censored simply because the builder’s client never accepted a given tx into its mempool. Result: validators might blacklist builders for non-censorship reasons → bad validator UX. Example: Erigon and Reth accept far more txs into their mempool than Geth or Nethermind. Besu uses a min tip of 1000 wei instead of 1 wei like others.",
+        "created_at": "2026-01-09T06:37:39.127000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "3. Builders would have no feedback loop. They wouldn’t even know they’re blacklisted until they don't get a registration ~5 months later when the proposer proposes again. In practice, builders loose months of opportunity with no real signal as to why.\n\n4. EL clients would each invent their own heuristics for what they consider “censorship,” and CL clients would then invent their own interpretations of that signal. For example: does the *first* “censored” response already trigger blacklisting at the CL? And if yes, for how long? Once you start pairing every EL with every CL, you get a combinatorial mess: an EL with aggressive heuristics combined with a CL that treats the signal as “hard blacklist” could easily lead to very weird (and fragile) behavior.\n\n5. To distinguish “actually censored” from “couldn’t afford basefee,” EL clients would need to track historical basefees. This might not be the biggest issue.\n\nThis kind of local, subjective view makes sense for FOCIL, where diversity of views is a feature (and full txs go into inclusion lists, so they don’t remain local), but not for blacklisting builders.",
+        "created_at": "2026-01-09T06:37:54.515000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Boolean for censoring.",
+        "created_at": "2026-01-09T12:38:25.891000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "julianma_",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Hi! From chatting with \u003c@520034910149410861\u003e , I understand that there is a withdrawal delay in the current spec to prevent people from bloating the state by deploying many builders and then withdrawing and redeploying. However, since (from what I understand) builder indices can be reused, someone cannot bloat the state by continuously reentering and withdrawing. Would it be possible to remove the withdrawal delay?",
+        "created_at": "2026-01-09T14:30:32.471000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Based on the current mevboost implementations I saw, builder indices won't be reused and registrations include the builder index. \nWe can move towards using builder pubkeys for registrations instead and actually reuse exited builder indices.\nBut sure this is worth it though.",
+        "created_at": "2026-01-09T15:54:43.487000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Not sure what you mean about mevboost implementations, reusing indices of exited builders for new builders is currently part of the beacon chain spec: https://github.com/ethereum/consensus-specs/blob/master/specs/gloas/beacon-chain.md#new-get_index_for_new_builder\n\nSo if someone has a fixed budget of N eth, they can bloat the beacon state with N builders and then withdraw the eth, but they can't then re-deposit and continue bloating the state, because they'll just end up reusing the indices.",
+        "created_at": "2026-01-09T16:06:40.240000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bharath.vedartham",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "we updated the validator registrations in mev-boost to not include builder index. We generally don't see much value in it and also the builder indices could dynamically change for a given whitelisted builder which can make implementations more complex.",
+        "created_at": "2026-01-09T17:03:29.704000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@\u00261417820113981145228\u003e please review this PR: https://github.com/ethereum/consensus-specs/pull/4817",
+        "created_at": "2026-01-09T17:35:59.504000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It would be good to make a decision on this at ACDT next week.",
+        "created_at": "2026-01-09T17:36:24.138000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Was referring to this PR:\nhttps://github.com/ethereum/builder-specs/pull/138\nIn this case, registrations should contain a list of pubkeys instead of indices.",
+        "created_at": "2026-01-09T18:57:58.100000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The anti-state bloat re-use of indices makes sense but registration may want to take this into account. cc \u003c@1386598056320831509\u003e",
+        "created_at": "2026-01-09T18:59:46.091000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I don't think there's much need for either builder index nor builder pubkey in the registration. There's a need for them (or just the endpoint url) in the bid request. I am uncertain of allowing builders to withdraw quickly as this allows them to cheaply dos the deposit request per blocks, but not sure if this attack is meaningful nor if it's not anyway cheap today.",
+        "created_at": "2026-01-09T19:28:14.909000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Found a spec test gap through code review: I used `len(state.validators)` instead of `active_validator_count(state)` and it still passed spec tests where we were selecting PTC members",
+        "created_at": "2026-01-09T21:52:59.578000+00:00",
+        "attachments": null
+    }
+]

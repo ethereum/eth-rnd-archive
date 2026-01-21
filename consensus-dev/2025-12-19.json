@@ -1,0 +1,222 @@
+[
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@795439202732867594\u003e do we have good numbers to why the number of aggregators today? We're getting a lot lot of duplicate aggregations on nodes, it's just a hunch but suspect that we could do better with less aggregators at the expense of hurting the tall of attestations. Are you guys monitoring this?",
+        "created_at": "2025-12-19T00:04:47.081000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "We found out because of a bug in Prysm",
+        "created_at": "2025-12-19T00:04:58.249000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "asn_d6",
+        "category": "general",
+        "parent": "",
+        "content": "Ben has good historical information on why the [number of aggregators](https://eth2book.info/latest/part2/building_blocks/aggregator/#beacon-committee-aggregators) is like that in the eth2book (see also linked hww post for more historical information). Of course, that shouldn't mean that things should remain the same.",
+        "created_at": "2025-12-19T09:01:49.608000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "I'm aware of why we chose things in theory, but we could have by now 5 years of evolving data gathering. I confess I was surprised to see several hundreds of identical aggregates coming in per slot, only difference is aggregator index.",
+        "created_at": "2025-12-19T09:56:52.546000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "surprises me as well, aren't they are from the same beacon node?",
+        "created_at": "2025-12-19T09:57:23.458000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Could be a sign of node clustering but anyway something to measure and act about",
+        "created_at": "2025-12-19T09:57:58.404000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Doubt hundreds are from the same beacon node but I do suspect it could be very large operators getting together or something \u003c@425572898787426305\u003e",
+        "created_at": "2025-12-19T09:58:36.762000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "wait, there are 16 aggregators, how there can be several hundreds of aggregates?",
+        "created_at": "2025-12-19T09:58:41.204000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "It's 16 per committee and 64 committees. Here's the log that triggered this:",
+        "created_at": "2025-12-19T10:01:18.413000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "```\n aggregateAttAndProofCount=377\n uniqueAggregateAttAndProofCount=267\n```\nSo we had to prune 100 duplicates. There are slots with more slots with less",
+        "created_at": "2025-12-19T10:02:53.114000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Not sure if it's an issue but it did surprise me to see large numbers",
+        "created_at": "2025-12-19T10:03:16.247000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "what i miss there is a distribution of those aggregates per committee, i.e. a number of all and unique aggregate per each committee. Average numbers are 5.84 and 4.17 respectively. Avg nums doesn't look unhealthy to me",
+        "created_at": "2025-12-19T10:05:46.225000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah we could indeed log these. We're experiencing cascading effects on that the node falls behind temporarily cause it didn't get data in time and then fails to catch up due to processing a bunch of pending aggregate attestations that came before then next block. We're looking into how to better queue them or deduplicating then more effectively",
+        "created_at": "2025-12-19T10:10:50.108000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "general",
+        "parent": "",
+        "content": "- a high duplicate rate in aggregators means that some aggregators are consistently arriving to the same state (i.e. they receive the same attestations and the local aggregation pipeline produces the same result)\n- attnets have around 500 mesh members today, so 16/500 = 3.2% of those are aggregators. doesn't seem like a poor parameter choice that balances altruism and safety.\n- i wonder if we actually have more aggregators in practice because other nodes are voluntarily taking that role too? we can run an investigation in Xatu to check\n- \u003c@755590043632140352\u003e attestations are ~180 bytes snappy compressed, so the excess in your numbers above would represent ~18KiB total duplicates during a time where the CL is mostly idle.\n- also, those numbers imply an overhead of ~23% duplicates, which doesn't seem alarming to me\n- optimizing the processing pipeline in implementations seems like the highest priority. from a networking perspective, adding control traffic to suppress duplicates when the payloads themselves are tiny and non-competing could be counterproductive",
+        "created_at": "2025-12-19T12:30:18.823000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m.kalinin",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e i wonder if we actually have more aggregators in practice because other nodes are voluntarily taking that role too? we can run an investigation in Xatu to check\n\nAggregates from voluntary aggregators that aren't selected should be rejected as `is_aggregator` for them is false",
+        "created_at": "2025-12-19T12:43:25.698000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "general",
+        "parent": "",
+        "content": "what's interesting is that based on our metrics we receive a lot more identical aggregates (`Equal` in our metric) on mainnet than compared to hoodi which might suggest that it's just healthier network? I would have assumed the opposite as hoodi nodes are more centralized",
+        "created_at": "2025-12-19T13:27:29.142000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "general",
+        "parent": "",
+        "content": "this is mainnet",
+        "created_at": "2025-12-19T13:27:33.631000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "53e1f2d2fb54d4ca514d896c534d4f55631408207f80d3182112a4acc2855cd2"
+            }
+        ]
+    },
+    {
+        "author": "nflaig",
+        "category": "general",
+        "parent": "",
+        "content": "compared to hoodi",
+        "created_at": "2025-12-19T13:27:51.880000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "19387c8ad62bdf8634b552d27e770639dea13149190e3ba0d17729927ec2c702"
+            }
+        ]
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "general",
+        "parent": "",
+        "content": "Do you have any stats on blob propagation latency and bandwith usage pre and post Fusaka?",
+        "created_at": "2025-12-19T14:40:24.675000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Hoodi is definitely healthier than mainnet: the Prysm bug on attestations was not triggered there",
+        "created_at": "2025-12-19T16:34:45.781000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "We ran for a month",
+        "created_at": "2025-12-19T16:35:06.433000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Mainnet took just a couple of hours and one large operator",
+        "created_at": "2025-12-19T16:35:21.913000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "general",
+        "parent": "",
+        "content": "I had missed this detail. If the aggregates are signed then it’s semantically identical aggregations will still be seen as unique by gossipsub and forwarded/gossiped if validation passes (since the message id func is a hash of the payload)",
+        "created_at": "2025-12-19T18:52:17.136000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "general",
+        "parent": "",
+        "content": "If that’s the case, a simple optimization consists of modifying the message id func to disregard the aggregator’s signature",
+        "created_at": "2025-12-19T18:53:11.214000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Yes this is the case (equal aggregates and different aggregators) and the node is not idle at all if it's trying to catch up with pending blocks (which is what triggered this). Sorry for being sketchy, in a tight spot now, but perhaps the larger point to take from this is that we should have a detailed distribution of this data for the last 5 years and if we don't then we should rethink our data gathering and saving policies when it is about offchain data cause that's lost forever. Sam does magic with xatu but it can't keep everything. Forkchoice dumps have been incredibly helpful diagnosing bugs. Aggregated data like this would be also useful.",
+        "created_at": "2025-12-19T21:21:55.841000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marcopolo__",
+        "category": "general",
+        "parent": "",
+        "content": "a couple of quick thoughts:\n- We should be ignoring aggregate attestations that are semantically the same as a previous one. This prevents us from forwarding semantically idential messages.\n\u003e - _[IGNORE]_ A valid aggregate attestation defined by\n\u003e   `hash_tree_root(aggregate.data)` whose `aggregation_bits` is a non-strict\n\u003e   superset has _not_ already been seen. (via aggregate gossip, within a verified\n\u003e   block, or through the creation of an equivalent aggregate locally).\n- We need to be careful when fiddling with the message id. At the very least we probably need to verify the signature and if the signer is an aggregator before calculating the message id if we aren't just hashing it. In other words, if multiple different messages can result in the same message ID, we need to make sure that the message is indeed valid before returning the ID.\n- Messing with the message ID will benefit in reducing duplicates from the gossiped IHAVE/IWANT, since with just the hash of the message, you don't actually know if it's a useful message until you get it.\n- The better solution might be to use partial messages that is designed around the idea of exchanging bitmaps.\n\nI'd need to dive deeper here to understand the finer details.",
+        "created_at": "2025-12-19T22:35:43.785000+00:00",
+        "attachments": null
+    }
+]

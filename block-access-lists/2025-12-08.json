@@ -1,0 +1,128 @@
+[
+    {
+        "author": "ethpandaops-devnet-pulse-v2",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "",
+        "created_at": "2025-12-08T01:00:00.461000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mirgee",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "[This](https://github.com/ethereum/execution-specs/pull/1846) test helped us uncover a class of potential BAL-related bugs in Besu across multiple opcodes, so we probably need more tests of the same style for other opcodes.\n\nThe test is parameterized over the gas forwarded to SELFDESTRUCT via the inner CALL:\n* static_gas_cost - 1, and\n* static_gas_cost.\n\nThis exercises the access patterns around the gas boundary and verifies that no unnecessary state accesses are made before the static gas-cost check.\n\n[This exposed the fact that in Besu we often compute the static and dynamic parts of the gas cost together](https://github.com/hyperledger/besu/pull/9548), which can cause unnecessary state accesses even when there isn’t enough gas to pay the minimum statically determinable cost of the operation. Presumably, in such cases, the operation should fail with OOG before any state access.\n\nBesides SELFDESTRUCT, the same pattern affects at least SLOAD, SSTORE, PAY and the CALL opcodes.",
+        "created_at": "2025-12-08T06:37:08.975000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "it could impact more opcodes. we are just listing where it could be an issue in besu. For exampe ExtCodeHash, we have the right behavior but could be an issue for another client",
+        "created_at": "2025-12-08T06:43:15.412000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We have bunch of such test cases already. \u003c@796570016966770688\u003e is working on adding more!",
+        "created_at": "2025-12-08T06:47:47.298000+00:00",
+        "attachments": [
+            {
+                "type": "image/webp",
+                "origin_name": "image.png",
+                "content": "746613acf69c94ad75aaa8bafb1b89d56f12a947674aae0a02f88a116394d174"
+            }
+        ]
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Please let us know if you have some specific edge casee in mind.",
+        "created_at": "2025-12-08T06:49:28.142000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Are this tests already running ? because for the moment we don't have failing tests so maybe we are not checking the edge case we found",
+        "created_at": "2025-12-08T06:51:09.905000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "These tests are part of the latest release.",
+        "created_at": "2025-12-08T06:52:41.373000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "ah ok we need to check because we have the blob gas issue so it's hiding the real failing tests. We merged the fix to don't have the blobGas issue",
+        "created_at": "2025-12-08T06:54:59.638000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I just checked in the last run and it's passing in besu https://hive.ethpandaops.io/#/test/bal/1765132164-2c816ca90a0b15ffedff927114b1ab54?page=1\n\nSo maybe we are not testing the edgecase. or maybe it's not using the last release",
+        "created_at": "2025-12-08T06:55:57.732000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Oh do you mean the self_destruct_oog test? I dont think those have been released yet.",
+        "created_at": "2025-12-08T06:57:36.187000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "no talking about test_bal_sstore_and_oog",
+        "created_at": "2025-12-08T06:57:54.286000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The *_oog test shown above was released long time ago. I recall besu passing those.",
+        "created_at": "2025-12-08T07:00:45.561000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes, that's what I'm saying: Besu passes these tests, which seems strange, since if we look at the code, there is an edge case where we actually have one extra read in a certain situation. So I think these tests are not checking everything, and maybe we should add something more. \n\nWe need to have a test similar to the selfdestruct test that fails for SSTORE, and I don't think that's currently the case in test_bal_sstore_and_oog. \n\nThe correct order of operations should be: first check if the base gas cost plus the cold gas cost are available; then, if there is sufficient gas, read the address from the database; and finally, carry out a complete gas check to verify total gas availability. \n\nIn Besu, we are first reading the account from the database, and then performing the complete gas check to verify total gas availability.",
+        "created_at": "2025-12-08T07:04:22.096000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We'll double check the coverage.",
+        "created_at": "2025-12-08T07:05:38.543000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mirgee",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e In Besu, we are first reading the account from the database, and then performing the complete gas check to verify total gas availability.\nI am not sure the issue can manifest with SSTORE because by the time it executes, the account whose storage is being written to (the recipient account) has necessarily already been accessed when the execution context was created?",
+        "created_at": "2025-12-08T08:03:25.832000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,202 @@
+[
+    {
+        "author": "ethpandaops-devnet-pulse-v2",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "",
+        "created_at": "2025-11-04T01:00:00.622000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Hi everyone,\n\nI recently ran a benchmark to evaluate the potential speedup achieved by including read locations in the BAL. The results show that these read locations can provide a significant performance improvement.\n\nPlease review the report and run the same benchmark on your implementation. Since different clients may use different database engines, the results could vary.\n\nhttps://hackmd.io/@bFEBbZiVSAO0IURh9qzEFg/S1Y-mjBkWe",
+        "created_at": "2025-11-04T05:23:42.878000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "What factors contribute to saturation around 32 threads?",
+        "created_at": "2025-11-04T06:59:12.271000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Let me try to interpret that:\nYou used 1m storage keys (1m*2100 ~= 2b gas limit), but this would scale quite linarly if using less (or more) storage keys, e.g. for a more realistic gas limit of 250m.\nThe **gains are a 8x** for such worst-case read-heavy blocks doing a bunch of SLOAD from random storage slots within one account.\n**E.g. at 250m gas we would get from 5.64s to 0.35s.** Still using 4 threads as the baseline. If we set the baseline to 16 threads, then we get from 2.5s to 0.35s.\nThe worst-case BAL (containing 120k random storage slots) is 3.6 MiB. With 50Mbits upload, it'd take roughly 0.58s to upload.",
+        "created_at": "2025-11-04T07:24:41.335000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think it's limited by the physical structure of SSD",
+        "created_at": "2025-11-04T07:32:15.502000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e You used 1m storage keys (1m*2100 ~= 2b gas limit), but this would scale quite linarly if using less (or more) storage keys, e.g. for a more realistic gas limit of 250m.\nyes",
+        "created_at": "2025-11-04T07:33:59.496000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yes, i think it's correct. We still need the performance numbers from other clients, ensuring we are aligned with each other",
+        "created_at": "2025-11-04T07:36:44.193000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lukaszrozmej",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Might be CPU too, 14700k has 8 p-cores running 16 threads and 12 e-cores for additional 12 threads, giving total 28 threads to work with. Not sure if I/O used was sync or async.",
+        "created_at": "2025-11-04T08:49:51.570000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "arnetheduck",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "what are the prospects for dropping BAL data from historical archives? is it feasible in the current design?",
+        "created_at": "2025-11-04T11:39:04.607000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes, but i guess mostly due to the NAND channels in the SSD. CPU probably also plays a role here.",
+        "created_at": "2025-11-04T11:41:51.878000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah, they can totally be dropped for archive nodes.",
+        "created_at": "2025-11-04T11:55:12.331000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think it will nice to test it with XEN contract transaction . they have a lot of SLOAD",
+        "created_at": "2025-11-04T13:02:20.443000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "XEN contract transaction also has a lot of SStore. I think the worst case is the read-heavy transaction, it's what i have simulated (all ssloads) in my benchmark",
+        "created_at": "2025-11-04T13:14:34.211000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I don't know if it's only SLOAD. From what I heard it depends on the client (some clients the issue was more related to SSTORE)\n\nHave you tried organizing read requests in parallel based on their keys? For example, to optimize the block cache trying to read all the storage from the same contract at the same time. I'm not sure if Pebble works the same way as RocksDB, but I'm wondering if prioritizing reads based on their keys could help optimize the blockcache usage during read operations.",
+        "created_at": "2025-11-04T13:20:49.343000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "XEN contract is the largest contract by storage trie size. In the transactions which perform slow on some nodes, we see that a lot of SSTOREs are utilized. In particular, there is also a write to a non-existing slot writing the zero value. For the gas schedule we have to lookup the original value (value of the slot at the start of the transaction). For some clients, reading non-existent storage slots is a slow operation, and this SSTORE causes a lookup to a non-existent slot.",
+        "created_at": "2025-11-04T13:39:20.670000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "In theory, attacker can deploy multiple contracts and access the storage slots from them. We always need to tackle the worst case. The cache locality is something we need to avoid in the benchmark",
+        "created_at": "2025-11-04T13:40:18.337000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah, but Sstore is much more expensive than the ssload right? My gut feeling is for the mainnet now, a block will all ssload will be even slower",
+        "created_at": "2025-11-04T13:42:39.212000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yes I agree with you, it was just to have an idea of the performance we can have in a worst case with much more locality . for example I saw that XEN is doing everytime 4 SLOAD that are clause to each other . But maybe not important to test it. just curious",
+        "created_at": "2025-11-04T13:45:38.599000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The SSTORE case for doing a no-op is actually the same cost as SLOAD https://eips.ethereum.org/EIPS/eip-2200",
+        "created_at": "2025-11-04T13:46:15.722000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "But yes, for clients where reading non-existent keys is slow a SLOAD block might be problematic. However for the XEN txs we also have to take into account that it writes a lot of storage and therefore has to pull a lot of intermediate trie nodes from disk",
+        "created_at": "2025-11-04T13:47:29.064000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "with the state root in background we can also batch the intermediate trie nodes read (several paths in //)",
+        "created_at": "2025-11-04T13:50:11.485000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "samwilsn",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Where do we put the state tracker in EELS?",
+        "created_at": "2025-11-04T19:41:04.381000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "By \"read location\" do you mean current structure of BAL (storage reads and empty accounts)?",
+        "created_at": "2025-11-04T19:46:16.988000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'd assume so because the simulation was being done reading 1m random storage slots from the same account (which has no empty accounts in this case), and the unmodified state locations have often casually been referred to as \"the reads\".",
+        "created_at": "2025-11-04T19:53:57.319000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Wanted to double check, would assume the same, but it is slighlty confusing. Results does make sense. Thanks",
+        "created_at": "2025-11-04T19:55:48.986000+00:00",
+        "attachments": null
+    }
+]

@@ -1,0 +1,82 @@
+[
+    {
+        "author": "lucassaldanhaconsensys",
+        "category": "general",
+        "parent": "",
+        "content": "Maybe this is too much, but what if we took it one step further and make it ARG_NUMBER | ARG1 | ARG2 | ARG3 | ARG4 | ARG5 are interpreted as an arbitrary chunk of 41 bytes of data? This would open up other possibilities.\n\nFor example, EIP-7804 defines a request that has pub_key | old_address | new_address. Using this approach, we could fit two addresses in the arbitrary data (and it is up to the CL to know how to interpret the parameters.\n\n I am not sure if I like the idea of generalising too much execution requests. But if we are thinking about it, maybe we don't restrict the type of data being sent. The target_pubkey would be interpreted as: `| MAGIC_PREFIX | CALL_TYPE | DATA (41 bytes) |`",
+        "created_at": "2025-08-28T10:13:41.085000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lucassaldanhaconsensys",
+        "category": "general",
+        "parent": "",
+        "content": "although it we were to go down the generic request route, maybe it would make more sense to have one new contract to be the generic request contract. With its own limits etc.",
+        "created_at": "2025-08-28T10:16:22.110000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "Yeah I'm not keen to any API in particular and indeed just sending arbitrary data is the best way to go. Just wanted to have the general concept discussed first, it seems that Matt is against the idea of overloading and he'd want to create new requests types. I on the other hand dislike to add more slices and types and tie an EL fork on what otherwise would be a pure cl one",
+        "created_at": "2025-08-28T10:18:19.080000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "And I particularly don't want to have a new contract because the first application I have in mind is changing the withdrawal prefix as what this contract does. Changing it's name is already good enough for me 😅",
+        "created_at": "2025-08-28T10:19:29.757000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lucassaldanhaconsensys",
+        "category": "general",
+        "parent": "",
+        "content": "IMHO the \"problem\" with the approach of adding a new contract per type means the cost of adding a request and the complexity demotivate some uses. Maybe this is by design, given we don't want to add too much complexity on execution requests, but it does mean we might decide not to implement something that would be useful just because we don't want to deal with the current cost of creating a request. EIP-7804 is an example of some quality of life feature, that many have requested,  but isn't crucial for the protocol so we are not motivated to deal with all the complexity of adding a new request type just for it.\n\nHaving said that, I do understand Matt's point of view as well. And I have some concerns loosening up this EL\u003c\u003eCL channel could make a mess in the future! So I don't really know where I stand on it 😅",
+        "created_at": "2025-08-28T10:27:56.390000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lucassaldanhaconsensys",
+        "category": "general",
+        "parent": "",
+        "content": "\u003e the first application I have in mind is changing the withdrawal prefix as what this contract does\nthis change would open up to eventually we adding support to \"downgrading\" withdrawal prefixes as well, just another CALL_TYPE. E.g. from 0x2 back to 0x1 etc. (applying the necessary churns etc.)",
+        "created_at": "2025-08-28T10:29:20.168000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "lightclient",
+        "category": "general",
+        "parent": "",
+        "content": "We wanted requests to have type bytes and be merkleized into the same root for exactly the reason of allowing more types of requests w/o as much overhead 😅  I do see how it can be nice from the CL perspective to just \"put different data\" into the message bus and get a different result on the other end. In retrospect, I can appreciate the simplicity of it and minimal interaction with EL forks to add new EL -\u003e CL operations. \n\nI think if we can come up with a dequeue operation that is flexible enough to support many different types of requests with different frequencies, e.g. some requests could have hundreds per block whereas many will be quite rare. As we add more and more requests, how long does the queue grow? Is there an issue with the additional time it takes to dequeue unrelated operations and send them to the CL?\n\nAlso would want to think more if there are any requests where it is valuable to have other types of validation steps before accepting. Right now we essentially just check the data is well formed, but you could imagine we verify a BLS sig (this was wanted for the deposit contract originally). A generic contract would not let us have pre-validation on those operations. Which is probably okay since the beacon chain will always have all the information to do it correctly. But it might be better UX to flag it early at the EL?\n\nLast, we would need to append the `msg.sender` or the EL request originator in every request, even if it is not relevant. Also probably not an issue, but it is slightly less efficient",
+        "created_at": "2025-08-28T13:32:25.464000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "\u003c@360491619402776577\u003e continuing here, what do you mean by \"unclean\"? it is simply renaming the second parameter from `target_pubkey` to `calldata` and now the CL gets three parameters: `sender`, `pubkey` `calldata`. And has a function that processes these three parameters.",
+        "created_at": "2025-08-28T15:19:13.081000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "general",
+        "parent": "",
+        "content": "if anything is seems much cleaner to me than having to add a new request every time when we have a validator with pubkey `pubkey`sigining with `sender` and sending data, the user also will need to figure out which contract to interact to, etc.",
+        "created_at": "2025-08-28T15:20:21.740000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "mariusvanderwijden",
+        "category": "general",
+        "parent": "",
+        "content": "We built a pretty generic framework with requests, now we are thinking about sidestepping this generic framework to built another generic framework within.\nThis feels pretty unclean to me. I guess if you rename the consolidation contract to something like arbitrary messaging contract, it would be okay.\nBut then wouldn't we want to have a different design for an arbitrary messaging contract? \n(including features like: bigger messages, not a broken 1559 design, more than 2 requests per block, ...)",
+        "created_at": "2025-08-28T18:50:35.233000+00:00",
+        "attachments": null
+    }
+]
