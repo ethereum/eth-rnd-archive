@@ -22,5 +22,109 @@
         "content": "This looks very impl specific, this order does not mean it is done in all clients in that way.",
         "created_at": "2026-01-21T10:14:26.027000+00:00",
         "attachments": null
+    },
+    {
+        "author": "marchhill",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "hey \u003c@577788234810130432\u003e \u003c@796570016966770688\u003e \u003c@762919002196410400\u003e I found a bug from running the latest test release which didn't come up in fuzzing - maybe we can extend the fuzzer to try to cover similar situations\n\n`tests/static/state_tests/stTimeConsuming/sstore_combinations_initial10_2_ParisFiller.json::sstore_combinations_initial10_2_Paris[fork_Amsterdam-blockchain_test_engine_from_state_test-d134]`\nthis was one of the tests that was failing. It seems like the error is caused when:\n- there is some storage slot with value `a`\n- in one transaction there is a storage change `a`-\u003e`b`, then `b`-\u003e`a`. so overall no storage change is recorded, but a read is added\n- we revert back to when the value was `b`\n- the storage read is not removed, so there is both a storage change and read for the same slot",
+        "created_at": "2026-01-21T14:47:27.477000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Say slot is 0.  \n\nOperation is slot 0: a -\u003e b and then REVERT\n\nExpected: read [0], and write []\n\nActual: read[0] write [0]?",
+        "created_at": "2026-01-21T14:56:27.231000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marchhill",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "no I'm talking about the case where the expected is read [] and write[0], but instead we get read [0] and write[0] because the storage change is restored but the read is not removed",
+        "created_at": "2026-01-21T15:08:54.091000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Reverted writes are recorded as reads. \n\nFrom the EIP\n\u003e State changes from the reverted call are discarded, but all accessed addresses MUST be included. If no changes remain, addresses are included with empty lists; if storage was read, the corresponding keys MUST appear in storage_reads.",
+        "created_at": "2026-01-21T15:21:28.978000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "marchhill",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "yep that's true, but see the case I posted above. because we go from `a`-\u003e`b` then back to `a` in the same tx then it deletes the storage change (and adds a read) as we are back to the original value. If we then revert to when the value was `b` we need to add back in a storage change (`a`-\u003e`b`),  and the storage read needs to be removed",
+        "created_at": "2026-01-21T15:24:44.689000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raxhvl",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I see you mean, that there is a stale read from the no-op storage operation that is not cleared",
+        "created_at": "2026-01-21T15:30:10.504000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "garyrong",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The issue is that the read location in BAL may vary depending on the order.\n\n1. charge access list costs for the target account\n2. check that we have enough gas to proceed\n3. charge access list costs if the target is a delegated contract\n4. value transfer cost\n5. memory expansion cost\n6. new account creation cost\n7. calculation of gas available to sub-call per 63/64 rule.\n\nFor example, if gas is used up after step (3), then the target account will be included in the BAL read list;\n\nIf we reorder it a bit by doing 4,5 first and then 3,  gas is used up after 5, the target account of step3 won't be included in the BAL\n\nWe need to specify the expected behavior upon these cases",
+        "created_at": "2026-01-21T15:55:27.039000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "My comment was mostly about that order before BAL that is impl specific, so comment `The advantage here is that steps 4-7 are the \"legacy\" gas handling logic from before 2929/7702.  It allows us to reuse existing a lot of existing code, reducing the diff significantly.` does not work for all clients.",
+        "created_at": "2026-01-21T16:01:54.213000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "But you are correct that order when we have BAL matter.",
+        "created_at": "2026-01-21T16:02:59.168000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m0_ox",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It is being clarified [here](https://github.com/ethereum/EIPs/pull/11066/changes). This is something we had agreed on during implementation but had not updated in the EIP. Feedback welcome there.",
+        "created_at": "2026-01-21T16:41:08.895000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "As clarified with \u003c@491624610215886849\u003e and \u003c@586161934425128960\u003e, CLs prefer to have the bal included in the response to `engine_getPayloadBodiesBy` instead of having a separate method for it.\nThis is the PR to the execution-apis repo with that change: moving from the separte BAL engine api methods to having the BAL in `ExecutionPayloadBodyV2`.",
+        "created_at": "2026-01-21T18:50:53.210000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://github.com/ethereum/execution-apis/pull/727",
+        "created_at": "2026-01-21T18:51:14.195000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This also means, ELs won't need the two new engine api methods and instead add the BAL to the response of the existing method.",
+        "created_at": "2026-01-21T18:53:14.430000+00:00",
+        "attachments": null
     }
 ]

@@ -1,0 +1,885 @@
+[
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Another issue that I do not like, on https://github.com/ethereum/consensus-specs/pull/4817 we onboard builders at the fork, but the deposit epoch is set to be the fork epoch, so those builders would not be active until two epochs later. We still haven't solved the issue of those builders participating. cc \u003c@981249983196041218\u003e",
+        "created_at": "2026-01-27T01:28:49.027000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "No bids from those buidlers will be included, the happiest case would be 1 epoch after the fork",
+        "created_at": "2026-01-27T01:29:17.904000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "just looking at the payload by range request, and max_request_payloads is 128.... kinda surprising we can request such a huge range?",
+        "created_at": "2026-01-27T01:29:33.479000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I believe this number comes from geth's that keeps these many payloads that can reorg",
+        "created_at": "2026-01-27T01:30:05.409000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "are you saying that these spec tests can be ran today, i just need to ignore the payload\nhave any clients done that and verify they pass?\nwanna avoid looking deeper if it fails then have to figure out whether its a prysm bug or a spec test issue 🙂",
+        "created_at": "2026-01-27T01:39:15.932000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@592004585506340885\u003e this is a double bug that wasn't caught yet. If we do want to enforce this activation after finalization constraint then `apply_deposit_for_builder` should not use the state's epoch as the deposit epoch. A deposit request at slot `32E + k` for   0 \u003c k \u003c 32 will be added with a deposit epoch of `E`. When the finalized checkpoint gets to have epoch `E` this builder's deposit will be considered finalized and the builder will be activated, when in fact the block 32E + k is still not final and can be reorged.",
+        "created_at": "2026-01-27T01:55:27.966000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We could change the deposit epoch in the fork onboarding to be one epoch before (since the deposits were in fact in the previous epoch) but the normal flow will probably need to change `is_active_builder` to check against `finalized_checkpoint.epoch - 1`",
+        "created_at": "2026-01-27T01:56:55.440000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We can probably ditch the finalization condition to being an active builder, I am not certain here... sorry to tag again \u003c@520034910149410861\u003e",
+        "created_at": "2026-01-27T01:57:42.003000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes, see: https://github.com/OffchainLabs/prysm/pull/15312",
+        "created_at": "2026-01-27T02:00:17.548000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I will open an issue about this to have it documented somewhere so that I can link it in the annotated version",
+        "created_at": "2026-01-27T02:09:49.903000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "terencechain",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Ok thanks. I'll try it out and let you know how it goes",
+        "created_at": "2026-01-27T02:24:32.115000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "is this really a problem? 90% of the people will still probably use mev boost and have trusted blocks built at and around the fork. Not having builders right around the fork doesn’t seem that big of a deal to me.",
+        "created_at": "2026-01-27T08:11:53.836000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "How are they going to use MEV boost?",
+        "created_at": "2026-01-27T08:38:03.081000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Are all clients gonna disable mev boost at the fork?",
+        "created_at": "2026-01-27T08:39:01.383000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I thought that mev boost will live on and people can opt in or out to use it",
+        "created_at": "2026-01-27T08:39:24.147000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "barnabasbusa",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "and maybe axe mev boost in heze",
+        "created_at": "2026-01-27T08:39:37.590000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Prysm will not support blind signing, there isn't even a blind object specified. I am unaware of any attempts by MEV boost or commit boost on trying to have a middleware to deal with blind signing. Other clients can implement this, I am unaware of clients trying to do this.",
+        "created_at": "2026-01-27T08:54:23.814000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "christoph7800",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I've been a bit out of loop with the variable payload deadline discussion. Two questions: 1) what will be the likely min and max deadlines? 2) if the min and max are far apart shouldn't we be worried that builders stuff their blocks with call data (in case gas is reasonably cheap) to extend the deadline?",
+        "created_at": "2026-01-27T09:15:45.426000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "christoph7800",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "also: is there any plan or ongoing discussion whether we will have penalties for failed payloads or rewards for delivered payloads?",
+        "created_at": "2026-01-27T09:26:10.101000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "julianma_",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Fwiw I'm not so worried about this as it has happened before with circuit breakers and doesn't seem extremely bad\n\nhttps://collective.flashbots.net/t/how-the-mev-supply-chain-reacts-to-circuit-breakers/5439/1 from \u003c@911055007837720597\u003e",
+        "created_at": "2026-01-27T10:06:04.373000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "nevermind this, I didn't see that the check is for \u003c and not for \u003c=",
+        "created_at": "2026-01-27T13:33:47.063000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It's going to be approx 3 epochs after the fork, we should probably do something to change the ones that are onboarded at the fork so that at least this is reduced to just one epoch instead of 3 https://github.com/ethereum/consensus-specs/issues/4867",
+        "created_at": "2026-01-27T14:11:02.675000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I take it back as well perhaps, while it's doable, the engine needs the commitments to verify the payload, and if we don't include them in the envelope then this forces the node to get a DCS to verify the payload",
+        "created_at": "2026-01-27T15:01:32.874000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "This was a good catch \u0026 easy to fix. Made this PR: https://github.com/ethereum/consensus-specs/pull/4868",
+        "created_at": "2026-01-27T15:02:44.760000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Btw with this change, I think builders can be completely active at the fork.",
+        "created_at": "2026-01-27T15:06:17.682000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The builder's deposit (from the pending deposit) could be finalized before the fork.",
+        "created_at": "2026-01-27T15:06:52.710000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bharath.vedartham",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "if a builder submits a deposit with a 0x03 credential before gloas but it gets processed into a validator deposit before the fork, the only thing the builder can do is to exit the validator and redeposit post the fork right?",
+        "created_at": "2026-01-27T15:32:22.449000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "If they deposit too early, it'll be annoying to get that deposit back. To perform an exit, the validator has to be active \u0026 it cannot be active without the minimum activation balance (32 ETH).",
+        "created_at": "2026-01-27T15:42:01.439000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "",
+        "created_at": "2026-01-27T15:42:25.773000+00:00",
+        "attachments": [
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "6b86d11e9fe6dbf73879f901afea05dfb807aed53e3d2a47c377e7ac72632179"
+            },
+            {
+                "type": "image/png",
+                "origin_name": "image.png",
+                "content": "811a7aa2f1d5bf9609a3255062fd267481b64d8713c98a54c0ac541072f086de"
+            }
+        ]
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So they'd probably need to deposit an additional ~30 ETH in order to exit.",
+        "created_at": "2026-01-27T15:43:58.312000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Which is why I made: https://jtraglia.github.io/onboard-builders/",
+        "created_at": "2026-01-27T15:44:36.948000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "looks good to me, will review later tonight",
+        "created_at": "2026-01-27T15:52:50.356000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Incidentally this is my first pass on an annotated spec for the beacon-chain.md file. Will require many more readings, but it may help people asking for some of the \"why\"  decisions. If you guys have any comment that need to be added I appreciate it. I haven't read this myself yet so it will be evolving surely\nhttps://www.potuz.net/posts/gloas-annotated-1/",
+        "created_at": "2026-01-27T15:53:45.925000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Much appreciated. I'll give this a read soon 🙂",
+        "created_at": "2026-01-27T16:00:09.339000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e It would be better if we had the full list of commitments in the bid already so that clients could request the blobs from the EL directly before even any sidecar arrives, but this would bloat the p2p network for bids, and the proposer \u003c-\u003e builder direct connection when requesting the bids.\nWould it really be that much bloat? 48 bytes * ~72 blobs = ~3500 bytes. Not nothing, but not that much.",
+        "created_at": "2026-01-27T17:14:44.285000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Would this allow us to remove the commitments from the data column sidecars? Potentially saving us bandwidth?",
+        "created_at": "2026-01-27T17:15:36.019000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Because we'll always have the `ExecutionPayloadBid` before receiving \u0026 verifying sidecars, right?",
+        "created_at": "2026-01-27T17:17:06.272000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "You could store the commitments root in `DataColumnSidecar` but I don't see the point in that.",
+        "created_at": "2026-01-27T17:19:33.633000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "cc \u003c@755590043632140352\u003e",
+        "created_at": "2026-01-27T17:19:38.643000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think it's a lot in the most time sensitive piece of the auction",
+        "created_at": "2026-01-27T17:21:24.211000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "That's fair. The other benefits would be nice though.",
+        "created_at": "2026-01-27T17:27:28.772000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We'd be able to remove the commitments from `ExecutionPayloadEnvelope` too.",
+        "created_at": "2026-01-27T17:31:22.492000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "With a 15Mbps connection, an extra 3500 bytes would add ~2ms of latency.",
+        "created_at": "2026-01-27T17:33:12.347000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Across 10 hops, ~20ms. Or something like that.",
+        "created_at": "2026-01-27T17:37:10.701000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "you can add it to the agenda, but I don't know if we have a place to discuss sync anymore. Perhaps we can tag builders here to gauge?",
+        "created_at": "2026-01-27T17:42:24.505000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Shared in the \u003c#692078615269212180\u003e channel. I'll think about adding it to the agenda. Might come to a quick resolution here first though.",
+        "created_at": "2026-01-27T17:44:41.768000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Another problem which is perhaps more fundamental is that it creates free DA",
+        "created_at": "2026-01-27T17:45:48.096000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "the commitments stay with the block even though the payload may never be available",
+        "created_at": "2026-01-27T17:46:16.514000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "it's a cheap form of DA though cause the blobs are not with nodes, but still you get to post 3MB on chain for the WSP",
+        "created_at": "2026-01-27T17:46:45.721000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We could limit the number of commitments in the bid to be \u003c= the current blob limit.",
+        "created_at": "2026-01-27T17:47:33.975000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Still free DA, but much less. 1 KiB right now.",
+        "created_at": "2026-01-27T17:47:54.128000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "But yes, this would affect state growth too. Since the bid is stored in the state.",
+        "created_at": "2026-01-27T17:49:15.966000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think that alone is reason enough to not make this change.",
+        "created_at": "2026-01-27T17:50:10.719000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So yeah nevermind. This is a bad idea 😅",
+        "created_at": "2026-01-27T17:50:53.522000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Oh lol, I said MB above 🙂",
+        "created_at": "2026-01-27T18:52:24.976000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "The bid is not stored in the state though, just one bid, should not be bad. And getting the blobs fom the EL seems to be a game changer at least now. If people are not worried about bandwith or the quick free DA we could probably do it. It can be done later too",
+        "created_at": "2026-01-27T18:53:57.039000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "definitely not devnet 0 though, please no more structure changes now 🙂",
+        "created_at": "2026-01-27T18:54:09.877000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "FWIW: we need mainnet vectors or more reallistic PTC selection testvectors, we had a bug selecting PTC members from committees looping through them and passed tests anyway, this is beause all tests must select the PTC from the first committee only",
+        "created_at": "2026-01-27T19:36:07.847000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@795439202732867594\u003e can you weigh in on the above? the suggestion is to move the full KZG commitments to the bid instead of the payload and all data column sidecars.  Pros (assuming 72 blobs)\n- Nodes can request the blobs from the EL before the builder even decided to broadcast them. \n- 3476 bytes less on each sidecar and each payload\n\nCons: \n- 3424 bytes more on each bid: this means the bid goes from 212 bytes to 3636 bytes. Bids can be broadcast by any builder and is a global topic. \n- Larger bids means more latency on the auction itself, bids are requested directly from the builder by validators, if this latency is important, builders may choose not to include blobs as they do today. \n\nPerhaps the biggest con is a metacon: I think we want to move to a world in which the bid does not identify anything from the payload, really removing most synchronization and commit/reveal mechanisms from the slot.",
+        "created_at": "2026-01-27T20:08:23.785000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "let me think carefully about this. as an early data point, Xatu Sentry nodes consistently see \u003e93% of blobs in the public mempool before they're included, with the other ~6% being received very shortly after the slot (1-10s). Overall, blobs wait a median of ~7-10s, and a p99 of \u003c20s before inclusion.\n\nhttps://observatory.ethp2p.dev/latest/mempool-visibility\n\ncaveat: Xatu Sentries are well connected machines with 1Gbps bw (possibly higher), so this picture is not representative of the whole network. but it does provide insight into pre-slot availability.",
+        "created_at": "2026-01-27T20:17:16.285000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "a couple of key points:\n- as we stretch towards 72+ blobs, we'll start seeing more fragmentation of blobpool availability\n- scaling blobs involves smoothening out bandwidth utilization over time (so instead of relying on critical path propagation, we rely more on the blobpool)",
+        "created_at": "2026-01-27T20:18:55.961000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "the last point is operative: the path to scaling blobs with the PeerDAS architecture leans on pre-propagation (both cell level messaging and the sparse blobpool leverage this), so from that perspective, we're fine taking a tradeoff in ePBS that reveals included blobs in a bid. on the flip side, it also gives builders more opportunity to withhold blobs from the blobpool and rely on the extra time to propagate them in the critical path. hmmm",
+        "created_at": "2026-01-27T20:25:51.325000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "on the variable PTC front, it's feels easier to reason about the function if blobs are not part of the exec payload",
+        "created_at": "2026-01-27T20:27:13.440000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "blobs aren't part",
+        "created_at": "2026-01-27T20:27:33.142000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "we're talking purely about the commitments here",
+        "created_at": "2026-01-27T20:27:39.487000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "i see, let me think more about this",
+        "created_at": "2026-01-27T20:28:13.718000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@755590043632140352\u003e to clarify, when i say \"blobs\" it's a shorthand for revealing which blobs are included (i.e. the commitments). i don't mean inlining blob data, if that's what you were commenting on?",
+        "created_at": "2026-01-27T20:32:51.349000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "then what does this comment mean?\n\u003e on the variable PTC front, it's feels easier to reason about the function if blobs are not part of the exec payload",
+        "created_at": "2026-01-27T20:33:37.909000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@755590043632140352\u003e sorry, was running on bad info, disregard the variable PTC comment. here are my thoughts -- pls flag if something is off:\n- the current spec makes DataColumnSidecar validation dependent on having received the BeaconBlockBody. in the past we could validate and forward DCS before receiving the BBB. the combination of kzg commitments, kzg cell proofs, signed block header, and inclusion proof, enabled us to authenticate columns independently; now we have to wait because we cannot legitimize the column before the block arives.\n- this might be problematic because, today, the majority of columns are received [***before*** the block](https://observatory.ethp2p.dev/latest/block-column-timing#Block-to-column-delay-over-time), so this new dependency can cause a net slowdown in column propagation.\n- however, my understanding is that we're betting that the reduced size of the beacon block (sans exec payload) will allow it to propagate faster, offsetting the potential delay (this is something we'll have to test carefully to see if it checks out; it's possible that block validation dominates path latency).\n- in summary, keeping the KZG commitments in DCS allows us to validate and forward the column before the *exec payload arrives*, but we still have to wait for the beacon block to arrive.\n- therefore, it does make sense to factor them out and lift them up to the execution bid, propagating them once instead of 128 times.\n- this spares bandwidth generally, at the expense of adding 3KiB on the root object.",
+        "created_at": "2026-01-27T21:47:36.482000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "re: extra weight in the execution_payload_bid topic, \u003c@755590043632140352\u003e, it would be good to see calcs on the expected traffic. i assume it won't mirror the bid traces we see in MEV boost, as those are only feasible due to the point-to-point communication via a relay.",
+        "created_at": "2026-01-27T21:55:51.650000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Hey \u003c@795439202732867594\u003e flagging. I think there's a misunderstanding. Sidecar validation is dependent on receiving the bid from the previous slot. If we moved the commitments to `ExecutionPayloadBid`, this information would be available before any data column sidecar would be sent/received in the next slot.",
+        "created_at": "2026-01-27T22:12:26.535000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003e therefore, it does make sense to factor them out and lift them up to the execution bid, propagating them once instead of 128 times\nYes, this is correct. But our concerns are primarily around bid latency. Will adding upwards of ~3500 bytes to the bid be too much? Keep in mind nodes [are expected to include some form of spam prevention](https://github.com/ethereum/consensus-specs/blob/46c1199d6b4584ba484dec807f03b8e6211dd725/specs/gloas/p2p-interface.md?plain=1#L322-L326). Could this change prevent the proposer from receiving bids in a timely fashion? I've estimated that it could introduce up to ~2ms of latency per hop or something like that.",
+        "created_at": "2026-01-27T22:32:15.821000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "i think we all agree 99(+?)% of all bids will come from point-to-point channels, so i think the extra 3.5k bytes isn't a huge deal",
+        "created_at": "2026-01-27T22:48:08.524000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ralexstokes",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "if im following correctly, its either a choice to put the burden on the network or put the burden on the builder(s)",
+        "created_at": "2026-01-27T22:48:41.291000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Could you elaborate on “bid from the *previous* slot”?",
+        "created_at": "2026-01-27T22:53:42.258000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Afk now, but the payload and blobs are associated with the bid from the previous slot. The proposer selects the bid puts it in the state.",
+        "created_at": "2026-01-27T23:05:38.199000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So the builder broadcasts the payload/blobs after it sees that the proposer selected its bid. Right?",
+        "created_at": "2026-01-27T23:06:38.791000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah that's a good framing. Just that the network is not really latency bound while builders are, not sure if the bid increase is enough to drive them away from including blobs",
+        "created_at": "2026-01-27T23:08:49.033000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@795439202732867594\u003e I think this analysis is based on current data which is far from valid on Gloas. Today the builder (or relay) is responsible from broadcasting of the full block, containing also the payload. This makes the block much larger and slow to propagate than columns while at the same time it makes it start propagating at the same time than columns! \n\nNeither of these assumptions are remotely reasonable on Gloas. In gloas the block is tiny, all transactions are gone, and the block propagates before the builder (that is reponsible for propagating blobs) even knows that they need to broadcast a payload + blob data. \n\nWhat can still be valid is that most blob transactions are there anyway in the mempool before the payload is even chosen. And this is what sending the KZG commitments in the bid (and consequently in the block) would solve: nodes will be able to start reconstructing data even before the person responsible to broadcast it knows that it needs to broadcast it. \n\nThe question here is wheter this gain is worth the extra burden on the bidding p2p stack and the risk of extra latency on the builder connection that is sensitive to latency (the p2p stack is kinda irrelevant for latency). \n\nSo just in case it wasn't clear: I think the assumption that we have already the beacon block to validate the data column sidecars is kinda irrelevant.",
+        "created_at": "2026-01-27T23:18:20.950000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "That’s not my understanding. Doesn’t bid for slot 3 commit to blobs that will be propagated during slot 3? And PTC for slot 3 attests to those blobs having been made available? I’m still confused about the reference to “previous”.",
+        "created_at": "2026-01-27T23:27:42.849000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "__kasey__",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "BTW we could reduce the data a bit by using versioned hashes (32 bytes) instead of commitments (48).",
+        "created_at": "2026-01-27T23:29:25.210000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think this is a good idea, that's all that's needed for the Payload validation anyway",
+        "created_at": "2026-01-27T23:37:01.244000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "would scale better when we're sending tons of blobs too",
+        "created_at": "2026-01-27T23:37:35.767000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Otoh this will probably require a redesign of grtblobs and the engine way of storing them",
+        "created_at": "2026-01-27T23:38:09.689000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "__kasey__",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "What would need to be redesigned? The versioned hash is already the input param to getBlobs.",
+        "created_at": "2026-01-27T23:39:35.320000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Indeed, this is an advantage of ePBS. We expect the (slimmer) blocks to arrive sooner. What I’m trying to say is that, before, each column could be independently verified (as long as you had the parent block), so it made sense to include the commitments/proofs/etc. Now, the column cannot be verified standalone (it needs the block), so that reason is gone.",
+        "created_at": "2026-01-27T23:40:17.744000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Oh I thought this changed. If we only need to pass versioned hashes then yes there's no need for us to deal with commitments. Verifying the proofs in the DCs?",
+        "created_at": "2026-01-27T23:41:57.398000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "If we don’t have the KZG commitments we can’t open the cell proofs, right?",
+        "created_at": "2026-01-27T23:42:24.334000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes we can remove the commitments completely from the DCs if we include them in the bid.",
+        "created_at": "2026-01-27T23:43:35.869000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I still think the biggest con to this is the fact that it will make any form of slot auction or aps much harder",
+        "created_at": "2026-01-27T23:44:28.219000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "But people aren't thinking this far ahead",
+        "created_at": "2026-01-27T23:44:50.886000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "__kasey__",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We'll have the full blobs and the proofs. We can construct the commitments from the full blob data, and later confirm they match byte-wise with the proposed values.",
+        "created_at": "2026-01-27T23:44:51.261000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@755590043632140352\u003e do you expect to see much upbidding activity on the bids topic? My bet is that all bids from a builder for a slot would include the same blobs",
+        "created_at": "2026-01-27T23:45:58.838000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I don't think anyone knows what that topic will look like. I am not that worried about that topic cause we can heavily throttle it without much risk",
+        "created_at": "2026-01-27T23:47:07.896000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "IMO they might add/remove txs as their profit changes, but I’d expect blobs to stay static over the bidding war",
+        "created_at": "2026-01-27T23:47:55.595000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "ok so the only place to get the list of blobs (versioned hashes)  would be in the  bid, so we can't just have a hash of them in the bid and get the list once the block is published... is that correct?",
+        "created_at": "2026-01-27T23:47:57.888000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Currently that's what we have, just a hash",
+        "created_at": "2026-01-27T23:48:40.447000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "And it works",
+        "created_at": "2026-01-27T23:48:44.206000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "But it has tradeoffs",
+        "created_at": "2026-01-27T23:48:49.482000+00:00",
+        "attachments": null
+    },
+    {
+        "author": ".paulharris",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "ok fair - just catching up still 🙂",
+        "created_at": "2026-01-27T23:49:03.391000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Wasn’t that your main concern (“bidding p2p stack”), or are we talking about another stack?",
+        "created_at": "2026-01-27T23:51:10.342000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "(Sorry, still catching up with the many moving parts here)",
+        "created_at": "2026-01-27T23:51:33.896000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Oh yeah that's one of them. Other is the extra latency on the direct connections and the other is the fact that it enshrines a commitment to the Payload in the CL block (we currently have a  blockhash but we can remove it)",
+        "created_at": "2026-01-27T23:52:43.307000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I don't really know what the weight in bandwidth in the bidding topic it will be",
+        "created_at": "2026-01-27T23:54:02.867000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Don't even have intuition for it",
+        "created_at": "2026-01-27T23:54:17.269000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "raulvk",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I see. Personally, I don’t view the enshrinement as a problem. The CL is already aware of KZG commitments and blob specifics, so it’s just moving logic from one spot to another IMO. The “leakage” already exists.",
+        "created_at": "2026-01-27T23:55:39.897000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "__kasey__",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Currently, sidecars are self-contained for verification purposes, meaning the block can arrive later. If we removed the commitments from the sidecar, sidecar verification would be reliant on the bid (or the block which includes it) being seen first. Verifying column field elements wrt the commitments has to happen after we have those other values. In the case where we recover full blobs from the EL, this is ok, because we can recompute the commitment. But for missing blobs we are stuck waiting. Also when we move to cell level messaging, I assume this breaks down.",
+        "created_at": "2026-01-27T23:57:05.495000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Nah, the issue is that this constrains the Payload before it needs to be constructed in theory",
+        "created_at": "2026-01-27T23:57:07.021000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "__kasey__",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I meant this as a reply to potuz' comment that `we can remove the commitments completely from the DCs if we include them in the bid.`",
+        "created_at": "2026-01-27T23:59:01.882000+00:00",
+        "attachments": null
+    }
+]

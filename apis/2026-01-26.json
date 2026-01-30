@@ -1,0 +1,362 @@
+[
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I don't think that's an issue, we can fix these even after merging them, will at latest catch all mismatches when running api spec tests. it's also pretty likely that the current CL structures are not yet final",
+        "created_at": "2026-01-26T09:47:00.578000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "we return a 404 currently if block is not canonical",
+        "created_at": "2026-01-26T09:47:28.003000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bez625",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "From a Vouch perspective:\n\nFor local blocks we submit the proposal to all connected BNs regardless of the BN that gave us the block.\n\nFor MEV we unblind the block on the v1 endpoint and submit to all BNs connected, but with blinded_blocks v2 that is no longer possible and I think we will have to fully rely on the relay to submit on chain.",
+        "created_at": "2026-01-26T10:20:59.957000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bez625",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Overall though, the stateless part is a worry. Either we will have to track state on the multi-client side and ensure we use the same BNs (limits the benefit of client diversity)",
+        "created_at": "2026-01-26T10:28:37.657000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "we can still keep the 2 step process and have the ability to publish to all nodes (see option 2. proposed [here](https://github.com/ethereum/pm/issues/1882#issuecomment-3798965040)) but I feel like we if pass all data around anyways which is the main concern of making the flow stateless then we might as well go with 3.",
+        "created_at": "2026-01-26T10:54:39.453000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bez625",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Yeah I think 2 or 3 make the flow much easier from a multi-client perspective and allow us to keep the REST api stateless.",
+        "created_at": "2026-01-26T12:09:55.095000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "For the record, I stand firmly by https://github.com/ethereum/beacon-APIs/issues/519#issuecomment-2769580434",
+        "created_at": "2026-01-26T12:18:27.157000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Losing statelessness to microoptimize something I've not seen a compelling argument is even worth microoptimizing, and especially without good data, is counterproductive. If people are concerned about encoding/decoding, there's SSZ",
+        "created_at": "2026-01-26T12:19:15.236000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "the reason for making the api stateful wasn't even because of not wanting to pass blobs around, it just more cleanly maps to the CL structures and in general to the separation of CL block and EL payload. You also avoid having different response types that way, so from a api spec/implementation perspective it is a bit cleaner",
+        "created_at": "2026-01-26T12:21:54.450000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "They are both part of a \"full block\" though",
+        "created_at": "2026-01-26T12:22:34.441000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I do agree with that point in general, I was also on the side to keep it stateless but we also have `--blindedLocal` since forever on Lodestar to not pass blobs around which is safe to use in a 1:1 setup\n\nif we go with the stateless approach for block v4, we should definitely standardize a query param to have a stripped down response even for local block production and let users decide how they wanna produce their blocks according to their setup",
+        "created_at": "2026-01-26T12:25:06.795000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "more micro-optimizations. would want to see what an SSZ-based protocol benchmark looks like first",
+        "created_at": "2026-01-26T12:26:17.295000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I don't think this is a micro optimization, we had orphaned blocks in deneb because of high latency between bn\u003c\u003evc and that's why we implemented `--blindedLocal`, granted this was before we adopted ssz on those apis, but even with ssz, the higher blob count goes the more relevant will this be, also considering that with gloas the deadline for submitting the `SignedBeaconBlock` will be shorter, so if you have a 1 step process by making the api fully stateless this needs to be considered",
+        "created_at": "2026-01-26T12:29:41.444000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "how slow was this?",
+        "created_at": "2026-01-26T12:30:08.818000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "to cause the orphaned blocks",
+        "created_at": "2026-01-26T12:30:14.505000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "pretty slow, json serialization is awful in js land, ssz solved the issue for us though, so not entirely relevant for this since ssz is well adopted now by all clients",
+        "created_at": "2026-01-26T12:31:52.441000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "https://github.com/shane-moore/beacon-APIs/pull/2 \u003c@654267572107083777\u003e please take a look",
+        "created_at": "2026-01-26T12:36:07.046000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "well, it's an improvement",
+        "created_at": "2026-01-26T12:38:38.464000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "also worth noting that if they beacon node that publishes is different from the one that produced the block you will have to reconstruct cells from blobs, it might be negligible since we pass the proofs around too, I don't think we have benchmarks for this",
+        "created_at": "2026-01-26T12:46:58.378000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "right, I think in general benchmarks are they key point for me",
+        "created_at": "2026-01-26T12:47:26.828000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I regard all of these optimizations as otherwise largely motivation-free",
+        "created_at": "2026-01-26T12:47:47.086000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "and/or overfocusing on only one way of achieving that outcome",
+        "created_at": "2026-01-26T12:48:10.759000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I also think that local block production needs to be as robust/reliable as possible and the main latency concern by far is likely column dissemination for which we will need `--max-blobs` flag at some point either way",
+        "created_at": "2026-01-26T12:50:20.482000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "yes, all ELs (including Nimbus...) have implemented that in their trunk branches",
+        "created_at": "2026-01-26T12:50:45.198000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "ok great that's good to know, haven't followed that discussion to closely but it pretty much addresses all performance concerns for now, until I guess we have too large payloads as well at which point we might need `--max-gas-limit` or similar",
+        "created_at": "2026-01-26T12:52:07.241000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "yes, the scaling has been slower for gas limit, but I agree, it might prove necessary",
+        "created_at": "2026-01-26T12:53:18.980000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "and blobs are still mostly altruistic, so nodes don't lose much, if anything, by using `--max-blobs`",
+        "created_at": "2026-01-26T12:54:23.763000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "if people want to realign incentives, they're welcome to, but until then...",
+        "created_at": "2026-01-26T12:54:41.589000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "like, no one refuses attestations because they're just too expensive",
+        "created_at": "2026-01-26T12:55:01.244000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "tersec",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "or sync committee duties",
+        "created_at": "2026-01-26T12:55:07.023000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bez625",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Actually now I've looked in to it again I think we would ideally go for option 3 from a multi-client perspective.",
+        "created_at": "2026-01-26T14:19:11.675000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jameshe5018",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "only 3 keeps it stateless right? unless i read that wrong",
+        "created_at": "2026-01-26T14:19:24.313000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bez625",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Yeah I missed that on first reading",
+        "created_at": "2026-01-26T14:19:36.272000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bez625",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "So I think we should push for stateless",
+        "created_at": "2026-01-26T14:19:44.082000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "2) still allows multi publishing in both steps, but doesn't keep it fully stateless",
+        "created_at": "2026-01-26T14:19:57.555000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "advantage of 2) is that you don't pass the huge amount of data around in step 1 and can publish `SignedBeaconBlock` slightly faster",
+        "created_at": "2026-01-26T14:20:39.053000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jameshe5018",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "i assume if you have a bunch of nodes and they need loadbalanced it's hard to ensure the consecutive beacon api get requests",
+        "created_at": "2026-01-26T14:21:48.298000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bez625",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "It's less about the implementation difficulty and more about the design/feature degradation - we'd be going against RESTful principles making the REST API stateful and Vouch / Vero would lose the benefit of multi-client local block building which exists today.",
+        "created_at": "2026-01-26T14:25:34.405000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bez625",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Also does anyone know how this affects DVT like Obol/SSV?",
+        "created_at": "2026-01-26T14:25:51.717000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "I have asked Obol, they will give feedback until Wednesday but in general I agree, there should rather be good arguments for making it stateful, otherwise we should try to keep the status quo",
+        "created_at": "2026-01-26T14:26:42.640000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bez625",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "Fully agree",
+        "created_at": "2026-01-26T14:26:54.298000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "\"having a clean spec\" or micro optimizations are not enough",
+        "created_at": "2026-01-26T14:27:26.064000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "serenita_io",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "With higher blob counts, \"not passing around a lot of data unnecessarily\" seems like a pretty good reason to me. In multi-node setups, a validator client could be receiving 5 blocks from 5 different beacon nodes, which could be quite a bit of data even SSZ-encoded.\n\nI will do a deep dive into ePBS over the next few days since some things are not clear to me yet and will also get back to you by Wednesday.",
+        "created_at": "2026-01-26T14:30:12.511000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nflaig",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "\u003e With higher blob counts, \"not passing around a lot of data unnecessarily\" seems like a pretty good reason to me. In multi-node setups, a validator client could be receiving 5 blocks from 5 different beacon nodes, which could be quite a bit of data even SSZ-encoded.\nthat's what happens currently, I think it would be good if we can standardize a query param for block v4 to tell the beacon node to not return blobs and payload for local builds, and then have a client flag to configure this, because in a 1:1 setup there is really no reason to pass all this data around",
+        "created_at": "2026-01-26T14:45:00.326000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "bez625",
+        "category": "Consensus Layer",
+        "parent": "",
+        "content": "This feels like a fair tradeoff. It also gives the option for validator clients to change approach, i.e. if a client uses the endpoint in a stateless way and the size of data becomes problematic then they can go stateful and handle state tracking internally.",
+        "created_at": "2026-01-26T14:48:42.850000+00:00",
+        "attachments": null
+    }
+]

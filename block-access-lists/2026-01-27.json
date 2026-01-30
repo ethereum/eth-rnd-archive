@@ -1,0 +1,194 @@
+[
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Can clients provide input for this table, with respect to devnet 2 and which optimizations are going to be available:\n\n```\n+------------+-----------+---------+------------+\n| EL Client  | Exec Par. | Batch IO| State Par. |\n+------------+-----------+---------+------------+\n| Geth       | [x]       | [?]     | [?]        |\n| Nethermind | [x]       | [?]     | [?]        |\n| Erigon     | [x]       | [?]     | [?]        |\n| Besu       | [x]       | [?]     | [?]        |\n| Reth       | [x]       | [?]     | [?]        |\n+------------+-----------+---------+------------+\n\n```",
+        "created_at": "2026-01-27T05:53:16.311000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I believe there is and I think this should be added to the spec. The gas rules have to be ordered in the manner such that the system keeps working as pre-BAL, but for rules check (which determines \"when\" (at what step) an account/slot is added to BAL) it should be in such way that all rules which could be checked **without reading anything** should be done first.\n\nThe alternative, adding stuff to BAL even if there is not enough gas to cover, can lead to a grief attack in BAL, where once we hit the \"CALL\" opcode we have 1 gas left (so definitely not enough to perform any operation, not even a no-op) but we send value to some address. This would add this address to BAL for 1 gas (there is obv. also loop costs here, which at least involves a CALL to invoke a new call frame, so 100 gas at least). \nIf we would however spec that we first deduct the X gas (9000 I think?) if value \u003e 0 then this would immediately bump this type of BAL read to 9000+ gas",
+        "created_at": "2026-01-27T06:52:44.701000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Thinking a bit about this, I think clients all have \"optimized\" these rules in such way that you only read the account if it is striclty necessary. For instance if the gas cost has enough to cover the base costs and the warmup costs, but not enough for the value transfer cost, then we dont have to read the account (which is expensive) and we can exit / OOG early\nInstead of writing these rules explicitly for each of the affected opcodes (all of CALL family and maybe also EXTCODECOPY for 7702 accounts?) would a rule \"only read the account if it is strictly necessary by gas accounting rules\" (or something similar) also do the trick?\n\nSo for your order of rules, we would first deduct all static costs (4,5,6) and then do rule 1,2,3,7 in order to minimize both the disk reads but thus also \"minimizing\" (not adding unnecessary entries) the BAL",
+        "created_at": "2026-01-27T07:04:20.428000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah this pop'ed up as an issue a few weeks ago and we figured that clients had done those checks differently (geth different to others iirc). \nSince then \u003c@796570016966770688\u003e and \u003c@762919002196410400\u003e have created tests for all those case and we have further specified it here:\nhttps://github.com/ethereum/EIPs/pull/11066\n^waiting to be merged by an eip editor btw 😉",
+        "created_at": "2026-01-27T07:22:42.562000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Weird I had that PR open just now and thought it was not relevant, lemme check it.\nNot sure why its not being merged, text changes to EIP, should auto merge I think?\nCould you try re-requesting review from eth bot?",
+        "created_at": "2026-01-27T07:27:23.958000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Or lemme first read over it",
+        "created_at": "2026-01-27T07:27:41.942000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "```\n+------------+-----------+---------+------------+\n| EL Client  | Exec Par. | Batch IO| State Par. |\n+------------+-----------+---------+------------+\n| Geth       | [x]       | [?]     | [?]        |\n| Nethermind | [x]       | [?]     | [?]        |\n| Erigon     | [x]       | [?]     | [?]        |\n| Besu       | [x]       | [x]     | [x]        |\n| Reth       | [x]       | [?]     | [?]        |\n+------------+-----------+---------+------------+\n```\n\nUpdated for Besu",
+        "created_at": "2026-01-27T07:30:29.279000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Awesome! Will there be flags for all 3 optimizations?",
+        "created_at": "2026-01-27T07:31:05.742000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yes we added flags 🙂",
+        "created_at": "2026-01-27T07:31:29.049000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We should then start benchmarking besu (and any other client with batch IO ready) against a shadow fork + bloatnet  ( \u003c@703742742135570499\u003e ) to find out how much batch IO gives us for worst-case blocks. There are tests.. almost ready..: https://github.com/ethereum/execution-specs/pull/2033 which we can use to do the benchmarking.\n\u003c@577788234810130432\u003e \u003c@680337202521440470\u003e \u003c@508125616940515329\u003e",
+        "created_at": "2026-01-27T07:41:17.435000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "matkt0",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I think we need at the minimum 2 clients, to be sure . The result may depend a lot on the implementation and the database we use.",
+        "created_at": "2026-01-27T07:53:58.598000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "very good point",
+        "created_at": "2026-01-27T08:03:20.797000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "cperezz.eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We can take a round of snapshots such that you can start the new devnet on top of them. We are sitting at 1TB of state approx.\n\nYou can also reuse some of the spamoor scenarios we have to stress the network and obvserve behaviour.\n\nOn top of that, the PRs for better and standarized metrics I've been working on are starting to get reviews/be merged. See: https://ethresear.ch/t/a-small-step-towards-data-driven-protocol-decisions-unified-slowblock-metrics-across-clients/23907\n\nWnat me to coordinate with the pandas to start this up?",
+        "created_at": "2026-01-27T08:32:40.216000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Cool post, I'll give it a more detailed look later. Standardized metrics would be incredibly helpful for streamlining general research (for more fine-grained need to add extra fields), because then you can be sure that output of client A and of a different client B actually measure the same thing 😄",
+        "created_at": "2026-01-27T08:38:53.210000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://github.com/ethereum/EIPs/pull/11066 got merged I think because my comment retriggered the bot. Left some comments 🙂",
+        "created_at": "2026-01-27T08:47:34.165000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "qu0b",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "does this support the otel standard?",
+        "created_at": "2026-01-27T13:58:40.371000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "One item I put on tomorrow's breakout call agenda is how clients handle blocks with invalid bals, in particular, how to fail blocks with invalid BALs as early as possible in the block validation process to avoid executing a full block (with invalid state locations declared) - without the help of batch I/O (which would not help with an maliciously crafted BAL) - and thereby falling back to a worst-case block that is the same as if we had no state locations in the BAL to begin with.",
+        "created_at": "2026-01-27T18:39:55.026000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "what are the flags?",
+        "created_at": "2026-01-27T19:29:16.236000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "To enable/disable parallelism",
+        "created_at": "2026-01-27T19:29:36.501000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I mean, what are the specific flags",
+        "created_at": "2026-01-27T19:29:46.556000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "geth can support three configurations:\n* batch io disabled, parallel tx + state root enabled\n* batch io enabled, parallel tx + state root enabled\n* all disabled",
+        "created_at": "2026-01-27T19:39:25.831000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "this is great! Do you have a kurtosis config to share, or maybe \u003c@577788234810130432\u003e ?",
+        "created_at": "2026-01-27T19:51:14.321000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "I'm still fixing broken tests, so not right now",
+        "created_at": "2026-01-27T19:52:22.659000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "but also, what are the specific CLI flags that I need to implement?",
+        "created_at": "2026-01-27T19:52:37.043000+00:00",
+        "attachments": null
+    }
+]

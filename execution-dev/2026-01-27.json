@@ -1,0 +1,138 @@
+[
+    {
+        "author": "yperbasis",
+        "category": "general",
+        "parent": "",
+        "content": "SELFDESTRUCT is still allowed for ephemeral contracts. See EIP-6780 (added in Dencun).",
+        "created_at": "2026-01-27T09:14:55.299000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "misilva73",
+        "category": "general",
+        "parent": "",
+        "content": "Hi all!\n\nI compiled a report on the short list of operations we should reprice in 7904: https://github.com/misilva73/evm-gas-repricings/blob/main/reports/eip-7904/included_operations.md\n\nI have split all operations performing worse than 60Mgas/s into two categories - **operations to reprice** and **operations to optimize**. It would be great to have your feedback on these splits. Do you think we should change any operation from one group to the other?\n\nAn important caveat is that these data is still based on Prague. Once we finish the test integration with Osaka, I expect some of these numbers to change slightly.",
+        "created_at": "2026-01-27T10:49:04.174000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "ahamlat",
+        "category": "general",
+        "parent": "",
+        "content": "7904 repricing",
+        "created_at": "2026-01-27T13:31:55.452000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "kfedoseev",
+        "category": "general",
+        "parent": "",
+        "content": "Hi, reading the latest 7708 spec \u0026 tests, this delta specifically - https://github.com/ethereum/execution-specs/blob/f3d0672e134ab0b5a4e7f5a340473fccf69e60a3/src/ethereum/forks/amsterdam/vm/instructions/system.py#L688-L702 \n\nMy understanding is that the purpose of the selfdestruct logs is to mark all eth burns, so that it's easier to track total eth supply/balances over time. The spec currently always emits them if selfdestruct is called to self, even if the contract is not ephemeral after 6780 and it's balance is not gonna be burned.\n\nShould we change it to be emitted only for ephemeral contracts, created in the same tx?",
+        "created_at": "2026-01-27T14:58:50.043000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "general",
+        "parent": "",
+        "content": "I think this was the intention (and my assumption), and the spec should be updated to reflect it.",
+        "created_at": "2026-01-27T15:45:54.466000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "general",
+        "parent": "",
+        "content": "[Resharing](https://discord.com/channels/595666850260713488/753271902520213625/1465801131916529746) for vis in v5.0.0 tests. `EIP-7708`  self transfer calls still create the log. Should probably skip it if `address == target` and do clarification in EIP.",
+        "created_at": "2026-01-27T20:24:06.441000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "general",
+        "parent": "",
+        "content": "we need to handle the burn case:  `address == target` and the invoker is ephemeral and either has balance at the time of executing the selfdestruct, or has balance at the time the account is removed",
+        "created_at": "2026-01-27T20:54:27.833000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "general",
+        "parent": "",
+        "content": "This is not about selfdestruct but ordinary CALL",
+        "created_at": "2026-01-27T20:55:51.026000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jwasinger",
+        "category": "general",
+        "parent": "",
+        "content": "oh, misread your comment",
+        "created_at": "2026-01-27T20:56:07.094000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "general",
+        "parent": "",
+        "content": "Have made a [PR](https://github.com/ethereum/EIPs/pull/11187)",
+        "created_at": "2026-01-27T21:21:57.959000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m0_ox",
+        "category": "general",
+        "parent": "",
+        "content": "I am also lining up these changes to selfdestruct and transfer [in EELS] so they are ready to go in based on what we decide. But we should try to reach a consensus on this on the [BAL breakout] call tomorrow so we can actually spec and test properly.",
+        "created_at": "2026-01-27T21:22:58.727000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "carsonseels",
+        "category": "general",
+        "parent": "",
+        "content": "Yes, that change to the EIP came in late right before devnet 2 so that interaction wasn't sufficiently clarified before the devnet was ready and released.",
+        "created_at": "2026-01-27T21:25:24.411000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "general",
+        "parent": "",
+        "content": "One more discussion/clarification on EIP-7708.\n\nWhat about this behavior, if same account had multiple selfdestructs (and what if one is on `address == target` and second on is `!=`). Not sure what is going to be generally expected here for someone that looks at the logs.",
+        "created_at": "2026-01-27T21:25:55.352000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "m0_ox",
+        "category": "general",
+        "parent": "",
+        "content": "What about a transaction that self-transfers? Does the first sentence there also need a `to a different account`?",
+        "created_at": "2026-01-27T22:20:55.093000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "Maybe in general for the understanding of SELFDESTRUCT (so not SENDALL as in EIP-6780, i.e. 0xff SELFDESTRUCT in same transaction as the contract is being created). It does not work as the intuition might state, because it has multiple steps:\n\nUpon invoking the opcode, mark current contract to-be selfdestructed and send all balance to the target. Exit current call frame.\nAfter the transaction ends (I have to check when precisely, if this is AFTER the tx execution, but before or after the fee transfer to coinbase (this is thus also an test case which should be added: selfdestruct coinbase as the accounting for fees is interesting here)) destroy all the accounts marked as to-be-selfdestructed. This means deleting it from trie. (And thus also the only way to destroy ETH).\nIt does thus not mean, as intuition might lead one thinking, that it is immediately destroyed when invoking the opcode (the code which is deposited there thus keeps existing in the current transaction when it was created, as this is the only way to invoke SELFDESTRUCT; after the tx the invocation is SENDALL. (There is thus also a case where one does SELFDESTRUCT in initcode, and also SELFDESTRUCT after deposting the code in the same tx)\n\nFor EIP-7708: it should mark required EIPs: EIP-4788 (system address), EIP-1559 (fee transfer, EIP-6780 (only SELFDESTRUCT in same transaction)\n\nI think using LOG2 for burning is a very good choice. The only case when this is thus invoked is \"at the end of the transaction\" (and either before or after sending priority fee).\nIt should (I think) be noted that for the SELFDESTRUCT **AND** SENDALL case (when sending ether) it should work as normal as LOG3 (and should not log when sending to self). Only in case of SELFDESTRUCT when burning ether it should invoke the LOG2",
+        "created_at": "2026-01-27T23:26:16.466000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jochembrouwer",
+        "category": "general",
+        "parent": "",
+        "content": "For LOG2 in case of SELFDESTRUCT to self I don't think it should be logged as this is already part of the accounting before (via LOG3). The LOG2 will then make clear what ETH was burned (and how much)",
+        "created_at": "2026-01-27T23:26:53.044000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "draganrakita",
+        "category": "general",
+        "parent": "",
+        "content": "What about a transaction that self-",
+        "created_at": "2026-01-27T23:29:56.443000+00:00",
+        "attachments": null
+    }
+]

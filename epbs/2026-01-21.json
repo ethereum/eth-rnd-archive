@@ -172,5 +172,133 @@
         "content": "I would agree that linear interpolation seems like the correct thing to do ultimately, even if it feels odd that the average case payload would get near minimum propagation time",
         "created_at": "2026-01-21T13:14:23.758000+00:00",
         "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah agree, This seems like the best approach. And then we use something more realistic like `gas_limit//64` as the reference:\nE.g. `capped_size = min(payload_size, gas_limit//64)` in `get_payload_due_ms()`?",
+        "created_at": "2026-01-21T15:12:03.843000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "so `gas_limit//64`  is supposed to be the max size of the transaction slice?",
+        "created_at": "2026-01-21T16:04:53.929000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "nero_eth",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It provides an good enough upper-bound yeah. One can get higher even larger valid payloads but this rule of thump gets us very close.",
+        "created_at": "2026-01-21T16:09:36.270000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So tweaking the `MIN_PAYLOAD_DUE_BPS` is equivalent to handling the constant term of the linear (eg the payload size for a payload without any transactions and requests) and `gas_limit//64` is a good replacement for `MAX_PAYLOAD_SIZE`. We probably would still get tight deadlines for average blocks which presumably are nowhere close to `gas_limit//64` anyway?",
+        "created_at": "2026-01-21T16:16:47.074000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah. In principle the min payload thing should just account for pure latency, and everything on top of that should be accounting for bandwidth and scale linearly up to to the max size",
+        "created_at": "2026-01-21T16:43:12.764000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "We also need to set the max deadline to account for the fact that a max size block can still use 75% of the gas for execution (16 gas per calldata byte plus 48 gas for execution to get to the 64 calldata floor cost), so in principle the max deadline should be `min_payload_due + (slot_duration - min_payload_due) // 4`, so we leave 3/4 of the `(slot_duration - min_payload_due)` for execution",
+        "created_at": "2026-01-21T17:01:35.083000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "fradamt",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "To be precise, that's if we can use compressed payload size for the interpolation. If not, we have to be more conservative because a max uncompressed size block can use 60/64 ~94% of its gas for execution (4 gas per 0 byte)",
+        "created_at": "2026-01-21T17:03:45.035000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "potuz",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "\u003c@917367578966523934\u003e already has these linear approximations  in his work, we could probably adapt those, abstract some constants away as parameters for testing, and only leave `gas_limit` as the linear variable for the max deadline, and then just adjust the constant at testing time.",
+        "created_at": "2026-01-21T18:33:56.535000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "anderselowsson",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "It's interesting that when it comes to execution and calldata, we can envision a multidimensional future where we do not treat them as fully orthogonal/separate. Ultimately, we are constrained by a \"Metadimension\" that limits the time for the block to propagate and then be executed. Today's aggregate gas measure captures this notion better, while the calldata floor cost with its fully orthogonal specification already favors the \"balanced\" block a bit too much. Metadimensions would give us a better definition of what a \"balanced block\" actually looks like.",
+        "created_at": "2026-01-21T19:26:40.380000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "anderselowsson",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "So essentially, the calldata floor cost lessens the importance of the variable deadline, since as Francesco points out, even a block with plenty of calldata could still carry a lot of compute. But the calldata floor cost does so, in a way, by removing opportunities for scaling blocks that carry either more calldata or more execution than we currently can accept. We are under the calldata floor cost harmstrung by having to consider that a high amount of execution could also be accompanied by a high amount of calldata. If the distribution of blocks is such that they very rarely use up all the calldata while execution indeed often hits the limit, then the protocol must always consider a worst-case block (room for propagating big blocks) that we hardly ever utilize! By turning the calldata floor cost specification closer to a Metaresource specification that accounts for calldata propagation time, Ethereum would be able to scale quite a bit further.",
+        "created_at": "2026-01-21T19:51:41.821000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "0xunclebill",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://github.com/ethereum/consensus-specs/blob/master/specs/gloas/validator.md#blob-sidecars\n\n\u003e The blob sidecars are no longer broadcast by the validator, and thus their construction is not necessary\n\nthis doesn't seem to be true in the case of local block building?",
+        "created_at": "2026-01-21T19:58:34.092000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Yeah that's a bit inaccurate. We brought this up in this PR: https://github.com/ethereum/consensus-specs/pull/4772/changes#r2590664642",
+        "created_at": "2026-01-21T20:21:30.623000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Later today, I'll re-write that paragraph.",
+        "created_at": "2026-01-21T20:22:09.358000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "Maybe we should just remove that paragraph.",
+        "created_at": "2026-01-21T20:23:06.608000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "jtraglia",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "https://github.com/ethereum/consensus-specs/pull/4853",
+        "created_at": "2026-01-21T20:52:43.654000+00:00",
+        "attachments": null
+    },
+    {
+        "author": "0xunclebill",
+        "category": "Cross-layer",
+        "parent": "",
+        "content": "another small thing, I think we're missing details on how to set `blob_data_available` for `PayloadAttestationData`\n\nI opened a PR here\nhttps://github.com/ethereum/consensus-specs/pull/4854\n\nhopefully I got the lint checks correct this time",
+        "created_at": "2026-01-21T21:55:51.994000+00:00",
+        "attachments": null
     }
 ]
