@@ -94,5 +94,277 @@
     "content": "Great summary!",
     "created_at": "2026-02-03T00:44:10.753000+00:00",
     "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "> Then it was noted that it's possible to actually remove ⁨payload_blob_count⁩ from the ExecutionPayload, since it has been committed to in the EL block header, but it means that you will need to download the EL block header in the scenario where you can't get the BALs or payload from the fast path, in order to figure out which blobs correspond to the payload.,\n\nThe EL block header is the EL representation of the ExecutionPayloadHeader. If the EL block header includes `payload_block_count`, then by design, the ExecutionPayloadHeader should include it as well, I believe. I don't think there's any dependency on the EL p2p.\n\n> BALs will also be put into payload and we can introduce a ⁨payload_bals_count⁩ to specify which blobs the BALs occupies and which blobs the payload occupies. The first blob would still tell us the amount of bytes for each.\n\nI've been giving BAL inclusion in blobs some thought. BAL's are not consensus critical in the same way that transactions are. They are an artefact for optimised re-execution. Omission of BALs can not result in a data withholding attack.  I'm questioning if there's any value in including BAL's in blobs. Possibly just wasting bandwidth. In any case, they can be produced from re-executing transactions on a re-execution node. I would be interested in understanding the size of BAL's. Just throwing this out there for discussion.\n\n> The easiest way to do this is to attach the preimages to the root to the proof, this preimage is ⁨NewPayloadRequestHeader⁩,\n\nIn the current consensus specs we only process proofs associated with a request root for which we have received the ExecutionPayload or ExecutionPayloadHeader. I.e. we never process a proof unless we know the public input / request roots pre-image.",
+    "created_at": "2026-02-03T15:16:15.576000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "If we determine that it is preferable to include the `NewPayloadRequestHeader⁩` with the proof, then we may want to consider the introduction of a signed variant such that we can associate the proposer with the BeaconChain state (`SignedNewPayloadRequestHeader`)",
+    "created_at": "2026-02-03T15:21:36.780000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I'm not following the recent discussion on BALs, but if it's about advancing the EL state without executing payload, you'd need an EL (or a lightweight EL, although I don't know how it is defined.) CL doesn't hold the EL state and BALs are just bytes for CL, i.e., CL doesn't know how to interpret BALs.\n\nThe idea of updating the EL state with state-diffs but without transaction execution touches partial statelessness IMO.",
+    "created_at": "2026-02-03T15:28:31.286000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Yeah so my interpretation of BAL's is that for re-execution nodes they are an optimisation. I.e. you can preload state entries for all transactions and process them in parallel. \n\nFor a lightweight EL, you can verify a proof of execution to assert that the BAL is correct and then update state from the BAL.",
+    "created_at": "2026-02-03T15:32:01.381000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": ">  If the EL block header includes payload_block_count, then by design, the ExecutionPayloadHeader should include it as well, I believe.\nThis was my original assumption too, though I think the EL block header can have fields that the ExecutionPayloadHeader doesn't have -- tbf these are POW fields, though its unclear if the relationship always holds -- I guess we could define it as such",
+    "created_at": "2026-02-03T15:32:43.367000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "> This was my original assumption too, though I think the EL block header can have fields that the ExecutionPayloadHeader doesn't have -- tbf these are POW fields, though its unclear if the relationship always holds -- I guess we could define it as such\n\nI think that would be cleaner than introducing an EL p2p dependency. I think the like-for-like mapping may not have been true pre-merge. But post-merge, I would assume it is, but I have not validated it myself personally.",
+    "created_at": "2026-02-03T15:35:23.668000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "By the way has anyone explored the idea of zk BAL's? The idea would be that instead of trying to prove block execution you just prove BAL correctness. I.e. a succinct state proof for the full BAL. Nodes would receive the BAL, re-execute transactions using the BAL and then update state. If state lookups + post root calculation >>> transaction re-execution then it may be an interesting idea. Just thinking out loud.",
+    "created_at": "2026-02-03T15:40:19.844000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "> I've been giving BAL inclusion in blobs some thought. BAL's are not consensus critical in the same way that transactions are. They are an artefact for optimised re-execution. Omission of BALs can not result in a data withholding attack.  I'm questioning if there's any value in including BAL's in blobs. Possibly just wasting bandwidth. In any case, they can be produced from re-executing transactions on a re-execution node. I would be interested in understanding the size of BAL's. Just throwing this out there for discussion.\nYep exactly, so they are not consensus critical and would be for a different usecase. On the size of the BALs <@792404665068158998> could opine on the percentage of space that BALs take up compared to the transactions",
+    "created_at": "2026-02-03T15:41:47.305000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Ah I meant that the EL block header just zeroes out certain fields like nonce and the ExecutionPayloadHeader doesn't have them",
+    "created_at": "2026-02-03T15:43:12.353000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Are those the pre-merge fields?",
+    "created_at": "2026-02-03T15:43:47.846000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Some are yes. Uncle hash, difficulty",
+    "created_at": "2026-02-03T15:44:40.145000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "My assumption would be that the fields that are not included in the ExecutionPayloadHeader are all pre-merge but we should validate this.",
+    "created_at": "2026-02-03T15:45:34.015000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "The EL block (including the EL block header) is instantiated from the ExecutionPayload so I would be surprised if any fields are missing.",
+    "created_at": "2026-02-03T15:46:23.733000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "https://github.com/ethereum/execution-specs/blob/forks/amsterdam/src/ethereum/forks/amsterdam/blocks.py#L148",
+    "created_at": "2026-02-03T15:48:17.074000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "https://github.com/ethereum/go-ethereum/blob/master/beacon/engine/types.go#L303",
+    "created_at": "2026-02-03T15:48:20.707000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "BALs are included in ExecutionPayload and you need BALs during EL's STF (when re-executing). Does this mean that `transactions` and `bals` go into the payload blobs?",
+    "created_at": "2026-02-03T15:51:11.126000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "> I've been giving BAL inclusion in blobs some thought. BAL's are not consensus critical in the same way that transactions are. They are an artefact for optimised re-execution. Omission of BALs can not result in a data withholding attack.  I'm questioning if there's any value in including BAL's in blobs. Possibly just wasting bandwidth. In any case, they can be produced from re-executing transactions on a re-execution node. I would be interested in understanding the size of BAL's. Just throwing this out there for discussion.",
+    "created_at": "2026-02-03T15:53:14.991000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I think you only need the BAL hash",
+    "created_at": "2026-02-03T15:53:34.909000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I think the simplest thing to do would be to include them. But an optimisation would be to not include them.",
+    "created_at": "2026-02-03T15:53:42.760000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Well, you do check if the given BALs are correct at the end of newPayload",
+    "created_at": "2026-02-03T15:53:55.817000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Looking at the EIP it says:\n\n- The EL receives the BAL in the ExecutionPayload\n\n- The EL computes block_access_list_hash = keccak256(blockAccessList) and includes it in the block header\n\n- The EL executes the block and generates the actual BAL\n\n- If the generated BAL doesn't match the provided BAL, the block is invalid (the hash in the header would be wrong)",
+    "created_at": "2026-02-03T15:54:04.187000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "So the ExecutionPayload sees the full RLP encoded BAL, whereas the EL block header sees the bal hash, or hmm actually the EL block would need the BAL to speed up state reads",
+    "created_at": "2026-02-03T15:54:57.541000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "When newPayload is called, the EL gets RLP-encoded BALs, hashes it and puts it into the EL header.",
+    "created_at": "2026-02-03T15:56:26.547000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "And generate BALs during the execution and check if the given ones are correct by comparing the hashes",
+    "created_at": "2026-02-03T15:57:13.810000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Right, I initially thought that the hashing was done in newPayload but not in execute_block",
+    "created_at": "2026-02-03T15:57:23.161000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "We could use BALs when generating an execution proof, but they aren't consensus critical in the same way transactions are. In the worst-case scenario, they could be re-created by a re-execution node. The question becomes, do we want to put BALs in blobs for convenience or not, IMO.",
+    "created_at": "2026-02-03T15:57:59.852000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "If BALs are part of ExecutionPayload and hence used for generating a proof, then do we need to provide data availability for BALs?",
+    "created_at": "2026-02-03T15:59:58.275000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "So from the EIP I originally read it as:\n\n⁨```rust\n\nfn newPayload(payload: ExecutionPayload) {\n\n   let bal_hash = hash(payload.bal)\n   let block = payload.to_el_block();\n   block.bal_hash = bal_hash;\n   \n   // Do other new payload stuff \n   \n   execute_block(block)\n\n}\n```⁩",
+    "created_at": "2026-02-03T16:00:18.384000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "On second thoughts, maybe we could just replace the BAL with a commitment in the private input for proof gen. Would be more efficient.",
+    "created_at": "2026-02-03T16:00:39.322000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "My feeling is that at least the state diff part of BALs makes sense to have in blobs, assuming a zkEVM world.",
+    "created_at": "2026-02-03T16:00:39.434000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "<@792404665068158998> is this correct? If so, how does the execute_block use BALs in order to preload the database?",
+    "created_at": "2026-02-03T16:01:33.366000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Nodes must be able to maintain state and the minimum needed for that is a state diff.",
+    "created_at": "2026-02-03T16:01:35.609000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "If block.bal_hash is the hash of the \"virtual BAL\" (the one generated during execution), then yes",
+    "created_at": "2026-02-03T16:03:03.744000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "What <@845691100072509460> said above is how the specs do it.",
+    "created_at": "2026-02-03T16:03:22.912000+00:00",
+    "attachments": []
   }
 ]
