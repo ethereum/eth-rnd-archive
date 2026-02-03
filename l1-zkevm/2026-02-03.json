@@ -30,5 +30,21 @@
     "content": "Right because of the extra copying needed, if your input is already in memory",
     "created_at": "2026-02-03T13:39:26.056000+00:00",
     "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "Just mapping this out from host to guest to SDK\n\nLets say, I want to have a Rust guest program that just reads two bytes and then three bytes.\n\n**Host**\n\n⁨```rust\nfn main() {\n    let input_data_1: Vec<u8> = vec![0xDE, 0x12]; // Witness\n    let input_data_2 : Vec<u8> = vec![0xAD, 0x11, 0x02, 0x04]; // More witness\n\n    // Create zkVM instance and provide all input\n    let mut zkvm = ZkVM::new();\n    zkvm.add_input(&input_data_1);\n    zkvm.add_input(&input_data_2);\n\n    // Run the guest program\n    let proof = zkvm.prove(\"guest_program.elf\");\n}\n```⁩\n\nSo host loads all inputs into memory and then calls the guest.\n\n**Guest**\n\n⁨```rust\nfn main() {\n    let input: &[u8] = zkvm_io::get_input();\n    \n    let first_2 = &input[0..2]; // 0xDE, 0x12\n    let next_3 = &input[2..5]; // 0xAD, 0x11, 0x02\n}\n```⁩\n\nzkvm_io is the SDK code that zkVM teams could expose to make it easier for the guest.\n\nThe guest could just call ⁨`read_input`⁩ directly though, which is probably what I think we would do in practice to reduce the surface area.\n\nI only write it like this because its what is currently happening in the SDKs plus serde.\n\n**zkVM SDK**\n\n⁨```rust\nmod zkvm_io {\n    extern \"C\" {\n        fn read_input(buf_ptr: *mut *const u8, buf_size: *mut usize);\n    }\n    // Return input buffer as static slice\n    pub fn get_input() -> &'static [u8] {\n        let mut ptr: *const u8 = std::ptr::null();\n        let mut size: usize = 0;\n        unsafe {\n            read_input(&mut ptr, &mut size);\n            std::slice::from_raw_parts(ptr, size)\n        }\n    }\n}\n```⁩",
+    "created_at": "2026-02-03T15:22:18.042000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "Orthogonal note: I added an extra byte to ⁨`input_data_2`⁩ that is never read, I was trying to think about whether it makes to try and catch that somehow since I think it could be indicative of a bug.\n\nI think for our usecase we _could_ catch it by never randomly indexing the slice. Then at the end of the program, just check if the cursor read everything",
+    "created_at": "2026-02-03T15:28:32.797000+00:00",
+    "attachments": []
   }
 ]
