@@ -1,0 +1,98 @@
+[
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Is there any reason why you mention \"ssz proof\" instead of directly including the whole NewPayloadRequestHeader? (i.e. replace \"ssz proof\" by \"NewPayloadRequestHeader\" -- feels much more useful in general)",
+    "created_at": "2026-02-03T00:03:03.479000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Maybe worrying about network waste if all proofs have this header?",
+    "created_at": "2026-02-03T00:04:01.440000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Ah yeah it can be NewPayloadHeader too -- I was thinking of the case where we just had the ssz root and we created a ssz proof to show the block_hash is included",
+    "created_at": "2026-02-03T00:04:50.199000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I think the Header size might be a small percentage of the proof",
+    "created_at": "2026-02-03T00:05:08.819000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "So probably better to do the header as you said",
+    "created_at": "2026-02-03T00:05:19.525000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I think if we only want to show ⁨`block_hash`⁩ then a SSZ would amek sense -- but including the whole header feels like high ROI",
+    "created_at": "2026-02-03T00:05:23.813000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I think this means we also don't care about the PayloadBid in ePBS; we can just introduce ExecutionPayloadHeader again and use that for linking the EL chain",
+    "created_at": "2026-02-03T00:08:33.677000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I think Jihoon mentioned something like that back in the convo when we were brainstorming 8025 (reg header revival in teh spec)",
+    "created_at": "2026-02-03T00:10:22.630000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Roughly summarizing since theres a lot of context:\n\n**BiB**\n\n- We discussed whether payload_blob_count is needed and concluded that we need it to distinguish between payload blobs and normal blobs for those that want to reconstruct the payload from blobs (fallback path)\n\n- BALs will also be put into payload and we can introduce a ⁨`payload_bals_count`⁩ to specify which blobs the BALs occupies and which blobs the payload occupies. The first blob would still tell us the amount of bytes for each.\n\n- Ideally we never use the blobs to get BALs or payloads; they would be on their respective gossip topics, but its not guaranteed.\n\n- Then it was noted that it's possible to actually remove ⁨`payload_blob_count`⁩ from the ExecutionPayload, since it has been committed to in the EL block header, but it means that you will need to download the EL block header in the scenario where you can't get the BALs or payload from the fast path, in order to figure out which blobs correspond to the payload.\n\n- For most nodes, like block builders this is okay, but if a node just wants to rely on the CL for BALs to update their state, then they would need the EL p2p to download the block header from blobs in the fallback path. So it seems better to have it in a CL accessible object.\n\n- Then we moved onto where this count variable should go, should we leave it in the ExecutionPayload or in NewPayloadRequest",
+    "created_at": "2026-02-03T00:31:09.300000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "**NewPayloadRequest**\n\n- In the guest program, we call ⁨`NewPayloadRequest.tree_hash_root()`⁩ NewPayloadRequest has an ExecutionPayload and that goes from ExecutionPayload -> ExecutionPayloadHeader -> Execution Payload Header root\n\n- tree_hash_root  automatically does the above conversion, the transactions become tx_root = transactions.tree_hash_root() etc. All of the lists like transactions become roots and this is what ExecutionPayloadHeader is.\n\n- The public input of the guest program is a single ssz tree_root, however to know if an EL block is valid, we need the block_hash that this root commits to\n\n- The easiest way to do this is to attach the preimages to the root to the proof, this preimage is ⁨`NewPayloadRequestHeader`⁩\n\n- A node would verify the proof and if true, they can be sure that the public input which is a ⁨`tree_root`⁩is correct. They would then call tree_hash_root on the ⁨`NewPayloadRequestHeader`⁩   object that came with the proof, to check that it equals the public input. They would then extract the block_hash from the ⁨`NewPayloadRequestHeader`⁩ object if all looks good.",
+    "created_at": "2026-02-03T00:31:11.174000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "In terms of action steps:\n\n-  I guess it doesn't matter where the ⁨`payload_blob_count`⁩ variable goes unless I'm missing something \n- Can add BAL to blobs (theres a bal field in execution payload)",
+    "created_at": "2026-02-03T00:34:52.733000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Great summary!",
+    "created_at": "2026-02-03T00:44:10.753000+00:00",
+    "attachments": []
+  }
+]
