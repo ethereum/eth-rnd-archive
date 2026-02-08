@@ -1,0 +1,226 @@
+[
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I think we don't need the payload blob count in the EL header.\nFor the EL, the nr of payload blobs in implicit, knowing the size of the payload.\n\nWe should split out the payload commitment in the block from the type-3-tx commitments, into a separate list. Then, we def don't need a payload count and we still distingish between type-3 blobs and payload blobs.",
+    "created_at": "2026-02-08T12:14:30.266000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "What was the original reasoning behind having the payload count? For the CL to apply different sampling strategies for payload blobs vs type-3-tx blobs?",
+    "created_at": "2026-02-08T12:14:37.985000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "We need the payload nr because zk attesters don’t have the payload, so they can’t derive the payload nr",
+    "created_at": "2026-02-08T12:20:45.906000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I’m not sure I see the benefit in having two lists for blobs vs having one list and a variable on the ExecutionPayloadHeader — we had a previous conversation about having it be a parameter to newPayload instead though",
+    "created_at": "2026-02-08T12:23:00.753000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "zk attersters need to know the nr. of payload blobs and the reason I see for enabling distinguishing is to have different sampling/retention strategies for type-3-txs blobs vs. payload blobs. Is this true?\nThen, we need the count to know, on the CL, which commitments are for payload blobs (vs which are type-3 txs blob commitments).\nSo, if we split it into two lists, which is clean bc I avoids commingling two things (user blobs vs protocol blobs), then we can also apply different sampling/retention strategies. Furthermore, the two could have different max-size limits or use different commitment schemes in the future. The split feels clean and even with 2 lists, the engine newPayload method can stay the same, keep the same signature and we just concat the lists before passing them to the EL.",
+    "created_at": "2026-02-08T12:34:09.828000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "For reconstruction of just the payload we need to know which blobs correspond to the payload no? (this would be the builder, but zk attesters need to have it as a public input) \n\nWe are snarkifying engine_newPayload so concatenation before passing them to the EL would still mean we need to know what blobs correspond to the payload.\n\nThe advantage of the current setup is that BiB is essentially opaque to the CL — I think if we choose to have different sampling strategies then perhaps it makes sense to have two lists (though a payload count doesn’t preclude this)",
+    "created_at": "2026-02-08T12:42:39.713000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Why is \"having it opaque to the CL\" a goal? I can def see why it might seem simpler, touching less on the CL, but my feeling is that two lists are cleaner, not more work and conceptually more sound",
+    "created_at": "2026-02-08T12:45:09.071000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "With the split in two lists, we would know which blob is what, just like with the payload blob count. Nothing better, nothing worse, I think.",
+    "created_at": "2026-02-08T12:46:15.688000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Agree yeah, one wouldn't need separation for different sampling or retention strategies",
+    "created_at": "2026-02-08T12:47:02.370000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I think it makes it simpler if only touch one layer (all things being equal)\n\nWouldn’t the CL need to know about payload_version_hashes and user_version_hashes?",
+    "created_at": "2026-02-08T12:47:16.051000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Versus the CL already seeing the payload header as an opaque object",
+    "created_at": "2026-02-08T12:47:48.337000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "You touch it by te-adding the header. Not sure if adding a simple list that essentially copies another would be a much bigger deal but yeah, might be worth considering",
+    "created_at": "2026-02-08T12:48:13.116000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Yeah maybe it can be concatenated somewhere on the CL such that it’s okay? (Would need to investigate)\n\nThough the payload nr in all cases would need to be a public input from newPayload",
+    "created_at": "2026-02-08T12:49:22.267000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "As an opaque object, yes, but not commingled with anything that is user-data posted through txs.",
+    "created_at": "2026-02-08T12:49:25.916000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Why? Wouldn't the payload -> blob proof be enough?",
+    "created_at": "2026-02-08T12:50:13.149000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Yeah I agree, just unsure if this is a problem since payload blobs are (sync) blobs to the CL currently",
+    "created_at": "2026-02-08T12:50:32.033000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Yep though this proof doesn’t let us know how many blobs the payload occupies without it being public",
+    "created_at": "2026-02-08T12:51:02.181000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Yeah, maybe the cleanest solution is having the payload blob count in the EL header + split thr commitment lists into 2.",
+    "created_at": "2026-02-08T12:52:27.191000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "One thing which wasn’t clear to me, does a change in ExecutionPayloadHeader imply a change in EL header?",
+    "created_at": "2026-02-08T12:53:12.810000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "They are not one to one currently and epbs removes the payload header (we plan to bring it back as a public input versus its current blind signing usecase)",
+    "created_at": "2026-02-08T12:54:11.633000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "It doesn't no",
+    "created_at": "2026-02-08T12:54:35.478000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "We _can_ bring it back, nothing speaks against this",
+    "created_at": "2026-02-08T12:55:09.483000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "In that case, I would change your sentence to ExecutionPayloadHeader not EL header",
+    "created_at": "2026-02-08T12:55:22.890000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Because we need the payload header anyways for optional proofs — not for this, so this just adds another field in just the payload header",
+    "created_at": "2026-02-08T12:56:11.049000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Yeah with EL header I meant the payload header 👍🏼",
+    "created_at": "2026-02-08T12:56:34.111000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I'm wondering if we even need to bring back the ExecutionPayloadHeader or if the proper way would be putting everything needed into the bid",
+    "created_at": "2026-02-08T12:58:48.953000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Yeah that was my original thinking — when I looked it seemed like folks wanted to make the bid as small as possible (understandably)",
+    "created_at": "2026-02-08T13:01:19.707000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Right but adding the header might be fine?",
+    "created_at": "2026-02-08T13:02:38.415000+00:00",
+    "attachments": []
+  }
+]
