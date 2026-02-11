@@ -14,5 +14,37 @@
     "content": "## BAL breakout happening now:\nhttps://ethereumfoundation.zoom.us/j/88902627473?pwd=lP4ukflb96wx8f0jc4EWaSUPbr7adn.1",
     "created_at": "2026-02-11T13:59:08.963000+00:00",
     "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Sorry, saw that just right now, but good we clarified this. What I meant was more like clients being free to chose to handle that however it makes the most sense for them. Assuming this check is cheap, there's nothing against doing it with every transaction",
+    "created_at": "2026-02-11T15:27:51.583000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "🤯 I just had an awesome realization regarding the sync process optimization with BALs on devp2p (sorry maybe late to party).\n\nThis is the optimization on how to quickly sync to chain MUCH FASTER in case of a reorg (we have to use devp2p here).\n\nStep 1: CL fcuS to head S, we realize we are reorging so we respond SYNCING\nStep 2: Query GetBlockHeaders(request_id, [S, 1, 0, 1]) (request this header)\nIf parentHash of the response is part of known blocks we are done (fetch transactions and BAL and either re-execute or apply BAL)\nIf this is not the case (deep reorg):\nFetch the chain headers in reverse mode using skeleton sync. Do so once we have reached a known block. We now have the complete list of BAL hashes B. This is the top priority:\nStep 3: Fetch all BAL hashes B in order (lowest number -> highest number). Verify BAL has expected BAL hash and if this is the case, then immediately apply state diff to canonical block (and verify if state root matches). Also fetch the block bodies, transactions and receipts.\n\nNote that here there is also a tradeoff: there could be very small block bodies but very large BALs. So downloading the block body could be much faster than downloading the BAL, but maybe executing them will take longer (maybe a defensive sync strategy would be to not prioritize anything but either exec the transactions if those are gotten first, or apply the BAL if it has gotten first).\n\nThis raises the question if we want to change something in the devp2p, some options:\n\n- `GetBlockAccessLists` requires the block hash. Another option is to request the BAL hash, however this means we first have to query the block header and can then query the block hash, while via current we don't have to get the header in order to get the BAL of that blockhash.\n- Could also do a structure like `[request-id: P, [startblock: {P, B_32}, limit: P, skip: P, reverse: {0, 1}]]` of `GetBlockHeaders`, however this will hit the devp2p limit very fast.\n\nCC <@792404665068158998>",
+    "created_at": "2026-02-11T15:43:06.484000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I'm thinking here if we can make the reorg fix time even faster by thus requesting the BALs in reverse. If you know exactly which blocks you need (so how much blocks you are apart from the blocks you have in DB) then if you can fetch the BALs in parallel and directly sequentially apply them while also getting block headers + block bodies would definitely help here I think",
+    "created_at": "2026-02-11T15:44:24.821000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Ah right also just saw this https://github.com/ethereum/devp2p/pull/264#issuecomment-3879142653, I think BALs for devp2p currently makes most sense to update chain state in case of reorg, so if we can compress the data this would be handy for faster state sync with less network overhead",
+    "created_at": "2026-02-11T15:47:41.003000+00:00",
+    "attachments": []
   }
 ]
