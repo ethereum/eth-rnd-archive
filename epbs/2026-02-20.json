@@ -1,0 +1,157 @@
+[
+  {
+    "author": "pk910",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "builder deposits are working with lighthouse already 🙂\nBut I think the bid submission api is missing,  so haven't been able to submit bids yet",
+    "created_at": "2026-02-20T06:58:47.712000+00:00",
+    "attachments": [
+      {
+        "type": "image/png",
+        "origin_name": "image.png",
+        "content": "612b350573d77899d25c5a0af5ab23158cf91028645f2a321db7b49061af689a"
+      },
+      {
+        "type": "image/png",
+        "origin_name": "image.png",
+        "content": "6787d5c6b9019e119e543db2ae9702be230e9d5fd08674a49b6d585762b46d62"
+      }
+    ]
+  },
+  {
+    "author": "dapplion",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "In ePBS given a SignedBeaconBlock can I know its parent is full/empty without having to fetch the parent? Now I need to do:\n\nFor child A and beacon parent B (B.root == A.parent_root):\n\n  - Read from A:\n      - bid_parent_root_A\n      - bid_parent_hash_A\n  - Read from B:\n      - block_hash_B (from B’s signed_execution_payload_bid.message.block_hash)\n\n  Then:\n\n  - If bid_parent_root_A == B.root and bid_parent_hash_A == block_hash_B:\n      - A is payload-carrying (built directly on B’s payload chain).\n  - Otherwise:\n      - A is empty (its payload parent skips over B).",
+    "created_at": "2026-02-20T07:00:22.294000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "dapplion",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "In reverse lookup sync then I have to (sequentially)\n- fetch block A\n- fetch block B\n- fetch payload of block B\n\nDo you see useful to make block A express if it built on top of empty / full without having to fetch its parent?",
+    "created_at": "2026-02-20T07:02:44.888000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "That's what we do, we check agains the bid of the parent block root. I am uncertain of the usefulness of expressing this in the block. For syncing, we must have the parent in forkchoice and this already has the payload there. I am unaware of any need to know if building on top of full or empty without fetching the parent. For example for backfill, you'll be fetching the parent anyway",
+    "created_at": "2026-02-20T07:51:03.178000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nc1234",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "To piggyback on this, if I receive a checkpoint state, would it be useful if there's a convenient way to tell whether this state is a block state or execution payload state (and thus knowing the view of the state provider on whether that slot was empty or full)?",
+    "created_at": "2026-02-20T08:19:43.689000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "It has to be the block state!",
+    "created_at": "2026-02-20T09:00:48.520000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "and you have to request anyway the payload by range and block by range starting from that slot, and import accordingly",
+    "created_at": "2026-02-20T09:01:14.011000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "there should definitely not be any ambiguity about what state one should receive",
+    "created_at": "2026-02-20T09:01:56.912000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "The biggest problem I see with checkpoints is when the slot 0 is missed, in those cases, attestations that justify the checkpoint actually are signalling for full or empty and we still return pending as the justified checkpoint when we *could* be returning the full payload status and avoid reorging the full justified payload. We chose to not change the signature of checkpoints to continue being the block root for simplicity and I think it was the right decision. I am unsure what we should be doing for checkpoint sync, but it seems to me that the simplest would be to always use the block state and just request all payloads and blocks by range starting with the state slot, and check if first the payload needs to be applied or not",
+    "created_at": "2026-02-20T09:39:49.415000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Well, the above is mostly stupid. Even when slot zero is not missed. Justification knows if the full or empty branch is being justified, but that would have also made justification and finalization processing more complicated",
+    "created_at": "2026-02-20T10:06:22.487000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<@755590043632140352> I find it confusing that [for attestations](https://github.com/ethereum/consensus-specs/blob/241783f4999c898e708ffab01929a282c05b68aa/specs/gloas/validator.md?plain=1#L103-L106), `data.index == 0` is `EMPTY` and `data.index == 1` is `FULL`. But [in fork-choice](https://github.com/ethereum/consensus-specs/blob/241783f4999c898e708ffab01929a282c05b68aa/specs/gloas/fork-choice.md?plain=1#L67-L68), `PayloadStatus(1)` is `EMPTY` and `PayloadStatus(2)` is `FULL`. Can we make these the same so we can re-use the constants?",
+    "created_at": "2026-02-20T14:20:03.316000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "That's <@520034910149410861>'s doing, not mine, but I like Francesco's approach cause it's neatly used in the tiebreaker.",
+    "created_at": "2026-02-20T14:24:04.120000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "You like that the values are different? Or you just like the approach in general?",
+    "created_at": "2026-02-20T14:25:16.110000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Just the order is needed, we can change them to be 0 and 1 as you want I think cause empty is not used I believe in that overload of values",
+    "created_at": "2026-02-20T14:29:13.068000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Can't check now cause I'm driving but I believe that to be true",
+    "created_at": "2026-02-20T14:29:35.126000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "fradamt",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I think this is fine if you prefer it? The tiebreaker it's only between `EMPTY` and `FULL` and would privilege `FULL` anyway\n\n| `PAYLOAD_STATUS_EMPTY`              | `PayloadStatus(0)`      |\n| `PAYLOAD_STATUS_FULL`                | `PayloadStatus(1)`      |\n| `PAYLOAD_STATUS_PENDING`         | `PayloadStatus(2)`      |",
+    "created_at": "2026-02-20T15:34:34.231000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Yes, something like that would be better IMO 👍",
+    "created_at": "2026-02-20T16:10:53.774000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I can make a PR in a bit which does this.",
+    "created_at": "2026-02-20T16:11:10.807000+00:00",
+    "attachments": []
+  }
+]
