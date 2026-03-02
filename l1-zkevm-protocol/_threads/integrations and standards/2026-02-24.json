@@ -1,0 +1,162 @@
+[
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "",
+    "created_at": "2026-02-24T13:12:41.007000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "1) Yep exactly, the io standard is here: https://github.com/eth-act/zkvm-standards/tree/main/standards/io-interface\n\nNo-one has implemented it yet, <@1408119112743256134> is looking into implementing it for ZisK\n\n2) Yep thats where we want to have the specs, the format will be a binary format, we are still playing around with what is the most efficient encoding though",
+    "created_at": "2026-02-24T13:12:41.990000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lukaszrozmej",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "so each client program needs to be able to deserialize that binary format?",
+    "created_at": "2026-02-24T14:53:46.092000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lukaszrozmej",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "what about standard for precompiles? Is it being implemented? We are trying to integrate ZISK precompiles now and it is a problem for us, due to ZISK doesn't expose something EVM equivalent but there is a rust library in-between",
+    "created_at": "2026-02-24T14:55:30.850000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "yep, but right now I'd suggest to use the default format that the zkVM comes with.\n\nJust to start from a common understanding, the flow is roughly:\n\n```rust\nfn main() {\n   // Host program\n\n    // Get input from rpc\n    let block = nethermind::get_block(100);\n    let execution_witness = nethermind::debug_execution_witness(100);\n    let chain_id = chain::mainnet();\n\n    // Serialize\n    let block_bytes = block.to_bytes();\n    let witness_bytes = execution_witness.to_bytes();\n    let chain_id_bytes = chain_id.to_bytes();\n     \n   // Host writes to guest program\n   zkvm::write_input(block_bytes);\n   zkvm::write_input(witness_bytes);\n   zkvm::write_input(chain_id_bytes);\n}\n```\n\n```rust\nfn main() {\n   // Guest program\n\n   // Read the input from memory that was written from host    \n   let block_bytes : Vec<u8> = zkvm::read_input();  \n   let witness_bytes : Vec<u8>. = zkvm::read_input();\n   let chain_id_bytes : Vec<u8> = zkvm::read_input();\n   \n   // Deserialize\n   let block = from_bytes(block_bytes);\n   let witness = from_bytes(witness_bytes);\n   let chain_id = from_bytes(chain_id_bytes);\n\n   // Now the program can use the block, witness and chain_id\n}\n```\n\n\nNote: The actual `read_input` and `write_input` methods are more low level and will just retrieve bytes.\n\nSo `to_bytes` and `from_bytes` need to match as you know and currently most zkVMs use bincode, it comes with their SDK.",
+    "created_at": "2026-02-24T16:38:23.821000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "How I see this playing out, is that we define a `from_bytes` and `to_bytes` that is available to all languages or just use an off the shelf thing like bincode",
+    "created_at": "2026-02-24T16:39:52.588000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Let me know if this doesn't make sense 🫡",
+    "created_at": "2026-02-24T16:40:11.450000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "precompiles also have a standard here: https://github.com/eth-act/zkvm-standards/tree/main/standards/c-interface-accelerators",
+    "created_at": "2026-02-24T16:40:41.084000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "So the idea is that you would use a C header",
+    "created_at": "2026-02-24T16:41:08.368000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "0xrubo",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "<@427491045308235776> what we're working on now is the guest app. i believe that host app is a third party that fetches the data from exec client, serializes it and feeds the guest app, right? otherwise, please elaborate. thanks.",
+    "created_at": "2026-02-24T19:34:11.361000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "yep this is correct -- I mainly wrote the host to illustrate the workflow, ie the serialization done by the host would need to match the deserialization done by the guest",
+    "created_at": "2026-02-24T19:40:46.502000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Is there a link to your guest program by chance? I had to do something similar in Golang here: https://github.com/eth-act/skunkworks-tama/blob/eff8e3af014b5a0777f071b73530d64659781b88/tamaboards/serialization/serialize.go#L12\n\nEssentially the `from_bytes` and `to_bytes` methods are defined in Go",
+    "created_at": "2026-02-24T19:46:19.444000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "0xrubo",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "our guest is unstable with lots of hardcoded stuff in very early stage here: https://github.com/NethermindEth/nethermind/tree/master/tools/StatelessExecution\nand now being heavily refactored here:\nhttps://github.com/NethermindEth/nethermind/tree/feature/stateless-zisk/tools/Stateless/ZiskGuest",
+    "created_at": "2026-02-24T20:16:25.177000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "This looks great",
+    "created_at": "2026-02-24T20:26:22.046000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Ah okay so you already have a ReadInput method: https://github.com/NethermindEth/nethermind/blob/fcfd95c60296b7a5719c456ea5ab272e74b8082b/tools/Stateless/ZiskGuest/Zisk.Memory.cs#L15",
+    "created_at": "2026-02-24T20:27:10.846000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I would add a Serialize and Deserialize method, one that works for you and is optimal, then we can look at all of the different impls and standardize on a single one",
+    "created_at": "2026-02-24T20:28:19.776000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "bincode is a rust native thing AFAICT, so we may need something more custom",
+    "created_at": "2026-02-24T20:28:53.417000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "0xrubo",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "i'm not familiar with it but noticed that in zisk docs. worth to consider?",
+    "created_at": "2026-02-24T22:34:14.579000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Since its very Rust specific, I think it may take up quite a bit of your time to get it working (In Rust, we usually put a procedural macro ontop of the structure and it works, which is not possible with C#) -- I would probably reach for MemoryPack and see what the performance characteristic is",
+    "created_at": "2026-02-24T22:39:49.118000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "or MsgPack",
+    "created_at": "2026-02-24T22:39:55.260000+00:00",
+    "attachments": []
+  }
+]
