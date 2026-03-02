@@ -1,0 +1,114 @@
+[
+  {
+    "author": "caravello878962",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "Leading up to the Hegota headliner vote, we compiled some common questions and responses on enshrined encrypted mempools and LUCID:\nhttps://ethereum-magicians.org/t/hegota-headliner-lucid-encrypted-mempool/27658/5\n\nLet us know if anything is missing here",
+    "created_at": "2026-02-26T04:45:43.820000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "0w3n6325",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "Out of curiosity. Who and why would someone else sign your ST?",
+    "created_at": "2026-02-26T15:51:28.149000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "0w3n6325",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "They would be paying your gas fees for you?",
+    "created_at": "2026-02-26T15:52:15.762000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "robocopsgonemad",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "you might trust them as a key provider.",
+    "created_at": "2026-02-26T15:58:54.988000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "0w3n6325",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "Isn't this still a trusted off chain third party? If the FBI knocks on their door are they any less likely to censor than a builder?",
+    "created_at": "2026-02-26T16:02:22.335000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "robocopsgonemad",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "yes it is, and it is optional",
+    "created_at": "2026-02-26T16:11:08.774000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "0w3n6325",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "I suppose maybe the argument is that the key providers incentives are fully aligned with the privacy of the user as otherwise no one would trust them or use their service.",
+    "created_at": "2026-02-26T16:13:19.157000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "0w3n6325",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "But either way. Whether the user signs it themselves or the key provider signs it. There would still be an identifier that could be used to censor the tx?",
+    "created_at": "2026-02-26T16:29:12.447000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "robocopsgonemad",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "no, the encrypted transaction is fully inside the ciphertext. you don't need to correlate anything on the outside with it. one could use an unused address to encrypt it and provide the key, totally different from what is executed.",
+    "created_at": "2026-02-26T17:29:30.319000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "data.always",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "re: the ACD debate today on whether gas limits are metadata that we should care about, my initial reaction is that yes, they do carry valuable information. \n\na proposal like lucid makes efficient backrunning almost impossible, which shifts the incentives for searchers to search onchain (see the problems with optimistic mev on L2s). having the gas limits on encrypted transactions public gives searchers more information about what types of transactions are being placed (simple dex, complicated routing, fraud proofs, etc.), as well as if other searchers are competing to extract mev from those txs. public gas limits could also lead to soft-collusion between searchers (whether this is good or bad depends on how you weigh the cost of spam v.s. whether searchers or the protocol/proposers capture the mev).\n\ni wouldn't personally call this a blocker, but it's definitely a non-trivial detail imo.",
+    "created_at": "2026-02-26T18:39:37.637000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "robocopsgonemad",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "there must be efficiencies in backrunning i do not understand - the encrypted tx when revealed, is still backrunnable in the block it is revealed in - it is placed in plaintext at top of block, and 7/8ths of the block gas remains. the only thing between the backrunee and the backrunner would be more encrypted txs which paid a lower ToB fee. can you explain the efficiency loss I am missing?",
+    "created_at": "2026-02-26T21:03:44.215000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "data.always",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "Apologies in advance, this is long. I'm trying to explain the whole picture.\n--\nBackrunning today is done by OFAs: they see the plaintext transaction, then outsource it to searchers who look at how the transaction misbalances pools. Those searchers then submit backruns that rebalance the pools, capturing MEV and redistributing most of it back to the original user (90% is the standard iirc). \n\nThey can only do this perfectly if they know the exact state, which means they can only do this perfectly for the first transaction in the block. After that there is noise that they cannot see. To get around this, searchers send many backruns in decreasing order of value. So a bundle will often look like: [`USER_TX`, `BACKRUN_1`, `BACKRUN_2`, ..., `BACKRUN_N`]. \n\nThe block builder then tries to include [`USER_TX`, `BACKRUN_1`], but if the route is not valid then `BACKRUN_1` reverts and the builder swaps to [`USER_TX`, `BACKRUN_2`], and repeat, etc. \n\nWith encrypted transactions, builders don't see the plaintext, which means that we can't offer revert protection on bundles. To make matters worse, instead of backruns having just a few transactions of noise, since LUCID places these at the bottom of the block, now there's going to be 150M gas of noise post-epbs (v.s. a couple million today). The end result is all encrypted transactions landing without helpful backruns that redistribute value to the users.\n\nNo backruns means uncaptured MEV.",
+    "created_at": "2026-02-26T23:27:09.355000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "data.always",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "Okay, so what now. we have uncaptured MEV that searchers want to compete over. They have two things they want to do: (1) land their transaction directly behind any targets and (2) pay as little as possible. With LUCID, the easiest way to do this is to search onchain before the state update is public to everyone (i.e., in the encrypted blockspace). This is also exactly what we see on L2s, with at times 70% of blockspace being eaten by blind searching onchain (a.k.a. optimistic mev). For structural reasons (longer block times, higher value trades, blockspace explicitly designed for defi, all transactions being backrunnable, etc.), with LUCID I would expect this number to be even higher than what we see on L2s. The searchers will keep all of the profits, while the blockchain suffers the externalities of the spam. See: https://writings.flashbots.net/mev-and-the-limits-of-scaling\n\nAny MEV that isn't captured through this blind onchain searching then becomes a PGA for searchers. In this case, all that MEV gets bid away meaning that none of it goes back to the user. In essence the worse the execution quality and trading experience for users --> the more money the next proposer makes.",
+    "created_at": "2026-02-26T23:27:16.163000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "data.always",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "The other point worth mentioning is that revert protection today protects user intentions in private mempools. If I place a big trade and my transaction can't land then it reverts offchain and the public doesn't know. This allows me to try again without being frontrun. When you have an encrypted mempool without revert protection, any failed transactions now leak these user intents and allows them to be frontrun in subsequent blocks (particularly if there are metadata leaks to correlate!). \n\nSo when you have 150M of gas noise leading to slippage --> this leads to an increase in reverts for LUCID users --> this leaks their transaction intents --> the user is meaningfully harmed compared to using an OFA (in additon to the execution quality also being worse).",
+    "created_at": "2026-02-26T23:44:34.664000+00:00",
+    "attachments": []
+  }
+]
