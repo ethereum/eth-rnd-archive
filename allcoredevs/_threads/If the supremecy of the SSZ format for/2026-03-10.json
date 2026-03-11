@@ -1,0 +1,50 @@
+[
+  {
+    "author": "jonny.derp",
+    "category": "general",
+    "parent": "allcoredevs",
+    "content": "I looked into why JSON encoding in geth is so slow. What I found is that when Go’s encoding/json package serializes a json.RawMessage, it runs a validation + compaction pass over the bytes even if they are already valid JSON. For small responses this is negligible, but for engine_getPayloadV5 with 72 blobs (~19 MB of hex-encoded JSON), each pass takes ~50–60 ms. The problem is that this happens at two separate layers in the RPC stack.\n\nI have a draft PR with an experimental fix that bypasses the redundant validation passes, which speeds this up by roughly 20x.  I’m mentioning this because if we’re making the case to switch to SSZ on the basis that JSON is slow, it’s important to point out that Geth’s current performance here is largely due to an implementation inefficiency in Go’s encoding/json. \n\nI’d be curious to see the benchmark run on a client that doesn’t have this issue with the JSON package, or see it run on my branch with the issue fixed.",
+    "created_at": "2026-03-10T03:58:50.941000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "siladu",
+    "category": "general",
+    "parent": "allcoredevs",
+    "content": "https://discord.com/channels/595666850260713488/1443978877440626809/1464047453438349426",
+    "created_at": "2026-03-10T10:54:53.556000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "siladu",
+    "category": "general",
+    "parent": "allcoredevs",
+    "content": "we also convert blobs to hex in parallel",
+    "created_at": "2026-03-10T10:58:41.261000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jameshe5018",
+    "category": "general",
+    "parent": "allcoredevs",
+    "content": "do you have a link to the draft pr? id like to take a look for prysm",
+    "created_at": "2026-03-10T15:49:49.516000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jonny.derp",
+    "category": "general",
+    "parent": "allcoredevs",
+    "content": "Sure thing. The change isn't as big as it might seem at first glance...there are ~1k lines of tests/benchmarks added:\n\nhttps://github.com/ethereum/go-ethereum/pull/33969\n\nThe speedup came from two places:\n\n1) Handrolling the encoding for BlobsBundle inside ExecutionPayloadEnvelope. All other fields envelope rely on json.Marshal, but I then hand stitch the fields together to avoid json.Marshal's expensive validation/compaction pass on BlobsBundle\n\n2) Handrolling the jsonrpcMessage wire encoding. Again, this avoids another call to json.Marshal that is expensive bc it would recompact and revalidate the enire JSON that we already know is valid.\n\nOne thing to note, in Go 1.26 I believe they make json/v2 standard. From the benchmarks I ran, it makes a big difference in speed; however, combining the use of these handrolled encoders + json/v2 is the most optimal. Geth is will have to wait a few months to upgrade to 1.26, but these mods should make a big difference in the meantime.",
+    "created_at": "2026-03-10T16:31:32.696000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "funnygiulio",
+    "category": "general",
+    "parent": "allcoredevs",
+    "content": "Idk if I can get to re-benchmark geth before ACD but will try",
+    "created_at": "2026-03-10T17:42:48.690000+00:00",
+    "attachments": []
+  }
+]
