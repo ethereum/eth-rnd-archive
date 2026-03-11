@@ -1,0 +1,210 @@
+[
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "",
+    "created_at": "2026-03-05T13:40:25.636000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "ok let's create a thread",
+    "created_at": "2026-03-05T13:40:26.745000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "but there is\n```python\ndef process_payload_attestation(\n    state: BeaconState, payload_attestation: PayloadAttestation\n) -> None:\n    data = payload_attestation.data\n\n    # Check that the attestation is for the parent beacon block\n    assert data.beacon_block_root == state.latest_block_header.parent_root\n    # Check that the attestation is for the previous slot\n    assert data.slot + 1 == state.slot\n    # Verify signature\n    indexed_payload_attestation = get_indexed_payload_attestation(state, payload_attestation)\n    assert is_valid_indexed_payload_attestation(state, indexed_payload_attestation)\n```\n\nso state `slot` must be `data.slot + 1`\n\nand `get_indexed_payload_attestation` calls `get_ptc`  into `compute_balance_weighted_selection` and then `compute_balance_weighted_acceptance` which uses we use the validator balance from that state `effective_balance = state.validators[index].effective_balance`\n\nso at epoch boundary, the balance after epoch transition is used, since ptc attesattion is in epoch _N-1_ but state is epoch _N_",
+    "created_at": "2026-03-05T13:43:37.681000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "either I am misinterpreting something in the spec or the spec is wrong imo, ptc should be stable and not change retrospectively",
+    "created_at": "2026-03-05T13:44:11.637000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": ">  it's fixed by the beacon committee that is fixed way before.\n regarding this I would say not because beacon committee is not balance weighted, while ptc is",
+    "created_at": "2026-03-05T13:47:30.875000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "oh you are right, if effective balance is changed this is a problem",
+    "created_at": "2026-03-05T13:47:33.727000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "we changed this when we did the balance check",
+    "created_at": "2026-03-05T13:47:44.048000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "this is valid cc <@520034910149410861> since you added the weighted selection",
+    "created_at": "2026-03-05T13:48:53.761000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I do not know what's the easiest way to deal with this, we need to validate PTC attestations for slot 32 both at slot 32 and at slot 31",
+    "created_at": "2026-03-05T13:51:22.124000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "ptc lookahead, same as we have for proposers?",
+    "created_at": "2026-03-05T13:52:56.425000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "it's either too large or we need to make PTC more stable",
+    "created_at": "2026-03-05T13:57:25.965000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "PTC more stable lends itself to bad attacks on builders I think",
+    "created_at": "2026-03-05T13:57:39.893000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "should add this to the agenda for todays ACDC 😝",
+    "created_at": "2026-03-05T13:59:51.212000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "maybe we can use the attested state like here https://github.com/nflaig/consensus-specs/pull/2",
+    "created_at": "2026-03-05T14:45:04.249000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "fradamt",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "The only slot where it's a problem is the last one right? Since each PTC only lives for one slot. So maybe storing that single PTC is viable, though ugly? Or perhaps we can always store the current PTC",
+    "created_at": "2026-03-05T15:02:28.687000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "fradamt",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Or do we more broadly want there to be a stable lookahead, e.g. not have the first PTC of epoch N only be known after the epoch transition to N?",
+    "created_at": "2026-03-05T15:07:03.206000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "fradamt",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Why is it too large? A one epoch lookahead is only 128 KBs",
+    "created_at": "2026-03-05T15:21:07.129000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "yeah that's what I thought it was large 🙂",
+    "created_at": "2026-03-05T15:21:44.026000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I don't know what's the right fix, but I rather the full lookahead than the last slot one",
+    "created_at": "2026-03-05T15:22:58.375000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "What can be done is commit on each state to the current slot PTC",
+    "created_at": "2026-03-05T15:23:48.474000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "and to validate PTC attestations we use the committed PTC",
+    "created_at": "2026-03-05T15:24:08.829000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "so get_ptc is computed *after* processing the payload attestations and put into the state",
+    "created_at": "2026-03-05T15:24:43.521000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "then PTC attesters can read from there their duties and attest, the block processor in the next slot will still use this slice",
+    "created_at": "2026-03-05T15:25:10.682000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "which would presumably be useful for reorgs as well",
+    "created_at": "2026-03-05T15:25:32.695000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "fradamt",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "We could do that, I am not convinced that we wouldn't rather have a lookahead though",
+    "created_at": "2026-03-05T15:36:38.997000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Yeah If people are happy with the lookahead that's fine too, just that either needs to be 2 epochs or also apply the pattern above",
+    "created_at": "2026-03-05T15:43:54.358000+00:00",
+    "attachments": []
+  }
+]
