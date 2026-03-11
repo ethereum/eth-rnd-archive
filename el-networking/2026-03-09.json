@@ -1,0 +1,130 @@
+[
+  {
+    "author": "jochembrouwer",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "<@792404665068158998> for snap/2 are the msgs the same as eth/71? \nIf this is the case, snap/2 runs alongside eth/71, so not sure here but I don´t think we should take existing messages and add it to protocol if it already exists in there? Feels like a copy when we know it runs already. Unless this bakes in the msgs into snap/2 to guarantee it exists, so if it gets removed on eth protocol it is guaranteed to be on snap. 🤔 Maybe I just rubber-duck fixed the issue here 😛\nLove SNAP BAL sync 😄",
+    "created_at": "2026-03-09T15:07:10.210000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "yes it's the same messages. Here's the eip:\nhttps://github.com/nerolation/EIPs/blob/toni/snap-2/EIPS/eip-9999.md\n\nHave only been talking with <@402853454126776320> so far but would love more eyes on it!",
+    "created_at": "2026-03-09T15:12:22.955000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "Right now it duplicates the messages in eth/71 and snap/2, following the \"sync primitives belong in satellite protocols\" philosophy, keeping snap self-contained for sync.\nWe could also have snap/2 only remove getTrieNodes/TrieNodes and using the eth/71 messages (GetBlockAccessLists (0x12/0x13)) for it. I don't have a strong opinion on neither.",
+    "created_at": "2026-03-09T15:15:29.129000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "One thing that could be done in the future (which would speak for keeping them separate) is splitting the state-diff in the BAL from the state locaitons (used for parallel IO) and only serving the state diff for sync.\nThe full BAL will be needed for reorgs for example but for snap sync we may only need the state-diff part.",
+    "created_at": "2026-03-09T15:19:02.717000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "I think there might be a problem with this approach. Has deleted nodes been taken into account? This collapses a branch node (2 branches) into a new one (extension/leaf node), and you need the contents of the branch which is not deleted there to construct the MPT. So you would have to do a range request in order to do get that node (this node would I think normally be retrieved via GetTrieNode)\nDeleted node only possible in storage trie when storage item is removed",
+    "created_at": "2026-03-09T15:20:01.005000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "Maybe I'm misunderstanding it though and not so deep into snap sync, so maybe Gary knows how the deletion operation would work here (lemme know if I should clarify the situation)",
+    "created_at": "2026-03-09T15:21:06.819000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "The cool part of snap/v2 is, you don't construct the trie alongside the sync, but only with a complete state",
+    "created_at": "2026-03-09T15:27:12.942000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "It eliminates all the complex parts in snap/v1 🙂",
+    "created_at": "2026-03-09T15:27:47.299000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "The pattern between v1 and v2 is very different. In v1, we synchronize the trie and derive the leaves (flat states), in v2, we synchronize the leaves (flat state) and rebuild the trie",
+    "created_at": "2026-03-09T15:28:46.509000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "Omg I already love it 😍  Wow this seems like a massive improvement",
+    "created_at": "2026-03-09T15:47:13.013000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "One thing I was just thinking is, \"what happens if we reorg past the pivot block\". With snap/1 things are fine and the node wouldn't need to start from scratch -> state can still be healed iteratively using GetTrieNodes + GetAccountRange/GetStorageRanges.\n\nFor snap/2, we would need do undo the state changes from blocks between the common ancestor and the pivot block (inclusive).\nWe could either (1) keep GetTrieNodes as a fallback for such a scenario, or (2) we live with the trade-off that such deep reorgs are practically impossible and have nodes restart in such cases\n\nAn optimization might be to request the BALs between the reorg block and the pivot block, delete their values from state and request them again from peers using GetAccountRange/GetStorageRanges, and then apply the new state diffs from the common ancestor forward to reach the new chain head. However, this relies on those BALs between the common ancestor and the pivot block still being available. In case they're not, we'd either have to restart sync or fallback to GetTrieNodes.",
+    "created_at": "2026-03-09T16:05:53.054000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "So, the 3 options are:\n1) snap/1 as a fallback\n2) Have nodes restart in case of such deep reorgs (most pragmatic)\n3) Have nodes not discard BALs for reorged blocks for a certain time\n\nMy feeling is option 3 is the best + potentially having a fallback to snap/1  to handle catastrophic cases where we have no finality for 2 weeks (in case we reorg back more than 3533 blocks (~16 days, which is the BAL retention period) and then having a flag to trigger snap/1 sync instead).",
+    "created_at": "2026-03-09T16:20:08.037000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "gakonst",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "Chiming in to say that we're extremely excited for a BAL-native snap sync, seems like a nobrainer and epic thing. It seems fine to retain some BALs for a bit?",
+    "created_at": "2026-03-09T19:42:51.662000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "Note that if we have a reorg which is past a certain depth (for Geth I think default is 256? Snap pivot window) then the nodes we are syncing too are also messed up because they do not have access to the MPT nodes of that big reorg. In that case we would rely on nodes having this archived data (archive node). If no node has this, then the only (?) way to reorg back (in case node was pruned) is full sync",
+    "created_at": "2026-03-09T22:26:48.927000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "Keeping BALs on some nodes on a voluntary basis to use later in case this happens also works, but this relies on out-of-protocol voluntary nodes running this service",
+    "created_at": "2026-03-09T22:27:33.002000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "So in case of an attack on the network we have a problem. I'll give this some more thoughts but also good to know indeed to immediately take into the \"worst case\" - the deep reorgs - here",
+    "created_at": "2026-03-09T22:28:29.323000+00:00",
+    "attachments": []
+  }
+]
