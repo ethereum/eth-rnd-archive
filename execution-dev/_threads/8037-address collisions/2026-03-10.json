@@ -1,0 +1,42 @@
+[
+  {
+    "author": "mariusvanderwijden",
+    "category": "general",
+    "parent": "execution-dev",
+    "content": "",
+    "created_at": "2026-03-10T14:53:06.479000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "mariusvanderwijden",
+    "category": "general",
+    "parent": "execution-dev",
+    "content": "# Proposed Spec Change: EIP-8037 Collision Gas Tracking\n\n## Problem\n\nIn the Amsterdam execution spec (`generic_create` in `vm/instructions/system.py`),\nwhen a CREATE or CREATE2 encounters an address collision, the child's regular gas\nallocation is burned (not returned to `gas_left`) but is **not** added to\n`regular_gas_used`:\n\n```python\ncreate_message_gas = max_message_call_gas(Uint(evm.gas_left))\nevm.gas_left -= create_message_gas                          # deducted\n\ncreate_message_state_gas_reservoir = evm.state_gas_left\nevm.state_gas_left = Uint(0)\n\n# ...\n\nif account_has_code_or_nonce(...) or account_has_storage(...):\n    increment_nonce(tx_state, evm.message.current_target)\n    evm.state_gas_left += create_message_state_gas_reservoir  # state gas returned\n    push(evm.stack, U256(0))\n    return                                                    # regular gas burned\n    # NOTE: regular_gas_used is NOT incremented\n```\n\nThis means the burned gas is:\n\n1. **Paid for by the user** — it reduces `gas_left`, increasing `tx_gas_used`\n   and the receipt's `gasUsed`.\n2. **Invisible to 2D block accounting** — it is in neither `regular_gas_used`\n   nor `state_gas_used`, so it does not appear in `tx_regular_gas` or\n   `tx_state_gas`.",
+    "created_at": "2026-03-10T14:53:07.127000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "mariusvanderwijden",
+    "category": "general",
+    "parent": "execution-dev",
+    "content": "### Consequence for implementations\n\nThe transaction-level accounting computes:\n\n```python\ntx_regular_gas = tx_env.intrinsic_regular_gas + tx_output.regular_gas_used\ntx_state_gas   = tx_env.intrinsic_state_gas   + tx_output.state_gas_used\n```\n\nAn implementation that derives `tx_regular_gas` from total consumed gas\n(the natural approach: `tx_regular = totalConsumed - tx_state`) will\n**overcount** regular gas by the collision-burned amount, because that gas\nis in `totalConsumed` but not in either dimension's counter.\n\nThis forces implementations to either:\n\n- Track a separate `regular_gas_used` counter through the entire EVM\n  (mirroring the spec's Python counter), or\n- Track collision-burned gas specifically and subtract it.\n\nBoth add complexity that could be avoided.\n\n### Inconsistency with error handling\n\nCompare with the error handler in `process_message` and `process_create_message`:\n\n```python\nexcept ExceptionalHalt as error:\n    evm.regular_gas_used += evm.gas_left   # remaining gas IS tracked\n    evm.gas_left = Uint(0)\n```\n\nOn exceptional halt, ALL remaining regular gas is added to `regular_gas_used`\nbefore being zeroed. This ensures that every unit of consumed gas appears in\nsome dimension's counter. Collision is the only case where gas is consumed\nwithout being tracked.",
+    "created_at": "2026-03-10T14:53:18.938000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "mariusvanderwijden",
+    "category": "general",
+    "parent": "execution-dev",
+    "content": "## Proposed Change\n\nOn collision, add the burned regular gas to `regular_gas_used`:\n\n```python\nif account_has_code_or_nonce(...) or account_has_storage(...):\n    increment_nonce(tx_state, evm.message.current_target)\n    evm.regular_gas_used += create_message_gas                # NEW\n    evm.state_gas_left += create_message_state_gas_reservoir\n    push(evm.stack, U256(0))\n    return\n```\n\n### Effect\n\n- `tx_regular_gas` now includes the collision-burned gas.\n- The identity `totalConsumed = tx_regular + tx_state` holds in all cases.\n- Implementations can derive `tx_regular = totalConsumed - tx_state` without\n  special-casing collision.\n- No change to receipt `gasUsed` (user still pays for the burned gas).\n- No change to `tx_state_gas` (collision does not affect the state dimension).\n- `max(block_regular, block_state)` may increase for blocks containing\n  collision transactions, but this reflects gas that was genuinely consumed\n  and paid for.\n\n### Rationale\n\nThe collision-burned gas represents real execution cost — the EVM performed\nwork (address computation, nonce increment, collision check) and the 63/64\ngas allocation was consumed. There is no reason to exclude it from the\nregular gas dimension. The current behavior appears to be an oversight\nrather than an intentional design choice, since the `regular_gas_used`\ncounter is incremented in every other gas-consuming path.",
+    "created_at": "2026-03-10T14:53:26.365000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "spencer_tb",
+    "category": "general",
+    "parent": "execution-dev",
+    "content": "Nice thanks! Oversight here, will add the changes to the specs and tests!",
+    "created_at": "2026-03-10T16:02:00.121000+00:00",
+    "attachments": []
+  }
+]
