@@ -1,0 +1,42 @@
+[
+  {
+    "author": "jochembrouwer",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "For these deep reorgs, how deep are those? I think Geth keeps a \"diff layer\" by default of a value somewhere between 64-256, so it can rollback chain quickly in case of mini reorgs? Then in case of a deep reorg we thus have > 256 reorg blocks (and already have a big problem then).\n\nIn that case the network/state has to survive on nodes which actually have access to that state to serve them the missing requests, which is indeed the storage/accounts which are in the W->P BAL but not in W->P' BAL (so the pre-value of that key in W). An interesting thing here is that state which has been untouched for a long time (\"dead\" accounts/storage) will thus not end up in this set. If it is only being read, then we have this value (not being marked as \"dirty\" by the W->P/W->P' comparison for BALs). The less-nice thing is that these writes are thus resurrecting old state. Since the rollback is so big, this is a huge reorg, and the network will then depend on \"archive\"-like nodes to save the network. These nodes will thus also get hit by a lot of traffic.\n\nDue to this (this is a spike moment in network traffic for these nodes) I think we should bundle the account/storage requests to the specific ones which clients need. This will depend on which BALs the client has. If the client has a BAL missing to reach W \"backwards\" then for now I think the only solution is to restart snap sync? \n\nNote that if the account does not exist, we:\n\n> The responding node is allowed to return less data than requested (own QoS limits), but the node must return at least one account. If no accounts exist between startingHash and limitHash, then the first (if any) account after limitHash must be provided.\n\nThis puts strain on the node if the account which is being fetched here did not exist at W.\n\nI am thinking if we can somehow use the range proofs to hash inner tries inside in order to get extra information, e.g. assume accounts are empty and then find out they are not if the inner hash does not match...",
+    "created_at": "2026-03-12T03:09:40.971000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "How does the network handle these big reorgs currently? This should not happen in practice - right?\n\nAlso a small suggestion (but this assumes a specific data format/layout which is maybe not wanted): if code of an account < 32 bytes, then instead of account code hash report the code. If a response has a codeHash < 32 bytes it is implied and known that this is the code of the account (hash it to get codeHash)\nThis is nice for EIP-7702-delegated accounts as the storage of it is 23 bytes, so fits nicely, and saves requests on GetCode 🙂",
+    "created_at": "2026-03-12T03:11:23.778000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "(However this means that client lookups code of an account to check if it is small in order to send it, or that the account itself is already stored like this such that in a single lookup it has instead of codeHash the code)",
+    "created_at": "2026-03-12T03:12:10.125000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "I'm also thinking about the flat database and the trie nodes database, I think this can be synced in parallel too. What the syncing node does it with every request it retrieves with a range proof, insert these nodes directly into the trie database (lookup path -> node db). For each BAL retrieved, update the trie database: with the range proof given, we know that these trie nodes are correct (and also know the path). If for a specific BAL update this fits in a range already retrieved before, we can insert this change and we can start hashing. If this value falls within the already retrieved left/right nodes of the proof then updating this value should yield the state root of that block, because we already have the values of all nodes.\n- Exception is if a storage key gets deleted, and a BranchNode with 2 items now collapses into an ExtensionNode: we need the contents of the branch the existing/old BranchNode points to in order to extend it correctly. This is thus if the remaining branch is left of the left proof or right of the right proof.\n\nI'm not sure how much this helps but besides that the trie can be built in parallel we can thus also keep track of the changes and update the trie accordingly while downloading the other state. \nSo in snap/1 if you had to change the targetHash of the block it would be unknown what values have updated (so not sure, might not make sense to already start building trie there?) but in snap/2 this is now known, the only nasty case where we want to get specific trie items are in the case of storage deletions 🤔",
+    "created_at": "2026-03-12T03:25:42.915000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "In case of deletion one could immediately call GetStorage to retrieve the range proofs for those values. We can also calculate the minimum key needed in case the left tree collapsed (depends on depth of trie where the branch collapsed/\"snapped\" 😜 ). Same for right, can adjust the limitHash of that accordingly.\nFor left we might not get what we want as we might hit the soft limit: for the right branch we are guaranteed it has the values/nodes we need.\nMaybe for left we request the deleted key minus 1 as this gives a proof and thus the required nodes for that request 🤔",
+    "created_at": "2026-03-12T03:29:05.731000+00:00",
+    "attachments": []
+  }
+]
