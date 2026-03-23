@@ -1,0 +1,58 @@
+[
+  {
+    "author": "draganrakita",
+    "category": "Testing",
+    "parent": "",
+    "content": "Have few things here.",
+    "created_at": "2026-03-23T10:34:20.601000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "draganrakita",
+    "category": "Testing",
+    "parent": "",
+    "content": "Static call check for CREATE/CREATE2 opcodes is done after state/regular gas deduction. This do refill the state gas. Imo spec code should be changed to do static call check first",
+    "created_at": "2026-03-23T10:34:26.695000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "draganrakita",
+    "category": "Testing",
+    "parent": "",
+    "content": "Refill of the reservoir does not happen on top level call halt/revert. This is a different behavior from how it is done inside subcalls. Aka if there is SSTORE at depth 0 (state gas is used) and the call reverts/halts, the state gas is not added back to reservoir.\n\nThis behaviour is charging for something that is not happening. <@755913785620824175> this was a issue I reported previously. \n\nEIP wording is kinda ambiguous on this: `The state_gas_reservoir is not consumed, it is returned to the parent frame or preserved at the top level for refund, consistent with the principle that state gas pays for long-term state growth which does not occur on failure.` have pinged Maria (she is ooo this week).",
+    "created_at": "2026-03-23T10:44:45.930000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "spencer_tb",
+    "category": "Testing",
+    "parent": "",
+    "content": "Thanks you're right here, the spec code currently charges regular + state gas before the `is_static` check which is wasteful and is inconsistent with SSTORE, CALL, etc which all check static context first. The ordering should match the other opcodes. We'll fix this in the spec!",
+    "created_at": "2026-03-23T13:29:39.431000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "spencer_tb",
+    "category": "Testing",
+    "parent": "",
+    "content": "Agreed this is inconsistent, currently on revert in subcalls,  state gas is returned to the parent reservoir, so state gas for reverted operations is not consumed. For the outer most call this means the state gas stays consumed even though the state was rolled back\n\nShall we add something like:\n> On revert or exceptional halt, state gas consumed during execution is not charged. In subcalls, it is returned to the parent frame's reservoir. At the top level, it is returned to the transaction's remaining gas for refund to the sender.\n\nWe can open a PR for next week when Maria is back, and add this change for devnet 4, include it as a topic for next weeks ACDT\n\nI feel like we should stick with what we have for devnet-3 currently, just to align on something then we can finalize the rest for devnet-4, wdyt?",
+    "created_at": "2026-03-23T13:46:36.241000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "draganrakita",
+    "category": "Testing",
+    "parent": "",
+    "content": "> I feel like we should stick with what we have for devnet-3 currently, just to align on something then we can finalize the rest for devnet-4, wdyt? \nDo agree with this",
+    "created_at": "2026-03-23T13:49:31.656000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "draganrakita",
+    "category": "Testing",
+    "parent": "",
+    "content": "> \n> On revert or exceptional halt, state gas consumed during execution is not charged. In subcalls, it is returned to the parent frame's reservoir. At the top level, it is returned to the transaction's remaining gas for refund to the sender.\n> \nWould not use `refund` here as it has different meaning (it is capped) i use `reimburs` caller in revm. But otherwise sounds good!",
+    "created_at": "2026-03-23T13:50:58.195000+00:00",
+    "attachments": []
+  }
+]
