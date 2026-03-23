@@ -1,0 +1,154 @@
+[
+  {
+    "author": "tbenr",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I can't decide between 5020  and 4992. The first is more efficient (trigger rehashing only when the change is needed) but a bit \"hacky\" and less general. The latter is cleaner but requires more state rehashing also when technically not needed (and slows down the processing of empty slots)\n\nI probably need to let the ideas settle",
+    "created_at": "2026-03-20T08:33:52.463000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I was fine with #4992 before looking into the implement in more detail, at least for us it's cheaper to access the data outside of the state anyways and we cache the ptc for the whole epoch at slot=0 anyways, also something to be careful with, if you load the state you need to make sure the slot is dialed forward to the correct slot.\n\nWe have both #4992 adn #5020 implemented, personally have slight preference for #5020 but it might be specific to lodestar implementation wise",
+    "created_at": "2026-03-20T10:37:24.511000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Why was https://github.com/ethereum/consensus-specs/pull/4979 closed? among the three options, this is my favorite, and in fact I'd add 3 epochs to the state",
+    "created_at": "2026-03-20T13:19:51.951000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "t",
+    "created_at": "2026-03-20T13:20:40.528000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "The cost is just a few KB on a state that is already several hundred MB and the wins are \n- Safer caching\n- Better hashing\n- Easier implementation\n- Better RPC providers UX (report duties early, etc)",
+    "created_at": "2026-03-20T13:21:36.592000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "The problem I have with 4992 is that it adds hashing every slot and it's also not flexible in which state to grab for validation, on reorgs it sucks. The problem I have with 5020 is that it just sucks the UX of having to use either state or a computation depending on the slot number. Of course if everything is cached you can use a cache, but that falls into the usual track of actually having  the cache in sync with what's the current state. This is why I believe it's better to have the full lookahead/behind on state. I can say for certain that all the bugs that we had because of a cache miss on the proposer id cache, were completely solved by having the lookahead on state, so I envision the same thing for the PTC.",
+    "created_at": "2026-03-20T13:38:24.648000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "will say given the size of state already, I tend to agree that having things in state tends to be nicer than ad-hoc caches. it also adds better testing because it enshrines the \"caches\" as part of consensus, the consensus spec tests, etc across the entire ecosystem",
+    "created_at": "2026-03-20T13:50:48.276000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "so there might be other arguments against the two variations which changes state for this purpose, but a small increase in state size isn't really one of them for me",
+    "created_at": "2026-03-20T13:51:38.114000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Just reopened #4979. We can close PRs once we reach to consensus.",
+    "created_at": "2026-03-20T14:02:36.643000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "To sum up, currently what's on the table are:\n\n- [#4979](<https://github.com/ethereum/consensus-specs/pull/4979>)\n- [#4992](<https://github.com/ethereum/consensus-specs/pull/4992>)\n- [#5020](<https://github.com/ethereum/consensus-specs/pull/5020>)\n- or yet another approach",
+    "created_at": "2026-03-20T14:02:42.830000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "well I was always a fan of that one from the beginning, agree we should solve the next epoch lookahead in that case, also if we do that we don't cache the ptc for just that one edge case, it's actually useful for the lookahead too, curious what <@1035747431461167125> thinks",
+    "created_at": "2026-03-20T14:09:43.369000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "#5020 just exists because I dislike #4992",
+    "created_at": "2026-03-20T14:10:36.678000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I've gradually changed my mind about the extra size on the state. Although it's cumulative on RPC providers cause these will be guaranteed to be different across epochs.",
+    "created_at": "2026-03-20T14:17:07.098000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tbenr",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "> Although it's cumulative on RPC providers cause these will be guaranteed to be different across epochs.\n\nwhat do you mean?",
+    "created_at": "2026-03-20T15:36:55.633000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "For clients that save full states it's irrelevant. For clients that save state diffs it'll be really 256KB more per checkpoint",
+    "created_at": "2026-03-20T15:38:09.007000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tbenr",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yes i see. I'm also not a fan of writing data in state when there are 0 usecases attached to it, even if I get the aesthetics of having it simila ro the proposer_lookahead",
+    "created_at": "2026-03-20T15:41:54.851000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "there is a use case for lookahead, makes slot 0 ptc duty handling ~~much~~ slightly simpler",
+    "created_at": "2026-03-20T15:42:57.548000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "it also makes cache handling trivial: if we're finalizing we always have dependent root being equal as the head state so we can *always* use head regardless of branch",
+    "created_at": "2026-03-20T17:09:41.468000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "this has been a relief for us since Fulu",
+    "created_at": "2026-03-20T17:10:04.080000+00:00",
+    "attachments": []
+  }
+]

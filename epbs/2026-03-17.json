@@ -1,0 +1,266 @@
+[
+  {
+    "author": "nixo.eth",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "^ <@376562530463776787>",
+    "created_at": "2026-03-17T04:39:45.655000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "dgusakov",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Gm! It is a bit hard to figure out the exact changes we are talking about here. Can I ask for a sort of summary?",
+    "created_at": "2026-03-17T08:25:23.391000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "dgusakov",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "We do prove exact events in exact blocks. Withdrawals, for example. If you are about to introduce the change where some blocks can be obtained directly while others via N jumps to parent, it will be problematic for us for sure",
+    "created_at": "2026-03-17T08:32:38.298000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "pk910",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "that's basically exactly what we'Re talking about 😅 \nwith epbs we won't have every block root on chain anymore.  \nthere are situations where a block root of a regular block does not appear in the beacon roots contract.\n\nthe workaround we've discussed above is, that the proof could be extended to not start at the block root that includes the operation that should be proved. Instead, extend the proof to go from the last available block_root -> state_root -> block_roots[]   and from there to the individual operation (eg. withdrawals).\n\nit'll make the proofs longer and more complex.",
+    "created_at": "2026-03-17T10:00:47.148000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "pk910",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "proving withdrawals could actually be problematic with epbs 🤔 \nwe don't have a execution_payload_envelope_root or execution_payload_root in the bid,   so there's no merkle proof path towards the ExecutionPayload?\ncc <@755590043632140352>",
+    "created_at": "2026-03-17T10:03:27.913000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ajsutton",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "oof, that sounds painful.  Is there a way to know if a block hash is or isn't going to be available easily? OP Stack uses the on-chain block hash history as part of proving derivation as it makes it _way_ faster to jump a long way back in history without having to walk through the block chain individually. We can be flexible about the process and already handle doing the lookup in multiple hops but would have to make adjustments if we can't look up an arbitrary block within the history range.",
+    "created_at": "2026-03-17T10:06:39.538000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "pk910",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "parent roots of blocks with empty payloads won't be on chain.   but don't mix the block hash with beacon block roots.\nwe're talking about the EIP-4788 contract,  not EIP-2935 (block hashes)",
+    "created_at": "2026-03-17T10:08:51.572000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ajsutton",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Ah, that's fine then - I only care about EL block hashes in this case.  OP Stack passes through the last beacon block header from L1 but we'll just continue to mirror whatever that is on L1 so should be fine.",
+    "created_at": "2026-03-17T10:11:08.722000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Withdrawals that were deducted in block N on the CL have to be paid in block N+k in the EL with some k>=0. The block root that will appear in the contract is N+k-1 but most importantly, they are cashed on the state until they are paid. If withdrawals are proved against inclusion in a Payload I believe it shouldn't be much different. If they are proved against deduction in the CL at a particular CL block yes this can be an issue, but if it's proven against the beacon state of that block (that cashed the withdrawals) then it should be fine as well",
+    "created_at": "2026-03-17T10:17:46.624000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "pk910",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "does it make sense to add a execution_payload_root to the bid? that way apps can construct merkle proofs into the payload too.\ncould be interesting if we go forward with ssz and transactions & co become structured ssz objects too.  then everything within a block or its payload would be provable via the block root",
+    "created_at": "2026-03-17T10:31:25.505000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "That can't be added",
+    "created_at": "2026-03-17T10:42:41.748000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Because there are fields in the envelope that can't be known at that time. Incidentally withdrawals is one of them",
+    "created_at": "2026-03-17T10:43:33.995000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "But yes, life for these kinds of problems would be much easier if EL devs bit the bullet and moved to SSZ in the whole pipeline.",
+    "created_at": "2026-03-17T11:10:11.262000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "pk910",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I don't fully get that argument.   the block_hash is included in a bid, which is the hash over the whole execution block header, which includes the withdrawals_root.  So there is already a cryptographic commitment for the included withdrawals in the bid?\nthe execution_payload_root would just be another representation of the same data?\n\nAnyway, I'll gonna dig into the proof complexity a bit.. let's see how big these proofs really get when going through the state / checking expected_withdrawals.",
+    "created_at": "2026-03-17T11:15:40.030000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "The bid does not include the beacon block root of the current root, it includes the beacon block root of the parent beacon block. In the happy case the bid is for a payload that will fullfil withdrawals for the *current* beacon block which is not known yet at the time of bid submission",
+    "created_at": "2026-03-17T11:20:14.709000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "The builder can always include a HTR for the full execution payload object within the envelope, but it cannot provide an HTR of the full envelope where some extra necessary data is included.",
+    "created_at": "2026-03-17T11:21:31.778000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "pk910",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "that's what I'm talking about 😉  I've never mentioned a execution_payload_envelope_root",
+    "created_at": "2026-03-17T11:22:54.721000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "ah yeah, for just the payload's HTR would work for this particular case, and yes, getting the payload HTR instead of the hash in the bid would be WAAAAY better, now go an advocate in ACDE for them to include this 😄",
+    "created_at": "2026-03-17T11:31:31.260000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "BTW, we could do this independent of the EL devs if we agreed, the bid is on the CL only",
+    "created_at": "2026-03-17T11:32:04.825000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "pk910",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "so, a proof from a beacon root  to a previous beacon root via block_roots needs 22 sibling hashes.\ngoing from a block root to a specific withdrawal root needs 14 sibling hashes.\ntotal 36 hashes per merkle proof verification for a withdrawal.\n\nright now, proving a specific withdrawal directly from the right beacon root and traversing through body_root -> execution_payload -> withdrawals needs 16 sibling hashes.\n\nso the complexity / proof size and gas costs would basically double when leaving it as is.\nif we get the beacon roots contract fixed, we can get rid of the first 22 siblings,  making the proof via the state actually cheaper than before 😄",
+    "created_at": "2026-03-17T11:58:15.494000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "For next ACDT there's only one topic I can think of and it's the PTC lookbehind thing. Please bring someone with an opinion. The issue above of blockroots should be discussed in ACD or the joint section of ACDT then",
+    "created_at": "2026-03-17T20:25:18.685000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ralexstokes",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "i was just looking at this earlier today -- it may be a bit heretical but im still trying to see if there are any attack vectors if we just remove the payload attestations from the blocks entirely",
+    "created_at": "2026-03-17T21:04:11.621000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ralexstokes",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "then we can just say e.g. in the fork choice doc to use the right state when validating them",
+    "created_at": "2026-03-17T21:04:31.484000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ralexstokes",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "AFAIK every client will keep the committees cached anyway",
+    "created_at": "2026-03-17T21:04:40.847000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ralexstokes",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "so it seems like adding the PTCs to the state is more of a harmony/aesthetics thing in the spec and then  at that point i'd ask if we can cut some complexity",
+    "created_at": "2026-03-17T21:05:40.728000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "- The PTC in the block helps in a few scenarios. One of them that I like is this:  if there have been equivocations by the PTC, the proposer enforces his own view on why he decided to reorg a payload or not. So it helps prevent some ex-ante reorgs in this way",
+    "created_at": "2026-03-17T21:13:00.429000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Something similar happens on split views",
+    "created_at": "2026-03-17T21:13:54.699000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ralexstokes",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "right and that's likely the justification, although going thru the fork choice to see if that's actually possible right now",
+    "created_at": "2026-03-17T21:26:37.996000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ralexstokes",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "hm although in the proposer case don't we already know via the parent they build on top of?",
+    "created_at": "2026-03-17T21:27:19.661000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ralexstokes",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "so then it seems a bit redundant",
+    "created_at": "2026-03-17T21:27:32.228000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ralexstokes",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "and if an attacker wanted to deviate from what would be on chain they can just withhold them from the block",
+    "created_at": "2026-03-17T21:27:46.916000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ralexstokes",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "and also catching up on the \"missing parent beacon block roots under epbs\" issue above <@808969530608451584> <@755590043632140352> \n\nlike potuz points out you can't really do anything without \"the next execution block\", so i dont see much value in modifying the engine API to capture them somehow (e.g. what EL timestamp should the empty beacon blocks associate with ?)\n\nand also like potuz is saying you can prove anything from any given block root so if you need to peek back into some history that isn't immediately reachable via the 4788 contract, you'd just extend the proof by a hash or two\n\n( so cc <@935504619554107392>  there shouldn't be any impact to what you are doing w/ withdrawals)",
+    "created_at": "2026-03-17T22:35:48.930000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "The proposer path is tricky, cause it's not really honest behavior if they \"decide\" to reorg the payload. That is, if the PTC voted the payload is not available but the proposer did see it on time, the proposer's forkchoice will pick the full state as head and it *should* build on full. However in this case the proposer could reorg and forkchoice of all attesters will follow it's choice. This is very much like an *honest reorg* today for the late CL block path. \n\nThe more reallistic scenario however is that the proposer may not have the payload and wants to make sure that attesters follow it's forced path on reorging.",
+    "created_at": "2026-03-17T22:52:16.962000+00:00",
+    "attachments": []
+  }
+]
