@@ -1,0 +1,10 @@
+[
+  {
+    "author": "developeruche",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Thanks! And yeah, your intuition is very correct. The `state` field is definitely the bottleneck, but it’s a bit more expensive than just reading MPT nodes for proofs.\n\nWhat’s actually happening under the hood is a full re-traversal and re-application of both the state and storage tries, with trie logging turned on. Concretely:\n\n- Every touched account is fetched again via `trie.get(hashed_address)`, which means a full MPT walk from root to leaf (I/O).\n- Each touched storage trie gets reopened per account, more I/O.\n- Every storage key is re-read via `storage_trie.get(hashed_key)`.\n- Then all account updates are re-applied using `apply_account_updates_from_trie_with_witness`, which recrds not just what was read, but also what gets created during the update. That way you capture both pre-state and post-state nodes needed for stateless validation.\n* Finally, all those collected nodes are hashed and packed into the witness.\n\nSo in practice, you’re basically doing merkleization a second time, plus the overhead of trie logging, which is why it lands around the time consumed.\n\nI only confirmed this for ethrex though, but is seems likely this should be similiar for other clients.",
+    "created_at": "2026-03-29T16:51:52.209000+00:00",
+    "attachments": []
+  }
+]
