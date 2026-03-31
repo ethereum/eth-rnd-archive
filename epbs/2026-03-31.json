@@ -334,5 +334,189 @@
     "content": "we may be talking different things then, do we have an endpoint for a local builder that is prepareing a bid/envelope to act as an external builder?",
     "created_at": "2026-03-31T14:01:50.638000+00:00",
     "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I want my validator client to act as a builder, what endpoint will it call?",
+    "created_at": "2026-03-31T14:02:48.152000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "https://github.com/ethereum/beacon-APIs/pull/580/changes#diff-70f7de196e41377e66d64da0bb5025d42f118937ee89bf86f8d2e78efa6610d0 should work for that case",
+    "created_at": "2026-03-31T14:03:19.016000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "so it is the same as for local build",
+    "created_at": "2026-03-31T14:03:30.931000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "and none of this is merged yet right?",
+    "created_at": "2026-03-31T14:04:00.206000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "but no, this doesn't work, the beacon node does not need to cache an envelope for every validator it serves that decides to act as a builder",
+    "created_at": "2026-03-31T14:04:53.603000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "it needs to cache just the payload and the state transition function, but the builder index etc needs to be passed to the endpoint",
+    "created_at": "2026-03-31T14:05:12.633000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "so is there no working version now? I'll work on the internal grpc version for PRysm then that I can do whatever I want",
+    "created_at": "2026-03-31T14:05:49.197000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "looks like we removed it here https://github.com/ethereum/beacon-APIs/pull/580/changes/0c458594da02947f60bf6c7f4cae876ed2cdb1f8",
+    "created_at": "2026-03-31T14:06:43.595000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "problem is nobody actually has gotten there yet to implement these endpoints, and before that's the case there is also no point merging these PRs",
+    "created_at": "2026-03-31T14:07:52.305000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I'm completely lost with that repo, I'm implementing the whole pipeline now for Prysm of all these endpoints, but the problem is that it looks that our internal implementation (grpc) will be very different than the beacon API (that as far as I can tell is not completely worked out to allow validator clients to act as builders). We were hoping to deprecate the grpc implementation, but it seems harder when we deviate from the beacon API",
+    "created_at": "2026-03-31T14:09:52.454000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "ok, but actually it's fine not to have the builder index in that call as long as the beacon node has the beacon block already with the committed signed bid",
+    "created_at": "2026-03-31T14:12:59.807000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "if that endpoint assumes the beacon has cached the envelope for the external builder or local proposer that is already committed in the bid, that endpoint as is will work fine",
+    "created_at": "2026-03-31T14:13:29.614000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "ahh no, that thing is in `produceBlock` not in the getPayloadEnvelope",
+    "created_at": "2026-03-31T14:15:01.729000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I'll stick to grpc",
+    "created_at": "2026-03-31T14:15:22.129000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "should be the same args either way that you need to pass, but I don't think anyone looked at implementing the \"act as a builder\" flow, I don't think I want to couple that with the validators client in lodestar and rather have a separate process that just uses some sse events, and might use the beaocn node to build the payload, just not sure yet how that flow will look like but we should make the standard beacon-api in a way that allows this to be easy to implement",
+    "created_at": "2026-03-31T14:17:59.456000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yeah perhaps it's that I had a very clear picture of what this beacon API would be, and assumed that this was the current status of that API:\nThe builder namespace requires two endpoints\n- Get a bid to sign right now:  The beacon is in charge of caching a payload, the fee recipient, etc. The endpoint gets the builder index as a parameter. \n- Get an envelope to sign right now: the beacon is in charge of using the cached payload or alternatively the endpoint takes an entire new payload and requests. It's fine if these are different endpoints, one that uses the cched payload and another one that gets all the data.  In the cached senario, if the current block has the commitment to the cached hash, return the corresponding full payload envelope. \nThe beacon needs two endpoints to just broadcast the two signed objects.",
+    "created_at": "2026-03-31T14:23:48.764000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yeah I think it's good to have separate endpoint under `/builder` what's currently not defined is the case where the beacon node caches the payload, we only have #584 which supplies the payload\n\nfor broadcast these should be `/beacon` endpoints anyway like we have `publishBlockV2` today so I don't think we need dedicated endpoints\n\nwhat doesn't work for local payloads right now is telling the EL what gas limit to use",
+    "created_at": "2026-03-31T14:29:04.672000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "`POST /eth/v1/beacon/execution_payload_bid` already part of master to broadcast the bid",
+    "created_at": "2026-03-31T14:30:50.694000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "`POST /eth/v1/beacon/execution_payload_envelope` is part of https://github.com/ethereum/beacon-APIs/pull/580/",
+    "created_at": "2026-03-31T14:32:04.199000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "0xpatches",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "idk if this is well known but the EIP and potuz's annotated spec make reference to PAYLOAD_TIMELY_THRESHOLD without defining it anywhere. I think some language around how the value is decided would be appropriate (client-configured? spec-defined?)\n\n<https://www.potuz.net/posts/gloas-annotated-forkchoice/> refers to it in `is_payload_timely` and <https://eips.ethereum.org/EIPS/eip-7732> refers to it in the `PTC equivocations` section",
+    "created_at": "2026-03-31T14:38:30.623000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "0xpatches",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "the spec itself does define it here <https://github.com/ethereum/consensus-specs/blob/master/specs/gloas/fork-choice.md#constants>",
+    "created_at": "2026-03-31T14:40:25.400000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "0xpatches",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "but as `PTC_SIZE // 2` which makes little sense",
+    "created_at": "2026-03-31T14:40:49.843000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yeah I think it's good to have separate",
+    "created_at": "2026-03-31T14:43:53.053000+00:00",
+    "attachments": []
   }
 ]
