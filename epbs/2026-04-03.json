@@ -94,5 +94,93 @@
     "content": "I don't see how the postEnvelope state can be finalized in this case. attestations would be voting for target block root `n - 1` . It seems to me that all we can safely say is that the postBlock state for `n-1` is finalized. the node consuming that data would have to then try syncing the rest of the chain to figure out if `n - 1` has a full or empty payload",
     "created_at": "2026-04-03T06:46:42.304000+00:00",
     "attachments": []
+  },
+  {
+    "author": "tuyen4818",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "my thinking is that a checkpoint of `slot, root` always has `slot % 32 == 0`, even through it's a skip slot\na finalized state is always a checkpoint state, so finalized state must have `state.slot == 0 ` as well\nand that's correct up until fulu, `finalizedState.slot` has the slot respective to the checkpoint's epoch\nI'd make it backward compatible starting from gloas, so finalized state should be postEnvelope state dialing to `n` in my view\n\n> attestations would be voting for target block root n - 1\nI agree this is also correct, but if we get `postBlock` state of `n-1` as the finalized state, then starting from gloas, it could happen that a finalized state has whatever slot, it's not necessarily has `slot % 32 == 0`, and especially the finalized state does not have the respective slot to the finalized checkpoint's epoch. This is not backward compatible.",
+    "created_at": "2026-04-03T07:05:07.512000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tuyen4818",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "this could also be implementation specific\nin the case of lodestar, we always store checkpoint states, and all of them have `state.slot === 32`, and it's always respective to an epoch of checkpoint, the finalized state is always a checkpoint state\nit should help us avoid an epoch transition for whatever reorg scenario",
+    "created_at": "2026-04-03T07:09:50.250000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "terencechain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "For skip slot, attestations do signal empty or full via committee index though, so i think post CL or EL state given attestations signal (or what you get from fork chice store) then advance up to the epoch is likely the correct thing to do here",
+    "created_at": "2026-04-03T07:14:49.126000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "terencechain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "another questions is what do people do for finalized / justified block hash to pass for FCU.. do you take the parent block hash or post CL block hash in skip slot scenario",
+    "created_at": "2026-04-03T07:16:59.448000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tuyen4818",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "agree with this\nit means to me the finalize state always have `slot % 32 == 0`, and it's respective to the finalized checkpoint's epoch",
+    "created_at": "2026-04-03T07:18:46.212000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tuyen4818",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "in lodestar we track the finalized checkpoint along with `payloadStatus`, based on that we always have the exact ProtoBlock that's finalized and we pass `execution_payload_block_hash` of that ProtoBlock\nand `execution_payload_block_hash` is `parent_block_hash` for EMPTY variant and `block_hash` for FULL variant\n\nin short:\n- if the finalized proto block is an `EMPTY` variant, we pass `parent_block_hash`\n- if the finalized proto block is a `FULL` variant, we pass the `block_hash`\n\nthat's consistent to my view about the finalized checkpoint state above",
+    "created_at": "2026-04-03T07:28:58.265000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "terencechain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "so if there's no skip slot.. that it's slot 0, its empty right?",
+    "created_at": "2026-04-03T07:32:34.693000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tuyen4818",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yes, and in that case we pass `parent_block_hash` as the finalized block hash to fcu",
+    "created_at": "2026-04-03T07:33:03.386000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "0xunclebill",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yeah attestations can signal empty or full but thats just for following head not for FFG, right? It doesn't seem to me that we could ever safely say that the post envelope state is finalized in the example above",
+    "created_at": "2026-04-03T07:41:54.565000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "0xunclebill",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "well i guess we could have some degree of safety, but it wouldn't be 100% certain like what a finalized state means currently pre-gloas",
+    "created_at": "2026-04-03T07:42:51.974000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tuyen4818",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "right, we don't count on that to decide\nbut my idea is the same: finalized state always have slot respective to the finalized checkpoint\nwe can ignore everything before that finalized state. If a node has to restart, or another beacon-node requests that finalized state, we can start syncing from there, and it does range sync from the next epoch",
+    "created_at": "2026-04-03T07:48:20.876000+00:00",
+    "attachments": []
   }
 ]
