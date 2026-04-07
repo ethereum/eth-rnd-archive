@@ -318,5 +318,69 @@
     "content": "So, correct me if I'm wrong. The mental model is that we should ignore the existence of payload states almost everywhere: gossip validations, everything around checkpoints, active balances, etc. The only place where they are used is pre-state selection of the next beacon block. Everything else remains as it is today: only post-beaconblock states matter.",
     "created_at": "2026-04-07T13:59:43.200000+00:00",
     "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I think this is true. However, the situation that worries me is the following: The chain has a block in slot 31 and the next block is in slot 65 based on 31 full During slot 65 you get an attestation for 65 has head, 31 as target. We use a dependent root check to decide which state to use to validate the attestation: the dependent root for the head state coincides with the dependent root fot he target state advanced to 64 and thus we use the head state for validation. The problem is that the head state has the payload processed in that epoch transition and will have a different set of active validators. \n\nThis is a real problem in implementations. As far as I can tell we use dependent root to decide if we can use the head state to validate two different things:\n\n- Is the proposer correct?\n- Is the attester/ptc attester etc in the right committee?\n\nThe first one is fine because of the lookahead. The second one is not because it requires the active balance and that can change from head *even if the dependent root is the same*.\n\nThe problem is here that the dependent root  was a concept that was chosen to be the latest blockroot **because** it guarantees that if you have that root on chain you have the right epoch transition and have guarantees shufflings, etc. But now that dependent root is useless if the payload can change the epoch transition. \n\nSo this requires changes about how we handle dependent roots I believe. cc <@602753420033785856> <@688748669268132001> you guys had already thought about this too. A full epoch's worth of missing blocks would definitely cause trouble here, I am uncertain about just 31-->33 though, I think that one is just fine.",
+    "created_at": "2026-04-07T14:15:39.084000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "So I think in this situation it would be invalid to use head state to validate gossip objects, and that really sucks",
+    "created_at": "2026-04-07T14:17:28.526000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "It may still be fine with regards to justified balances though cause that is just keeping the right justified state. But it worries me the beacon committees",
+    "created_at": "2026-04-07T14:26:52.575000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tbenr",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "> The only place where they are used is pre-state selection of the next beacon block\nactually beacon block gossip validation requires the payload state (which is the prestate of that block)",
+    "created_at": "2026-04-07T14:27:37.642000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tbenr",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yes, these are the things that worry me. If those payload states become relevant in some scenarios, it becomes VERY complicated to reason about.",
+    "created_at": "2026-04-07T14:32:03.488000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tbenr",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "(and obviously bug prone)",
+    "created_at": "2026-04-07T14:33:46.520000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tbenr",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "so my suggestion is that we should land on a very tight list of places where we need to use payload states. And this list must be exhaustive. Seems like a practical useful angle to look things from.",
+    "created_at": "2026-04-07T14:37:35.351000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tbenr",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I won't even consider the head state to be a payload state if my assumption is true. (even if it would be inconsistent with forkchoice head)",
+    "created_at": "2026-04-07T15:01:37.538000+00:00",
+    "attachments": []
   }
 ]
