@@ -294,5 +294,61 @@
     "content": "> isn't my proposal strictly better here, you can pre-compute the epoch transition without relying on the payload itself which means you can run it earlier in the previous slot (as soon as you see the beacon block and are confident it won't be reorged)\nIn fact this is a good thing of this approach, we do this anyway only when the payload is late.",
     "created_at": "2026-04-08T17:35:26.081000+00:00",
     "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I think the stf having a signature of state, block, optional<payload> -> state  works",
+    "created_at": "2026-04-08T21:06:10.634000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "you prefer that over not modyfing that signature at all?",
+    "created_at": "2026-04-08T21:06:44.380000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "At this stage I prefer what we have now rather than redesigning forkchoice to see if it's safe with this signature. But I think it should work",
+    "created_at": "2026-04-08T21:07:37.733000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Notice that you have it what way isn't it? You're getting the requests from the previous payload",
+    "created_at": "2026-04-08T21:08:04.253000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I was thinking about having an optional param like you said above\n\nbut my current design just adds them to the beacon block body\n\n```python\nclass BeaconBlockBody(Container):\n    # ...\n    signed_execution_payload_bid: SignedExecutionPayloadBid\n    payload_attestations: List[PayloadAttestation, MAX_PAYLOAD_ATTESTATIONS]\n    # execution requests from parent's payload (empty if parent was EMPTY)\n    parent_execution_requests: ExecutionRequests\n```\n\nand updates `process_block`\n```python\ndef process_block(state: BeaconState, block: BeaconBlock) -> None:\n    # Process parent's deferred execution requests FIRST\n    # (uses state.latest_block_header.slot and state.latest_execution_payload_bid\n    #  which are overwritten by process_block_header and process_execution_payload_bid)\n    process_parent_execution_payload(state, block)\n    process_block_header(state, block)\n    # ...\n```\n\nI don't think it's strictly necessary from spec perspective but I am also not sure if changing the signature of `state_transition` is a good idea since it's stable `(state, block) -> state` since phase0\n\nin general, having everything that's needed to run stf seems like a good idea, it keeps it more self-contained",
+    "created_at": "2026-04-08T21:18:06.680000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "unless I am completely missing something my proposal has no impact on fork choice",
+    "created_at": "2026-04-08T21:19:42.827000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "in fact, it also fixes everything that is currently not correct in the spec like `store_target_checkpoint_state` and `is_within_weak_subjectivity_period` + restores checkpoint state and `dependent_root` semantics on the api",
+    "created_at": "2026-04-08T21:22:40.042000+00:00",
+    "attachments": []
   }
 ]
