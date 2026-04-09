@@ -1,392 +1,392 @@
 [
-    {
-        "author": "jochembrouwer",
-        "category": "general",
-        "parent": "",
-        "content": "Hey, what is the rationale for `[block: {P, B_32}, maxHeaders: P, skip: P, reverse: P in {0, 1}]` (input of GetBlockHeaders in ETH devp2p) for including the \"skip\" here? Why would I want to traverse the chain and skip X blocks, like only getting block 10, 15, 20, 25... (skip 5 blocks) ?",
-        "created_at": "2020-10-30T15:24:25.600000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "Deleted User",
-        "category": "general",
-        "parent": "",
-        "content": "this is called a \"skeleton\" pattern that go-ethereum is using. In the first step, it creates a skeleton of headers that are many headers apart, and then tries to use multiple peers simultaneously to load headers between the skeleton points",
-        "created_at": "2020-10-30T15:27:11.015000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "general",
-        "parent": "",
-        "content": "Ah okay - I think I get it, this is because `GetBlockBodies` only accepts hashes and not numbers (why? `GetBlockHeaders` accepts numbers, but bodies not?) - so you can run this in parallel?",
-        "created_at": "2020-10-30T15:35:12.642000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "Deleted User",
-        "category": "general",
-        "parent": "",
-        "content": "you can run things in parallel even without the skeleton feature 🙂",
-        "created_at": "2020-10-30T15:35:45.195000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "Deleted User",
-        "category": "general",
-        "parent": "",
-        "content": "what we are going to do soon is to just take some hard-coded header hashes and start querying from there",
-        "created_at": "2020-10-30T15:36:05.379000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "Deleted User",
-        "category": "general",
-        "parent": "",
-        "content": "so strictly the skeleton pattern is not required",
-        "created_at": "2020-10-30T15:36:16.984000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "tkstanczak",
-        "category": "general",
-        "parent": "",
-        "content": "\u003e Ah okay - I think I get it, this is because `GetBlockBodies` only accepts hashes and not numbers (why? `GetBlockHeaders` accepts numbers, but bodies not?) - so you can run this in parallel?\n\u003c@!508125616940515329\u003e we do not use skip and last time when we tried to use the backwards feature (direction field) Geth was not handling that properly",
-        "created_at": "2020-10-30T15:38:59.022000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "tkstanczak",
-        "category": "general",
-        "parent": "",
-        "content": "so we currently use forward and invert on receiving response",
-        "created_at": "2020-10-30T15:39:12.713000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "general",
-        "parent": "",
-        "content": "\u003c@456226577798135808\u003e so without the skeleton feature I would just request `GetBlockHeaders` with a gap (like request starting from block 1..999 and 1000..1999 from 2 different peers (assuming this is within Request limit)) and once I get those Headers I can then `GetBlockBodies` using these hashes?",
-        "created_at": "2020-10-30T15:44:31.220000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "general",
-        "parent": "",
-        "content": "Why would I use the skeleton approach?",
-        "created_at": "2020-10-30T15:44:43.729000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "tkstanczak",
-        "category": "general",
-        "parent": "",
-        "content": "you do not want to go up from genesis",
-        "created_at": "2020-10-30T15:44:55.387000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "tkstanczak",
-        "category": "general",
-        "parent": "",
-        "content": "you will find plenty of false branches",
-        "created_at": "2020-10-30T15:45:01.927000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "tkstanczak",
-        "category": "general",
-        "parent": "",
-        "content": "very expensive to discard them",
-        "created_at": "2020-10-30T15:45:05.838000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "tkstanczak",
-        "category": "general",
-        "parent": "",
-        "content": "my first approach that I remember which was sending parallel requests to multiple peers upwards took me a few hours to code and ended up being super slow (sometimes I was discarding 200k blocks)",
-        "created_at": "2020-10-30T15:45:43.593000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "tkstanczak",
-        "category": "general",
-        "parent": "",
-        "content": "then we ended up with our FastBlocks mechanism",
-        "created_at": "2020-10-30T15:45:53.742000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "general",
-        "parent": "",
-        "content": "O.O okay this sounds more complex than I anticipated",
-        "created_at": "2020-10-30T15:45:58.878000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "tkstanczak",
-        "category": "general",
-        "parent": "",
-        "content": "difference was huge",
-        "created_at": "2020-10-30T15:46:01.370000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "general",
-        "parent": "",
-        "content": "So how does this work in the current implementation? You first use `Status` (0x0) to get the tip of the chain? And then traverse this chain backwards?",
-        "created_at": "2020-10-30T15:46:33.330000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "tkstanczak",
-        "category": "general",
-        "parent": "",
-        "content": "we download all mainnet headers in 15 minutes",
-        "created_at": "2020-10-30T15:46:34.245000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "tkstanczak",
-        "category": "general",
-        "parent": "",
-        "content": "we ask user to provide a safe recent block header",
-        "created_at": "2020-10-30T15:46:57.194000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "tkstanczak",
-        "category": "general",
-        "parent": "",
-        "content": "and then go from there to genesis",
-        "created_at": "2020-10-30T15:47:01.414000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "general",
-        "parent": "",
-        "content": "I see. Thanks!",
-        "created_at": "2020-10-30T15:47:25.751000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "Deleted User",
-        "category": "general",
-        "parent": "",
-        "content": "Yes, that is a similar mechanism I am testing. Downloading backwards, but from multiple points in history. These points can be hard-coded to prevent false branches. My latest test was 20 mins 🙂",
-        "created_at": "2020-10-30T15:51:54.768000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "Deleted User",
-        "category": "general",
-        "parent": "",
-        "content": "But this depends on how many peers you get",
-        "created_at": "2020-10-30T15:52:21.232000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "general",
-        "parent": "",
-        "content": "Hard coding these hashes feels a bit like cheating. But I have no idea how to do it without hardcoding hashes and ensuring that you end up with the correct tip 🤔 Would be rather useful if we had some kind of binary search tree of pivot points so you can verify in log(N) time if you have the correct tip and not some bogus block (block without a valid parent)",
-        "created_at": "2020-10-30T15:54:04.074000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "Deleted User",
-        "category": "general",
-        "parent": "",
-        "content": "\u003e Hard coding these hashes feels a bit like cheating.\n\u003c@!508125616940515329\u003e Ha-ha, software does not care",
-        "created_at": "2020-10-30T15:55:49.144000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "general",
-        "parent": "",
-        "content": "😛",
-        "created_at": "2020-10-30T15:56:03.830000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "general",
-        "parent": "",
-        "content": "20 mins is pretty fast though 😮 😄",
-        "created_at": "2020-10-30T16:00:53.399000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "chat-bridge",
-        "category": "general",
-        "parent": "",
-        "content": "\u003ctkstanczak\u003e Yup, 12000 headers per second on average",
-        "created_at": "2020-10-30T16:01:39.863000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "chat-bridge",
-        "category": "general",
-        "parent": "",
-        "content": "\u003ctkstanczak\u003e seen 20000 hps a few times",
-        "created_at": "2020-10-30T16:02:32.334000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "s1na",
-        "category": "general",
-        "parent": "",
-        "content": "Is that happening sequentially? i.e. requesting the parent's hash after downloading a header",
-        "created_at": "2020-10-30T16:08:04.744000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "Deleted User",
-        "category": "general",
-        "parent": "",
-        "content": "in my test, I was also trying to be \"gentle\" to the peers, meaning not to send a new request until the previous one was answered",
-        "created_at": "2020-10-30T16:09:09.085000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "chat-bridge",
-        "category": "general",
-        "parent": "",
-        "content": "\u003ctkstanczak\u003e no, you cannot do that sequentially",
-        "created_at": "2020-10-30T16:09:13.467000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "trent_vanepps",
-        "category": "general",
-        "parent": "",
-        "content": "how are tx hashes serialised? is it easy to project how certain inputs will change a tx hash? meaning, when a nonce is the only thing that changes, how much will that effect the output tx hash",
-        "created_at": "2020-10-30T17:00:32.110000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "chat-bridge",
-        "category": "general",
-        "parent": "",
-        "content": "\u003ctkstanczak\u003e nope",
-        "created_at": "2020-10-30T17:05:15.783000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "chat-bridge",
-        "category": "general",
-        "parent": "",
-        "content": "\u003ctkstanczak\u003e assuming the hash function is not broken",
-        "created_at": "2020-10-30T17:05:29.214000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "chat-bridge",
-        "category": "general",
-        "parent": "",
-        "content": "\u003ctkstanczak\u003e a correct hash function does not allow you to find any correlation whatsoever between the change in input and change in output",
-        "created_at": "2020-10-30T17:05:55.938000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "chat-bridge",
-        "category": "general",
-        "parent": "",
-        "content": "\u003ctkstanczak\u003e perfect explanation here: https://www.coursera.org/learn/crypto",
-        "created_at": "2020-10-30T17:06:26.929000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "lightclient",
-        "category": "general",
-        "parent": "",
-        "content": "now i'm interested to know what prompted your question \u003c@!420951281910284289\u003e 🙂",
-        "created_at": "2020-10-30T19:02:58.482000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "trent_vanepps",
-        "category": "general",
-        "parent": "",
-        "content": "\u003c@!543900561460822016\u003e nothing sinister, I promise",
-        "created_at": "2020-10-30T19:06:20.200000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "general",
-        "parent": "",
-        "content": "I have a question regarding uncle headers and validation. I am probably not understanding the yellow paper. See pic:",
-        "created_at": "2020-10-30T21:15:21.742000+00:00",
-        "attachments": [
-            {
-                "type": "",
-                "origin_name": "MEeAIcAQ4AhwBjgBHgCOQ3RDgBDq7jTjvL0eAI8AR4AhwBDgCHAGOgFoIcAKtFnz8Y44AR4AjwBHgCHAEOAIcgeyGwP8AGCiJ6jI.png",
-                "content": "9a93de50626f3dc62731ee3e772a6ae2be7984404453b98d4b8d153bfe29c193"
-            }
-        ]
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "general",
-        "parent": "",
-        "content": "So how to verify an Uncle? We can have at most 2 uncles per header, the uncle headers should be valid, and we have to ensure that we ensure this is-sibling function is true. This is-sibling function is called on the current parent header and the subsequent 6 parent headers. It is true if: the parentHeader of the current header is the same parentHeader as the uncle (i.e. the uncle was tried to be written to the canonical chain once), (2): The Header itself is not an uncle (i.e. we cannot put canonical headers and uncles) and (3) the uncle is not part of the uncles of the current checked parent header (i.e. not included)",
-        "created_at": "2020-10-30T21:17:54.261000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "general",
-        "parent": "",
-        "content": "However what ensures that I don't include an uncle twice? If this `s` function is true at some point this recursive call (at most 6) will terminate",
-        "created_at": "2020-10-30T21:18:15.862000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "general",
-        "parent": "",
-        "content": "~~How am I possible to include an uncle which does not have the same block number as the current header? Otherwise, `P(H) = P(U)` is false, right? If we have both the same parent header (uncle and \"canonical header\") then the block number should be the same?~~",
-        "created_at": "2020-10-30T21:21:27.638000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "general",
-        "parent": "",
-        "content": "I think that property 3 is supposed to mean that this uncle has not yet been included as uncle yet right? (In the past 6 blocks)? But it doesn't seem to prevent this?",
-        "created_at": "2020-10-30T21:31:38.083000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "general",
-        "parent": "",
-        "content": "Because it essentially checks that the Uncle is not marked as Uncle in the canonical block (so `B(H)_U`) which has the same parent hash of the Uncle?",
-        "created_at": "2020-10-30T21:32:44.257000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "general",
-        "parent": "",
-        "content": "Also how can the second condition ever be true? If H = U then the blocks are indeed equal, but you cannot put the block as uncle hash, because it changes the block hash, and thus you would have a different block? (Plus it is impossible to ever create this block, because it keeps referencing to itself)",
-        "created_at": "2020-10-30T21:37:37.198000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "pauld.9606",
-        "category": "general",
-        "parent": "",
-        "content": "\u003e what ensures that I don't include an uncle twice?\n\nAs you know, B_U is the set of uncles for block B. B_U is a set -- if you insert the same uncle twice into a set, the set has just one instance of that uncle. I.e. a set can't have multiplicity of an element. I use the word \"set\" from mathematics. Edit: actually, you are right, this is a bug in the spec, since B_U is actually defined in 4.3 as a list, not a set. Edit2: 4.3 also says that U is a set, so I think that the typo is in 4.3, B_U is a set, not a list.  \n\n\u003e I think that property 3 is supposed to mean that this uncle has not yet been included as uncle yet right? (In the past 6 blocks)?\n\nCorrect.\n\n\u003e But it doesn't seem to prevent this? Because it essentially checks that the Uncle is not marked as Uncle in the canonical block (so B(H)_U) which has the same parent hash of the Uncle?\n\nCorrect. To be clear, B(H)_U is the set of uncles of the block with header H.\n\n\u003e Also how can the second condition ever be true? ? If H = U then the blocks are indeed equal, but you cannot put the block as uncle hash, because it changes the block hash, and thus you would have a different block?\n\nAs you know, H is the header of a recent block in the chain and U is the header of the alleged uncle. H=U is true if the alleged uncle header is also a recent block header in the chain. I.e. a recent block can't also be an uncle.",
-        "created_at": "2020-10-30T23:42:48.151000+00:00",
-        "attachments": null
-    }
+  {
+    "author": "jochembrouwer",
+    "category": "general",
+    "parent": "",
+    "content": "Hey, what is the rationale for `[block: {P, B_32}, maxHeaders: P, skip: P, reverse: P in {0, 1}]` (input of GetBlockHeaders in ETH devp2p) for including the \"skip\" here? Why would I want to traverse the chain and skip X blocks, like only getting block 10, 15, 20, 25... (skip 5 blocks) ?",
+    "created_at": "2020-10-30T15:24:25.600000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "Deleted User",
+    "category": "general",
+    "parent": "",
+    "content": "this is called a \"skeleton\" pattern that go-ethereum is using. In the first step, it creates a skeleton of headers that are many headers apart, and then tries to use multiple peers simultaneously to load headers between the skeleton points",
+    "created_at": "2020-10-30T15:27:11.015000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "general",
+    "parent": "",
+    "content": "Ah okay - I think I get it, this is because `GetBlockBodies` only accepts hashes and not numbers (why? `GetBlockHeaders` accepts numbers, but bodies not?) - so you can run this in parallel?",
+    "created_at": "2020-10-30T15:35:12.642000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "Deleted User",
+    "category": "general",
+    "parent": "",
+    "content": "you can run things in parallel even without the skeleton feature 🙂",
+    "created_at": "2020-10-30T15:35:45.195000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "Deleted User",
+    "category": "general",
+    "parent": "",
+    "content": "what we are going to do soon is to just take some hard-coded header hashes and start querying from there",
+    "created_at": "2020-10-30T15:36:05.379000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "Deleted User",
+    "category": "general",
+    "parent": "",
+    "content": "so strictly the skeleton pattern is not required",
+    "created_at": "2020-10-30T15:36:16.984000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "tkstanczak",
+    "category": "general",
+    "parent": "",
+    "content": "> Ah okay - I think I get it, this is because `GetBlockBodies` only accepts hashes and not numbers (why? `GetBlockHeaders` accepts numbers, but bodies not?) - so you can run this in parallel?\n<@!508125616940515329> we do not use skip and last time when we tried to use the backwards feature (direction field) Geth was not handling that properly",
+    "created_at": "2020-10-30T15:38:59.022000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "tkstanczak",
+    "category": "general",
+    "parent": "",
+    "content": "so we currently use forward and invert on receiving response",
+    "created_at": "2020-10-30T15:39:12.713000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "general",
+    "parent": "",
+    "content": "<@456226577798135808> so without the skeleton feature I would just request `GetBlockHeaders` with a gap (like request starting from block 1..999 and 1000..1999 from 2 different peers (assuming this is within Request limit)) and once I get those Headers I can then `GetBlockBodies` using these hashes?",
+    "created_at": "2020-10-30T15:44:31.220000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "general",
+    "parent": "",
+    "content": "Why would I use the skeleton approach?",
+    "created_at": "2020-10-30T15:44:43.729000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "tkstanczak",
+    "category": "general",
+    "parent": "",
+    "content": "you do not want to go up from genesis",
+    "created_at": "2020-10-30T15:44:55.387000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "tkstanczak",
+    "category": "general",
+    "parent": "",
+    "content": "you will find plenty of false branches",
+    "created_at": "2020-10-30T15:45:01.927000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "tkstanczak",
+    "category": "general",
+    "parent": "",
+    "content": "very expensive to discard them",
+    "created_at": "2020-10-30T15:45:05.838000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "tkstanczak",
+    "category": "general",
+    "parent": "",
+    "content": "my first approach that I remember which was sending parallel requests to multiple peers upwards took me a few hours to code and ended up being super slow (sometimes I was discarding 200k blocks)",
+    "created_at": "2020-10-30T15:45:43.593000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "tkstanczak",
+    "category": "general",
+    "parent": "",
+    "content": "then we ended up with our FastBlocks mechanism",
+    "created_at": "2020-10-30T15:45:53.742000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "general",
+    "parent": "",
+    "content": "O.O okay this sounds more complex than I anticipated",
+    "created_at": "2020-10-30T15:45:58.878000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "tkstanczak",
+    "category": "general",
+    "parent": "",
+    "content": "difference was huge",
+    "created_at": "2020-10-30T15:46:01.370000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "general",
+    "parent": "",
+    "content": "So how does this work in the current implementation? You first use `Status` (0x0) to get the tip of the chain? And then traverse this chain backwards?",
+    "created_at": "2020-10-30T15:46:33.330000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "tkstanczak",
+    "category": "general",
+    "parent": "",
+    "content": "we download all mainnet headers in 15 minutes",
+    "created_at": "2020-10-30T15:46:34.245000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "tkstanczak",
+    "category": "general",
+    "parent": "",
+    "content": "we ask user to provide a safe recent block header",
+    "created_at": "2020-10-30T15:46:57.194000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "tkstanczak",
+    "category": "general",
+    "parent": "",
+    "content": "and then go from there to genesis",
+    "created_at": "2020-10-30T15:47:01.414000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "general",
+    "parent": "",
+    "content": "I see. Thanks!",
+    "created_at": "2020-10-30T15:47:25.751000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "Deleted User",
+    "category": "general",
+    "parent": "",
+    "content": "Yes, that is a similar mechanism I am testing. Downloading backwards, but from multiple points in history. These points can be hard-coded to prevent false branches. My latest test was 20 mins 🙂",
+    "created_at": "2020-10-30T15:51:54.768000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "Deleted User",
+    "category": "general",
+    "parent": "",
+    "content": "But this depends on how many peers you get",
+    "created_at": "2020-10-30T15:52:21.232000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "general",
+    "parent": "",
+    "content": "Hard coding these hashes feels a bit like cheating. But I have no idea how to do it without hardcoding hashes and ensuring that you end up with the correct tip 🤔 Would be rather useful if we had some kind of binary search tree of pivot points so you can verify in log(N) time if you have the correct tip and not some bogus block (block without a valid parent)",
+    "created_at": "2020-10-30T15:54:04.074000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "Deleted User",
+    "category": "general",
+    "parent": "",
+    "content": "> Hard coding these hashes feels a bit like cheating.\n<@!508125616940515329> Ha-ha, software does not care",
+    "created_at": "2020-10-30T15:55:49.144000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "general",
+    "parent": "",
+    "content": "😛",
+    "created_at": "2020-10-30T15:56:03.830000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "general",
+    "parent": "",
+    "content": "20 mins is pretty fast though 😮 😄",
+    "created_at": "2020-10-30T16:00:53.399000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "chat-bridge",
+    "category": "general",
+    "parent": "",
+    "content": "<tkstanczak> Yup, 12000 headers per second on average",
+    "created_at": "2020-10-30T16:01:39.863000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "chat-bridge",
+    "category": "general",
+    "parent": "",
+    "content": "<tkstanczak> seen 20000 hps a few times",
+    "created_at": "2020-10-30T16:02:32.334000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "s1na",
+    "category": "general",
+    "parent": "",
+    "content": "Is that happening sequentially? i.e. requesting the parent's hash after downloading a header",
+    "created_at": "2020-10-30T16:08:04.744000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "Deleted User",
+    "category": "general",
+    "parent": "",
+    "content": "in my test, I was also trying to be \"gentle\" to the peers, meaning not to send a new request until the previous one was answered",
+    "created_at": "2020-10-30T16:09:09.085000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "chat-bridge",
+    "category": "general",
+    "parent": "",
+    "content": "<tkstanczak> no, you cannot do that sequentially",
+    "created_at": "2020-10-30T16:09:13.467000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "trent_vanepps",
+    "category": "general",
+    "parent": "",
+    "content": "how are tx hashes serialised? is it easy to project how certain inputs will change a tx hash? meaning, when a nonce is the only thing that changes, how much will that effect the output tx hash",
+    "created_at": "2020-10-30T17:00:32.110000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "chat-bridge",
+    "category": "general",
+    "parent": "",
+    "content": "<tkstanczak> nope",
+    "created_at": "2020-10-30T17:05:15.783000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "chat-bridge",
+    "category": "general",
+    "parent": "",
+    "content": "<tkstanczak> assuming the hash function is not broken",
+    "created_at": "2020-10-30T17:05:29.214000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "chat-bridge",
+    "category": "general",
+    "parent": "",
+    "content": "<tkstanczak> a correct hash function does not allow you to find any correlation whatsoever between the change in input and change in output",
+    "created_at": "2020-10-30T17:05:55.938000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "chat-bridge",
+    "category": "general",
+    "parent": "",
+    "content": "<tkstanczak> perfect explanation here: https://www.coursera.org/learn/crypto",
+    "created_at": "2020-10-30T17:06:26.929000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "lightclient",
+    "category": "general",
+    "parent": "",
+    "content": "now i'm interested to know what prompted your question <@!420951281910284289> 🙂",
+    "created_at": "2020-10-30T19:02:58.482000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "trent_vanepps",
+    "category": "general",
+    "parent": "",
+    "content": "<@!543900561460822016> nothing sinister, I promise",
+    "created_at": "2020-10-30T19:06:20.200000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "general",
+    "parent": "",
+    "content": "I have a question regarding uncle headers and validation. I am probably not understanding the yellow paper. See pic:",
+    "created_at": "2020-10-30T21:15:21.742000+00:00",
+    "attachments": [
+      {
+        "type": "",
+        "origin_name": "MEeAIcAQ4AhwBjgBHgCOQ3RDgBDq7jTjvL0eAI8AR4AhwBDgCHAGOgFoIcAKtFnz8Y44AR4AjwBHgCHAEOAIcgeyGwP8AGCiJ6jI.png",
+        "content": "9a93de50626f3dc62731ee3e772a6ae2be7984404453b98d4b8d153bfe29c193"
+      }
+    ]
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "general",
+    "parent": "",
+    "content": "So how to verify an Uncle? We can have at most 2 uncles per header, the uncle headers should be valid, and we have to ensure that we ensure this is-sibling function is true. This is-sibling function is called on the current parent header and the subsequent 6 parent headers. It is true if: the parentHeader of the current header is the same parentHeader as the uncle (i.e. the uncle was tried to be written to the canonical chain once), (2): The Header itself is not an uncle (i.e. we cannot put canonical headers and uncles) and (3) the uncle is not part of the uncles of the current checked parent header (i.e. not included)",
+    "created_at": "2020-10-30T21:17:54.261000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "general",
+    "parent": "",
+    "content": "However what ensures that I don't include an uncle twice? If this `s` function is true at some point this recursive call (at most 6) will terminate",
+    "created_at": "2020-10-30T21:18:15.862000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "general",
+    "parent": "",
+    "content": "~~How am I possible to include an uncle which does not have the same block number as the current header? Otherwise, `P(H) = P(U)` is false, right? If we have both the same parent header (uncle and \"canonical header\") then the block number should be the same?~~",
+    "created_at": "2020-10-30T21:21:27.638000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "general",
+    "parent": "",
+    "content": "I think that property 3 is supposed to mean that this uncle has not yet been included as uncle yet right? (In the past 6 blocks)? But it doesn't seem to prevent this?",
+    "created_at": "2020-10-30T21:31:38.083000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "general",
+    "parent": "",
+    "content": "Because it essentially checks that the Uncle is not marked as Uncle in the canonical block (so `B(H)_U`) which has the same parent hash of the Uncle?",
+    "created_at": "2020-10-30T21:32:44.257000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "general",
+    "parent": "",
+    "content": "Also how can the second condition ever be true? If H = U then the blocks are indeed equal, but you cannot put the block as uncle hash, because it changes the block hash, and thus you would have a different block? (Plus it is impossible to ever create this block, because it keeps referencing to itself)",
+    "created_at": "2020-10-30T21:37:37.198000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "pauld.9606",
+    "category": "general",
+    "parent": "",
+    "content": "> what ensures that I don't include an uncle twice?\n\nAs you know, B_U is the set of uncles for block B. B_U is a set -- if you insert the same uncle twice into a set, the set has just one instance of that uncle. I.e. a set can't have multiplicity of an element. I use the word \"set\" from mathematics. Edit: actually, you are right, this is a bug in the spec, since B_U is actually defined in 4.3 as a list, not a set. Edit2: 4.3 also says that U is a set, so I think that the typo is in 4.3, B_U is a set, not a list.  \n\n> I think that property 3 is supposed to mean that this uncle has not yet been included as uncle yet right? (In the past 6 blocks)?\n\nCorrect.\n\n> But it doesn't seem to prevent this? Because it essentially checks that the Uncle is not marked as Uncle in the canonical block (so B(H)_U) which has the same parent hash of the Uncle?\n\nCorrect. To be clear, B(H)_U is the set of uncles of the block with header H.\n\n> Also how can the second condition ever be true? ? If H = U then the blocks are indeed equal, but you cannot put the block as uncle hash, because it changes the block hash, and thus you would have a different block?\n\nAs you know, H is the header of a recent block in the chain and U is the header of the alleged uncle. H=U is true if the alleged uncle header is also a recent block header in the chain. I.e. a recent block can't also be an uncle.",
+    "created_at": "2020-10-30T23:42:48.151000+00:00",
+    "attachments": null
+  }
 ]

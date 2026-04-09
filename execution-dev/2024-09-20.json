@@ -1,96 +1,96 @@
 [
-    {
-        "author": "karalabe",
-        "category": "general",
-        "parent": "",
-        "content": "Oh, interesting. We definitely want it deterministic and made some steps towards that. If we are still not deterministic enough, that's definitely something to fix. Will look into it a bit to see what order we use",
-        "created_at": "2024-09-20T09:04:56.187000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "karalabe",
-        "category": "general",
-        "parent": "",
-        "content": "Hmm, yes, we're iterating the map, which gives a random order. That can be fixed.",
-        "created_at": "2024-09-20T09:08:59.388000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "karalabe",
-        "category": "general",
-        "parent": "",
-        "content": "\u003c@656728086410297356\u003e Something like this? https://github.com/ethereum/go-ethereum/pull/30481",
-        "created_at": "2024-09-20T13:56:37.732000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "francis.li",
-        "category": "general",
-        "parent": "",
-        "content": "Yes, that's it! Thank you",
-        "created_at": "2024-09-20T15:11:34.838000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "karalabe",
-        "category": "general",
-        "parent": "",
-        "content": "\u003c@656728086410297356\u003e Could you hare a testcase however where this mattered?",
-        "created_at": "2024-09-20T16:33:35.687000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "clab.by",
-        "category": "general",
-        "parent": "",
-        "content": "The one we spotted was when deleting all children within a branch, i.e.:\n\n```\ncase A (for ex, reth):\n- Branch { None, A, B, C, None, ... }\n- Branch { None, delete\u003cA\u003e, B, C, None, ... }\n- Branch { None, None, reveal\u003cB\u003e, delete\u003cC\u003e, None, ... }\n- B is deleted in a later op, but in its new position (either collapsed into an extension/leaf)\n\ncase B (for ex, geth):\n- Branch { None, A, B, C, None, ... }\n- Branch { None, delete\u003cA\u003e, B, C, None, ... }\n- Branch { None, None, delete\u003cB\u003e, reveal\u003cC\u003e, None, ... }\n- C is deleted in a later op, but in its new position (either collapsed into an extension/leaf)\n```\n\nConcrete example of this happening in the wild would be an account that had 3 storage slots:\n* `0x00...0A`: 0x01\n* `0x00...0B`: 0x02\n* `0x00...0C`: 0x03\nAnd a transaction sets each of these slots to `0`, returning the account trie to an empty state. Since deletion order is not standardized atm, the witness for applying these deletions to the trie is non-deterministic between clients (and for geth, non-deterministic alone before #30481).",
-        "created_at": "2024-09-20T17:28:42.224000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "clab.by",
-        "category": "general",
-        "parent": "",
-        "content": "The write portion of the witness ended up being non-deterministic, since the sibling preimage that's revealed depends on the order that the branch children were deleted.",
-        "created_at": "2024-09-20T17:29:27.949000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "clab.by",
-        "category": "general",
-        "parent": "",
-        "content": "For the fault proof, if we want to for ex. consult geth for the execution witness when running the reth-based fault proof program, we just need to ensure that the witness is valid in total. The read part of the witness was fine already, believe it's just the order of deletions that is causing the disparity between the two.",
-        "created_at": "2024-09-20T17:31:37.678000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "clab.by",
-        "category": "general",
-        "parent": "",
-        "content": "There's also a few other fun edge cases unrelated to this, i.e. [geth skipping over the transfer to coinbase](https://github.com/ethereum/go-ethereum/blob/9326a118c7c074a6c719b381033845c47c1168f5/core/state_transition.go#L468-L471) if `NoBaseFee` is set, vs. [revm always loading coinbase even if 0 value is being transferred](https://github.com/bluealloy/revm/blob/f57e3e639ee157c7e659e740bd175a7357003570/crates/revm/src/handler/mainnet/post_execution.rs#L44-L56). This means that atm, reth needs the MPT proof to the coinbase account in the state trie in order to statelessly execute an empty block due to 4788, but geth doesn't.",
-        "created_at": "2024-09-20T17:34:37.129000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "suburbandad_",
-        "category": "general",
-        "parent": "",
-        "content": "Is there an agreed benchmark machine we are using for gas benchmarking?  I kinda recall anecdotes about Marius' laptop.  \n\nSpecifically for g1/g2 MSM, Besu gets different numbers for arm64 vs x86_64, even taking cpu clock out of the picture.  This is more dramatic when using constantine for bls precompiles, which has x86 optimizations but not arm64 (yet).\n\nI still have more work to quantify how restricting parallelism impacts some of these measures, but it appears the single threaded besu gnark-crypto implementation compares favorably with low pair count but degrades logarithmically with higher pair counts, faster than geth non-concurrent.  \n\nit seems like both non-concurrent geth and current besu (and probably others) meet a 35 mgas/sec threshold for 32-ish pairs with current pricing.  [edit: besu measures below were not on 'baseline' machines - baseline metrics seem support repricing MSM]\n\nAssuming a nuc gen 11 and mac m1 as the baseline, what pair count and mgas/sec should we be targeting?  Un-DoS-able 4096 pairs at 50 mgas/sec ?",
-        "created_at": "2024-09-20T18:11:44.268000+00:00",
-        "attachments": [
-            {
-                "type": "image/png",
-                "origin_name": "image.png",
-                "content": "5e006ed86eb42923a0c5607d174969f97326ea650f9c7115e54d763a523b1e86"
-            }
-        ]
-    },
-    {
-        "author": "suburbandad_",
-        "category": "general",
-        "parent": "",
-        "content": "I suppose what I am looking for a standalone metric rather than a comparison to ecrecover pricing, since that is variable based on each client's implementation of ecrecover also",
-        "created_at": "2024-09-20T18:30:30.901000+00:00",
-        "attachments": null
-    }
+  {
+    "author": "karalabe",
+    "category": "general",
+    "parent": "",
+    "content": "Oh, interesting. We definitely want it deterministic and made some steps towards that. If we are still not deterministic enough, that's definitely something to fix. Will look into it a bit to see what order we use",
+    "created_at": "2024-09-20T09:04:56.187000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "karalabe",
+    "category": "general",
+    "parent": "",
+    "content": "Hmm, yes, we're iterating the map, which gives a random order. That can be fixed.",
+    "created_at": "2024-09-20T09:08:59.388000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "karalabe",
+    "category": "general",
+    "parent": "",
+    "content": "<@656728086410297356> Something like this? https://github.com/ethereum/go-ethereum/pull/30481",
+    "created_at": "2024-09-20T13:56:37.732000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "francis.li",
+    "category": "general",
+    "parent": "",
+    "content": "Yes, that's it! Thank you",
+    "created_at": "2024-09-20T15:11:34.838000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "karalabe",
+    "category": "general",
+    "parent": "",
+    "content": "<@656728086410297356> Could you hare a testcase however where this mattered?",
+    "created_at": "2024-09-20T16:33:35.687000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "clab.by",
+    "category": "general",
+    "parent": "",
+    "content": "The one we spotted was when deleting all children within a branch, i.e.:\n\n```\ncase A (for ex, reth):\n- Branch { None, A, B, C, None, ... }\n- Branch { None, delete<A>, B, C, None, ... }\n- Branch { None, None, reveal<B>, delete<C>, None, ... }\n- B is deleted in a later op, but in its new position (either collapsed into an extension/leaf)\n\ncase B (for ex, geth):\n- Branch { None, A, B, C, None, ... }\n- Branch { None, delete<A>, B, C, None, ... }\n- Branch { None, None, delete<B>, reveal<C>, None, ... }\n- C is deleted in a later op, but in its new position (either collapsed into an extension/leaf)\n```\n\nConcrete example of this happening in the wild would be an account that had 3 storage slots:\n* `0x00...0A`: 0x01\n* `0x00...0B`: 0x02\n* `0x00...0C`: 0x03\nAnd a transaction sets each of these slots to `0`, returning the account trie to an empty state. Since deletion order is not standardized atm, the witness for applying these deletions to the trie is non-deterministic between clients (and for geth, non-deterministic alone before #30481).",
+    "created_at": "2024-09-20T17:28:42.224000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "clab.by",
+    "category": "general",
+    "parent": "",
+    "content": "The write portion of the witness ended up being non-deterministic, since the sibling preimage that's revealed depends on the order that the branch children were deleted.",
+    "created_at": "2024-09-20T17:29:27.949000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "clab.by",
+    "category": "general",
+    "parent": "",
+    "content": "For the fault proof, if we want to for ex. consult geth for the execution witness when running the reth-based fault proof program, we just need to ensure that the witness is valid in total. The read part of the witness was fine already, believe it's just the order of deletions that is causing the disparity between the two.",
+    "created_at": "2024-09-20T17:31:37.678000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "clab.by",
+    "category": "general",
+    "parent": "",
+    "content": "There's also a few other fun edge cases unrelated to this, i.e. [geth skipping over the transfer to coinbase](https://github.com/ethereum/go-ethereum/blob/9326a118c7c074a6c719b381033845c47c1168f5/core/state_transition.go#L468-L471) if `NoBaseFee` is set, vs. [revm always loading coinbase even if 0 value is being transferred](https://github.com/bluealloy/revm/blob/f57e3e639ee157c7e659e740bd175a7357003570/crates/revm/src/handler/mainnet/post_execution.rs#L44-L56). This means that atm, reth needs the MPT proof to the coinbase account in the state trie in order to statelessly execute an empty block due to 4788, but geth doesn't.",
+    "created_at": "2024-09-20T17:34:37.129000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "suburbandad_",
+    "category": "general",
+    "parent": "",
+    "content": "Is there an agreed benchmark machine we are using for gas benchmarking?  I kinda recall anecdotes about Marius' laptop.  \n\nSpecifically for g1/g2 MSM, Besu gets different numbers for arm64 vs x86_64, even taking cpu clock out of the picture.  This is more dramatic when using constantine for bls precompiles, which has x86 optimizations but not arm64 (yet).\n\nI still have more work to quantify how restricting parallelism impacts some of these measures, but it appears the single threaded besu gnark-crypto implementation compares favorably with low pair count but degrades logarithmically with higher pair counts, faster than geth non-concurrent.  \n\nit seems like both non-concurrent geth and current besu (and probably others) meet a 35 mgas/sec threshold for 32-ish pairs with current pricing.  [edit: besu measures below were not on 'baseline' machines - baseline metrics seem support repricing MSM]\n\nAssuming a nuc gen 11 and mac m1 as the baseline, what pair count and mgas/sec should we be targeting?  Un-DoS-able 4096 pairs at 50 mgas/sec ?",
+    "created_at": "2024-09-20T18:11:44.268000+00:00",
+    "attachments": [
+      {
+        "type": "image/png",
+        "origin_name": "image.png",
+        "content": "5e006ed86eb42923a0c5607d174969f97326ea650f9c7115e54d763a523b1e86"
+      }
+    ]
+  },
+  {
+    "author": "suburbandad_",
+    "category": "general",
+    "parent": "",
+    "content": "I suppose what I am looking for a standalone metric rather than a comparison to ecrecover pricing, since that is variable based on each client's implementation of ecrecover also",
+    "created_at": "2024-09-20T18:30:30.901000+00:00",
+    "attachments": null
+  }
 ]
