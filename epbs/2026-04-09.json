@@ -462,5 +462,77 @@
     "content": "if there is a commitment in the bid that can be solved",
     "created_at": "2026-04-09T16:00:02.529000+00:00",
     "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "So I have a few problems with the proposal, most importantly the fact that I think this should be dealt at the API level (eg relax checkpoint sync and change dependent roots to signal the payload). But even if we decide to go with this, I think it makes our caching more complicated.  We currently pick head as soon as the block/payload arrives and we cache that state that will be the head state to apply the next block immediately. With this approach we can do this right after the CL block. If it's slot 31 we can immediately execute epoch transition which is a big plus. But in general it is a problem because it makes slot advancing more complicated: For a regular block we would do this:\n\n- Get the CL block, execute state transition.  Preemptively do epoch transition if it's slot 31. \n- Get the EL block. Execute the requests to cache the next state that will be used to apply the next block. \n- If there's no new block, then we need to remove that cached state with the requests applied, advance the slot on that and reapply the requests again. \n\nEvery slot that passes we invalidate some state and recompute the cached head to be able to apply a block. \n\nToday the situation is much simpler: any object is missing we just do nothing or we just advance the block to the next slot. \n\nOur next slot cache is probably the single piece of most complicated code for block processing, and this will destroy it. I'm a bit scared of such a change. Perhaps the simplest approach is to *not* cache the requests applied, but this feels incredibly suboptimal to me",
+    "created_at": "2026-04-09T16:11:07.214000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "during checkpoint sync, you would fetch the finalized `anchor_state` and `anchor_block`, and the state here is the post `state_transition` state of the anchor block, as a node you can run `state_transition` on the anchor block and should produce the same `state_root` as the `anchor_state`, if the previous payload was not valid, then validators would not vote for that state at all so it wouldn't be finalized in the first place",
+    "created_at": "2026-04-09T16:20:42.406000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "how do you jknow that the anchor block has the right requests?",
+    "created_at": "2026-04-09T16:21:47.729000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "if it doesn't it would produce a different `state_root`",
+    "created_at": "2026-04-09T16:22:15.779000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "the block has a post-state root not a pre-state root",
+    "created_at": "2026-04-09T16:22:30.955000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "or now blocks will have two state roots?",
+    "created_at": "2026-04-09T16:22:38.587000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I don't see why it's needed `assert anchor_block.state_root == hash_tree_root(anchor_state)` isn't that the only condition we need to verify when bootstrapping from a finalized checkpoint state?",
+    "created_at": "2026-04-09T16:27:30.114000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "If the justified checkpoint is say block 31, you will get the post state of 31 advanced to 32. And the first block you need to apply is 33 that is based on 31. The state of 31 does not have the requests of its payload (it was full) so the root does not have this. The block 33 includes these requests, that need to be validated against the payload of 31. You can't do this without its payload.",
+    "created_at": "2026-04-09T16:31:05.961000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tbenr",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "> Get the EL block. Execute the requests to cache the next state that will be used to apply the next block.\n\nwhy would you execute the requests as the EL block arrives, instead of waiting next beacon block?",
+    "created_at": "2026-04-09T16:53:16.936000+00:00",
+    "attachments": []
   }
 ]
