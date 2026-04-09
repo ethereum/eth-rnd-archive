@@ -1,0 +1,146 @@
+[
+  {
+    "author": "wemeetagain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "The argument for why its wrong is that the state without the payload applied dialed to that epoch would typically not be part of the canonical chain but part of a competing chain. The balance calculations the protocol chooses should always be from the canonical chain.\n- justified balances are pulled from the post-state of a justified root, importantly, dialed to the justified epoch if necessary (skip slots).\n- current gloas spec requires the payload to be applied/processed before the epoch transition.\n- payload processing affects balances\n- thus payload status is a required element in determining the correct balances",
+    "created_at": "2026-04-09T14:31:54.096000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "wemeetagain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "The situation described is the same scenario as, after the end of an epoch, 2/3 - 1 target votes for block at slot 30, and 1 target vote for a descendant at slot 31. We don't worry that we should have justified root from 30 because that chain transitively got enough weight. FFG votes tally towards consensus of the view of the chain at an epoch boundary (after the epoch transition). So it doesn't matter if a supermajority agreed on the chain state at slot 30. By the time the epoch rolled around, they had diverged! The threshold for consensus FFG cares about was not met.\n\nSo really what's framed as a problem is actually a good thing that is masked right now. Current gloas spec weakens the consensus protocol's FFG guarantee by failing to definitively come to consensus on an epoch with prior skip slot -- without extra-consensus-protocol information, fork choice info. This is the regression from mainnet that should be fixed one way or another.",
+    "created_at": "2026-04-09T14:32:35.904000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "wemeetagain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I think <@586161934425128960> 's proposal ^ does the trick without changing checkpoint tho",
+    "created_at": "2026-04-09T14:35:08.318000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "wemeetagain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "just apply exe requests to the state after epoch processing, and the coherence of checkpoint states is restored",
+    "created_at": "2026-04-09T14:35:48.195000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "this is not true, attestations today are for block_roots, not pairs block+hash.  To justify 30 as target and not 31 then there must have been a fork and a chain voting descending from 30 and not containing 31. However, with the current vote counting on Gloas, it could happen that we justify 31 without it's payload and still the payload be canonical. \n\nOf course we *could* deal with this situation as well and make it analogous to the situation you describe of 30/31, in which case we should count also target votes as different justification targets and consider the fork of full/empty at 31. That is, any vote for say, a block in 37 that descends from full and that votes for target 31, count for justification of (31,full) and **not** count for justification of (31,empty), and a vote for a block that descends from (31, empty)  using the root of 31 for target to count for (31,empty) and **not** count for 31, full, but this then leads to even deeper consensus changes.\n\nAll over issues that are not consensus breaking.",
+    "created_at": "2026-04-09T14:41:05.265000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "by the way, Nico's proposal does not change at all the situation on FFG guarantees: today the guarantee is on the post CL block of the justified root, and that would be exactly the case with Nico's change, as that would be the only post-state",
+    "created_at": "2026-04-09T14:43:47.042000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "wemeetagain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Yes, with the current gloas spec, this situation is obscured. Payload applied before epoch boundary vs not applied is a fork. But attesters on both sides of the fork are voting for 'the same thing'. Fixing this issue is a big gloas spec change, but its just preserving the guarantees of phase0-fulu.",
+    "created_at": "2026-04-09T14:51:26.674000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "it does preserve the same guarantees, that is the whole point, the target vote is always for tha post-CL block, the justified checkpoint is that state, it was before Gloas, it continues to be after gloas, and it would be even if we adopt Nico's change.",
+    "created_at": "2026-04-09T14:52:44.483000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "wemeetagain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "His proposal does change the FFG guarantees.\n> today the guarantee is on the post CL block of the justified root\nThis is not the full picture, tho. It's the post CL block of the justified root, critically at the justified epoch.",
+    "created_at": "2026-04-09T14:53:33.829000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "So I continue to streess: there is currently no consensus-breaking issue in the spec, there are tons of bug prone complexities due to having separate state transitions, there are API calls that are broken, semantics of dependent roots that are broken, etc. But there is no consensus breaking change",
+    "created_at": "2026-04-09T14:53:47.639000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "that is not the case, the spec only defines justified checkpoint, not states, the API for checkpoint sync is what imposed this condition of advaning the state.",
+    "created_at": "2026-04-09T14:55:02.907000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "And that API was discussed in the issue linked above. Before that discussion, no notion of \"justified state\" existed.",
+    "created_at": "2026-04-09T14:55:24.399000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "wemeetagain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Thats not correct tho. Its in the fork choice spec. This is mechanically how justified balances are calculated -- from the justified checkpoint state",
+    "created_at": "2026-04-09T14:56:14.932000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "That is not broken as far as I can tell",
+    "created_at": "2026-04-09T14:57:04.085000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "And again, if we move to Nico's design, the outcome would be that the balances used would be exactly the balances that we would use today in the situation of a missing block in slot 32",
+    "created_at": "2026-04-09T14:58:46.281000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "so absolutely nothing would change except just calling a state boundary aligned",
+    "created_at": "2026-04-09T14:59:12.298000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "wemeetagain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yes but the difference is that there's no ambiguity in the FFG vote any more. Theres no more information loss. Imo restores a lot of sanity",
+    "created_at": "2026-04-09T14:59:53.289000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "there is no ambiguity today either I claim, we really would just move literally to the exact same situation as today, except that the \"state\" would be forced to be an epoch boundary state. I do recognize some big advantage on not having to deal with two official state transition, with some disadvanteges of having to change the signature of the STF, but there are no consensus changes as far as I can tell",
+    "created_at": "2026-04-09T15:01:53.637000+00:00",
+    "attachments": []
+  }
+]
