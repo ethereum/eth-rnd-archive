@@ -1,0 +1,312 @@
+[
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "<@755590043632140352> might be faster to ask this here, why exactly do we wanna keep these https://github.com/ethereum/consensus-specs/pull/5094#discussion_r3073129276, I am assuming you just mean the `else` case here which does `assert bid.parent_block_hash == parent_bid.parent_block_hash`\n\ncan you elaborate what's the rational for when something needs to be added in `on_block` vs. `process_block` vs. gossip\n\nespecially for the first two I am not sure",
+    "created_at": "2026-04-13T18:12:44.956000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "<@592004585506340885> come in here 🙂",
+    "created_at": "2026-04-13T18:14:16.750000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Am here & ready to chat 😁",
+    "created_at": "2026-04-13T18:14:34.393000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "let's me put on the fire so it's a bit more cozy in here",
+    "created_at": "2026-04-13T18:15:40.444000+00:00",
+    "attachments": [
+      {
+        "type": "image/webp",
+        "origin_name": "ai-generated-warm-hearth-cozy-fireplace-with-crackling-flames-casting-a-warm-glow-photo.png",
+        "content": "8fea4e24244cf3999d8607d62f107da4110cea36f620d7ebe0377963ed2e14da"
+      }
+    ]
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "and going straight to the next comment, I agree this is wrong here https://github.com/ethereum/consensus-specs/pull/5094#discussion_r3073215931, but what's the right approach? do we need to call `should_extend_payload`?",
+    "created_at": "2026-04-13T18:24:10.248000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "yeah it's the else branch, it's weird that github marked three lines, I was sure I clicked on one. In general gossip has cheap checks, and some/all of these checks need to be repeated in the handlers anyway since we sync blocks that we request out of gossip.  `on_block` has all of the forkchoice handling and it only consumes a pure function for state transition that eventually calls `process_block`, so anything that should be considered part of the STF should be in `process_block` and checks that are considered offchain should be in `on_block`. Since any node that gets a block and a state can statically perform the STF and check that this block is invalid with the check of `assert bid.parent_block_hash == parent_bid.parent_block_hash`I believe this check is better in `process_block` probably in processing the bid? Before it was in forkchoice cause we had that if-else branch there",
+    "created_at": "2026-04-13T18:24:11.578000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "`process_execution_payload_bid` already has `assert bid.parent_block_hash == state.latest_block_hash`",
+    "created_at": "2026-04-13T18:27:26.344000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I am not sure what the right approach is here, the wordking on the Bellatrix spec is more adapted to the current Gloas spec in which the state already determines head. I think you want to have a call to `get_head` there",
+    "created_at": "2026-04-13T18:27:51.902000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I agree with this. My rule of thumb is that gossip performs static checks, whereas processing functions can do whatever checks they want.",
+    "created_at": "2026-04-13T18:28:30.729000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "With the exception of signature/proof verifications.",
+    "created_at": "2026-04-13T18:29:27.649000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Ah this may in fact be already enough",
+    "created_at": "2026-04-13T18:30:41.938000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I removed the checks in the response to what Michael said here https://github.com/ethereum/consensus-specs/pull/5094#discussion_r3069319758 (just fyi)",
+    "created_at": "2026-04-13T18:31:18.862000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "assuming the state already has the parent block applied",
+    "created_at": "2026-04-13T18:31:21.965000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "michael is right that after the branching is gone, then it's fine to have that in the processing function. I am uncertain about asserting against the latest block hash in the state though",
+    "created_at": "2026-04-13T18:33:20.531000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "if the block builds on empty we know this before doing any processing, and at this point we should know if the bid has the wrong parent hash. If we process the execution requests and modify the state's latest block hash, we also change the result of this check in the bid. I agree that we can keep everything consistent, but I think it's bug prone",
+    "created_at": "2026-04-13T18:34:40.472000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "it's easier to keep the check against the state latest block hash but also add the check against the parent bid parent hash in case the block builds on empty",
+    "created_at": "2026-04-13T18:35:09.380000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "so we have this gossip check\n```\n[REJECT] The bid's parent (defined by `bid.parent_block_root`) equals the\n  block's parent (defined by `block.parent_root`).\n```\nisn't that the same as `assert bid.parent_block_hash == parent_bid.parent_block_hash` just for the root, why is one in gossip and the other check `on_block`\n\nshould we also add the later as a gossip rule instead, this seems like a static check to me",
+    "created_at": "2026-04-13T18:48:17.727000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "these can be both in gossip and in processing, but they should definitely be in processing",
+    "created_at": "2026-04-13T18:51:07.764000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "the thing with gossip rules is that you may not have the parent block handy",
+    "created_at": "2026-04-13T18:51:23.743000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "this is why I didn't like your new check for the request roots",
+    "created_at": "2026-04-13T18:51:35.741000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "In gossip you typically have a state around already in memory and that's good enough to validate most things. Some other things are grabbed from forkchoice that caches some info on the unfinalized blocks",
+    "created_at": "2026-04-13T18:52:13.931000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "but grabbing the full block from db to validate becomes costly.",
+    "created_at": "2026-04-13T18:52:27.482000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "The argument for having duplicate checks is that this matters for syncing, right?",
+    "created_at": "2026-04-13T18:52:51.202000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Something I learned from Adrian Sutton I think early on is the moto that any gossip validation should be cheap eough so that an attacker cannot dos you by triggering it",
+    "created_at": "2026-04-13T18:53:03.077000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "correct, you cannot assume that anything that gets to processing passes the gossip validation",
+    "created_at": "2026-04-13T18:53:27.647000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Anything that is required for validity has to be checked on processing",
+    "created_at": "2026-04-13T18:53:37.225000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "and anything that is really cheap to check may be checked in gossip",
+    "created_at": "2026-04-13T18:53:56.683000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "the fact that processing needs exhaustive checks is clear to me, but what is not clear are the fork choice checks in `on_block`",
+    "created_at": "2026-04-13T18:54:10.129000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "yeah many of those may not be necessary",
+    "created_at": "2026-04-13T18:54:32.602000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "is that covered by\n```\n# [IGNORE] The block's parent has been seen (via gossip or non-gossip sources)\n    # (MAY be queued until parent is retrieved)\n```",
+    "created_at": "2026-04-13T18:55:12.651000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "We added a bunch of them to detect errors in the spec itself early on",
+    "created_at": "2026-04-13T18:55:17.519000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "that covers that you have it, but if you have a check that actively needs to read the block then you will need to load it from db",
+    "created_at": "2026-04-13T18:55:55.532000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "it's arguable if this is worth it or not",
+    "created_at": "2026-04-13T18:56:04.950000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I'm uncertain if any check today requires loading the block from db",
+    "created_at": "2026-04-13T18:56:18.899000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "you are talking about checkint the execution requests?",
+    "created_at": "2026-04-13T18:56:27.972000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "so for the execution requests in particular we would need to either 1) cache the root in forkchoice when we insert the block, or 2) request the parent block from db to check them",
+    "created_at": "2026-04-13T18:56:55.724000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "no, we don't load anything from db for gossip checks, and I agree with keeping it that way",
+    "created_at": "2026-04-13T18:58:40.909000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "ah you mean in `on_execution_payload`? for block we already check during processing in `process_parent_execution_payload` where we get it from `state.latest_execution_payload_bid.execution_requests_root`",
+    "created_at": "2026-04-13T19:01:26.324000+00:00",
+    "attachments": []
+  }
+]
