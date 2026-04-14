@@ -1,0 +1,58 @@
+[
+  {
+    "author": "nero_eth",
+    "category": "general",
+    "parent": "allcoredevs",
+    "content": "",
+    "created_at": "2026-04-14T10:47:01.679000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "general",
+    "parent": "allcoredevs",
+    "content": "q1: yeah it's wasteful, payload basically gets fetched twice.\n\nq2: no, in both variants the EL ends up re-executing everything so an invalid finalized block can't get through, unless the EL falls back to snap sync in which case you're trusting the pivot (=checkpoint) anyway.\n\nq3: I think you're right. In the normal case (synced node, offline for a while, state intact) ELs don't snap sync on restart. E.g. for geth [there's a check in eth/downloader/syncmode.go](https://github.com/ethereum/go-ethereum/blob/189bbd91b40c6d9879b268ee3c1ff1e565e5df7d/eth/downloader/syncmode.go#L61-L63): if it sees a head block with state on disk, it flips `--syncmode snap` to full, so, snap is usually only used for initial sync (if state is intact).\n\nFor the 5-day-offline scenario, e.g. geth re-executes S to head no matter what the CL does. If the CL skips payloads over S->F and only sends F onward, the EL sees missing parents, back-fills over eth/ and re-executes. So, at least my assessment is that the CL's blockhash check on the finalized range buys nothing as the EL does the work anyway.\nSnap sync kicks in e.g. if the EL db got wiped too and then it trusts the pivot, so the CL check still wouldn't save it. The \"100% dishonest validators\" property is already broken in that case today.\n\ntldr, I think you're right and the CL can skip range-requesting payloads over S->F and nothing gets worse. But worth checking with reth/nethermind/besu/erigon/ethrex/nimbus folks to confirm they also re-execute to catch-up. \nAlso, cc'ing <@402853454126776320> to make sure I didn't interpret geth's behavior incorrectly.",
+    "created_at": "2026-04-14T10:47:02.950000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "general",
+    "parent": "allcoredevs",
+    "content": "Wrt BALs, if nodes would just apply BALs from S->F, then you'd arrive at a similar place as snap sync where you trust that a checkpoint (=F) is correct. I'm not 100% sure what clients do now that we're adding BALs to the picture (e.g. re-execution with BALs vs just using BALs) but I assumed clients would still re-execute (at least geth does so on bal-devnet-3, afaict). Not re-executing would mean clients won't generate receipts and would have to request them from peers, which would be a possible optimization.",
+    "created_at": "2026-04-14T10:47:23.649000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "general",
+    "parent": "allcoredevs",
+    "content": "Cc <@602753420033785856> re Q1",
+    "created_at": "2026-04-14T10:47:27.897000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "general",
+    "parent": "allcoredevs",
+    "content": "If the EL doesn't execute and doesn't validate BALs in range syncing then we'd lose the property in the malicious majority case. I think at the very least it should be the default to reexecute (if not mandatory)",
+    "created_at": "2026-04-14T10:52:32.478000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "general",
+    "parent": "allcoredevs",
+    "content": "Also cc <@361447803194441738> who originally designed optimistic sync. At the merge this had a ton of edge cases, but it seems to me that perhaps we can just completely disregard payloads and return codes from the EL even in the gossip section and simplify the engine API? A return of VALID/INVALID and we deal as today. Any other can be treated as optimistic?",
+    "created_at": "2026-04-14T10:55:13.149000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "general",
+    "parent": "allcoredevs",
+    "content": "And in general it seems pointless to compute the rlp hash in the CL now",
+    "created_at": "2026-04-14T10:55:43.656000+00:00",
+    "attachments": []
+  }
+]
