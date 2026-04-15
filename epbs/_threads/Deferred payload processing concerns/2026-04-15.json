@@ -1,0 +1,66 @@
+[
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I am making this thread so we can more easily discuss the concerns from Lido [here](https://github.com/ethereum/consensus-specs/pull/5094#issuecomment-4251843475). cc <@586161934425128960> @avsetsin <@935504619554107392>.",
+    "created_at": "2026-04-15T17:19:39.257000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "<@935504619554107392> what is avsetsin's discord handle?",
+    "created_at": "2026-04-15T17:20:09.080000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "dgusakov",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "<@565595741477928990>",
+    "created_at": "2026-04-15T17:45:42.191000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "> Deposits (EL requests): deposit requests from EL block Y (referenced by the bid in CL slot X) are only applied to CL state at slot X+1 via process_parent_execution_payload. At slot X, the ETH has already left the depositor's account on EL, but is not yet visible on CL — neither in pending_deposits nor in validator balances.\n> A consumer taking a CL+EL snapshot at slot X — linking EL state through the bid reference — would see ETH that is missing from the total: already gone on EL, not yet on CL.\nThis statement is incorrect,  there should not be something called \"an EL snapshot at X\". The state is not slot based but rather the head state is completely determined by the CL. \n\nAt slot X after importing the beacon block for X and regarless of whether the payload for X has or hasn't been revealed, the beacon state on the CL only points to the parent hash as canonical, and that is the only EL state that makes sense to look at.\n\nPrevious to 5094, there could be two different situations: the beacon state could contain information for both the current CL block and the payload (this happened when getting the post-EL state) or the current beacon block and the parent payload (this happens when getting the post-CL state or no payload was revealed). \n\nAfter 5094, the beacon state will always point to the second situation, that is the beacon state shows everything that happened up to slot X and including everything that happened from processing requests of X-1, and **no influence at all** from the payload of X, in particular, the EL snapshot will always have to be the EL state at the hash in `state.latest_block_hash`",
+    "created_at": "2026-04-15T17:45:49.266000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "if Lido requires proving with the intermediate state transition forcefully I'd be quite surprised, because the intermediate state transition (that exist today and dissapears in 5094) is not even guaranteed to exist.",
+    "created_at": "2026-04-15T17:47:03.272000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "ah thanks <@755590043632140352> looks like you have the same conclusion I do",
+    "created_at": "2026-04-15T17:47:29.370000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I am still digging into how Lido oracle works concretly I think that makes it easier to talk about this",
+    "created_at": "2026-04-15T17:47:53.238000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "so pre-gloas (currently) the Lido oracle does the following\n1. `ref_slot X = HashConsensus.getCurrentFrame().ref_slot`\n2. Poll `GET /eth/v1/beacon/blocks/finalized/root` to get `finalized_slot`\n3. Wait until `finalized_slot` >= `ref_slot`\n4. `block_X` = `GET /eth/v2/beacon/blocks/{ref_slot}`\n   (if `ref_slot` missed: scan forward for first non-missed block,\n    follow `parent_root` backward to get block just before `ref_slot`)\n5. `state_root` = `block_X.state_root`\n6. `block_hash` = `block_X.body.execution_payload.block_hash`\n7. `cl_state` = `GET /eth/v2/debug/beacon/states/{state_root}`\n8. CL reads: `cl_state.balances`, `cl_state.pending_deposits`\n9. EL reads: `eth_getBalance(vault, block_identifier=block_hash)`\n10. CL+EL are consistent (CL state includes payload effects at same slot)\n\nimportant part here is that `block.state_root` commits to the state after `state_transition`, so `state.slot = block.slot`, so `process_slots` is applied, so I do think the checkpoint state semantic is importnat because it affects `cl_state.balances`",
+    "created_at": "2026-04-15T17:57:53.335000+00:00",
+    "attachments": []
+  }
+]
