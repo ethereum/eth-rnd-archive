@@ -306,5 +306,109 @@
     "content": "because this is really the hurt that a malicious builder can do **for free**",
     "created_at": "2026-04-15T17:37:50.883000+00:00",
     "attachments": []
+  },
+  {
+    "author": "raulvk",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "i am trying to understand why we **need** to propagate the same data twice on the wire, it feels extremely wasteful. it'll be taking away 1.5MiB of capacity (poorly compressible worst case scenario) from the critical path, basically annulling one of the most useful benefits of ePBS: the beacon block is tiny and sufficient to start critical path work.",
+    "created_at": "2026-04-15T18:04:30.656000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "raulvk",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "IUC, a necessary precondition to validate beacon block N+1 is that we must've received and executed the payload for N, which already includes the execution requests. so we already have them. it makes zero sense to duplicate them on the wire.",
+    "created_at": "2026-04-15T18:06:29.120000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "raulvk",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "i must be misunderstanding something, please correct me!",
+    "created_at": "2026-04-15T18:06:54.632000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "because validity of the block should be a static check on the STF, if we do not send this with the block the STF becomes a function of the previous payload, the block and the previous state",
+    "created_at": "2026-04-15T18:10:15.486000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "raulvk",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "sure, but we can just virtualize this field",
+    "created_at": "2026-04-15T18:10:50.185000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "raulvk",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "we don't need to send the data twice on the network. the beacon block can commit to it, and the beacon node can replace that commitment with the actual data it already has _before_ feeding it into the STF",
+    "created_at": "2026-04-15T18:11:27.164000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "On the practical side of things also it is because without sending them twice then it would break the exact same problem that this PR is trying to solve: that you can request the finalized checkpoint from the node and you only need the next block to start proceeding, you do not need to start requesting payloads from previous epoch to be able to sync the next block",
+    "created_at": "2026-04-15T18:11:30.378000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "raulvk",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<@755590043632140352> to be clear: the network payload does not need to coincide 100% with the consensus payload. it's useful to view it as a stateful compression mechanism. during the critical path:\n- we compress the data into a commitment in the beacon block N+1 for sending\n- we expand into the full exec requests before feeding the expanded block into STF\n\nwhen serving it via req/resp (for the sync from finalized checkpoint you just mentioned), the responder can also send the expanded response. it just doesn't make sense to send the same data twice in the critical path. especially given the WCS is 1.5MiB.",
+    "created_at": "2026-04-15T18:18:14.713000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "> payloads from previous epoch to be able to sync the next block\nthat shouldn't be needed even if we remove `parent_execution_requests` as the `anchor_state` already has the execution requests of the `anchor_block` applied, so you should be able to sync the next block",
+    "created_at": "2026-04-15T18:41:40.053000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I do not think that's true: finalized is slot 30 full, the state is the post state of the CL block advanced to 32, that's anchor state. You cannot apply 33 (the next block) without recovering the payload of 30, this is the main problem",
+    "created_at": "2026-04-15T18:43:48.615000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "well, then explain me how you solve the checkpoint sync scenario I am pointing to",
+    "created_at": "2026-04-15T18:45:07.879000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "which is what led to the uproar over the current status",
+    "created_at": "2026-04-15T18:45:19.505000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "ah I see what you mean but that's needed either way, you need the payload of 30 to process 33 since the payload is not finalized and need to be verified (ie. part of `store.payloads`) to pass this check\n```\nif is_parent_node_full(store, block):\n    assert is_payload_verified(store, block.parent_root)\n```\nin `on_block`, only the `anchor_state.latest_block_hash` payload is finalized",
+    "created_at": "2026-04-15T19:00:52.982000+00:00",
+    "attachments": []
   }
 ]
