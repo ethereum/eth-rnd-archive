@@ -62,5 +62,13 @@
     "content": "so pre-gloas (currently) the Lido oracle does the following\n1. `ref_slot X = HashConsensus.getCurrentFrame().ref_slot`\n2. Poll `GET /eth/v1/beacon/blocks/finalized/root` to get `finalized_slot`\n3. Wait until `finalized_slot` >= `ref_slot`\n4. `block_X` = `GET /eth/v2/beacon/blocks/{ref_slot}`\n   (if `ref_slot` missed: scan forward for first non-missed block,\n    follow `parent_root` backward to get block just before `ref_slot`)\n5. `state_root` = `block_X.state_root`\n6. `block_hash` = `block_X.body.execution_payload.block_hash`\n7. `cl_state` = `GET /eth/v2/debug/beacon/states/{state_root}`\n8. CL reads: `cl_state.balances`, `cl_state.pending_deposits`\n9. EL reads: `eth_getBalance(vault, block_identifier=block_hash)`\n10. CL+EL are consistent (CL state includes payload effects at same slot)\n\nimportant part here is that `block.state_root` commits to the state after `state_transition`, so `state.slot = block.slot`, so `process_slots` is applied, so I do think the checkpoint state semantic is importnat because it affects `cl_state.balances`",
     "created_at": "2026-04-15T17:57:53.335000+00:00",
     "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "now in post-gloas (with 5094 changes) it should look like this\n\n1. `ref_slot X = HashConsensus.getCurrentFrame().ref_slot`\n2. Poll `GET /eth/v1/beacon/blocks/finalized/root` to get `finalized_slot`\n3. Wait until `finalized_slot` >= `ref_slot + 1`  (+1 because of epbs pipelining, that's not new in 5094)\n4. `block_X` = `GET /eth/v2/beacon/blocks/{ref_slot+1}`\n5. `state_root` = `block_X.state_root`\n6. `cl_state` = `GET /eth/v2/debug/beacon/states/{state_root}`\n7. `block_hash` = `cl_state.latest_block_hash`\n8. CL reads: `cl_state.balances`, `cl_state.pending_deposits`\n9. EL reads: `eth_getBalance(vault, block_identifier=block_hash)`\n10. CL+EL are consistent (CL state includes payload effects of `block_hash`)",
+    "created_at": "2026-04-15T18:03:50.230000+00:00",
+    "attachments": []
   }
 ]
