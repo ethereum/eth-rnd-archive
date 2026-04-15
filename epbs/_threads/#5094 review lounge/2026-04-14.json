@@ -590,5 +590,133 @@
     "content": "I dont really like this part `get_head  plus  block_states  avoiding any divegence`\n- 1. the `state` is part of the fucntion signurate since bellatrix which defines the following `state is the state object after applying process_slots(state, slot) transition to the resulting state of the parent block processing`\n- 2. if we get state from `block_states` we need to call `process_slots` on it\n\nI do agree if we call `process_slots` and advance the state we can use `get_head` but I feel like easier way to reason about `prepare_execution_payload` in bellatrix vs. gloas, is that now you need to in addition consult FC to know if you `should_extend_payload`, semantically that seems better\n\nthat's why I tend to think we should just use `should_extend_payload` but seems like you are fine with both cases anyways",
     "created_at": "2026-04-14T23:00:51.465000+00:00",
     "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "yep I'm absolutely fine with ` should_extend_payload`  and assume that the caller has already advanced the head state.",
+    "created_at": "2026-04-14T23:02:55.247000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "if we ever change the tie breaker, we may need to call the tie breaker directly",
+    "created_at": "2026-04-14T23:03:21.798000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I was actually looking at that, the semantics are just not as nice but good to keep in mind",
+    "created_at": "2026-04-14T23:04:45.560000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "also notice that if you call `should_extend_payload`  you need to make sure also that the paylaod exist in the store.",
+    "created_at": "2026-04-14T23:05:29.744000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "yes I realized that today",
+    "created_at": "2026-04-14T23:05:53.491000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "otherwise the callto it will fail an assert",
+    "created_at": "2026-04-14T23:05:54.721000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I guess the note makes it clear `whether to extend an available payload` but I was surprised this can be true without us having the payload in FC",
+    "created_at": "2026-04-14T23:06:32.666000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "yeah the function itself is a bit weird:\n```\ndef is_payload_timely(store: Store, root: Root) -> bool:\n    \"\"\"\n    Return whether the execution payload for the beacon block with root ``root``\n    was voted as present by the PTC, and was locally determined to be available.\n    \"\"\"\n    # The beacon block root must be known\n    assert root in store.payload_timeliness_vote\n\n    # If the payload is not locally available, the payload\n    # is not considered available regardless of the PTC vote\n    if root not in store.payload_states:\n        return False\n```\nI don' t have time to check now the spec but I find it weird that the first assert can pass and the second if being false 🙂",
+    "created_at": "2026-04-14T23:07:45.325000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "ahh no nvm, adding the vote adds to the dict",
+    "created_at": "2026-04-14T23:09:07.312000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "so the assert is not the problem, but the problem is that the function will return true anyway even if there' s no payload",
+    "created_at": "2026-04-14T23:09:49.269000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I will just check `store.payloads` for now, maybe a separate refactor if needed, for now I think this is fine",
+    "created_at": "2026-04-14T23:12:12.203000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "No wait that's definitely not good . I think you want to check it exists and also should extend",
+    "created_at": "2026-04-14T23:13:31.510000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "It's just a single extra \"and\"",
+    "created_at": "2026-04-14T23:13:56.632000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "that's what I meant both conditions",
+    "created_at": "2026-04-14T23:14:26.698000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Ah then we're in agreement. I don't see this being wrong at all in any future",
+    "created_at": "2026-04-14T23:15:07.537000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Hard to change the tie breaker itself",
+    "created_at": "2026-04-14T23:15:20.019000+00:00",
+    "attachments": []
   }
 ]
