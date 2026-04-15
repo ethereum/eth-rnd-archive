@@ -410,5 +410,245 @@
     "content": "ah I see what you mean but that's needed either way, you need the payload of 30 to process 33 since the payload is not finalized and need to be verified (ie. part of `store.payloads`) to pass this check\n```\nif is_parent_node_full(store, block):\n    assert is_payload_verified(store, block.parent_root)\n```\nin `on_block`, only the `anchor_state.latest_block_hash` payload is finalized",
     "created_at": "2026-04-15T19:00:52.982000+00:00",
     "attachments": []
+  },
+  {
+    "author": "raulvk",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "1. You fetch the finalized state from a peer.\n2. You sync to HEAD via req/resp (BeaconBlocksByRoot/BeaconBlocksByRange).\n3. The peer serves the expanded form, with the **full parent_execution_requests inlined**, not the compressed form.",
+    "created_at": "2026-04-15T19:03:22.468000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "no, with 5094 you do not need the payload, you get the block 33 and you check against the bid in 30, that's the whole point of your PR as far as I can tell!",
+    "created_at": "2026-04-15T19:04:37.458000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "this doesn't work, we sync to finalized state from the checkpoint server that gives us the finalized state already",
+    "created_at": "2026-04-15T19:05:09.407000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I cannot start syncing until I have seen the requests from **before** the finalized epoch start",
+    "created_at": "2026-04-15T19:05:37.944000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I've been saying this forever 🙂 https://discord.com/channels/595666850260713488/874767108809031740/1491830057327526138",
+    "created_at": "2026-04-15T19:11:11.429000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "that is true from a pure STF perspective but I thought doing [gloas range sync](https://www.potuz.net/posts/gloas-range-sync/) is only safe up until the finalized checkpoint",
+    "created_at": "2026-04-15T19:11:16.923000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "So there's still an edge case that a payload with that given blockhash may not exist at all but in that case the incoming block would have to be invalid and you won't be able to sync that chain eventually",
+    "created_at": "2026-04-15T19:13:07.472000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I'm still awaiting for EL devs to chime in that thread as to the safety of syncing the EL and CL independently",
+    "created_at": "2026-04-15T19:13:32.017000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I guess what you are saying is you can sync optimistically even to the head with 5094 without requiring fetching payloads?",
+    "created_at": "2026-04-15T19:16:03.370000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "even with less assurances than optimistically: I think even checking the blockhash is unnecessary",
+    "created_at": "2026-04-15T19:16:31.571000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I am starting to suspect that we kept an overly complex optimistic sync spec that we could have ditched after the merge",
+    "created_at": "2026-04-15T19:17:02.328000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "and Gloas allows us to sync without ever getting a payload at all",
+    "created_at": "2026-04-15T19:17:11.383000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "raulvk",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "can you elaborate? what is the exact problem with the checkpoint sync service? are you worried about some off-by-1 sort of situation?",
+    "created_at": "2026-04-15T19:23:15.251000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "raulvk",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "the snapshot would just include the beacon blocks in expanded form, no?",
+    "created_at": "2026-04-15T19:24:26.948000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "And Raul no, you cannot do what you want because there's no attestations to the Payload. If the proposer got the requests but attesters didn't them the proposer would be grieved",
+    "created_at": "2026-04-15T19:24:46.839000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "So you cannot avoid sending them with the block unless there's a round of attestations to DA of the Payload",
+    "created_at": "2026-04-15T19:25:45.239000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "One could overload PTC for this but we need to check safety even in this case and again it breaks checkpoint sync again",
+    "created_at": "2026-04-15T19:26:42.541000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "It's the situation I describe above with 30 finalized",
+    "created_at": "2026-04-15T19:27:44.891000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "raulvk",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "sorry, i don't get this. you're saying that PTC does not actually provide a strong enough signal of the execution payload having been received by the whole network?",
+    "created_at": "2026-04-15T19:29:27.063000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "It does but it doesn't do any checking",
+    "created_at": "2026-04-15T19:30:54.969000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "So the requests in the Payload may not correspond to the commitment",
+    "created_at": "2026-04-15T19:31:10.871000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "raulvk",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "for an attester to attest successfully to beacon block N+1, it must have received the execution payload of N _and_ executed it so it can verify that the state root matches, no?",
+    "created_at": "2026-04-15T19:31:16.941000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "raulvk",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "otherwise it won't be able to attest to N+1 to begin with",
+    "created_at": "2026-04-15T19:31:27.910000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Yes",
+    "created_at": "2026-04-15T19:31:43.422000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "raulvk",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "so if this is a precondition for attestation, then it follows that the execution requests _are_ available. otherwise we have a larger problem",
+    "created_at": "2026-04-15T19:32:32.045000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "No, again: no one got the requests except the next proposer that got them. No one has imported the Payload except the proposer that got it and the proposer has built on full, but it's reorged cause no one has the requests",
+    "created_at": "2026-04-15T19:34:27.417000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "If instead the proposer sends the requests then the Payload has to be present",
+    "created_at": "2026-04-15T19:35:05.820000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "So the only way to do this on gossip is to also request that the PTC checks that the requests correspond to the bid",
+    "created_at": "2026-04-15T19:35:37.829000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "And that will still break checkpoint sync but at least work for gossip if we put this extra trust on the PTC",
+    "created_at": "2026-04-15T19:36:08.022000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "But we already have these sort of equivocation attacks by builders anyway",
+    "created_at": "2026-04-15T19:37:48.318000+00:00",
+    "attachments": []
   }
 ]
