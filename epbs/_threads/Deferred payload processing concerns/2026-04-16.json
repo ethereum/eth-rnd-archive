@@ -30,5 +30,93 @@
     "content": "I don't think `pending_deposits` are the issue if you do the following:\n- get `block_X`\n- get `cl_state` (for `block_X.state_root`)\n- `block_hash` is `block_X.body.signed_execution_payload_bid.message.parent_block_hash`, or `cl_state.latest_block_hash`\n- fetch EL state with `block_hash`",
     "created_at": "2026-04-16T09:48:04.513000+00:00",
     "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I do think withdrawals need to be considered though because `cl_state` has already deducted them from validator balances (via `apply_withdrawals` in `process_withdrawals`) but those are not reflected in EL state for `block_hash`, only the next EL block that builds on top of`block_hash` includes those, the `cl_state` includes those via `state.payload_expected_withdrawals`",
+    "created_at": "2026-04-16T10:04:44.265000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "dgusakov",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Yes. This is the problem with looking at the next CL block. So the concern remains. There is not clear way to get consitent state",
+    "created_at": "2026-04-16T10:12:32.324000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "so the problem really is that withdrawals are pre-deducted on the CL side",
+    "created_at": "2026-04-16T10:17:16.224000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "dgusakov",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "We can think about it this way, yes",
+    "created_at": "2026-04-16T10:17:38.072000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "but you have those in the state via `cl_state.payload_expected_withdrawals` so you can add them back to validator balances",
+    "created_at": "2026-04-16T10:17:45.005000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "dgusakov",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "<@565595741477928990> This looks like a simpler option compared to deposits inclusion simulation. Tho it works if we take CL `block_X` and parent EL block for the `cl_state.latest_block_hash`. So that we have all effects from this EL block reflected and we need to add all withdrawals back to the validator balances. I general it does not look too bad to me. If <@565595741477928990> has no objections I would vote for having an explicit comment in CL spec covering the case \"How to get consistent state on CL + EL\"",
+    "created_at": "2026-04-16T10:22:02.706000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "but let's see if <@755590043632140352> or <@592004585506340885> can confirm this, I am not that familiar why we need to pre-deduct withdrawals from CL balances but I am sure there is good reason for it, maybe there is a more elegant solution?",
+    "created_at": "2026-04-16T10:24:02.103000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "but this is true in epbs in general, you need to look at the next CL block to know whether previous block was FULL or EMPTY",
+    "created_at": "2026-04-16T10:34:09.162000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "so I am not even sure why we need to pre-deduct withdrawals from CL side\n- in `process_withdrawals` we can remove `apply_withdrawals(state, expected.withdrawals)`\n- and then in `apply_parent_execution_payload` we can run `apply_withdrawals(state, state.payload_expected_withdrawals)`\nso I believe my #5094 changes can even solve that issue if we do this",
+    "created_at": "2026-04-16T10:46:31.427000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "george_avs",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "If withdrawals are also deferred to the next slot, that would make both directions symmetric and simplify things significantly — not just working with cross-layer state, but also the overall mental model of the system.\n\nTo echo what Dima said — the problem is not with our oracle specifically, we'll figure that out. What we wanted to flag is the asymmetry itself. There are many protocols that may do cross-layer TVL calculations, and this is not an obvious thing to catch. If someone in DeFi misses this nuance, it could lead to serious accounting issues.\n\nIf it can be resolved the way you're suggesting, that would be great. If not, I agree with Dima that it would be valuable to educate the community about the nuances of ePBS — it's a big change and things like this are easy to miss.",
+    "created_at": "2026-04-16T11:00:26.593000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "The withdrawals are sent to the EL on the attributes before the next block is generated. The next block will deduct them and the next Payload will credit them in the EL. The problem is that there's a state transition between the two and the balance may not be enough to deduct the withdrawal after that state transition. So we need to deduct immediately to escrow what surely needs to be minted in the EL",
+    "created_at": "2026-04-16T11:02:14.070000+00:00",
+    "attachments": []
   }
 ]
