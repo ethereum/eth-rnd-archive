@@ -46,5 +46,125 @@
     "content": "> all i'm saying is that we should avoid propagating them twice.\nI don't think it's technically needed to have them in the `ExecutionPayloadEnvelope`, the local EL can always reconstruct them from the payload but that would require `engine_newPayload` to return them and we lose the ability to statically check them on gossip/fork choice before calling the EL",
     "created_at": "2026-04-16T12:50:51.079000+00:00",
     "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Yeah with 5094 we could do this at the cost of slightly complicating the engine API, we would pass the bid root on new Payload and it will add a validation step on the EL to check that they match. The next proposer will also require an endpoint to recover them. I think this is not worth it cause the pain is in CL gossip not EL gossip",
+    "created_at": "2026-04-16T13:04:33.977000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<@795439202732867594> <@504202741933932544> we clearly have solutions to make the STF dependent on the availability of the requests, however, in addition of making the STF signature be clearly distinct for the first time, it would make RPC serving much more complicated. Range serving of blocks should unblind the blocks by requesting the requests from DB, assembling the block and sending them. \n\nThis is all doable, the question is if we want to go this route.",
+    "created_at": "2026-04-16T13:27:58.018000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "kinda related, I was curious why you mentioned including a ton of invalid requests is free for a builder, because they have to pass `verify_execution_payload_envelope` otherwise the payload is invalid and the next proposer will not build on it, there is comment below that says \"deposit requests that are crap\", in what regard?",
+    "created_at": "2026-04-16T13:32:25.884000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yeah, I'm actually disregarding EL validations, we do send the requests to the EL to verify them. My worry is mostly about the broadcast cost and situations of payload equivocations with bad requests.",
+    "created_at": "2026-04-16T13:37:58.358000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "perhaps the garbage requests is not a problem if the cost to include them and passing validation is more than the expected profit of a reorg, which should probably be fine since a reorg cannot steal a payload in ePBS.",
+    "created_at": "2026-04-16T13:39:17.125000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "to pass validation you need to lock up a huge amount of capital and currently the max size is limited by the gas limit",
+    "created_at": "2026-04-16T13:41:28.138000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "but I brought this up because removing `execution_requests` from `ExecutionPayloadEnvelope` kinda resolves this issue?",
+    "created_at": "2026-04-16T13:41:48.428000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "can't you just let the EL return it in the `engine_newPayload` and do the root check on the CL side?",
+    "created_at": "2026-04-16T13:42:27.680000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "you mean the requests would be part of the payload itself instead of the envelope?",
+    "created_at": "2026-04-16T13:51:45.650000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "they are part of the payload already (sort of) but as transactions, the EL can always reconstruct them",
+    "created_at": "2026-04-16T13:52:58.723000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yes so this was originally the design, for requests, I do not know why we went with the two seaparate lists that need to be validated that they are in sync",
+    "created_at": "2026-04-16T13:56:08.716000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "aren't they part of the CL block because pre-gloas you need them for stf? if you rely on them being given to you by the EL you can't run `state_transition` on a blinded block, that's at least one issue I see (also same reasoning as above that stf should be self-contained)",
+    "created_at": "2026-04-16T13:58:01.301000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "removing the requests from the envelope also prevent payload equivocation at least with regards to these requests.",
+    "created_at": "2026-04-16T13:58:14.789000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "well, this same issue would continue happening if we remove them from the payload, they are always needed for the STF. We can remove it from the payload and then add them to the block. We could remove them from both but again this breaks syncing without the payloads.",
+    "created_at": "2026-04-16T13:59:41.648000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "we do need them in the `BeaconBlock` via `parent_execution_requests` but I don't see a reason why the `ExecutionPayloadEnvelope` should have `execution_requests` since there is no stf anymore",
+    "created_at": "2026-04-16T14:02:16.722000+00:00",
+    "attachments": []
   }
 ]
