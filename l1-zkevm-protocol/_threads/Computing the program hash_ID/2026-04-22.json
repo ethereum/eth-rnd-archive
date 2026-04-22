@@ -1,0 +1,18 @@
+[
+  {
+    "author": "developeruche",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Question;\n\nHow does zkVM compute the \"program hash\" of a guest program, is it zkVM specific or it is just the hash of the guest program.\n\n\n### SP1\n\n- The ELF is parsed into a `Program` [here](https://github.com/succinctlabs/sp1/blob/main/crates/prover/src/worker/prover/core.rs) using `Program::from`. During this stage, the `pc_start` is also obtained.\n- Next, the *preprocessed traces* are computed [here](https://github.com/succinctlabs/sp1/blob/main/crates/hypercube/src/prover/shard.rs) and then committed [here](https://github.com/succinctlabs/sp1/blob/main/crates/hypercube/src/prover/shard.rs). This output is stored in the `preprocessed_commit` field present in the `VerifyingKey`. This commitment binds the prover to the ELF of the guest program.\n- Using the `preprocessed_commit` field, the `MachineVerifyingKey` struct can be computed. Other fields present in this struct include: `pc_start`, `initial_global_cumulative_sum` (which relates to the memory initialization of the ELF), and `enable_untrusted_programs`.\n- All these fields are concatenated and hashed to obtain the *program hash* on demand. The function responsible for this can be found [here](https://github.com/succinctlabs/sp1/blob/main/crates/hypercube/src/verifier/hashable_key.rs).\n\n\n### RISC0\n\n- The ELF is first parsed to obtain a `Program` using `Program::load_elf` [here](https://github.com/risc0/risc0/blob/main/risc0/binfmt/src/elf.rs#L49-L132).\n- A memory image is created from this `Program`. After this, the `e_entry` is set so the VM knows where to start execution. It is important to note that `MemoryImage` is organized into 1024-byte pages.\n- To obtain the *image ID*, the Merkle root of these pages is first computed. Then, a `SystemState` digest of `{pc, merkle_root}` is created. This digest serves as the `image_id` of the guest program’s ELF.",
+    "created_at": "2026-04-22T04:38:55.058000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "developeruche",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "### Zisk\n\nUnlike RISC Zero or SP1 which hash the memory state directly, ZisK's \"program hash\" is actually the Merkle root of an algebraic execution trace table (the ROM Trace) containing transpiled ZisK instructions.\n\nThe Merkle setup and commitment can be found [here](https://github.com/0xPolygonHermez/zisk/blob/main/rom-setup/src/rom_merkle.rs#L11-L58) and [here](https://github.com/0xPolygonHermez/zisk/blob/main/rom-setup/src/utils.rs#L48-L67)\n\n\n\n\nSo the answer to the question is;\n- Yes, The approach to obtain the program hash differs across zkVMs.\n- No, it is not just a hash of the guest programs ELF",
+    "created_at": "2026-04-22T04:39:11.995000+00:00",
+    "attachments": []
+  }
+]
