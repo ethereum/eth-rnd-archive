@@ -1,0 +1,60 @@
+# Result
+
+When I reproduce it on a STEEL branch with BAL+7843+7805 and run against besu/focil branch I get `9 passed / 8 failed` in hive. The failures split into three buckets, and for this run they all point to Besu-side issues rather than flaws in EEST.
+
+## 1. `unexpected VALID` instead of `INCLUSION_LIST_UNSATISFIED` is a Besu bug
+
+These failures:
+
+- `unsatisfied_with_appendable_pending_il_tx`
+- `unsatisfied_with_mixed_valid_and_invalid_pending_il_txs`
+
+EEST is expecting omitted pending IL transactions to still be appendable, so the block should be `INCLUSION_LIST_UNSATISFIED` in [test_focil.py](./execution-specs/tests/amsterdam/eip7805_focil/test_focil.py:127). But Besu validates IL transactions using an “empty” validation context in [InclusionListValidationContext.java](./besu/ethereum/eth/src/main/java/org/hyperledger/besu/ethereum/eth/transactions/inclusionlist/InclusionListValidationContext.java:22), wired from [AbstractEngineNewPayload.java](./besu/ethereum/api/src/main/java/org/hyperledger/besu/ethereum/api/jsonrpc/internal/methods/engine/AbstractEngineNewPayload.java:268). In the `hive` logs, Besu explicitly skips omitted IL txs because it thinks the sender balance is `0x0` or the nonce is wrong, so it concludes they are not appendable and returns `VALID`. That is a Besu implementation flaw.
+
+## 2. The invalid-signature IL case is also a Besu bug
+
+This failure:
+
+- `block_with_invalid_signature_pending_il_tx_is_valid`
+
+EEST expects an invalid-signature pending IL tx to be omissible, so the payload remains valid in [test_focil.py](./execution-specs/tests/amsterdam/eip7805_focil/test_focil.py:361). Besu instead throws JSON-RPC `-32602 Invalid inclusion list transactions params`. The `hive` log shows Besu treating the bad tx as an undecodable IL parameter, and [StrictInclusionListValidator.java](./besu/ethereum/eth/src/main/java/org/hyperledger/besu/ethereum/eth/transactions/inclusionlist/StrictInclusionListValidator.java:31) currently turns that into a request-level error. That is Besu behavior not matching the test/spec expectation.
+
+## 3. These failures:
+
+- `invalid_authorization_keeps_nonce_zero_il_appendable`
+- `invalid_authorization_omits_nonce_one_il`
+- `valid_authorization_omits_nonce_zero_il`
+- `valid_authorization_requires_nonce_one_il`
+
+are because the STEEL branch used does not contain 8037, but the besu focil branch includes 8037. it would be much easier if you could create a besu branch that only has BAL+7843(slotnum affects created blocks)+7805 to test this
+
+# How you can reproduce this
+
+On latest `execution-specs` branch `forks/amsterdam` run:
+
+`uv run .github/scripts/build_devnet_branch.py --fork amsterdam --devnet-name bal/5 --eip-numbers 7805,7843 --run-static-checks` to create the branch used for testing (will only contain BAL, focil and slotnum). 
+
+Then generate the test vectors using ` uv run fill -v -s --no-html --clean ./tests/amsterdam/eip7805_focil --until=amsterdam `
+
+Then in latest hive/master use this `clients.yaml`:
+
+```
+- client: besu
+  nametag: default
+  dockerfile: git
+  build_args:
+    github: besu-eth/besu
+    tag: focil
+```
+
+and run hive with:
+
+`go run . --docker.nocache=besu --docker.buildoutput --docker.output --client=besu --client-file=clients.yaml --dev --loglevel=5 --sim.loglevel=5 `
+
+and finally in our created steel branch root run:
+
+` uv run fill -v -s --no-html --clean ./tests/amsterdam/eip7805_focil --until=amsterdam `
+
+followed by
+
+` uv run consume engine -v -s ./fixtures/blockchain_tests_engine/ `
