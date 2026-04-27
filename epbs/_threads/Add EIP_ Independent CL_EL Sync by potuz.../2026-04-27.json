@@ -1278,5 +1278,181 @@
     "content": "On second thought this change alone wont be enough. We would also need to replace the transactions commitment from ssz to SHA256 AND also use a SHA256 commitment instead of the rlp block hash.",
     "created_at": "2026-04-27T14:00:47.754000+00:00",
     "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I think the possible move away from ssz in the guest is a broader discussion that would require changes to the transactions commitment in the CL execution payload. \n\nLet me prepare a short summary of whats been discussed above, it's potential implications for the guest program and then an extension of how we could deprecate ssz from the guest if it's more efficient.",
+    "created_at": "2026-04-27T14:04:30.799000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Thanks, this will be very useful. Trying to read the thread above to get a bit more context.",
+    "created_at": "2026-04-27T14:06:05.440000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "On a high level the core idea is to introduce a SHA256 commitment to the fields / values that need to be consistent across CL/EL",
+    "created_at": "2026-04-27T14:07:13.732000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "My first reaction to this is also: who will be checking that the `versioned_hashes` match the EL block type 3 transactions?\nThis is a semantic check beteween CL and EL consistency, and AFAIK this would need the CL to RLP-decode the `transactions` field and do the checking, no?",
+    "created_at": "2026-04-27T14:08:10.098000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "The EL still does the `version_hashes` check and then includes the value it has for `versioned_hashes` when computing the `chain_binding_hash` which is included in the EL header.",
+    "created_at": "2026-04-27T14:09:32.123000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "```\nchain_binding_hash = SHA256(\n      parent_chain_binding_hash,\n      beacon_parent_root,\n      prev_randao,\n      timestamp,\n      slot_number,\n      expected_withdrawals_hash,\n      execution_requests_hash,\n      blob_versioned_hashes_hash,\n  )\n```",
+    "created_at": "2026-04-27T14:09:43.582000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Ah, prob is me still trying to understand. This `chain_binding_hash` would be a new field in the EL header?",
+    "created_at": "2026-04-27T14:12:58.130000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "correct",
+    "created_at": "2026-04-27T14:13:08.023000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "The idea would be that `chain_binding_hash` would be the public input that teh CL will check? And teh guest program would do the consistency checks between those fields inside the SHA256 against the EL block private input?\n\nBecause if that's the case, sounds like those fields should basically be all the same fields that we have today in NewPayloadRequest (maybe  replace for some raw data with hashes)?",
+    "created_at": "2026-04-27T14:25:18.931000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Correct",
+    "created_at": "2026-04-27T14:25:37.954000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "But there's a few additional fields that alos need to be constrained to make this work in absence of historical payloads",
+    "created_at": "2026-04-27T14:26:13.391000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Currently there are checks like `assert payload.expected_withdrawals == get_expected_withdrawals(beacon_state)` in the CL before it passes the payload to the EL. We basically want to push every assertion placed on the payload into this binding accumulator commitment.",
+    "created_at": "2026-04-27T14:28:27.450000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "<@774033563732541451> do you have reference to the EL EIP8025 tests that are sensitive to this change?",
+    "created_at": "2026-04-27T14:29:53.011000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Just a FYI, but it seems lighthouse for everyone was already counting with this EIP in Glamsterdam cc <@688748669268132001> , so we'll try to get the EIP merged and try to schedule it on devnets",
+    "created_at": "2026-04-27T14:32:04.389000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I added comment on the PR regarding the actual accumulator structure because I think the current proposal is missing a field and uses parent_block_hash when it should use parent_block_root.",
+    "created_at": "2026-04-27T14:33:45.956000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "looking",
+    "created_at": "2026-04-27T14:40:01.050000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "No the parent hash already makes it binding in the beacon chain",
+    "created_at": "2026-04-27T14:40:34.277000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "because the beacon block commits to a parent hash which is commited by the hash",
+    "created_at": "2026-04-27T14:40:50.091000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "At this this is in my 30 seconds available at the moment 🙂",
+    "created_at": "2026-04-27T14:41:09.784000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "BTW I don't think we've met and I love your handle 🙂",
+    "created_at": "2026-04-27T14:41:37.978000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Ah you also removed gas limit, that actually is correct, I think we don't need to commit to it",
+    "created_at": "2026-04-27T14:49:32.165000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "<@402080271563751435>, I'm still not sure how this idea makes sense for the guest program new input.\n\nIf `chain_binding_hash` is expected to be the new public input, this means that all the fields of that `SHA256(...)` should allow the guest program to build the EL full block for execution, in exactly the same way that today we do that using `NewPayloadRequest`.\n\nAll fields from `NewPayloadRequest` would be needed in taht `chain_binding` fields -- if not, there would be missing things for the CL to be sure the executed EL block was the expected one.\n\nAs mentioned before, `transactions` isn't part of `chain_binding_hash` -- that clearly means that `chain_binding_hash` can't be the public input to be checked... since the CL wouldn't even know that the executed block in the guest program contains the expected transactions.\n\nBut there are many other fields that matter. Another example is `gas_limit` (taking it as an example since mentioned in prev message). If `chain_binding_hash` hashes fields doesn't contain `gas_limit`, how does the CL knows that the proof executed an EL block which `gas_limit` field is correct and not completely arbitrary? e.g. i could create two proofs with the same `chain_binding_hash` and both execute a block with different `gas_limit` and everything would work.\nOther example is `state_root` -- if this isn't part of the `chain_binding` commitment, then you can create anotehr proof that will also pass with teh same public input hash. (etc)\n\nWhat this means from my perspective is that this `chain_binding` fields shoudl contain be the same `NewPayloadRequest` fields. If one is missing, then that basically means that field in the EL block used in the guest program isn't linked with the public input commitment.",
+    "created_at": "2026-04-27T14:57:16.684000+00:00",
+    "attachments": []
   }
 ]
