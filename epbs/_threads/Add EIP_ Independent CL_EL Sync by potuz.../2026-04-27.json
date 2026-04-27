@@ -1054,5 +1054,229 @@
     "content": "In this construction we basically had a new type `SignedExecutionPayloadHeaderEnvelope` which contains everything we need (DOES NOT contain the full payload body - i.e. the transactions). However, I think sentiment has changed and current consensus is that we want to push these fields into the bid.",
     "created_at": "2026-04-27T10:39:33.162000+00:00",
     "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Yeah, exactly!",
+    "created_at": "2026-04-27T13:09:28.197000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I think the current solution in the PR is broke? There is no accumulation in the partial header?",
+    "created_at": "2026-04-27T13:10:17.856000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "And I assume we wouldn't want ssz htr over sha256 for the accumulator.",
+    "created_at": "2026-04-27T13:10:19.800000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "```\nchain_binding_hash = SHA256(\n      parent_chain_binding_hash,\n      beacon_parent_root,\n      prev_randao,\n      timestamp,\n      slot_number,\n      expected_withdrawals_hash,\n      execution_requests_hash,\n      blob_versioned_hashes_hash,\n  )\n```",
+    "created_at": "2026-04-27T13:10:51.769000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "<@792404665068158998> thanks for helping to figure this out. these commitments are easy to get confused about",
+    "created_at": "2026-04-27T13:10:53.137000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "same, I got confused too. Will still have to think more about it",
+    "created_at": "2026-04-27T13:11:14.913000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "seems the current PR is missing the parent_chain_binding_hash?",
+    "created_at": "2026-04-27T13:11:15.709000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "it is, via parent_hash which has the prev accumulator value",
+    "created_at": "2026-04-27T13:11:34.082000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "the accumulator is a part of EL block header",
+    "created_at": "2026-04-27T13:12:04.917000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "This is current from the PR:\n```python\ndef compute_partial_header_hash(\n    parent_hash: Hash32,\n    prev_randao: Bytes32,\n    gas_limit: uint64,\n    timestamp: uint64,\n    withdrawals: List[Withdrawal, MAX_WITHDRAWALS_PER_PAYLOAD],\n    slot_number: uint64,\n    execution_requests: ExecutionRequests,\n) -> Hash32:\n    return SHA256(parent_hash + prev_randao + serialize(gas_limit) + serialize(timestamp) + serialize(withdrawals) + serialize(slot_number) + serialize(execution_requests))\n```",
+    "created_at": "2026-04-27T13:12:20.752000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "From my analysis, we something like this",
+    "created_at": "2026-04-27T13:13:05.868000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "we could probably emulate ssz htr if it was easy, but withdrawals list makes it complicated",
+    "created_at": "2026-04-27T13:13:40.897000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Also, I wonder if we can now deprecate execution requests and blob commitments from the engine api new payload method",
+    "created_at": "2026-04-27T13:14:31.357000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "why? they are validated by the EL as only EL knows how to compute requests commitment and parse blob transactions",
+    "created_at": "2026-04-27T13:15:31.393000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "They are committed to by the SHA256 hash that both the CL and EL compute",
+    "created_at": "2026-04-27T13:16:18.649000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "This provides binding/consistency, the EL provides validity",
+    "created_at": "2026-04-27T13:16:38.632000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "requests or both?",
+    "created_at": "2026-04-27T13:19:28.706000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "```\nchain_binding_hash = SHA256(\n      parent_chain_binding_hash,\n      beacon_parent_root,\n      prev_randao,\n      timestamp,\n      slot_number,\n      expected_withdrawals_hash,\n      execution_requests_hash,\n      blob_versioned_hashes_hash,\n  )\n```\n\nAll of this",
+    "created_at": "2026-04-27T13:19:44.819000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "oh, you mean with this EIP, i see",
+    "created_at": "2026-04-27T13:21:45.329000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "correct yes",
+    "created_at": "2026-04-27T13:21:56.867000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "sorry if that wasnt clear",
+    "created_at": "2026-04-27T13:22:05.076000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I suspect we will be able to deprecate the new payload request root preamble from the zkvm guest in the light of this change and revert back to  the execution block hash as public input. cc: <@774033563732541451> <@427491045308235776> (should be net positive for guest efficiency)",
+    "created_at": "2026-04-27T13:31:36.140000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "there' s been a lot of discussion in this thread, there' s no way I'm reading this while in interop, so <@1126229231572094976> will have to tell me what' s going on",
+    "created_at": "2026-04-27T13:50:49.127000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "What would be a summary of what would allow this? This means that the CL can construct a block header hash without requiring RLP encoding and hashing? This was the original motivation for us relying on `NewPayloadRequest` for public inputs to make CL life easier.",
+    "created_at": "2026-04-27T13:52:40.096000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "We prob be super sure about this will be the right direction -- while I agree this would be a nice change so simplify and improve efficiency, it would mean we need to fix execution-specs for 8025 with a quite big change and that means also ELs adapt/rollback again to previous style. It is a nice change if we have to make it since goes in the \"simplify\" direction -- but would be qutie terrible to later realize we have to go back again to `NewPayloadRequest` 😅\nEdit: I would guess this is assuming [EIP-8237 happens](https://github.com/ethereum/EIPs/pull/11557/changes)",
+    "created_at": "2026-04-27T13:54:34.755000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Completely agree so I think it's important that yourself and <@427491045308235776> who also have context on the EIP8025 review this",
+    "created_at": "2026-04-27T13:55:38.182000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "The premise is that we will now include a commitment in the EL payload that is computed as a SHA256 hash of the fields that the are typically passed via the engineAPI (and a few others) such as execution requests, blob commitments etc.",
+    "created_at": "2026-04-27T13:57:53.307000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "On second thought this change alone wont be enough. We would also need to replace the transactions commitment from ssz to SHA256 AND also use a SHA256 commitment instead of the rlp block hash.",
+    "created_at": "2026-04-27T14:00:47.754000+00:00",
+    "attachments": []
   }
 ]
