@@ -1454,5 +1454,85 @@
     "content": "<@402080271563751435>, I'm still not sure how this idea makes sense for the guest program new input.\n\nIf `chain_binding_hash` is expected to be the new public input, this means that all the fields of that `SHA256(...)` should allow the guest program to build the EL full block for execution, in exactly the same way that today we do that using `NewPayloadRequest`.\n\nAll fields from `NewPayloadRequest` would be needed in taht `chain_binding` fields -- if not, there would be missing things for the CL to be sure the executed EL block was the expected one.\n\nAs mentioned before, `transactions` isn't part of `chain_binding_hash` -- that clearly means that `chain_binding_hash` can't be the public input to be checked... since the CL wouldn't even know that the executed block in the guest program contains the expected transactions.\n\nBut there are many other fields that matter. Another example is `gas_limit` (taking it as an example since mentioned in prev message). If `chain_binding_hash` hashes fields doesn't contain `gas_limit`, how does the CL knows that the proof executed an EL block which `gas_limit` field is correct and not completely arbitrary? e.g. i could create two proofs with the same `chain_binding_hash` and both execute a block with different `gas_limit` and everything would work.\nOther example is `state_root` -- if this isn't part of the `chain_binding` commitment, then you can create anotehr proof that will also pass with teh same public input hash. (etc)\n\nWhat this means from my perspective is that this `chain_binding` fields shoudl contain be the same `NewPayloadRequest` fields. If one is missing, then that basically means that field in the EL block used in the guest program isn't linked with the public input commitment.",
     "created_at": "2026-04-27T14:57:16.684000+00:00",
     "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Yeah I think this works too. Need to think more in terms of the pros/cons of each.",
+    "created_at": "2026-04-27T15:22:31.075000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "thank you! It started as a masters thesis project and ended as a whole new online identity... not exactly sure how it happened 😂 nice to meet you! Its interesting how many people in the eth core have made note.",
+    "created_at": "2026-04-27T15:26:27.965000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "The `ExecutionPayload` has everything we need. The `chain_binding_hash` is added as a field in the `ExecutionPayload`. The guest program takes  the `ExecutionPayload` as private input and  `hash(ExecutionPayload)` as public input (`hash` is HTR-ssz). The guest will include logic takes the transaction data and constructs versioned hashes, withdrawals and execution requests and computes the `chain_binding_hash`. The guest asserts that the `chain_binding_hash` that is included in the `ExecutionalPayload`. Similarly the CL asserts the `chain_binding_hash` is consistent with beacon state.",
+    "created_at": "2026-04-27T15:33:58.204000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": ">  hash(ExecutionPayload) as public input\nAh, from before I understood the idea was making `chain_binding_hash` the public input",
+    "created_at": "2026-04-27T15:35:21.848000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "No sorry if that was confusing",
+    "created_at": "2026-04-27T15:35:32.572000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "If `ExecutionPayload` hash is the public input, starts to feel quite close to the current reality of using `NewPayloadRequest`.",
+    "created_at": "2026-04-27T15:37:08.274000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Yes. I would almost describe this change as enshrining engine_newPayload into the protocol via a commitment.",
+    "created_at": "2026-04-27T15:38:13.224000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I'm keen to hear your general thoughts regarding implications for EIP8025 <@774033563732541451> after you've had a chance to consider.",
+    "created_at": "2026-04-27T15:39:46.254000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "From what I undestand now, this is not the original big simplification that we think it was right? i.e. the public input being the EL block_hash. If that was the case, we could remove all the CL types (`NewPayloadRequest` and downstream) from the guest program, and let the guest program only have the EL block stuff.\n\nMy understanding now is that what this makes is basically instead of using `NewPayloadRequest` hash as the public input, use `ExecutionPayload` since now the other fields apart from `ExecutionPayload` that we have in `NewPayloadRequest` are now part of `ExecutionPayload` via this `chain_binding_hash`. So the CL checking `ExecutionPayload` hash public input, is indirectly checking those fields too.\n\nThis still means that the guest program must do the `ExecutionPayload` -> `EL block` conversion that we do today, so there aren't much efficiency gains from there. Maybe a bit less work since `ExecutionRequests` are not only a hash via `chain_binding_hash` . But I think the public input will still be `hash_tree_root(ExecutionPayload)` , no?. Which is most of the hashing work of `hash_tree_root(NewPayloadRequest)` anyway?\n(Thinking out loud here)",
+    "created_at": "2026-04-27T15:53:31.298000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Yes I am aligned with your understanding based on eip8237 described above. \n\nIf we want to remove ssz in the guest program we would replace the transactions_root which currently uses ssz with some generic hash scheme such as sha256 over the raw tx bytes `sha256(transaction_bytes)`. Additionally we would use  `sha256(ExecutionPayload)` as the public input.",
+    "created_at": "2026-04-27T16:01:14.361000+00:00",
+    "attachments": []
   }
 ]
