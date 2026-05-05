@@ -1,0 +1,34 @@
+[
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Reg the `ChainConfig` discussion, I [created a PR ](https://github.com/ethereum/execution-specs/pull/2797)in teh specs with what I think would be a good change. You can see the PR description for a summary, but also added some comments in the PR on specific points. Happy to hear thoughts if this feels good -- of course we can always keep iterating, mostly trying to come up with something that feels good enough to have a stable-ish guest program API.",
+    "created_at": "2026-05-04T21:51:09.957000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "andrurachi",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I have a quick question on how option 2 translates to the CL verifier. My understanding is that, to avoid passing the full config as expensive public inputs, the guest would instead compute a hash of the config and expose that in the journal (please correct me if that’s off).\n\nGiven that EIP-7910 standardizes the config schema but explicitly avoids defining a canonical serialization or hash, should verifiers rely on local hashing of the config, or is there an expectation that we eventually introduce a canonical commitment (e.g. an SSZ root) so that different verifiers can consistently identify the intended chain/config?",
+    "created_at": "2026-05-04T22:00:21.138000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Yes, this is an excellent point. My take on this is that at the spec level for now we define the `StatelessValidationOutput` which today is (assuming my PR above):\n```\nclass StatelessValidationResult:\n    new_payload_request_root: Hash32\n    successful_validation: bool\n    chain_config: ChainConfig\n```\nI think ideally we could leave the hashing out of execution-spec for this (serialization is SSZ today in execution-specs), and maybe the need for that could be part of https://github.com/eth-act/zkvm-standards/tree/main/standards reg IO for output. \n\nAs in, from the guest program perspective we write the SSZ output bytes and that's the boundary. And from the zkVM perspective, we could define if those bytes are hashed (or not), if there is a concrete need or limitation of zkVMs architecture reg output length. Althought I would prefer that to be an opaque internal behavior, and at CL layer we still define the same output bytes as the guest program (i.e. the hashing is done by the zkVM SDK or similar maybe)\n\nSo _I think_ this is mostly a discussion about the need for this (if any), and if tehre is a need then _where_ is the boundary of responsibility for doing this (i.e. zkevm standards, or guest program outputing a 32-byte hash)",
+    "created_at": "2026-05-04T22:08:26.639000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Tangent note: the `new_payload_request_root: Hash32` is intentional since the full new payload request would be huge and size depending on gas limit which we don't want, since the CL shouldn't require to download the whole payload (i.e. `hash_tree_root(newpaylaodrequest) == hash_tree_root(new_payload_request_header)`. So the fields in `StatelessValidationResult` should be _small_ (and not depend on the whole payload).",
+    "created_at": "2026-05-04T22:12:08.722000+00:00",
+    "attachments": []
+  }
+]
