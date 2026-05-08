@@ -1588,5 +1588,469 @@
     "content": "I don't understand how making it 32ETH solves anything, it just makes the attack more expensive, not impossible, still cheap for a nation state or similar",
     "created_at": "2026-05-08T11:59:51.658000+00:00",
     "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "the attack is not that problematic, is not that it stalls the chain, it just may reorg some beacon blocks. You can achieve that sort of liveness failure cheaper by simply buying the payload slot and not delivering. By making this more expensive we detract attackers from even exercising this",
+    "created_at": "2026-05-08T12:05:58.261000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "At any rate, Misha's PR *seems* to work, but I still think it' s a bad idea to start making these changes now, it would be much nicer if we could handle these with the gas limit only",
+    "created_at": "2026-05-08T12:06:54.551000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "We need to be careful with malicious builders preventing others to entry and to top up/withdraw, so the churn to exit I believe should be higher and we should allow more deposits per epochs to be processed.",
+    "created_at": "2026-05-08T12:08:09.552000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Still I think top builders can dos us trivially, we' re saying we can' t handle 512 deposits per slot, but with 37M USD today a builder can still clog the entire queue then, **even if we did allow 512 deposits per slot** and we processed them at epoch transition as this PR suggest",
+    "created_at": "2026-05-08T12:09:53.535000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "so I don' t think this queue actually solves the issue of signature verification",
+    "created_at": "2026-05-08T12:10:05.901000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "with the current numbers I believe it makes matters worse in fact",
+    "created_at": "2026-05-08T12:11:11.859000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "i don't think introducing a queue on CL is more complicated than introducing a similar semantics to EL",
+    "created_at": "2026-05-08T12:14:31.321000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "i've pushed some changes:\n1) val queue: builder deposit is now moved to the builder queue and doesn't hit val deposit limit per epoch\n2) builder queue: sig verifications is the only thing that is rate limited, arbitrary number of top ups or val deposits can be processed; the only limitation is that that arbitrary number should happen before `MAX_BUILDER_DEPOSIT_SIGNATURES_PER_EPOCH` is hit",
+    "created_at": "2026-05-08T12:16:19.124000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "The problem is that I don' t think it avoids the signature verification problem. There' s an inherent tradeoff.  Say we cap the number of signatures per slot to N. Then\n\n- We should be able to process 32N signatures at epoch transition with the queue. \n- A builder' s cost to fill the queue is 32N ETH. \n\nThese two are in contention. If N is small, it' s cheap for a builder to DOS others. If N is large, we still can' t process the deposits.",
+    "created_at": "2026-05-08T12:17:15.011000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "we have two problems: a number of deposit sig verifications per block and a number of deposits per block due to gas limit. To solve the former we need some queueing in EL",
+    "created_at": "2026-05-08T12:17:20.489000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "So how does this queueing mechanism help us here?",
+    "created_at": "2026-05-08T12:17:24.499000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "notice that the builder' s cost is only capital efficiency, not really paying that much",
+    "created_at": "2026-05-08T12:18:38.956000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "they can simply withdraw and reenter",
+    "created_at": "2026-05-08T12:18:44.760000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "> it' s cheap for a builder to DOS others\n\nIt either DoS nodes or DoS other builders. i think this is the trade off",
+    "created_at": "2026-05-08T12:19:22.549000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yes, I agree",
+    "created_at": "2026-05-08T12:19:39.036000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "and both are bad",
+    "created_at": "2026-05-08T12:19:45.331000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "if we let only one builder bid then the chain can also stall",
+    "created_at": "2026-05-08T12:20:03.319000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I really think we need to fundamentally change the point of view here. The attack should be as expensive as the benefits to the attacker. This is the philosophy we should take. Either we make the attack more expensive, or we improve nodes to handle the deposits or we have something in the middle. \n\nThings that will make the attack more expensive:\n- Increase min deposit. \n- Increase withdrwal churn. \n- Increase gas cost per deposit (seems impossible)\n\nThings that will make us improve the handling:\n- precompute the requests verification as we did pre-5094. \n- Add a queue as in these PRs (it allows to pipeline the signature handling for later in epoch transition, but it doesn' t fundamentally change how many we can handle). \n\nOther than this we need to understand the actual impact. It seems to me that we heal in exactly one slot and even zero slot if the next proposer does not reorg these blocks.",
+    "created_at": "2026-05-08T12:24:08.667000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "> Increase min deposit.\nWe will have to introduce activation_epoch and activate builders upon gaining enough stake\n\n> Increase withdrwal churn.\nHow long builders can wait for exit?",
+    "created_at": "2026-05-08T12:27:55.134000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "min deposit and withdrwal churn -- can be modeled as a single attack budget constraint. attach_budget = min_deposit * sigs_per_epoch * withdrawal_delay. It means that instead of increasing min_deposit by `X` times we can multiply withdrawal_delay by `X` with the same outcome",
+    "created_at": "2026-05-08T12:31:00.048000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Yes, this was exactly the reason why I wanted the exit churn to be much much larger",
+    "created_at": "2026-05-08T12:38:06.805000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "But people pushed back",
+    "created_at": "2026-05-08T12:38:15.023000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "what was the pushback reason?",
+    "created_at": "2026-05-08T12:38:29.497000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Capital cost of builders",
+    "created_at": "2026-05-08T12:41:12.826000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "These proposed countermeasures also function by effectively increasing capital cost of builders",
+    "created_at": "2026-05-08T12:43:52.490000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "min_deposit implies the same",
+    "created_at": "2026-05-08T12:44:28.994000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Originally, the min withdrawal delay for builders was 4096 epochs. Some thought this was excessive and [advocated to remove this delay entirely](https://github.com/ethereum/consensus-specs/pull/4826) but the delay prevented some attacks, so we [compromised at reduced value](https://github.com/ethereum/consensus-specs/pull/4869), 64 epochs.",
+    "created_at": "2026-05-08T12:45:34.263000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I think we need to just make this number very large again and leave the spec as it's",
+    "created_at": "2026-05-08T12:46:28.663000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "As is",
+    "created_at": "2026-05-08T12:46:32.130000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "The attack cannot be kept",
+    "created_at": "2026-05-08T12:46:38.249000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "And if a nation state actually decided to pull it up we have plenty of time to just fork and burn that shitton of ETH",
+    "created_at": "2026-05-08T12:47:15.776000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "It wouldn't affect a single user transaction",
+    "created_at": "2026-05-08T12:47:56.785000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I think 4096 is even too small",
+    "created_at": "2026-05-08T12:48:29.162000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "there is no real reason why a builder would want to quickly deposit/exit unless its an attack (unless I'm missing something)",
+    "created_at": "2026-05-08T12:49:10.899000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "also ignore [my comment ](https://github.com/ethereum/consensus-specs/pull/4826#issuecomment-3785107986) lol, that was from before I got wise 😂",
+    "created_at": "2026-05-08T12:49:55.534000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Could we not use an alternative deposit queue for builders, but use the validator queue for the exits?",
+    "created_at": "2026-05-08T12:52:17.222000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "or it doesn't make sense to have different queues like that?",
+    "created_at": "2026-05-08T12:52:35.167000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Hmm I'm not sure raising this is sufficient. Still feels like a bandaid fix.",
+    "created_at": "2026-05-08T12:53:09.317000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I'm still worried what will happen to the network if such an attack were performed for a short time.",
+    "created_at": "2026-05-08T12:53:24.892000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sauliusgrigaitis",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I admit that it was too long to read, so I'm just proposing to add a fee for becoming a builder. This could be a part of the builder deposit.",
+    "created_at": "2026-05-08T12:54:29.270000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "how much fee?",
+    "created_at": "2026-05-08T12:55:16.034000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "how big of a fee?",
+    "created_at": "2026-05-08T12:55:19.154000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sauliusgrigaitis",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "how much is the fish?",
+    "created_at": "2026-05-08T12:55:35.259000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "what fee could stop the DoS?",
+    "created_at": "2026-05-08T12:55:57.451000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "A fee won't stop an attacker, just gonna make the attack expensive",
+    "created_at": "2026-05-08T12:55:59.010000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sauliusgrigaitis",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "haha, isn't that how PoS works?",
+    "created_at": "2026-05-08T12:56:15.882000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sauliusgrigaitis",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I would say we can even increase a deposit. But if you exit you pay a fee.",
+    "created_at": "2026-05-08T12:56:46.622000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "billions vs millions of USD",
+    "created_at": "2026-05-08T12:56:49.385000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sauliusgrigaitis",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "so technically it's free as long as don't exit",
+    "created_at": "2026-05-08T12:56:59.191000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sauliusgrigaitis",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "and you want to be competitive builder you need to have some money",
+    "created_at": "2026-05-08T12:57:46.927000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "so you gonna lose 1ETH at least per builder?",
+    "created_at": "2026-05-08T12:57:47.396000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Should be just a quick dos on the CL and a very expensive one if we keep the churn large",
+    "created_at": "2026-05-08T12:58:01.748000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sauliusgrigaitis",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "For exact number we need to think a bit. But I don't see why we can't charge for exiting.",
+    "created_at": "2026-05-08T12:58:39.634000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sauliusgrigaitis",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "If you don't want to be charged you just don't exit.",
+    "created_at": "2026-05-08T12:58:50.242000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Deposit a builder -> 1ETH\nOperaate a builder -> 1ETH+\nExit a builder -> -1ETH",
+    "created_at": "2026-05-08T12:59:34.180000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "cost of running a builder would be 1ETH basically. And once you exit, you never get a refund of that 1ETH, so it would be very expensive to do the attack",
+    "created_at": "2026-05-08T13:00:20.171000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sauliusgrigaitis",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I'm actually not sure why it's as low as 1ETH, my understanding is that if you want to be competitive builder you want to put some money in your setup.",
+    "created_at": "2026-05-08T13:00:24.164000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sauliusgrigaitis",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I understading that the pitch line is that everyone can be builder, but how is that realistic?",
+    "created_at": "2026-05-08T13:00:54.637000+00:00",
+    "attachments": []
   }
 ]
