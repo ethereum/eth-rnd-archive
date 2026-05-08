@@ -1,0 +1,80 @@
+```yaml
+ id: bulk-builder-deposits
+  name: "Sustained 513 unique 0x03 builder deposits per slot"
+  timeout: 4h
+  config:
+    walletPrivkey: ''
+    depositContract: '0x00000000219ab540356cBB839Cbe05303d7705Fa'
+    depositAmount: 1
+    totalDeposits: 100000
+    perSlot: 513
+
+  tasks:
+  - name: check_clients_are_healthy
+    config:
+      minClientCount: 1
+
+  - name: get_consensus_specs
+    id: get_specs
+
+  - name: check_consensus_slot_range
+    id: current_slot
+
+  - name: run_shell
+    id: calc_target_slot
+    config:
+      envVars:
+        GLOAS_FORK_EPOCH: "tasks.get_specs.outputs.specs.GLOAS_FORK_EPOCH"
+        SLOTS_PER_EPOCH: "tasks.get_specs.outputs.specs.SLOTS_PER_EPOCH"
+        CURRENT_SLOT: "tasks.current_slot.outputs.currentSlot"
+      command: |
+        set -e
+        GLOAS_FORK_EPOCH=$(echo $GLOAS_FORK_EPOCH | jq -r .)
+        SLOTS_PER_EPOCH=$(echo $SLOTS_PER_EPOCH | jq -r .)
+        CURRENT_SLOT=$(echo $CURRENT_SLOT | jq -r .)
+        ACTIVATION_SLOT=$((GLOAS_FORK_EPOCH * SLOTS_PER_EPOCH))
+        DEPOSIT_SLOT=$((ACTIVATION_SLOT + 5))
+        if [ "$CURRENT_SLOT" -ge "$DEPOSIT_SLOT" ]; then
+          DEPOSIT_SLOT=$((CURRENT_SLOT + 5))
+        fi
+        echo "::set-output-json depositSlot $DEPOSIT_SLOT"
+
+  - name: generate_child_wallet
+    id: test_wallet
+    config:
+      walletSeed: bulk-builder-deposits-513
+      prefundMinBalance: 120000000000000000000000   # 120000 ETH
+    configVars:
+      privateKey: walletPrivkey
+
+  - name: get_random_mnemonic
+    id: test_mnemonic
+
+  - name: get_pubkeys_from_mnemonic
+    id: builder_pubkeys
+    configVars:
+      mnemonic: "tasks.test_mnemonic.outputs.mnemonic"
+    config:
+      count: 100000
+
+  - name: check_consensus_slot_range
+    timeout: 30m
+    configVars:
+      minSlotNumber: "tasks.calc_target_slot.outputs.depositSlot"
+
+  - name: generate_deposits
+    id: deposit_batch
+    config:
+      limitTotal: 100000
+      limitPerSlot: 513
+      indexCount: 100000
+      startIndex: 0
+      awaitReceipt: true
+      awaitInclusion: true
+    configVars:
+      walletPrivkey: "tasks.test_wallet.outputs.childWallet.privkey"
+      mnemonic: "tasks.test_mnemonic.outputs.mnemonic"
+      depositContract: "depositContract"
+      depositAmount: "depositAmount"
+      withdrawalCredentials: '| "0x03" + ("00" * 11) + (.tasks.test_wallet.outputs.childWallet.address | ltrimstr("0x"))'
+```
