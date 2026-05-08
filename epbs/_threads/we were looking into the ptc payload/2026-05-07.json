@@ -1,0 +1,226 @@
+[
+  {
+    "author": "brechy",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "",
+    "created_at": "2026-05-07T12:32:34.250000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "brechy",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "So future votes from the same ptc member would be ignored by the node? These are wire messages correct?",
+    "created_at": "2026-05-07T12:32:35.244000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "if a validator is multiple times in the ptc you would dismiss/drop their second message on gossip, but it's debatable how useful that message is because it presumably would vote exactly the same",
+    "created_at": "2026-05-07T12:45:02.076000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "brechy",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Ok, but the votes can actually be updated according to the current version of the specs, in both duplicated ptc member or re-vote cases",
+    "created_at": "2026-05-07T12:58:04.731000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "so \"future votes\" here is not the case, we can check this per slot, but if a validator is multiple times in the ptc for the same slot, then we would drop them",
+    "created_at": "2026-05-07T12:58:57.907000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "how do you do this with current gossip and message type? the message would be 1:1 the same",
+    "created_at": "2026-05-07T12:59:54.348000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "been thinking about this, the gossip check seems fine, but shouldn't we count multiple votes for the same validator if it is in the ptc multiple times? I don't think this is a big deal either way (especially on mainnet) but since PTC is balance weighted seems the right thing to do, we'd just need to update `notify_ptc_messages` and `on_payload_attestation_message` as far as I can see",
+    "created_at": "2026-05-07T21:55:09.321000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "brechy",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I've been working on these tests too, sorry",
+    "created_at": "2026-05-07T22:03:02.123000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "brechy",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "This is lighter on performance than removing duplicates for the balance weighted selection",
+    "created_at": "2026-05-07T22:06:35.411000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "so you wanna remove duplicates until you have a unique set? I don't even think this is correct, if a validator is in ptc multiple times (more likely with higher balance) then we should count all their votes",
+    "created_at": "2026-05-07T22:18:18.693000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "have not spent too much time on this but I believe all we need to do is this\n```diff\ndiff --git a/specs/gloas/fork-choice.md b/specs/gloas/fork-choice.md\nindex c2bf5cddb..56a13deac 100644\n--- a/specs/gloas/fork-choice.md\n+++ b/specs/gloas/fork-choice.md\n@@ -963,9 +963,10 @@ def on_payload_attestation_message(\n             ),\n         )\n     # Update the votes for the block\n-    ptc_index = ptc.index(ptc_message.validator_index)\n     payload_timeliness_vote = store.payload_timeliness_vote[data.beacon_block_root]\n-    payload_timeliness_vote[ptc_index] = data.payload_present\n     payload_data_availability_vote = store.payload_data_availability_vote[data.beacon_block_root]\n-    payload_data_availability_vote[ptc_index] = data.blob_data_available\n+    for ptc_index, idx in enumerate(ptc):\n+        if idx == ptc_message.validator_index:\n+            payload_timeliness_vote[ptc_index] = data.payload_present\n+            payload_data_availability_vote[ptc_index] = data.blob_data_available\n```",
+    "created_at": "2026-05-07T22:19:07.608000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "brechy",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "No no, sorry, I don't want to do anything lol",
+    "created_at": "2026-05-07T22:19:46.174000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I leave the tests up to you don't worry 😁",
+    "created_at": "2026-05-07T22:22:40.541000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "just debating why we wouldn't count the votes (cc <@592004585506340885> since your not in this thread)",
+    "created_at": "2026-05-07T22:23:34.774000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Yes, this is a simple way of handling duplicates in the PTC. I like it.",
+    "created_at": "2026-05-07T22:28:29.613000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Whether or not to count their other votes is an interesting question. Say there's a PTC of 16 members. God laughs and makes 10 out of 16 members the same validator. If that validator (with 10 votes) says \"yes\" the payload is timely and the other 6 validators say \"no\", what should the result be?",
+    "created_at": "2026-05-07T22:35:44.466000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Here 6/7 validators say the payload wasn't present. So it seems logical to say it wasn't timely.",
+    "created_at": "2026-05-07T22:36:55.845000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "But also that's unfair.",
+    "created_at": "2026-05-07T22:44:05.786000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Because the validator that was given 10 votes probably has a larger effective balance.",
+    "created_at": "2026-05-07T22:44:45.860000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "the problem is with the current spec, they are counted as absent, ie. you would never reach the threshold and `is_payload_timely` is false irrespective of votes",
+    "created_at": "2026-05-07T22:44:46.865000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Yes this is true. Let's count these. Your suggested change lgtm.",
+    "created_at": "2026-05-07T22:45:45.970000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "that's what I am thinking, if we wanted one validator, one vote, why balance weight it in the first place?",
+    "created_at": "2026-05-07T22:46:34.232000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Yup I agree. I'm convinced now.",
+    "created_at": "2026-05-07T22:46:58.896000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "need to sleep on this, also wanna find out why we balance weighted the ptc, Francesco explained that somewhere",
+    "created_at": "2026-05-07T22:48:34.879000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "brechy",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Oh I assumed this was because there's no slashing",
+    "created_at": "2026-05-07T22:54:55.020000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "even if there was slashing, pretty sure you'd still wanna balance weight the ptc",
+    "created_at": "2026-05-07T23:08:34.380000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "found some comment\n- https://discord.com/channels/595666850260713488/874767108809031740/1397494442516287629\n- https://discord.com/channels/595666850260713488/874767108809031740/1401102555907358771",
+    "created_at": "2026-05-07T23:09:05.371000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "pretty convinced now we should not throw away those votes",
+    "created_at": "2026-05-07T23:10:40.976000+00:00",
+    "attachments": []
+  }
+]
