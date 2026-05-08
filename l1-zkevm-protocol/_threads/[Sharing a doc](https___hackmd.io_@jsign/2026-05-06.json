@@ -1,0 +1,154 @@
+[
+  {
+    "author": "0xrubo",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "back to schema versioning, i'd suggest something like this:\n```\nclass SszStatelessEnvelope:\n    schema_id: uint64 \n    payload: ByteList[MAX_SIZE]\n```\nthen based on the `schema_id`, we deserialize it to the right structure. that seems better than playing around the raw input bytes and parsing ssz offsets, and then go for another round of actual deserialization. wdyt?",
+    "created_at": "2026-05-06T13:56:16.585000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Yep, I agree with the approach. Maybe I would rename some things there like `SszStatelessInputEnvelope` and things like that, but those are nits.\nI'm thinking of creating a PR in the specs with this proposal, and I can ping you when ready to take a look. wdyt?",
+    "created_at": "2026-05-06T14:45:02.559000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "<@912415191067676693> (and other readers here), do you have any strong opinion reg doing that envelope and ssz-it, versus an alternative take of having more like `[1-byte-schema-id][stateless-input-ssz-bytes]` ? Mainly because the latter would avoid a second SSZ decoding.",
+    "created_at": "2026-05-06T14:47:28.061000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "<@774033563732541451> not sure about this but my intuition tells me that the fork hash may be something we can leverage as a commitment for the chain config in the public input. Wondering if you had explored this?",
+    "created_at": "2026-05-06T15:08:28.970000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Ah, I thought about forkHash on this front... I'll extend it a bit more since I originally though about it for the private input, apart from your public input point.\n\nFor private input, the forkHash was quite attractive since with a single hash (thus small reg input size overhead) we can identify complete chain configs inside the guest program. The main downside why I discarded it in my mind, is that it indirectly means the guest program must know all the potential full ChainConfigs, including the ones in EEST tests. So for example if we create a new test that creates a custom chain config (e.g. Osaka to Amsterdam at time 18k) then suddenly we force guest programs to now also know the forkHash of that new configuration which i think defeated the purpose of the guest program being quite generic. \nThis is why i leaned on the current PR where the ChainConfig can be as small as possible describing the current and next forks, and avoiding all the history too. This \"semantic\" description of ChainConfig has max flexibility of using hte same guest program in different setups.\n\nNow reg public input (which was your point), I think this would mean forcing the private input to receive the full ChainConfig and not only this more minimal one I propose. Mainly to allow the calculated CRC32-thing for forkHash to match full mainnet values. (Apart from the forkHash calculation overhead that I guess we should measure, but i suspect might not be that big).\nWe could optimize this for mainnet, but if that's the case I don't think we even need a forkHash (e.g. `ChainConfig` is optional and `None` is mainnet; plus zero-byte overhead in input). But tried for now to avoid special cases to simplify things, and we can always see if we need it eventually.\n\nNo strong opinions -- just sharing thoughts",
+    "created_at": "2026-05-06T15:25:01.200000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I haven't had a chance to review your proposal yet, so it's likely I'm missing some important context. \n\n> The main downside why I discarded it in my mind, is that it indirectly means the guest program must know all the potential full ChainConfigs, including the ones in EEST tests.\n\nWhy is this? Can't you provide the full chain config as private input, then derive the fork hash from it which is used as public input?",
+    "created_at": "2026-05-06T15:30:57.337000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Yes, but in my PR I allow to send a ChainConfig only with say `Amsterdam` + `Hegota` values in the ChainConfig to allow it to be more minimal.\nIf the provided block timestamp can't be resolved from the ChainConfig, then the guest program will reject validating it since doens't know which is the correct fork.\n\nFor meaningful forkHash matching with mainnet or devnets, this would mean we would required the ChainConfig to have all the history of forks so that the forkHash calculation in the guest progrma for public input has the \"right value\".",
+    "created_at": "2026-05-06T15:33:04.075000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I see, how does this play with recursive chain proofs?",
+    "created_at": "2026-05-06T15:34:10.483000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Say we wanted a chain proof (recursive execution proof), would it still be compatible?",
+    "created_at": "2026-05-06T15:34:31.925000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "The `ChainConfig` still allows the private input to have al lthe history of forks, so I guess yes.\nBut recursive chain proofs isn't strictly part of 8025, so I guess isn't correctly defined what we would need?\nFor now I'm trying to always lean to something flexible for the needs we currently know are required for 8025.",
+    "created_at": "2026-05-06T15:36:43.282000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Maybe worth exploring more that particular use case in a document to figure out first what that means and how things look like, and maybe we might discover is worth doing changes in the current guest program api. But feels to me we might need to do a bit more formal exploration of what we need exactly.",
+    "created_at": "2026-05-06T15:37:45.407000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "A recursive chain proof doesn't also mean that we need the guest program to receive a list of blocks maybe?\nBecuase if the guest program api stil lreceives a single block, i'm not sure what having a heavier chainconfig might buy us.",
+    "created_at": "2026-05-06T15:39:50.754000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "So prob we might need more changes.",
+    "created_at": "2026-05-06T15:40:05.527000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "What I'm thinking now is if maybe instead of `forks: Tuple[ForkConfig, ...]` we could simplify further to `fork: ForkConfig` in the private input, given the guest program only proves a single block anyway (as i mentioned in prev message).",
+    "created_at": "2026-05-06T15:47:39.523000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "It would still need the current check to validate if the payload block-num/timestamp isn't before that provided `ForkConfig` -- but that was required anyway. Not sure makes much sense for the private input to provide more than one fork really so being a \"list\" might not be really used in practice.",
+    "created_at": "2026-05-06T15:50:10.167000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Agree, this was not initially considered within scope and only really came to my attention during explorations of EIP8237. \n\nMy thinking of the recursive program is that it would be a layer on top of execution proofs, so execution proofs in itself wouldn't change but there is an aggregation program that consumes execution proofs to generate chain proofs.",
+    "created_at": "2026-05-06T15:52:19.548000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I have a task to write up the EIP8237 <-> execution proof intersection but I doubt I will have time to finish that until next week at some point.",
+    "created_at": "2026-05-06T15:52:58.195000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "There is no rush anyway. Nothing here will be final and we can still make spec changes in the future.",
+    "created_at": "2026-05-06T15:53:35.941000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "0xrubo",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "actually, that was my initial idea too, as it's more performant, but then i thought it would be pushed back 😁 i'm for that",
+    "created_at": "2026-05-06T17:36:55.152000+00:00",
+    "attachments": []
+  }
+]
