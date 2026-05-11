@@ -1,0 +1,223 @@
+# Erb files
+
+Erb files are e2store files which store blobs. For more information on this
+format, see https://github.com/status-im/nimbus-eth2/blob/stable/docs/e2store.md.
+
+The overall structure of an Erb file follows closely the structure of an
+[Era](./era.md) file, grouped per `SLOTS_PER_HISTORICAL_ROOT` slots with a
+trailing `SlotIndex` for random-access reads. The per-slot payload is the
+list of `BlobSidecar` records attached to the beacon block at that slot.
+
+In examples, we assume the mainnet configuration:
+`SLOTS_PER_HISTORICAL_ROOT == 8192` and
+`MAX_BLOB_COMMITMENTS_PER_BLOCK == 4096`.
+
+## File name
+
+```
+<config-name>-<era-number>-<short-era-root>.erb
+```
+
+`config-name`, `era-number` and `short-era-root` are computed exactly as for
+the corresponding `.era` file (see [era.md](./era.md)). The matching
+`<config-name>-<era-number>-<short-era-root>.era` and
+`<config-name>-<era-number>-<short-era-root>.erb` files share an identical
+suffix and pair by file name alone.
+
+## Structure
+
+```
+erb           := group+
+group         := Version | blob-sidecars* | other-entries* | SlotIndex(blob-sidecars)
+blob-sidecars := CompressedBlobSidecars
+```
+
+```
+Version                 = { type: [0x65, 0x32], data: nil }
+CompressedBlobSidecars  = { type: [0x0a, 0x00], data: snappyFramed(ssz(List[BlobSidecar, MAX_BLOB_COMMITMENTS_PER_BLOCK])) }
+SlotIndex               = { type: [0x69, 0x32], data: starting-slot | offset | offset | ... | count }
+```
+
+Differences from `.era`:
+
+* the per-slot payload is `CompressedBlobSidecars` instead of
+  `CompressedSignedBeaconBlock`
+* there is no state record and no `slot-index(state)` - blob sidecars carry
+  their own `signed_block_header` and `kzg_commitment_inclusion_proof`,
+  which anchor verification to the matching `.era` file without a separate
+  per-file commitment
+
+There is at most one `CompressedBlobSidecars` entry per slot. The entry
+contains every sidecar attached to the beacon block at that slot, in `index`
+order, encoded as a single SSZ
+`List[BlobSidecar, MAX_BLOB_COMMITMENTS_PER_BLOCK]`. Slots with no sidecars
+are omitted; the corresponding `SlotIndex` entry is `0`.
+
+The fork - and thus the exact `BlobSidecar` schema - is derived from the slot
+of the entry, exactly as `CompressedSignedBeaconBlock` is decoded in `.era`.
+
+`other-entries` is an extension point for future record types. Unknown record
+types must be skipped.
+
+## Verifying erb files
+
+Against the paired `.era` file, for every slot `s` in
+`[starting_slot, starting_slot + 8192)`:
+
+* let `block = era[s]` (if any) and `sidecars = erb[s]` (empty if the
+  `SlotIndex` offset is `0`)
+* `len(sidecars) == len(block.body.blob_kzg_commitments)`
+* for every sidecar `c`:
+  * `c.signed_block_header.message` matches the header derived from `block`
+  * `c.kzg_commitment == block.body.blob_kzg_commitments[c.index]`
+  * `c.kzg_commitment_inclusion_proof` verifies against the block body root
+  * `verify_blob_kzg_proof(c.blob, c.kzg_commitment, c.kzg_proof)` succeeds
+
+## Reading erb files
+
+```python
+import io
+
+import snappy  # python-snappy; supports framed snappy via stream_decompress
+
+E2S_HEADER_LEN = 8
+
+TYPE_VERSION                  = b"\x65\x32"
+TYPE_SLOT_INDEX               = b"\x69\x32"
+TYPE_COMPRESSED_BLOB_SIDECARS = b"\x0a\x00"
+
+
+def read_entry_header(f):
+    hdr = f.read(E2S_HEADER_LEN)
+    if len(hdr) != E2S_HEADER_LEN:
+        return None
+    return hdr[:2], int.from_bytes(hdr[2:8], "little", signed=False)
+
+
+def read_slot_index(f):
+    """
+    Read the trailing SlotIndex record assuming f is positioned at the *end*
+    of that record. Returns (starting_slot, index_record_start, offsets) and
+    leaves f positioned at index_record_start.
+    """
+    end = f.tell()
+
+    f.seek(end - 8)
+    count = int.from_bytes(f.read(8), "little", signed=False)
+
+    record_size = E2S_HEADER_LEN + 8 + count * 8 + 8
+    start = end - record_size
+
+    f.seek(start)
+    typ, length = read_entry_header(f)
+    assert typ == TYPE_SLOT_INDEX, f"expected SlotIndex, got {typ.hex()}"
+    assert length == 8 + count * 8 + 8
+
+    starting_slot = int.from_bytes(f.read(8), "little", signed=False)
+    offsets = [
+        int.from_bytes(f.read(8), "little", signed=True) for _ in range(count)
+    ]
+    count_again = int.from_bytes(f.read(8), "little", signed=False)
+    assert count_again == count
+
+    f.seek(start)
+    return starting_slot, start, offsets
+
+
+def snappy_frame_decompress(data):
+    src, dst = io.BytesIO(data), io.BytesIO()
+    snappy.stream_decompress(src, dst)
+    return dst.getvalue()
+
+
+def read_blob_sidecars_at_slot(f, slot, starting_slot, index_record_start, offsets):
+    """
+    Random-access read. Returns the SSZ-encoded
+    List[BlobSidecar, MAX_BLOB_COMMITMENTS_PER_BLOCK] bytes (fork-defined
+    element type), or None if the slot has no entry.
+    """
+    rel = slot - starting_slot
+    if rel < 0 or rel >= len(offsets):
+        return None
+    rel_offset = offsets[rel]
+    if rel_offset == 0:
+        return None
+
+    f.seek(index_record_start + rel_offset)
+    hdr = read_entry_header(f)
+    assert hdr is not None
+    typ, length = hdr
+    assert typ == TYPE_COMPRESSED_BLOB_SIDECARS, (
+        f"expected CompressedBlobSidecars, got {typ.hex()}"
+    )
+    return snappy_frame_decompress(f.read(length))
+
+
+def read_erb_file(name):
+    """Walk an erb file backwards, group by group, printing a summary."""
+    with open(name, "rb") as f:
+        f.seek(0, 2)
+        total_groups = 0
+
+        while f.tell() > E2S_HEADER_LEN:
+            starting_slot, index_start, offsets = read_slot_index(f)
+
+            non_zero = [o for o in offsets if o != 0]
+            print(
+                "Group starting slot:", starting_slot,
+                "| index at:", index_start,
+                "| slots indexed:", len(offsets),
+                "| populated:", len(non_zero),
+            )
+
+            for rel, off in enumerate(offsets):
+                if off != 0:
+                    blob_ssz = read_blob_sidecars_at_slot(
+                        f, starting_slot + rel,
+                        starting_slot, index_start, offsets,
+                    )
+                    print(
+                        "  first populated slot:", starting_slot + rel,
+                        "ssz bytes:", len(blob_ssz),
+                    )
+                    break
+
+            # The Version record sits at the very front of this group;
+            # stepping over its header lands us at the end of the previous
+            # group, where its trailing SlotIndex is.
+            if non_zero:
+                prev_group_end = (index_start + non_zero[0]) - E2S_HEADER_LEN
+            else:
+                prev_group_end = index_start - E2S_HEADER_LEN
+
+            f.seek(prev_group_end)
+            total_groups += 1
+
+        print("Total groups in file:", total_groups)
+```
+
+## FAQ
+
+### Why one entry per slot rather than one entry per blob?
+
+A single offset per slot keeps the `SlotIndex` semantics identical to `.era`
+and matches how blob sidecars are already grouped by block in the consensus
+protocol. Within a slot's entry the sidecars are stored in `index` order, so
+individual blobs are still addressable after one decompression.
+
+### Why no accumulator entry?
+
+Each `BlobSidecar` already carries a `signed_block_header` plus a
+`kzg_commitment_inclusion_proof` that anchors it into the corresponding
+beacon block. Combined with the matching `.era` file, this is sufficient to
+verify every sidecar without an extra per-file commitment.
+
+### Why share the `.era` file's short root in the name?
+
+So a downloader can fetch `mainnet-00269-<root>.era` and
+`mainnet-00269-<root>.erb` together by suffix and know they describe the
+same canonical history. The cost is that erb generation requires either the
+matching era file or the beacon state at end-of-era to compute the short
+root - a self-contained alternative (e.g. the last beacon block root from
+the last populated sidecar entry, like `e2hs` does) would avoid that
+dependency at the cost of full file-name pairing.
