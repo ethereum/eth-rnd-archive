@@ -78,5 +78,61 @@
     "content": "Also, would there be a limit for gas_limit on the node level now or will the TX fail later if we specify the gas_limit above 16M for non contract creation TX?",
     "created_at": "2026-05-12T12:14:35.068000+00:00",
     "attachments": []
+  },
+  {
+    "author": "alexmovn",
+    "category": "Execution Layer",
+    "parent": "evm-pricing",
+    "content": "<@968526635735326741> here's the deep dive on our case:\n\n**Setup**\n- EL: ethpandaops/geth:bal-devnet-6-73944e3 (latest, 2026-05-07)\n- CL: ethpandaops/prysm-beacon-chain:glamsterdam-devnet-3\n- Synced to public glamsterdam-devnet-3\n- Deploying Aragon Agent template (~15,803 bytes runtime, 16,891 bytes initcode) via Lido `lido-core` scratch deploy\n- geth runs with `--rpc.gascap=100000000`, `--rpc.txfeecap=0`\n\n**Two-stage failure observed**\n\nAttempt A — try `tx.gas = 30000000`:\n`ProviderError: transaction gas limit too high (cap: 16777216, tx: 30000000)`\nTX never lands on-chain. cap=2^24 looks exactly like **EIP-7825**.\n\nAttempt B — drop `tx.gas` to 16,777,215 (just under the cap):\nTX is accepted and mined in block 26444 of public glamsterdam-devnet-3, but reverts inside EVM:\n`Error: transaction execution reverted, gasUsed: 16777215n, status: 0`\n\ndebug_traceTransaction:\n  - 198 opcodes total, single CREATE, no internal CALL/CREATE\n  - constructor consumes only ~47K gas, reaches RETURN cleanly with the full 15,803-byte runtime\n  - failure on implicit code deposit: `contract creation code storage out of gas`\n  - geth applies consume-all-gas penalty → `gasUsed = 16,777,215`\n\nFor the deposit to fit, `CodeDepositGas × 15803 < 16,330,346 (gas left after RETURN)` so `CodeDepositGas` must be **< 1033 gas/byte** (pre-EIP-8037 is 200). Looks like **EIP-8037 raised CodeDepositGas to ~1033+ gas/byte**, and **EIP-7825** prevents us from giving more gas to compensate.\n\nFailing TX: 0xfa4fd03ad73be222a0a8a862a7d8966fa882944a054da92f9ab0741cf7ecb9ff\nContract address: 0xcA6dE8643112100cE527fD5cBF447B2DcD2D3a11",
+    "created_at": "2026-05-12T13:23:42.997000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "alexmovn",
+    "category": "Execution Layer",
+    "parent": "evm-pricing",
+    "content": "**Cross-client divergence (bonus finding)**\nWe tried `ethpandaops/reth:glamsterdam-devnet-0` as the EL. Sync fails on **bad_block=5492** (our previous failed Agent deploy from May 7):\n\nStage encountered a validation error: block gas used mismatch:\n    got 47618676, expected 47656244;\n    bad_block=5492\n\nReth thinks the tx used ~15,962,432 gas (no consume-all-gas penalty on code-storage OOG), while the geth-produced chain has it as 16,777,215. The block doesn't validate → reth unwinds → crashloop.\n\nSo **bal-devnet-geth and reth disagree on the gas accounting for `CodeStoreOutOfGas` under post-Glamsterdam pricing**. Geth applies the classic consume-all-gas penalty, reth charges actual consumed. If this is intended, would be great to lock down which one is canonical in the spec.",
+    "created_at": "2026-05-12T13:26:57.465000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "misilva73",
+    "category": "Execution Layer",
+    "parent": "evm-pricing",
+    "content": "Thanks for added context! There was a lot of changes in both spec and client implementations between bal-devnet-3 and bal-devnet-6. Also, bal-devnet-6 (which is the spec used for glamsterdam-devnet-3) still had clients disagreeing on some gas accounting edge cases, so the issues could be from there.\n\nWe are currently working to launch bal-devnet-7, which should be much more stable regarding 8037. I think it may be more productive to resume test there, whenever the network is available. Would that be ok?",
+    "created_at": "2026-05-12T13:32:39.058000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "misilva73",
+    "category": "Execution Layer",
+    "parent": "evm-pricing",
+    "content": "per the current spec, during transaction validation, we only check that the transaction fits within the block's regular and state gas budget, so not cap is considered here. Then, during execution, we set gas_left to a max of 16M and give the remaining gas_limit to the state_reservoir. If the transaction tries to use more than 16M gas in regular gas, it goes OOG",
+    "created_at": "2026-05-12T13:35:15.008000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "dgusakov",
+    "category": "Execution Layer",
+    "parent": "evm-pricing",
+    "content": "It can be an option for sure. We just try to test the protocol ASAP since the amount of changes in Glamsterdam is mindblowing for a staking protocols",
+    "created_at": "2026-05-12T13:41:29.980000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "dgusakov",
+    "category": "Execution Layer",
+    "parent": "evm-pricing",
+    "content": "Thanks for the answers <@968526635735326741>! We will wait for more sable node versions",
+    "created_at": "2026-05-12T13:43:11.859000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "alexmovn",
+    "category": "Execution Layer",
+    "parent": "evm-pricing",
+    "content": "Thanks for the answers. Any expectations for timeline of bal-devnet-7?",
+    "created_at": "2026-05-12T13:55:08.930000+00:00",
+    "attachments": []
   }
 ]
