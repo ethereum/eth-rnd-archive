@@ -62,5 +62,165 @@
     "content": "https://github.com/OffchainLabs/prysm/",
     "created_at": "2026-05-13T11:30:08.938000+00:00",
     "attachments": []
+  },
+  {
+    "author": "fradamt",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "> Keeping track of equivocations seen over gossip will require us to validate signatures on possible garbage that may arrive after we've already seen the first block.\nWhy is this different than doing so before seeing the first block? It's still punishable if someone sends a message that doesn't verify\n\n> And moreover will require us to check on every repeated message for differences in the block\nThis would only have to be done once, once a single equivocation has been seen we can go back to ignoring everything",
+    "created_at": "2026-05-13T12:05:52.551000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "fradamt",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "That's mostly right, except:\n2) The proposer would reveal the second block afterwards, once the builder has already published the payload (so it can't just detect the equivocation and withhold)\n\nIt doesn't need to publish the equivocating block on time because it doesn't care about receiving any attestation weight, since it can just get the 40% from proposer boost + a few of its own attestations.\n\nI don't know how to solve this without equivocation detection. Still up for doing away with trustless payments though 😄",
+    "created_at": "2026-05-13T12:09:50.016000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Why do we need `store.block_timeliness[root][PTC_TIMELINESS_INDEX]`?",
+    "created_at": "2026-05-13T12:11:34.142000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yep, I am now implementing exactly this, my question was vacuous anyway since today we anyway do that extra signature verification to prepare a proposer slashing on the fly.",
+    "created_at": "2026-05-13T12:25:09.808000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "This is because proposer boost only cares about \"early\" equivocations. Francesco argues that otherwise you can remove proposer boost from an honest proposer by releasing late equivocations. This is mostly an edge case that I am not sure justifies tracking these timeliness in the store, but anyway it's fairly trivial to implement so no problem",
+    "created_at": "2026-05-13T12:26:45.792000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "fradamt",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I guess the \"ignore after second message\" rule should be specified in the executable p2p spec?",
+    "created_at": "2026-05-13T12:27:14.591000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "this timeliness rule seems to be gamable if you have two consecutive proposals. Then you can have proposer boost for your malicious proposal build on top of an equivocal block with empty payload and stolen builder's payload",
+    "created_at": "2026-05-13T12:30:30.074000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "that is also possible today",
+    "created_at": "2026-05-13T12:30:52.849000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "i am saying that timeliness rule seems to make things worse. it is removing PB from honest proposer at the cost of slashing vs having PB on malicious proposal and helping it win when it makes sense to be slashed as the fee from stolen payload covers the costs.",
+    "created_at": "2026-05-13T12:33:34.493000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "but i might be wrong",
+    "created_at": "2026-05-13T12:34:04.164000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I don't understand, today proposer boost is unconditionally applied",
+    "created_at": "2026-05-13T12:34:13.923000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "regardless of equivocations",
+    "created_at": "2026-05-13T12:34:20.998000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "it's not about today vs Gloas. we change conditions for applying proposer boost and we introduce a new rule for early equivocations while removing \"early\" would be a net positive to me. Why not remove it then?",
+    "created_at": "2026-05-13T12:35:22.970000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "fradamt",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Ah no you could not do this, because *the timely block that caused the builder to release the payload* would then be detected as an equivocation:\n- Let `B` be the \"good block\" that caused the builder to release its payload. \n- `B` must have been released early, so everyone would have recorded `B`. \n- Then the proposer releases `B'` late and builds on it, but everyone that gets it sees that `B` and `B'` are an equivocating pair, because they are evaluating `B'` and they have `B` as a timely recorded sibling:\n\n```\n    equivocations = [\n        root\n        for root, block in store.blocks.items()\n        if (\n            store.block_timeliness[root][PTC_TIMELINESS_INDEX]\n            and block.proposer_index == parent.proposer_index\n            and block.slot + 1 == slot\n            and root != parent_root\n        )\n    ]\n```\n\nIf the proposer had built on `B`, `B'` would not be detected as a timely equivocation (because it is not, it is late), and proposer boost would have applied, because `equivocations` would be empty. If the proposer maliciously builds on `B'` (even though it has no weight), then we have `equivocations = [B]`, because `B` was timely",
+    "created_at": "2026-05-13T12:42:09.844000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "fradamt",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "It's this statement (from https://github.com/ethereum/consensus-specs/pull/4807):\n\n> Assuming < 20% adversary, we get builder reveal safety:\n> Builder reveals when seeing block B with > 40% weight and no equivocations\n> => if the proposer extends an equivocation B', proposer boost doesn't apply to B': B' is weak because it is late and thus does not accrue honest weight, and attesters detect the existence of an equivocation (B is timely).\n> => no matter what the proposer does, the block stays canonical",
+    "created_at": "2026-05-13T12:44:03.202000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "btw we would need tests for this, my initial implementation for this actually only checked for the existence of equivocations symmetrically and would have counted equivocations both ways, only after you linked to the above conversation that I changed it to track differently",
+    "created_at": "2026-05-13T12:46:10.155000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "oh, i see now, sorry i got confused by that check. So, it checks that *another* block is timely",
+    "created_at": "2026-05-13T12:49:46.687000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "then it makes sense!",
+    "created_at": "2026-05-13T12:49:56.228000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "fradamt",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "It is confusing 😂",
+    "created_at": "2026-05-13T12:55:16.106000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "fradamt",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "(every time this comes up I never remember about the details and I am just re-reading the description of the PR and asking claude questions about it before answering 😄)",
+    "created_at": "2026-05-13T12:56:32.887000+00:00",
+    "attachments": []
   }
 ]
