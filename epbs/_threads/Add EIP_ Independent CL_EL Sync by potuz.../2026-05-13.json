@@ -606,5 +606,157 @@
     "content": "The EL chain is valid from the EL side, but not compatible with the CL chain",
     "created_at": "2026-05-13T10:58:58.605000+00:00",
     "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Suppose there is a finalized block `F` and it's descendant block `S` .\nPayload of block `S` is valid and content of block `S` commits to `S.block_hash`, but that doesn't imply that block `F` content commits to `F.block_hash` unless block `F.block_hash` has been validated",
+    "created_at": "2026-05-13T11:04:44.017000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Are you asking about why specificaly it is the case?",
+    "created_at": "2026-05-13T11:05:40.167000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Just a nit pick but it doesn't need to involve finalization: I want to avoid *all* range syncs",
+    "created_at": "2026-05-13T11:05:49.905000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "what does it mean?",
+    "created_at": "2026-05-13T11:06:09.544000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "That I only want to verify Payloads on gossip",
+    "created_at": "2026-05-13T11:06:33.073000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "when do you want to start block_hash validation?",
+    "created_at": "2026-05-13T11:06:43.065000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "ah, i see",
+    "created_at": "2026-05-13T11:06:49.573000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "so, no gossip implies no validity",
+    "created_at": "2026-05-13T11:07:02.792000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "why not checking with the head at least?",
+    "created_at": "2026-05-13T11:07:14.038000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I want to remove all sync methods, and keep the current code pre Gloas",
+    "created_at": "2026-05-13T11:07:23.992000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "The head is always over gossip",
+    "created_at": "2026-05-13T11:07:39.930000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "oh, you never finalize the sync until receive a gossip, I see",
+    "created_at": "2026-05-13T11:08:04.514000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "And yes we need to request it by root if no one gives it by gossip",
+    "created_at": "2026-05-13T11:08:16.128000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "arnetheduck",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "so in this case, does it matter whether the el snap syncs or not as part of its \"catch up\"? if the el chain is valid at every block leading up to `S.block_hash` from the EL perspective, it can snap sync all it wants?",
+    "created_at": "2026-05-13T11:12:11.432000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "it matters as if it doesn't snap sync and execute blocks it will validate e.g. `execution_requests` given by CL match `execution_requests` it got from the execution. While for snap sync it's not the case",
+    "created_at": "2026-05-13T11:15:37.068000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "We need the EL to sync every block so that we can verify the accumulator",
+    "created_at": "2026-05-13T11:16:55.939000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "arnetheduck",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "so, the attack surface, if we skip block hash validation is the following:\n\n* there is a dishonest majority (ie CL safety broken already) that fabricates a a CL chain where at some point, `F.block_hash` does not correspond to execution requests / CL state\n* they construct an EL history such that `S.block_hash` leads up to it and is EL-valid\n* in the S history, the execution requests are valid with respect to S.block_hash\n\nnow, they attack:\n* CL's that are out of sync but within the weak subjectivity period and start performing a range sync with malicious nodes\n\nnot vulnerable:\n* honest, in sync - they are validating payloads and will mark `F` as invalid and thus (hopefully) never follow this history\n\nvulnerable anyway:\n* checkpoint syncers\n\nI guess one way to view the above is that a node _becomes_ out of sync  by not following F then restarts and forgets that F is invalid and now on the second attempt, accepts F has valid (because it didn't check the block hash) .. still pretty contrived though due to the fact that checkpoint sync nodes are vulnerable (and easier to attack I think)",
+    "created_at": "2026-05-13T11:40:25.524000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "arnetheduck",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "so, bringing us back to 8237, it feels like one could also make the argument that we could simply enforce in the spec that continue _serving_ payloads on the CL side - CL clients can then choose whether they are bothered by the above attack and either implement payload downloading or not (some _already implement payload downloads, so for these clients it's obviously not a problem to keep doing so) - keeping in mind that this is a scenario where the validators are already dishonest and can do dishonest things ..",
+    "created_at": "2026-05-13T11:54:12.757000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "arnetheduck",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "ie in that world we have 4 options for gloas:\n* implement 8237, don't serve payloads - breaks top-up sync\n* implement 8237, serve payloads - allows top-up sync, allows cl-side block hash checks\n* don't implement 8237, serve payloads - make block hash check _recommended_ instead of mandatory / quality-of-implemention -> clients implement payload downloading at their leisure (or they might mark/persist F as permanently broken so as not to enable the \"resync after restart\" attack)\n* don't implement 8237, serve and validate payloads as we do today (either by using RLP in CL or asking the EL to validate)\n\nregardless of 8237, I think 7807 is the better way to approach this whole problem space (in H*)",
+    "created_at": "2026-05-13T12:02:15.943000+00:00",
+    "attachments": []
   }
 ]
