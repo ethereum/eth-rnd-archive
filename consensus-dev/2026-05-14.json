@@ -174,5 +174,45 @@
     "content": "fair, finding divergence point cound indeed save a few downloaded blocks of overshoot on the range",
     "created_at": "2026-05-14T17:32:04+00:00",
     "attachments": []
+  },
+  {
+    "author": "dapplion",
+    "category": "general",
+    "parent": "",
+    "content": "To recap: the massive simplification in sync comes from building a block tree in memory from all peer's heads rooted in something we know. Then forward syncing. Answering to <@833706406699073536> y proposal, fetching roots only doesn't help because we can't verify the chain of blocks. Headers is the most efficient, but <@449019668296892420> rejected it due to the need of an additional DB index. Then here is where `beacon_blocks_by_head` comes in.",
+    "created_at": "2026-05-14T18:04:44.484000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "dapplion",
+    "category": "general",
+    "parent": "",
+    "content": "If `beacon_blocks_by_head` request as slot range, and the peer returns empty, we have two possible scenarios:\n- There was a long skip (honest)\n- Peer omiting blocks (malicious / faulty)\n\nWe have no way of telling those two cases apart. `beacon_blocks_by_range` suffers the same issue and this complicates sync significantly in Lighthouse codebase. The point of `beacon_headers_by_head` requesting a `count` is to eliminate that edge case.",
+    "created_at": "2026-05-14T18:05:11.015000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "dapplion",
+    "category": "general",
+    "parent": "",
+    "content": "<@449019668296892420> if you want to request sequential slot ranges you need to keep then in memory as you can't validate the range `N` until you validate range `N-1`. How do you handle the DoS OOM risk in that case? How many ranges will you keep in memory?",
+    "created_at": "2026-05-14T18:05:24.614000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "arnetheduck",
+    "category": "general",
+    "parent": "",
+    "content": "two ways:\n* store the blocks on disk, in a temporary location - it's bounded by your finality point so there's really not much damage that _can_ be done, ie your client _must_ be able to store this much data anyway\n* drop them and redownload if valid, with bounded lru - combine with above for simple / small cases (as is typical)\n\nit's not really a profitable deliberate DoS because the peer has to upload as much data as you have to download and the data has to be well-formed, so a malicious peer has to work to generate it - that leaves buggy peers, which indeed might force you to waste some bandwidth finding out that a history  is useless .. \n\n_however_ - we also discussed mitigation strategies in general .. ie you order your branch downloads by the number of peers that report a particular head - they could all be lying to you of course but the point is mostly that a single peer can't make you download anything more than `head_slot - finalized_slot` blocks which your client can _always_ handle",
+    "created_at": "2026-05-14T18:11:24.416000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "arnetheduck",
+    "category": "general",
+    "parent": "",
+    "content": "we do: we request a range by _root_ - that means that the honest peer returns _at least_ one block (the one selected by block_root) - that block contains the parent root - the next request will skip the slot gap by construction - ie you _always_ detect the \"peer omitting blocks\" case that can happen with the current range request",
+    "created_at": "2026-05-14T18:12:57.869000+00:00",
+    "attachments": []
   }
 ]
