@@ -1,0 +1,139 @@
+# Refutation: beacon-breaker item 067 — builder queue+sweep collision
+
+## Claim being refuted
+
+beacon-breaker item 067 reports a supply-asymmetry bug in the Gloas spec, with
+`mainnet-glamsterdam` impact:
+
+> When a single builder simultaneously has (a) entries in
+> `state.builder_pending_withdrawals` AND (b) is sweep-eligible
+> (`withdrawable_epoch <= current_epoch AND balance > 0`), the spec's
+> `get_builders_sweep_withdrawals` emits `Withdrawal.amount = pre_block balance`
+> while `get_builder_withdrawals` separately emits the queue entry's amount.
+> `apply_withdrawals` saturates the CL balance to 0, but the EL mints both
+> amounts in full, producing a net supply inflation equal to the queue total.
+
+The report further claims this is "mainnet-reachable by any builder that
+initiates exit while having pending payments."
+
+## Why the spec-level bug is real *as written*
+
+The math in the report is correct *given* a state where the collision is
+already present. Walking through `specs/gloas/beacon-chain.md`:
+
+- `get_builder_withdrawals` (line 1185) drains queue entries and emits
+  `Withdrawal(amount=entry.amount)` without mutating state.
+- `get_builders_sweep_withdrawals` (line 1219) reads
+  `state.builders[builder_index].balance` directly at line 1245 — the pre-block
+  value, since `apply_withdrawals` has not yet run.
+- `apply_withdrawals` (line 1303) runs sequentially with `min(amount, balance)`
+  saturation: the queue entry debits the balance, then the sweep clamps to
+  whatever remains.
+- The withdrawals list is committed to `state.payload_expected_withdrawals`
+  (line 1320) and enforced against `payload.withdrawals` at
+  `specs/gloas/fork-choice.md:822`, so the EL mints the literal amounts.
+
+Concrete example with `builders[0].balance = 1000` and one queue entry
+`BPW(builder_index=0, amount=200)`, builder sweep-eligible:
+
+- Emitted: `W(200, fee_recipient)` then `W(1000, builder.execution_address)`.
+- `apply_withdrawals`: balance 1000 → 800 → 0. CL decrement: 1000.
+- EL mints 200 + 1000 = 1200. **Net supply inflation: +200 Gwei** (= queue total).
+
+The pyspec test `test_builder_pending_and_sweep_same_builder` at
+`tests/core/pyspec/eth_consensus_specs/test/gloas/block_processing/test_process_withdrawals.py:1308`
+constructs this state and asserts the literal spec semantics.
+
+## Why the state is not reachable from a valid genesis
+
+`initiate_builder_exit` (`specs/gloas/beacon-chain.md:889`) is the only path
+that sets `builder.withdrawable_epoch` to a non-`FAR_FUTURE_EPOCH` value. It is
+called from exactly one site: `process_voluntary_exit` at line 1652. There is
+no builder-slashing path. The exit precondition at lines 1641-1652 is:
+
+```python
+if is_builder_index(voluntary_exit.validator_index):
+    builder_index = convert_validator_index_to_builder_index(voluntary_exit.validator_index)
+    assert is_active_builder(state, builder_index)
+    # Only exit builder if it has no pending withdrawals in the queue
+    assert get_pending_balance_to_withdraw_for_builder(state, builder_index) == 0
+    ...
+    initiate_builder_exit(state, builder_index)
+```
+
+`get_pending_balance_to_withdraw_for_builder` (line 575) sums entries for the
+builder across **both** `state.builder_pending_withdrawals` and
+`state.builder_pending_payments`. So at the moment exit is allowed, both lists
+are empty for X.
+
+From the instant exit is initiated to the moment X becomes sweep-eligible
+(`MIN_BUILDER_WITHDRAWABILITY_DELAY = 64` epochs later), there are only two
+paths that can add an entry to `state.builder_pending_withdrawals` for X.
+Both are blocked:
+
+### Path 1: `settle_builder_payment` via a settled bid
+
+`settle_builder_payment` (line 904) moves an entry from
+`builder_pending_payments` to `builder_pending_withdrawals`. For an entry to
+exist in `builder_pending_payments` referencing X, `process_execution_payload_bid`
+must have run for a bid with `builder_index = X`. That function asserts
+`is_active_builder(state, builder_index)` at line 1439. After exit,
+`is_active_builder` returns False (line 483 checks
+`withdrawable_epoch == FAR_FUTURE_EPOCH`). So no new bids for X can be
+committed post-exit, and no settle can deposit a new entry for X.
+
+### Path 2: Direct append at `apply_parent_execution_payload:1144`
+
+This branch fires when `parent_bid.value > 0 AND parent_epoch <
+get_previous_epoch(state)`. It appends a `BuilderPendingWithdrawal` directly
+using `parent_bid.builder_index`. For it to fire with `builder_index = X`,
+`state.latest_execution_payload_bid` must still reference X's bid and the bid
+must be more than one epoch old.
+
+Every block, however, calls `process_execution_payload_bid`, which writes
+`state.latest_execution_payload_bid = bid` unconditionally at line 1473 — even
+for self-builds (`builder_index = BUILDER_INDEX_SELF_BUILD`, `amount = 0`).
+Therefore any block produced after X's bid overwrites it.
+
+X's exit itself happens inside a block (it is a `voluntary_exit` operation).
+That block calls `process_execution_payload_bid`, so `latest_execution_payload_bid`
+is no longer X's bid by the time the exit takes effect.
+
+For the late-append to still fire for X after exit, the chain would have to
+stall (no blocks at all) for the full 64 epochs between exit and
+sweep-eligibility. A 64-epoch global block outage is not a normal operational
+condition, and finality would have been lost well before sweep-eligibility
+arrives anyway.
+
+Even setting that aside: if the late-append *did* fire for X before exit
+(requiring at least 32 consecutive empty slots between X's bid and the next
+block), it would *itself* place a pending entry for X, which then blocks the
+exit precondition until that entry drains.
+
+### No path adds queue entries for X with reference to someone else's bid
+
+`BuilderPendingWithdrawal.builder_index` is the *payer*, not the *recipient*.
+Every entry referencing X arises from a bid X made while X was active. There
+is no mechanism by which another builder's bid produces a queue entry for X.
+
+## Conclusion
+
+The spec's `get_builders_sweep_withdrawals` does emit a sweep amount computed
+from a balance that has not yet had the same-block queue drain applied, and a
+pyspec fixture can construct a state where this produces a +N Gwei supply
+asymmetry between CL and EL. However, the exit precondition at
+`process_voluntary_exit:1647` ensures that valid state transitions never reach
+that collision: a builder cannot become sweep-eligible while having any
+pending payments or pending withdrawals, and no path adds new entries for the
+builder during the 64-epoch sweep-eligibility countdown.
+
+The report's claim that the bug is "mainnet-reachable by any builder that
+initiates exit while having pending payments" is incorrect — that exit
+transition is rejected by the spec. The `mainnet-glamsterdam` impact tag
+overstates the issue.
+
+The lodestar `builderBalanceAfterWithdrawals` caching divergence noted in the
+report is still a real cross-client conformance issue against constructed
+fixtures (and against any future fuzz-generated state that exercises the
+collision), but it does not represent a reachable mainnet consensus split,
+because honest block production cannot reach the colliding state.
