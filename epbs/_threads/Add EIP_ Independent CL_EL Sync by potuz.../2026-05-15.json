@@ -22,5 +22,69 @@
     "content": "> I'm just wondering, looking at sync only, wouldn't checkpoint sync on CL + snapv2 on the EL be the most efficient way to catch up?\n\nit depends - checkpoint syncing is a security gap since it's unverified, so you want to avoid it as much as possible ..  in that sense, what we're reasoning about is \"how long can my node stay offline and still get be guaranteed to follow the right chain\" - it's not so much a performance question but a security question, on the CL side alone - the EL, if it starts snap-syncing mid-way, there are also security implications per our above discussions.\n\nfor performance alone, whether snap sync is faster that block-by-block topup depends on many things, ie bandwidth vs disk speed vs computation power vs gas costs vs gas pricing vs the ability to find peers that are willing to give you history (TCP vs QUIC, discovery, peer slots etc) - it's a question with many parameters .. I'd say that for the \"typical\" upgrade-my-node scenario or \"power outage in the middle of the night\" wher yueo're cathcing up a few hours, top-up sync is faster .. \n\nonce things stretch into days, resyncing fully might be faster, but since modern execution clients can process the whole ethereum history in a week:ish or two, I'd still go with top-up sync for the peace of mind and simplicity",
     "created_at": "2026-05-15T07:01:13.505000+00:00",
     "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I def agree with that assessment in general, e.g. that it's more a compromise than a full-backed solution, but my feeling was that it's easier to do than having CLs do RLP or ELs adopt SSZ - at least in the short term - and waiting for those (bigger) updates means we won't see improvements in the next 1-2 years. That's why I see the compromise as \"improving sync today for adding a little bit of computation + 32b partial header hash to the payload\". \nJust to clarify, serving payloads != downloading payloads, right? So, other clients like prysm, lighthouse or teku could still not download payloads but serve them to top-up syncing peers by requesting them from the EL first? (ofc, this means they would be open to that attack without verifying the EL block hash).",
+    "created_at": "2026-05-15T08:11:11.644000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Another question I'd have, why would top-up sync be faster as it comes with the same work: downloading payloads + re-executing them. In theory it's the same work and should take the same time.\nSnap sync doesn't require any execution, thus, should be quite efficient, but in our scenario, where the EL is offline for a few hours/days, it would not snap sync but full-sync, thus re-execute every block body retrieved over devp2p.",
+    "created_at": "2026-05-15T08:14:32.642000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "arnetheduck",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "> Just to clarify, serving payloads != downloading payloads, right? \nthere are 3 issues:\n\n* serve\n* download\n* verify\n\nverification is maybe the easiest because all clients are already doing it today _in some form_ (either with RLP-in-CL or by asking the EL) - it's not a new feature.\n\nThe main argument for 8237 was to avoid _downloading_ on the CL side - downloading is not a hard problem to solve (according to the clients that implemented it), but it is \"code to be written\" (for those that didn't yet write that code). in current forks, the \"download\" happens for free because it's bundled with the block while in gloas, it's a separate loop (ergo \"code to be written\")\n\nif nobody downloads, there's obviously no need to serve - serving is mostly a complication when you reason about how much history the p2p network carries vs alternatives like era files - if cl doesn't have to serve, we don't have to coordinate block retention periods between el and cl - conversely, if we do serve, we need a cl-el api for the cl to fetch payloads from the el and send them through the CL network. this infrastructure is needed for by-root requests if we want to maintain the ability to fetch non-final payloads by CL root (which is a hot-path recovery method for unstable methods) - if we drop by-root payloads, we can also remove the cl-el api for serving payloads",
+    "created_at": "2026-05-15T08:25:51.317000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I wouldn't say downloading is free. Yes, on the code side (assuming clients can do it today - ignoring that ePBS changes things and some clients struggle with it right now) but we are downloading the largest object we have (which is continously increasing in size) twice - on the EL and the CL. This is the main argument for 8237 imo - not downloading it on the CL, saving bandwidth.",
+    "created_at": "2026-05-15T08:29:59.423000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I could then see a world where most clients don't download but still serve for those clients that want to keep downloading, e.g. for top up sync",
+    "created_at": "2026-05-15T08:30:45.489000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "arnetheduck",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "> why would top-up sync be faster \nit's not faster in terms of computation - it's somewhat simpler if you analyze \"total ethereum complexity\" since there are fewer protocols involved (ie the cl already has to reason about both payloads and peers so it doesn't add complexity there - on the EL, it's .. avoidable) - it can also have lower latency on restart since you don't need to set up another p2p network for it hence you can often start validating _a little bit_ faster\n\n> we are downloading the largest object we have\nin gloas, you only download it once no matter what (there are *no* bandwidth savings in 8237) - the question is who does the downloading (aka who writes the code):\n* if the CL downloads, it can do top-up sync like today and the EL doesn't have to download anything (this is true today too! if your CL performs topup sync, we don't do the \"double download\" ever)\n* if the CL does not download, the EL has to (via devp2p)",
+    "created_at": "2026-05-15T08:34:05.918000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "arnetheduck",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "there actually exists another mode of operation that is correct and safe and doesn't require 8237 - one where the el syncs payloads via devp2p, then the CL asks the EL to verify the payloads by feeding it the expected execution requests / block hashes that it has (`engine_verifyBlockHash` mentioned by <@425572898787426305>  above)",
+    "created_at": "2026-05-15T08:39:32.929000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "arnetheduck",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "well, this is also something to consider: for non-finalized blocks that we request by root, do we expect CLs to download payloads or not? until now, the answer has been \"yes\" since latency is of essence - if the answer is yes here, clients are already have to implement top-up sync post-gloas.\n\nby-root requests can in theory also be synced by the EL, assuming its p2p network has peers that have observed those histories (the CL p2p network is _guaranteed_ to have such peers but the EL not be connected to the right peers and therefore might have issues downloading htem) - it's again a matter of who does the downloading and when - is it acceptable for the EL to have to look for peers? I don't think so, it makes the network more brittle",
+    "created_at": "2026-05-15T08:58:39.843000+00:00",
+    "attachments": []
   }
 ]
