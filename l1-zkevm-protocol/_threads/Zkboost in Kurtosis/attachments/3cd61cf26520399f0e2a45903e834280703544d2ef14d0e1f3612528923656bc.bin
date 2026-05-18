@@ -1,0 +1,549 @@
+---
+sidebar_position: 1
+title: zkboost
+hide_title: true
+---
+
+import ToolHeroBanner from '@site/src/components/ToolHeroBanner';
+
+<ToolHeroBanner
+  title="zkboost"
+  description="zkboost is an EIP-8025 Proof Node implementation for CL to request execution proof generation and verification."
+  imagePath="/img/tools/zkboost.jpg"
+/>
+
+<RelatedLinks
+  githubRepo="eth-act/zkboost"
+  links={[
+    {
+      name: "ere",
+      url: "https://github.com/eth-act/ere"
+    },
+    {
+      name: "ere guests",
+      url: "https://github.com/eth-act/ere-guests/"
+    },
+    {
+      name: "ethereum-package zkboost",
+      url: "https://github.com/ethpandaops/ethereum-package/tree/main/src/zkboost"
+    }
+  ]}
+/>
+
+## Overview
+
+zkboost is an [EIP-8025](https://eips.ethereum.org/EIPS/eip-8025) Proof Node implementation that handles execution proof generation and verification for Ethereum consensus clients. It sits between the CL/VC and zkVM backends (ere-servers), providing:
+
+- **Proof request routing** - Dispatches prove requests to the configured backend for each proof_type
+- **Witness fetching** - Gets execution witness from the EL via `debug_executionWitnessByBlockHash` (requires EL support)
+- **Proof caching** - LRU cache for completed proofs and witnesses
+- **Verification** - Verifies proofs via ere-server, mock, or in-process verifier mode
+- **SSE streaming** - Real-time proof status updates
+- **Health endpoint** - `/health` for liveness checks
+- **Metrics endpoint** - `/metrics` for Prometheus scraping
+
+## Architecture
+
+```mermaid
+flowchart TB
+  subgraph CLIENTS["Beacon & Validator Clients"]
+    direction LR
+    BN["Beacon Node<br>(CL / Consensus Client)"]
+    VC["Validator Client<br>(VC)"]
+  end
+
+  subgraph ZK["zkboost"]
+    direction TB
+
+    subgraph API["API Endpoints"]
+      direction LR
+      A1["POST<br>/v1/execution_proof_requests"]
+      A2["GET<br>/v1/execution_proof_requests<br>(SSE)"]
+      A3["GET<br>/v1/execution_proofs"]
+      A4["POST<br>/v1/execution_proof_verifications"]
+      A1 ~~~ A2
+      A2 ~~~ A3
+      A3 ~~~ A4
+    end
+
+    subgraph KINDS["Backend Kinds"]
+      direction LR
+      ERE["kind: ere"]
+      VERIFIER["kind: verifier"]
+      MOCK["kind: mock"]
+      EXTERNAL["kind: external"]
+    end
+  end
+
+  subgraph INFRA["Prover Infrastructure"]
+    direction LR
+    ERESRV["ere-server<br>(GPU)"]
+    EREVER["ere-verifier<br>(CPU)"]
+    EXTPRV["External Prover"]
+  end
+
+  EL["EL Client<br>(Execution Client)"]
+
+  BN ~~~ VC
+  CLIENTS -- "--proof-engine-endpoint<br>--proof-types" --> API
+  API --> KINDS
+
+  ERE --> ERESRV
+  VERIFIER --> EREVER
+  EXTERNAL --> EXTPRV
+
+  ZK -- debug_executionWitnessByBlockHash --> EL
+
+  classDef client fill:#1f2937,stroke:#60a5fa,color:#f9fafb,stroke-width:1.5px;
+  classDef api fill:#172554,stroke:#38bdf8,color:#f9fafb,stroke-width:1.5px;
+  classDef kind fill:#312e81,stroke:#c4b5fd,color:#f9fafb,stroke-width:1.5px;
+  classDef infra fill:#064e3b,stroke:#34d399,color:#f9fafb,stroke-width:1.5px;
+  classDef execution fill:#3f1d1d,stroke:#fb7185,color:#f9fafb,stroke-width:1.5px;
+  classDef hidden fill:transparent,stroke:transparent,color:transparent;
+
+  class BN,VC client;
+  class A1,A2,A3,A4 api;
+  class ERE,VERIFIER,MOCK,EXTERNAL kind;
+  class ERESRV,EREVER,EXTPRV infra;
+  class EL execution;
+  class C0,A0,K0 hidden;
+```
+
+**Notes**:
+- `kind: external` is an ethereum-package abstraction that maps to `kind: ere` with an endpoint in zkboost config
+- `kind: verifier` and `kind: mock` are in-process backends (no separate container)
+- `ere-verifier` in the diagram represents the in-process verification library, not a separate container
+
+## Proof Types
+
+Each proof type is a combination of an EL client and a zkVM:
+
+| ID | Name | EL Client | zkVM |
+|----|------|-----------|------|
+| 0 | `ethrex-risc0` | ethrex | RISC Zero |
+| 1 | `ethrex-sp1` | ethrex | SP1 |
+| 2 | `ethrex-zisk` | ethrex | ZisK |
+| 3 | `reth-openvm` | reth | OpenVM |
+| 4 | `reth-risc0` | reth | RISC Zero |
+| 5 | `reth-sp1` | reth | SP1 |
+| 6 | `reth-zisk` | reth | ZisK |
+
+**Note**: The numeric IDs are used by CL/VC flags (`--proof-types=6`). zkboost's API uses kebab-case strings (`reth-zisk`).
+
+## Proof Flow
+
+1. **Block produced** - EL produces a new block
+2. **VC receives block** - Via CL beacon node
+3. **VC requests proof** - `POST /v1/execution_proof_requests` → returns `new_payload_request_root`
+4. **zkboost fetches witness** - From EL via `debug_executionWitnessByBlockHash`
+5. **zkboost routes to backend** - ere-server (GPU) or mock (verifier is verify-only)
+6. **Proof generated** - Backend generates ZK proof, zkboost caches it
+7. **zkboost emits completion** - `proof_complete` SSE with `new_payload_request_root` and `proof_type`
+8. **VC fetches proof** - `GET /v1/execution_proofs/{root}/{proof_type}` → raw proof bytes
+9. **VC constructs ExecutionProof** - Combines `proof_data`, `proof_type`, `public_input.new_payload_request_root`
+10. **VC signs proof** - BLS signature over `ExecutionProof` → `SignedExecutionProof`
+11. **VC submits to CL** - `SignedExecutionProof` includes `validator_index` + BLS `signature`
+12. **CL gossips proof** - On `execution_proof` topic
+13. **Other CLs verify** - BLS signature locally + ZK proof via zkboost `/v1/execution_proof_verifications`
+
+---
+
+# ethereum-package Integration
+
+The [ethereum-package](https://github.com/ethpandaops/ethereum-package) provides full support for deploying zkboost with Kurtosis.
+
+## Quick Start
+
+Add `zkboost` to `additional_services` and configure participants with an EIP-8025 compatible CL/VC:
+
+```yaml
+participants:
+  - cl_type: lighthouse
+    cl_image: ethpandaops/lighthouse:eth-act-optional-proofs
+    el_type: reth
+    cl_extra_params:
+      - --proof-engine-endpoint=http://zkboost:3000
+      - --proof-types=6
+    vc_extra_params:
+      - --proof-engine-endpoint=http://zkboost:3000
+      - --proof-types=6
+    count: 2
+
+additional_services:
+  - zkboost
+```
+
+This uses the default mock backend. For real GPU proving, see [GPU Configuration](#gpu-configuration).
+
+## Configuration Reference
+
+### `zkboost_params`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `image` | string | `ghcr.io/eth-act/zkboost/zkboost:latest` | zkboost Docker image |
+| `instances` | list | `[{name: "zkboost", el_participant_index: 0}]` | List of zkboost instances |
+| `zkvms` | list | `[]` (auto-configures mock) | zkVM backend configurations |
+| `env` | map | `{RUST_LOG: "info,zkboost=debug"}` | Environment variables |
+
+**Hardcoded values** (not currently configurable via Kurtosis):
+- `witness_timeout_secs`: 12
+- `witness_cache_size`: 128
+- `proof_cache_size`: 128
+- `dashboard.retention`: 256
+- `dashboard.enabled`: Auto-derived from `grafana` or `prometheus_grafana` in `additional_services`
+
+### `instances`
+
+Each instance runs a separate zkboost container connected to one EL participant:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Unique Kurtosis service name |
+| `el_participant_index` | int | Yes | Index of EL participant to connect to |
+| `zkvms` | list | No | Per-instance zkvm overrides (falls back to global) |
+
+### `zkvms`
+
+Each entry configures a zkVM backend. Common fields:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `kind` | string | Yes | Backend type: `mock`, `ere`, `external`, `verifier` |
+| `proof_type` | string | Yes | One of the [proof types](#proof-types) |
+| `proof_timeout_secs` | int | No | Proof generation timeout (default: `seconds_per_slot * 3/4`). Not used for `verifier`. |
+
+## Backend Kinds
+
+### `kind: mock`
+
+In-process mock backend for testing without GPU:
+
+```yaml
+zkvms:
+  - kind: mock
+    proof_type: reth-zisk
+    mock_proving_time: { kind: constant, ms: 6000 }
+    mock_proof_size: 131072  # 128 KiB
+    mock_failure: false
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `mock_proving_time.kind` | string | `constant` | `constant`, `random`, or `linear` |
+| `mock_proving_time.ms` | int | 6000 | Fixed duration in ms (for `constant`) |
+| `mock_proving_time.min_ms` | int | - | Min duration in ms (for `random`) |
+| `mock_proving_time.max_ms` | int | - | Max duration in ms (for `random`) |
+| `mock_proving_time.ms_per_mgas` | int | - | ms per million gas (for `linear`) |
+| `mock_proof_size` | int | 131072 | Simulated proof size in bytes |
+| `mock_failure` | bool | false | Simulate proving failures |
+
+**Note**: When `zkvms` is empty, ethereum-package auto-injects a mock with `{kind: random, min_ms: 2000, max_ms: 8000}`. The defaults above apply when you explicitly add a `kind: mock` entry.
+
+### `kind: ere`
+
+Launches a GPU ere-server container for real ZK proving:
+
+```yaml
+zkvms:
+  - kind: ere
+    proof_type: reth-zisk
+    gpu:
+      device_ids: ["0"]
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `image` | string | Auto-resolved | ere-server Docker image |
+| `elf_url` | string | Auto-resolved | URL to guest ELF binary |
+| `gpu.device_ids` | list | `[]` | Specific GPU device IDs |
+| `gpu.count` | int | 0 | Number of GPUs (use `device_ids` for multi-GPU) |
+| `gpu.driver` | string | `nvidia` | GPU driver |
+| `gpu.shm_size` | int | 32768 (ZisK) | Shared memory size in MiB |
+| `gpu.ulimits` | map | `{memlock: -1}` (ZisK) | Ulimit overrides |
+| `env` | map | `{}` | Extra environment variables |
+
+**Auto-resolution**: When using the official zkboost image, `image` and `elf_url` are automatically resolved from zkboost's pinned ere/ere-guests versions.
+
+### `kind: verifier`
+
+In-process CPU-only verification without ere-server:
+
+```yaml
+zkvms:
+  - kind: verifier
+    proof_type: reth-zisk
+    program_vk_url: https://github.com/eth-act/ere-guests/releases/download/v0.10.0/stateless-validator-reth-zisk.vk
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `program_vk_url` | string | Auto-resolved | URL to program verifying key (.vk file) |
+
+**Use case**: Nodes that only verify gossipped proofs without generating new ones. No GPU required.
+
+### `kind: external`
+
+Connect to an already-deployed ere-server-compatible prover:
+
+```yaml
+zkvms:
+  - kind: external
+    proof_type: reth-zisk
+    endpoint: http://my-prover:3000
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `endpoint` | string | Yes | HTTP URL of the external prover |
+
+**Note**: `external` is an ethereum-package abstraction. In the generated zkboost config, it maps to `kind = "ere"` with the specified `endpoint`.
+
+---
+
+## GPU Configuration
+
+### Prerequisites
+
+1. **NVIDIA GPU** with drivers installed
+2. **NVIDIA Container Toolkit** installed and configured:
+   ```bash
+   # 1. Install the toolkit (provides nvidia-container-runtime)
+   # See: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
+
+   # 2. Configure Docker to use the runtime (choose one):
+
+   # Option A: Automatic (recommended)
+   sudo nvidia-ctk runtime configure --runtime=docker
+
+   # Option B: Manual - edit /etc/docker/daemon.json:
+   # {
+   #   "runtimes": {
+   #     "nvidia": {
+   #       "path": "nvidia-container-runtime",
+   #       "runtimeArgs": []
+   #     }
+   #   }
+   # }
+
+   # 3. Restart Docker
+   sudo systemctl restart docker
+   ```
+
+   Kurtosis uses Docker's `DeviceRequests` API (same mechanism as `--gpus` flag) for ere containers, so registering the nvidia runtime is sufficient. Setting `"default-runtime": "nvidia"` is not required.
+
+### Single GPU
+
+```yaml
+zkboost_params:
+  zkvms:
+    - kind: ere
+      proof_type: reth-zisk
+      gpu:
+        device_ids: ["0"]
+```
+
+### Multiple GPUs (Multiple Proof Types)
+
+Each ere-server requires exclusive GPU access:
+
+```yaml
+zkboost_params:
+  zkvms:
+    - kind: ere
+      proof_type: reth-zisk
+      gpu:
+        device_ids: ["0", "1", "2", "3"]
+    - kind: ere
+      proof_type: ethrex-zisk
+      gpu:
+        device_ids: ["4", "5", "6", "7"]
+```
+
+### Mixed Prover + Verifier
+
+One GPU prover instance + multiple CPU verifier instances:
+
+```yaml
+zkboost_params:
+  instances:
+    - name: zkboost-prover
+      el_participant_index: 0
+      zkvms:
+        - kind: ere
+          proof_type: reth-zisk
+          gpu:
+            device_ids: ["0"]
+    - name: zkboost-verifier
+      el_participant_index: 1
+      zkvms:
+        - kind: verifier
+          proof_type: reth-zisk
+```
+
+---
+
+## Validation
+
+The ethereum-package validates zkboost configuration at startup:
+
+### GPU Validation
+
+1. **ere requires GPU**: `kind: ere` entries must have `gpu.device_ids` or `gpu.count > 0`
+2. **No GPU overlap**: Each GPU device can only be assigned to one ere-server
+3. **Single gpu.count**: At most one ere entry can use `gpu.count` without `device_ids`
+
+### Proof Type Validation
+
+1. **Valid proof_type**: Must be one of the [supported proof types](#proof-types)
+2. **No duplicates**: Each proof_type can only appear once in `zkvms`
+3. **Requested types configured**: If participants use `--proof-types=X`, a matching zkvm must be configured
+
+### Error Examples
+
+```
+# Missing GPU for ere
+proof_type 'reth-zisk' has kind=ere but no GPU configured. ere-server requires GPU for proving.
+Either add gpu.device_ids or gpu.count, or use 'kind: mock' for testing.
+For verification-only use cases, use 'kind: verifier' instead.
+
+# GPU overlap
+GPU device '0' is used by multiple ere entries: 'reth-sp1' and 'reth-zisk'.
+Each ere-server requires exclusive GPU access.
+
+# Missing zkvm for requested proof type
+participants[0] requests proof_type 'ethrex-zisk' (ID 2) via --proof-types flag,
+but no zkvm is configured for it in zkboost_params.zkvms.
+```
+
+---
+
+## CL/VC Configuration
+
+EIP-8025 requires a compatible CL/VC. The [eth-act](https://github.com/eth-act) team maintains a [Lighthouse fork](https://github.com/eth-act/lighthouse/tree/optional-proofs) with EIP-8025 support.
+
+CL/VC flags:
+
+### CL (Beacon Node)
+
+| Flag | Description |
+|------|-------------|
+| `--proof-engine-endpoint` | URL to zkboost (enables gossip subscription) |
+| `--proof-types` | Comma-separated proof type IDs to handle |
+
+### VC (Validator Client)
+
+| Flag | Description |
+|------|-------------|
+| `--proof-engine-endpoint` | URL to zkboost |
+| `--proof-types` | Comma-separated proof type IDs to request/sign |
+
+**Note**: Gossip subscription is enabled by `--proof-engine-endpoint`, not `--proof-types`. The `--proof-types` flag controls which types to request/handle.
+
+---
+
+## Example Configurations
+
+### Basic Mock (No GPU)
+
+```yaml
+participants:
+  - cl_type: lighthouse
+    cl_image: ethpandaops/lighthouse:eth-act-optional-proofs
+    el_type: reth
+    cl_extra_params:
+      - --proof-engine-endpoint=http://zkboost:3000
+      - --proof-types=6
+    vc_extra_params:
+      - --proof-engine-endpoint=http://zkboost:3000
+      - --proof-types=6
+    count: 2
+
+additional_services:
+  - zkboost
+```
+
+### Single GPU Prover
+
+```yaml
+participants:
+  - cl_type: lighthouse
+    cl_image: ethpandaops/lighthouse:eth-act-optional-proofs
+    el_type: reth
+    supernode: true
+    cl_extra_params:
+      - --proof-engine-endpoint=http://zkboost:3000
+      - --proof-types=6
+    vc_extra_params:
+      - --proof-engine-endpoint=http://zkboost:3000
+      - --proof-types=6
+    count: 2
+
+network_params:
+  seconds_per_slot: 30
+
+additional_services:
+  - zkboost
+  - grafana
+  - prometheus
+
+zkboost_params:
+  zkvms:
+    - kind: ere
+      proof_type: reth-zisk
+      gpu:
+        device_ids: ["0"]
+```
+
+### Prover + Verifier (Mixed)
+
+See [`.github/tests/examples/zkboost_in_process_verifier.yaml`](https://github.com/ethpandaops/ethereum-package/blob/main/.github/tests/examples/zkboost_in_process_verifier.yaml) for a complete example.
+
+---
+
+## Troubleshooting
+
+### "ere requires GPU" error
+
+```
+proof_type 'reth-zisk' has kind=ere but no GPU configured.
+```
+
+**Solution**: Add GPU configuration or use `kind: mock` for testing:
+
+```yaml
+# Option 1: Add GPU
+zkvms:
+  - kind: ere
+    proof_type: reth-zisk
+    gpu:
+      device_ids: ["0"]
+
+# Option 2: Use mock
+zkvms:
+  - kind: mock
+    proof_type: reth-zisk
+```
+
+### Proofs not being generated
+
+1. Check zkboost logs: `kurtosis service logs <enclave> zkboost`
+2. Verify `--proof-engine-endpoint` is set on both CL and VC
+3. Ensure `--proof-types` includes the configured proof type IDs
+
+### GPU not detected
+
+1. Verify NVIDIA Container Toolkit is installed
+2. Check Docker runtime: `docker info | grep -i runtime`
+3. Test GPU access: `docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi`
+
+---
+
+## Resources
+
+- [EIP-8025 Specification](https://eips.ethereum.org/EIPS/eip-8025)
+- [zkboost Repository](https://github.com/eth-act/zkboost)
+- [ere Repository](https://github.com/eth-act/ere)
+- [ere-guests Repository](https://github.com/eth-act/ere-guests)
+- [ethereum-package zkboost Source](https://github.com/ethpandaops/ethereum-package/tree/main/src/zkboost)
+- [Lighthouse EIP-8025 Fork](https://github.com/eth-act/lighthouse/tree/optional-proofs)
