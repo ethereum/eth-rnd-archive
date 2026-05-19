@@ -54,5 +54,69 @@
     "content": "On EIP-8038 `Special case for EXTCODESIZE and EXTCODECOPY`  i think we should just add static cold read for bytecode (warm cose does not cover it).\n\nIt is strange opcode as for some warm accounts (warmed with BALANCE opcode) there would be no need to load bytecode, so bytecode would be cold. But on other case if account is warmed with CALL we would load bytecode.\n\nSo adding static cold cost for reading bytecode would overcharge it in some cases but we would not need to introduce a notion of cold/warm bytecode load.",
     "created_at": "2026-05-19T11:57:08.033000+00:00",
     "attachments": []
+  },
+  {
+    "author": "misilva73",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "This is an interesting point. I didn't know that if the account is warmed with BALANCE no bytecode is loaded. Is this behavior consistent accross clients?",
+    "created_at": "2026-05-19T12:13:02.281000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "draganrakita",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "we didn't load the bytecode as there was no need (balance was only needed), not sure if this is consistent with other clients. hm i see what you mean, every account load assumes that bytecode is loaded.",
+    "created_at": "2026-05-19T12:15:47.438000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "misilva73",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "To make sure I understand, are you saying that we can have an unsucessful CALL before entering the the new frame? And, in that case, we should also clarify that case and refill the reservoir",
+    "created_at": "2026-05-19T12:16:51.793000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "misilva73",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Yeah, I think you have a point there. I am starting to think we should change it to:\n\n```python\ntx_gas_used = tx_gas_used_after_refund + max(0, calldata_floor_gas_cost - tx_regular_gas_after_refund)\n```\n\nWhat do you think, <@755913785620824175> and <@796570016966770688> ? Do we have test cases covering this?\nAlso curious about your thoughts on this, <@792404665068158998> : should the call data floor be compared against the regular gas or the regular + state gas?",
+    "created_at": "2026-05-19T12:18:53.229000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "spencer_tb",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "> To make sure I understand, are you saying that we can have an unsucessful CALL before entering the the new frame? And, in that case, we should also clarify that case and refill the reservoir\n\nWe do this in EELS and have a tests: `test_call_stack_depth_returns_reservoir`/`test_call_insufficient_balance_returns_reservoir`. So would be in favor of clarifying this behavior!",
+    "created_at": "2026-05-19T12:41:04.157000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "misilva73",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "So, you are saying that the current spec uses `tx_gas_used = tx_gas_used_after_refund + max(0, calldata_floor_gas_cost - tx_regular_gas_after_refund)` instead of `tx_gas_used = max(tx_gas_used_after_refund, calldata_floor_gas_cost)`?",
+    "created_at": "2026-05-19T12:44:47.019000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "spencer_tb",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Sorry updated the above comment, was for other point. For this I just updated the spec locally, and refilled the tests. They all pass so we do not have test cases covering it. No strong preference on updating it but does it mean we have the case now where `tx_gas_used > tx.gas`?",
+    "created_at": "2026-05-19T12:48:24.775000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "misilva73",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "> does it mean we have the case now where tx_gas_used > tx.gas?\n\nYeah, this is the problem of doing `tx_gas_used = tx_gas_used_after_refund + max(0, calldata_floor_gas_cost - tx_regular_gas_after_refund)`. If a big portion of the gas is used for state creation (which could happen in contract deployments), then tx.gas may not be enough to cover the floor plus the state creation costs. So, I guess we need to use `tx_gas_used = max(tx_gas_used_after_refund, calldata_floor_gas_cost)` afterall",
+    "created_at": "2026-05-19T13:01:12.420000+00:00",
+    "attachments": []
   }
 ]
