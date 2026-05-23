@@ -14,5 +14,29 @@
     "content": "I'm thinking, for provers who have multiple candidate blocks to create a proof for in each slot, this would be quite helpful, proving the MPT of the prev block, n-1, at the beginning of the slot with block n. \nSo it def help provers/builders, at least those with multiple candidate blocks, but would it impact zkEVMs at all if, let's say, there's only one candidate block. We'd prove the MPT after the state transition of the block in n-1, in n, right at the beginning, instead of the post-state of the block in n at the end of execution.",
     "created_at": "2026-05-23T08:58:14.794000+00:00",
     "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "Here are my rough thoughts on 7862:\n\nWithout 7862, we have the post state root in the current block header and the STF checks that this value is correct using the changeset/BALs we get after executing the EVM. \n\nThe stateless STF without 7862, gets given a block header that should be the block header for the parent block. We check correctness by checking that the current block we are validating links to this previous block header. If it does, we take the post state root out of the previous block header and use that to validate the read proofs/MPT proofs for the current block.\n\nWith 7862, we put the pre-state root in the current block, so we don't need the previous block header like before for this reason. However, we do need to validate that this is indeed the post-state root for the previous block and not some random state root, else I could prove anything.\n\nThe naive/simple way to do this would be to prove the pre-state root is correct in the current block by:\n\n- Taking in the ExecutionWitness for the previous block\n- Taking in the changeset/BAL from the previous block\n- Compute the post state root of the previous block and check that it equals the pre-state root of this block\n- Then compute the STF for the current block\n\nThe pipelined way to do this would be to:\n\n- Prove the previous block is correct (assuming the pre-state root of the previous block is correct, this is okay given the next step), and output the BAL hash and ExecutionWitness Hash as public inputs\n\nIn parallel:\n\n  - Make a state proof that proves the post state root is correct. This will output a BAL hash, an ExecutionWitness hash and the post state root for the previous block as public inputs.\n - Make the proof for the current block assuming the pre-state root is correct, since it will be proven by the state proof in previous step.",
+    "created_at": "2026-05-23T11:00:00.219000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "A verifier will receive two proofs in order to be sure that the block is valid; the state proof and the evm proof, sice the state proof shows that the pre-state root for the current block is correct, and the evm proof shows that the block is valid. \n\nThis _does_ mean that there are two proofs on the network, so we could mitigate this by recursively verifying the state proof in the evm proof, but probably better to benchmark first I think",
+    "created_at": "2026-05-23T11:00:28.535000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "I guess one thing to note is that splitting the evm proof from the state proof can be done without 7862, though with 7862 it seems like the natural thing to do",
+    "created_at": "2026-05-23T11:02:22.306000+00:00",
+    "attachments": []
   }
 ]
