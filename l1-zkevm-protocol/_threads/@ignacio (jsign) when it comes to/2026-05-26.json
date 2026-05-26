@@ -1,0 +1,114 @@
+[
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "",
+    "created_at": "2026-05-26T20:11:03.035000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "The `ChainConfig` is defined as:\n```\nclass ChainConfig:\n    chain_id: U64\n    active_fork: ForkConfig\n```\nWith `chain_id` you could identify which network is being targeted, although we don't strictly need to be aware of \"semantics\" in the guest program but only required it for proper tx signature verification.\nThen we have a single `active_fork`, so it is not possible to \"have more forks activatoins\" (IIUC what you're saying). There is no point of having more than one fork activation in the `ChainConfig` in the guest program because it always validates a single block, so there is no \"pass fork boundary\" situation.\n\nLMK if this makes sense or maybe I'm missing something in your question.",
+    "created_at": "2026-05-26T20:11:04.201000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "0xrubo",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "makes sense. maybe our implementation specifics make it a bit harder. `SszOptionalForkActivationValue` is a list, so it allows multiple items -- is it to bypass some ssz limitations?",
+    "created_at": "2026-05-26T20:14:29.083000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "0xrubo",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "i see its max is 1 but that can be changed 🙂",
+    "created_at": "2026-05-26T20:15:29.841000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Ah no, that list is a list with max length of 1. So yes, is mainly to have optionals in SSZ",
+    "created_at": "2026-05-26T20:15:33.606000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Just in case, note that type is only used here:\n```\nclass SszForkActivation(Container):\n    \"\"\"SSZ container mirroring ``ForkActivation``.\"\"\"\n\n    block_number: SszOptionalForkActivationValue\n    timestamp: SszOptionalForkActivationValue\n```\n(optionals there since fork activation in theory can be blocknum or timestamp based)\n\nIt is not related to potentially accepting more htan one `ForkConfig` or similar (i.e. `active_fork` it is not a list as shown in my first msg).",
+    "created_at": "2026-05-26T20:17:01.202000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "0xrubo",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "sure",
+    "created_at": "2026-05-26T20:19:17.963000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "For active_fork, I guess the main case to analyse for sanity would be something like: block 100 is glamsterdam and block 101 is hegota\n\nBlock 100 would use a different chain config than block 101 here, it would be up to the validator and prover to switch to the new chain config at block 101",
+    "created_at": "2026-05-26T20:28:09.342000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Correct. This is currently the expectation:\n- prover: must switch to the new `active_fork` in block 101\n- verifier: must swithc the public input expectation to the new `active_fork` in block 101.\n\nThe current design is basically providing to the guest program the minimal information needed, since both active forks aren't strictly needed. Supporting a list would mainly mean avoiding the \"switch\" logic on both prover/verifier at fork boundary, yes.",
+    "created_at": "2026-05-26T20:32:41.616000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Maybe wheenver there is proper impl on the CL side reg public input verification, we could get some feedback if there is any friction on this, and if feels properly justified to having to deserialize a bigger chain config on the guest program side .",
+    "created_at": "2026-05-26T20:33:55.850000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Makes sense, I think the simpler approach you went for is better. \n\nIt’s possible but maybe not advised to also say that a guest program only supports one fork at a time. This would simplify the guest program since it doesn’t need information about fork-1 but it means that the validator will need two different guest programs, one for block 100(glamsterdam) and then they switch to another for block 101(hegota)",
+    "created_at": "2026-05-26T20:37:14.267000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Uhm, yeah I wasn't thinking of advising to support only one fork. Feels that would complicate things a bit on the CL side reg verification keys",
+    "created_at": "2026-05-26T20:38:03.793000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "(not saying this is a good approach, since as you mentioned, we don’t know where the friction will be)",
+    "created_at": "2026-05-26T20:38:09.225000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Yeah exactly re two verification keys",
+    "created_at": "2026-05-26T20:38:31.945000+00:00",
+    "attachments": []
+  }
+]
