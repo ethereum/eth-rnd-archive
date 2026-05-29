@@ -1,0 +1,146 @@
+[
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "",
+    "created_at": "2026-05-29T12:13:17.121000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "hey <@575994543527297055> can you corroborate here the issue with empty/full in some detail and how  an application of `should_build_on_full` was taken?\n\nI assume that what you had is that you have a chain of full blocks, with the PTC voting somehow that they weren't timely and achieving quorum over this (which is already surprising) and also missing slots in between. \n\nSo attesters attested for full explicitly because of the missed slots and attesters don't care about the payload being late (what I am mentioning above). Therefore head is always for  full in that chain's view. \n\nThen suddenly a CL block comes and builds on top of an earlier block, so that this CL block is not viewed as our head simply by running forkchoice. Then we run forkchoice and we find that our head is from a previous slot and is full, but when we go and count the PTC vote we see that there was consensus that it was late or not available. Thus we attempt to reorg the payload because of an incorrect application of `should_build_on_full`.\n\nI assume this is the situation. But how in the hell did the chain get into a situation in which there is consensus among the PTC that the payloads weren't available or timely and still the chain kept building on full?",
+    "created_at": "2026-05-29T12:13:18.230000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I just want confirmation that the above was the situation with Lodestar.",
+    "created_at": "2026-05-29T12:15:39.181000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I am also still confused how `should_build_on_full` managed to return `False` for `22903` but that's the only explanation I have right now and since we called this even after missed slots, we kept building on `EMPTY` even though `FULL` had much more weight, so we didn't even accept the own block we build as head",
+    "created_at": "2026-05-29T12:21:17.022000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "so `lodestar-nethermind-2` proposed this block https://dora.glamsterdam-devnet-4.ethpandaops.io/slot/22903, the same node later build on top of that block https://dora.glamsterdam-devnet-4.ethpandaops.io/slot/22912, but on `EMPTY`, but looking at the weights via fork choice, it's `EMPTY=9504` and `FULL=15968` so it should build on full unless `should_build_on_full` was wrongly returning `False`",
+    "created_at": "2026-05-29T12:23:56.158000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "but do you have a block that included the PTC votes for that block 22903?",
+    "created_at": "2026-05-29T12:31:59.158000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Either way there seems to be a bug, that PTC is actually achieving consensus on unavailable or empty",
+    "created_at": "2026-05-29T12:32:41.949000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "wouldn't that only be the case if there was a block for 904?",
+    "created_at": "2026-05-29T12:32:59.373000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "yeah, there was no block produced? I'm not even looking at dora, if there's no block, do you have a forkchoice dump that includes them?",
+    "created_at": "2026-05-29T12:36:10.832000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "have the API people even agreed on a format for the forkchoice dump?",
+    "created_at": "2026-05-29T12:36:26.063000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I think the only way to achieve actual consensus on this is to have nodes sending PTC attestations for blocks they haven't processed. Prysm for example could not have even voted for those blockroots since they could not have imported them as they lacked a parent payload",
+    "created_at": "2026-05-29T12:41:46.425000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "this is my worry",
+    "created_at": "2026-05-29T12:41:51.077000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I am not aware of anyone proposing a format, I just created https://github.com/ethereum/beacon-APIs/issues/576 a while ago",
+    "created_at": "2026-05-29T12:43:32.416000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I think <@575994543527297055> wanting to look into enhancing our forkchoice dump to make it easier to debug this",
+    "created_at": "2026-05-29T12:44:13.229000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "we have our own `GET /eth/v0/debug/forkchoice` but that dumps our proto array, so this doesn't apply to prysm",
+    "created_at": "2026-05-29T12:46:47.148000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "If no one takes over the API issue by today I'll implement one in Prysm and open that implementation as an API pr. Similar to the builders endpoint that has me blocked still",
+    "created_at": "2026-05-29T12:54:13.314000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "any proposal is appreciated, we can go with the prysm implementation as a proposal, people can complain if they don't like it and we can discuss on the PR and iterate on it",
+    "created_at": "2026-05-29T13:01:18.534000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "generally for gloas it's hard to move some stuff because nobody has strong opinions or gives feedback on api stuff",
+    "created_at": "2026-05-29T13:01:57.668000+00:00",
+    "attachments": []
+  }
+]
