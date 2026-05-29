@@ -182,5 +182,21 @@
     "content": "I'm not sure about this, but I have some facts:\n- this node `lodestar-ethrex-2` get majority no votes\n- the other node `lodestar-ethrex-1` did not get that and still build on FULL\n- given 2400 validators, we have a committee of 75 per slot, and it's shuffled into 512 members of ptc, one validator may have a lot of positions in the ptc committee\n\none possible scenario to me is this node `lodestar-ethrex-2` receives majority \"no\" votes via its own api (validators connected to this own node), network was not stable so these ptc messages are not forwarded fully to other peers\nie this node itself did not receive all columns timely",
     "created_at": "2026-05-29T13:33:10.322000+00:00",
     "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I think I have a conclusion why [22912](https://dora.glamsterdam-devnet-4.ethpandaops.io/slot/22912) was build on `EMTPY` on [22903](https://dora.glamsterdam-devnet-4.ethpandaops.io/slot/22903) even though we had majority of attesters voting `FULL`\n- the `should_build_on_full` not having the check https://github.com/ethereum/consensus-specs/pull/5309, so we evaluated that for `22912`\n- how can `should_build_on_full` return `false`? it was definitely not the case that we had >256 voting not available in that slot\n- but there is a 2nd issue where lodestar votes even if `block.slot` is not `slot` and we vote not timely/available in that case\n- these votes shouldn't even be casted (we have a fix already) but also https://github.com/ethereum/consensus-specs/pull/5281 change will filter them\n- now how did `lodestar-nethermind-2` process these? it seems like we would still count them from blocks we import like [22907](https://dora.glamsterdam-devnet-4.ethpandaops.io/slot/0x57929a1cb3634c183503478fbc56563045fdeb822b6dbd2f4aa6afd968d13034) and [22908](https://dora.glamsterdam-devnet-4.ethpandaops.io/slot/0x0319a4f08d2a05c5fc6b26e14f9f2b4002b2c6708f956c39932e96709362f21b#download)\n- so by slot `22912`, the `lodestar-nethermind-2` accumulated enough nay votes for `should_build_on_full` to return `false`\n\nwhich it seems in our implementation of `notify_ptc_messages` a check like `data.slot != state.slot` in the spec is missing",
+    "created_at": "2026-05-29T21:31:01.736000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "votes from `22908`\n```json\n[\n  {\n    \"aggregation_bits\": \"0x834000200000000800020001000008000000004100100041000005000040200004a002000000140824c002101020e040020408208002a2c01010008040408442\",\n    \"data\": {\n      \"beacon_block_root\": \"0xd11e08afe59f62a2cc71f7a7bbebdc8abbb2184fe1e1ddd826e704b188a1ea6a\",\n      \"slot\": \"22907\",\n      \"payload_present\": false,\n      \"blob_data_available\": false\n    },\n    \"signature\": \"0x8f4757943c6ca987a0e6f004a3350b9dedb21a6bec278f5ea2969d7d99a36746297500344278ac7fb99c2efea9d4ad8f097c814979696c95aaa75403f79ed70e73b2b4f6853e386bce54d4ef862627d1be5ea962f6a2448fb50c7e2cd04c6a98\"\n  }\n]\n```\nand from `22907`\n```json\n[\n  {\n    \"aggregation_bits\": \"0x0006c004a012028000200432433000000a25101c8006004204404920000020026400c022042080400500412820800a04082018400210000020d0100828001024\",\n    \"data\": {\n      \"beacon_block_root\": \"0xd11e08afe59f62a2cc71f7a7bbebdc8abbb2184fe1e1ddd826e704b188a1ea6a\",\n      \"slot\": \"22906\",\n      \"payload_present\": false,\n      \"blob_data_available\": false\n    },\n    \"signature\": \"0x84e0dee3920f5351bc1bdcb3b28540e6dfd99c63aa8a9c296402ec3c2e3dd0e0d17f404157c38497588df4a98dfd489411cb3e5ba8f4c7bfb3c5400a32f818970d21d3798737146abd2b85e5418a11686b982f6466836b19b86b351890f42ff6\"\n  }\n]\n```",
+    "created_at": "2026-05-29T21:37:28.093000+00:00",
+    "attachments": []
   }
 ]
