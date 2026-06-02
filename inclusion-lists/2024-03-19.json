@@ -1,684 +1,684 @@
 [
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e thanks! looking at these and the items you commented on in the pr !! (re @terencechain: Hi @mikeneuder, Thanks for the nice work, I left a bunch of comments. Some high level notes:\n1. It seems like we are still using is_inclusion_list_available as a validity check. Instead, we should remove that and use fork choice (ie track seen for block tips)\n2. Why did we move state.parent_proposer_index. Even if summary contains proposer_index, we still need to check alignment between proposer indices across slot or else an evil proposer can change the previous proposer index to its own index\n3. We verify summary signature twice (forkchoice.md and beacon-chain.md). I think we can remove once\n4. Currently p2p spec rejects IL that's not current slot. Instead we should make a note that an IL can arrive earlier before slot start. Client may queue it or even import it)",
-        "created_at": "2024-03-19T12:17:33.054000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e sounds good, will visit the sig verifications (re @potuz0: Beacon chain has to be part of process execution payload)",
-        "created_at": "2024-03-19T12:18:10.052000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e wait in that case is it cleaner to keep the signed summary in the ExecutionPayload (re @InclusionList_bot: \u003cg11tech\u003e yea, otherwise a node which didn't see gossiped IL will not be able to verify that it was correct or a made up previous summary embedded in the block)",
-        "created_at": "2024-03-19T12:19:23.893000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e so that we can always have that signature around for syncing",
-        "created_at": "2024-03-19T12:19:35.541000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e ok updated consensus specs with latest round of revs from @terencechain :D \n\nhttps://github.com/ethereum/consensus-specs/pull/3617/commits/7545154453f911f8bb88f4e9d4c29a02e797e2e0\nchange log:\n- add back beacon state for parent_proposer_index. this is used to verify signature in `verify_inclusion_list_summary_signature` which is called during `process_execution_payload`. \n- remove signature check in fork-choice.md as discussed\n- remove is_il_available check from `verify_and_notify_new_payload`\n- rename “previous” to “parent” to match existing style",
-        "created_at": "2024-03-19T13:45:21.789000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e ok updated consensus specs with latest round of revs from @terencechain :D \n\nhttps://github.com/ethereum/consensus-specs/pull/3617/commits/7545154453f911f8bb88f4e9d4c29a02e797e2e0\nchange log:\n- add back beacon state for parent_proposer_index. this is used to verify signature in verify_inclusion_list_summary_signature which is called during process_execution_payload. \n- remove signature check in fork-choice.md as discussed\n- remove is_il_available check from verify_and_notify_new_payload\n- rename “previous” to “parent” to match existing style\n- fix types in `on_inclusion_list` \n- get rid of parent hash check and length check in p2p validation. \n- allow future ILs to be gossiped\n- add signature generation over IL received from the EL for honest validator spec",
-        "created_at": "2024-03-19T13:47:23.709000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e three remaining questions:\n1. when should the IL avaibility check happen for the block ? i removed it from the `verify_and_notify_new_paylad` function, so maybe it should happen in the `process_execution_payload`? \n2. does the EL need a signed summary or unsigned? i made it unsigned based on convos, but @gr3999 has a comment saying it might need to be signed for syncing. curious what you think. if its unsigned, we never store that signature, which might be fine but im unsure\n3. when should the `verify_and_notify_new_inclusion_list` get called ? this takes the execution engine as a parameter. in the deneb spec, the `verify_and_notify_new_payload` call happens happens in the `process_execution_payload` function. it feels like for the IL it should happen in the p2p validation somewhere ? curious what y’all think",
-        "created_at": "2024-03-19T13:52:31.929000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e left one open comment re: @terencechain https://github.com/ethereum/consensus-specs/pull/3617#discussion_r1529211094",
-        "created_at": "2024-03-19T13:53:05.301000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e is this back and forth useful ? i feel like yes, but want to make sure others do too :D",
-        "created_at": "2024-03-19T13:53:30.856000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e i think in general the stuff that goes in “fork-choice.md” vs “beacon-chain.md” is confusing tbh.",
-        "created_at": "2024-03-19T14:06:16.532000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e maybe the right place for the IL availability check is here in on_block. similar to is_data_available, we can queue the block for validity even if the IL is not there yer",
-        "created_at": "2024-03-19T14:07:55.464000+00:00",
-        "attachments": [
-            {
-                "type": "image/jpeg",
-                "origin_name": "file_15.jpg",
-                "content": "9fb932ef07c59d90b3c862c3b0e6ab0c35e96a1817e1f0ff3bbd98ee1a1a1e6c"
-            }
-        ]
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e maybe the right place for the IL availability check is here in on_block. similar to is_data_available, we can queue the block for validity even if the IL is not there yet",
-        "created_at": "2024-03-19T14:07:57.044000+00:00",
-        "attachments": [
-            {
-                "type": "image/jpeg",
-                "origin_name": "file_15.jpg",
-                "content": "9fb932ef07c59d90b3c862c3b0e6ab0c35e96a1817e1f0ff3bbd98ee1a1a1e6c"
-            }
-        ]
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "We don' t want to check on `on_block`  because we don' t want to tie availability with validity! the beauty of the design is that we can have a completely independent forkchoice handler whose only task is to simply set a boolean in the node",
-        "created_at": "2024-03-19T14:36:42.798000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "you need to add the bool to the protoarray node and set it in a handler `on_inclusion_list`",
-        "created_at": "2024-03-19T14:37:06.317000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e do you have a link to your spec on this ? having trouble following (re @InclusionList_bot: \u003cpotuz\u003e [reply]: We don' t want to check on `on_block`  because we don' t want to tie availability with validity! the beauty of the design is that we can have a completely independent forkchoice handler whose only task is to simply set a boolean in the node)",
-        "created_at": "2024-03-19T15:56:48.233000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "my spec won´t help you here cause I had specified ILs as a validity condition, in ePBS the situation is different since the IL is seen without any Payload at all",
-        "created_at": "2024-03-19T15:57:29.778000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e i see. i feel like the on_block handler makes sense tho, same as deneb, “this block MAY be queued and subsequently considered when IL data becomes available\"",
-        "created_at": "2024-03-19T15:58:28.287000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e b/c the validity of the block is conditioned on existence of an IL",
-        "created_at": "2024-03-19T15:58:39.160000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e or i guess in process_execution_payload ?",
-        "created_at": "2024-03-19T16:00:15.016000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e e.g., after verifying the slot n-1 signature, we could also check that an IL is available ?",
-        "created_at": "2024-03-19T16:01:17.049000+00:00",
-        "attachments": [
-            {
-                "type": "image/jpeg",
-                "origin_name": "file_16.jpg",
-                "content": "a533ff6245b80a38f7ca2c700472729954156600c61311851cadaed91021dac8"
-            }
-        ]
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cpotuz0\u003e no: the IL is specifically independent than block, you could receive the IL after the block, and a VC for example may want to propose on top of a block whose IL was received after it was processed in `on_block`",
-        "created_at": "2024-03-19T16:01:43.849000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cpotuz0\u003e we do not need to check at all that the il is available",
-        "created_at": "2024-03-19T16:02:00.232000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "The whole point is that there is no longer a need to check for it",
-        "created_at": "2024-03-19T16:02:12.857000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "rather we mark the IL available when we receive it",
-        "created_at": "2024-03-19T16:02:22.748000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e but i shouldn’t attest to a block that i dont have an IL for",
-        "created_at": "2024-03-19T16:02:36.509000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "this is the difference between a validity condition and a head filtering condition",
-        "created_at": "2024-03-19T16:02:43.383000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e funny you switched from TG to discord hehe",
-        "created_at": "2024-03-19T16:02:46.207000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e ok gotcha, we want a head filtering condition. that makes sense (re @InclusionList_bot: \u003cpotuz\u003e this is the difference between a validity condition and a head filtering condition)",
-        "created_at": "2024-03-19T16:03:07.426000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "I dislike the TG interface, I get a ping everytime someone writes there 😄",
-        "created_at": "2024-03-19T16:03:11.228000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e so it should be in fork-choice somewhere",
-        "created_at": "2024-03-19T16:03:15.992000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "Ok, so here's a summary about IL verification:",
-        "created_at": "2024-03-19T16:03:30.228000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "- We have an independent handler in forkchoice `on_inclusion_list` this handler checks the signature of the summary, request the EL to check the validity and puts a `in_available = true` in the corresponding node in forkchoice. for ease of implementation I would start by asserting that the beacon block is already imported and say that client can hold the IL until the block is known. \n- We have another handler in `process_execution_payload` that checks the signature of the summary and sends the payload for validation to the EL\n- We have another handler in p2p gossip that checks the signature on the summary and performs basic checks (like the proposer is supposed to be submitting an IL this slot or the next one). \n\nWe also need to be careful about the first point: if the beacon block root is explicit in the IL then it is easy to check for which block this IL belongs. However this prevents sending the IL before the block which is a good feature to have. So we send instead the slot and the proposer. This is a little more akward in forkchoice because we can have different blocks for the same slot",
-        "created_at": "2024-03-19T16:09:53.637000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e incredible (re @InclusionList_bot: \u003cpotuz\u003e - We have an independent handler in forkchoice `on_inclusion_list` this handler checks the signature of the summary, request the EL to check the validity and puts a `in_available = true` in the corresponding node in forkchoice. for ease of implementation I would start by asserting that the beacon block is already imported and say that client can hold the IL until the block is known. \n- We have another handler in `process_execution_payload` that checks the signature of the summary and sends the payload for validation to the EL\n- We have another handler in p2p gossip that checks the signature on the summary and performs basic checks (like the proposer is supposed to be submitting an IL this slot or the next one). \n\nWe also need to be careful about the first point: if the beacon block root is explicit in the IL then it is easy to check for which block this IL belongs. However this prevents sending the IL before the block which is a good feature to have. So we send instead the slot and the proposer. This is a little more akward in forkchoice because we can have different blocks for the same slot)",
-        "created_at": "2024-03-19T16:12:26.728000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e and then in validator.md we say that you only attest to a block if il_available is true ?",
-        "created_at": "2024-03-19T16:12:53.933000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e right ?",
-        "created_at": "2024-03-19T16:12:54.960000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "that's probably not needed, probably better to wait up for Francesco on this, it may be easier to tweak `get_head` to do the filtering. And we may need to change the honest reorg spec to allow longer reorgs",
-        "created_at": "2024-03-19T16:13:56.887000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e ok sg!",
-        "created_at": "2024-03-19T16:15:35.961000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e still thinking on 2,3 in here! (re @mikeneuder: three remaining questions:\n1. when should the IL avaibility check happen for the block ? i removed it from the verify_and_notify_new_paylad function, so maybe it should happen in the process_execution_payload? \n2. does the EL need a signed summary or unsigned? i made it unsigned based on convos, but @gr3999 has a comment saying it might need to be signed for syncing. curious what you think. if its unsigned, we never store that signature, which might be fine but im unsure\n3. when should the verify_and_notify_new_inclusion_list get called ? this takes the execution engine as a parameter. in the deneb spec, the verify_and_notify_new_payload call happens happens in the process_execution_payload function. it feels like for the IL it should happen in the p2p validation somewhere ? curious what y’all think)",
-        "created_at": "2024-03-19T16:16:11.850000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cterencechain\u003e 2 needs to be signed, that is `payload.signed_summary` because state transition requires that for `verify_inclusion_list_summary_signature`",
-        "created_at": "2024-03-19T16:17:14.629000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cterencechain\u003e (I just left a comment about that)",
-        "created_at": "2024-03-19T16:17:25.470000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cterencechain\u003e 3 `verify_and_notify_new_inclusion_list` is called on `on_inclusion_list`, that looks good to me. The remining thing is when/how you want to flip `il_available` to true",
-        "created_at": "2024-03-19T16:19:07.398000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e oh good pt! (re @terencechain: 2 needs to be signed, that is payload.signed_summary because state transition requires that for verify_inclusion_list_summary_signature)",
-        "created_at": "2024-03-19T16:21:42.379000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e nice",
-        "created_at": "2024-03-19T16:21:42.943000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "1. yes, this is the second handler mentioned in my previous message, you verify in `process_execution_payload` the validity of the IL included in the payload. There is **no need to verify availability of the IL** for the current slot when processing the current slot's block. \n2. The simplest is to let the signature in the payload, so that you include a signed summary as it is today. The EL will ignore the signature and the CL will verify it.  I think it's preferable to have the signature outside of the payload in a separate envelope so that the CL assembles the summary and checks the signature, and the EL does not need to keep objects it doesn't care about nor knows how to read. However, this is probably overkill for the PoC at this stage. \n3. This is part of the first handler in my message, in forkchoice `on_inclusion_list` should call the engine and verify it. If it returns without error then you flip the node's bool. The node needs to exist for this before. That's why the comment of asserting that the block is already processed, even though implementations will be different",
-        "created_at": "2024-03-19T16:21:49.386000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "The actual implementation in clients will be different: p2p will do a signature verification and then the forkchoice handler will not do it again",
-        "created_at": "2024-03-19T16:22:54.737000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e ok sounds great!",
-        "created_at": "2024-03-19T16:23:15.880000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "also clients will call the EL with the IL and cache the result",
-        "created_at": "2024-03-19T16:23:20.848000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e ill incorporate this",
-        "created_at": "2024-03-19T16:23:23.833000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "so that when the block is synced and added to forkchoice, immediately they set the boolean",
-        "created_at": "2024-03-19T16:23:32.481000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cterencechain\u003e I think two signatures verifications. One on p2p, one one state transition. `process_execution_payload` -\u003e ``verify_inclusion_list_summary_signature``",
-        "created_at": "2024-03-19T16:23:47.152000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "I think this is fine",
-        "created_at": "2024-03-19T16:24:37.536000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e oh my reacts on tg dont show up in discord. acking",
-        "created_at": "2024-03-19T16:25:31.719000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "terencechain",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "Sorry for changing the topic to more of an edge case discussion. Say the following\n- IL arrives before block\n- IL is valid, we cache the result\n- Proposer equivocates and broadcasts two blocks\n- One single IL should allow the two blocks valid, not one or another\n- I think we need to make sure to check this edge case",
-        "created_at": "2024-03-19T16:32:03.664000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "Hey \u003c@750824368438771842\u003e are there any changes proposed for the EL side (I can't seem to find it?). I would love to review it 🙂",
-        "created_at": "2024-03-19T16:39:53.779000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "(I will take on implementing IL in EthJS 😄 )",
-        "created_at": "2024-03-19T16:40:12.125000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e actually take a peek here: https://github.com/ethereum/consensus-specs/pull/3617/commits/4d5444534e37f7d62e0e036f9a623f8c98042832\n\nsince the IL is independent of the block it was gossiped with, we can just store that a given slot has a good IL for it right ? (might need to use the parent_root somewhere, but that is contained in the EL check). then we would just need to check that a slot has an IL for it at some pt, which is the thing we might need to ask fradamt (re @InclusionList_bot: \u003cterence0083\u003e Sorry for changing the topic to more of an edge case discussion. Say the following\n- IL arrives before block\n- IL is valid, we cache the result\n- Proposer equivocates and broadcasts two blocks\n- One single IL should allow the two blocks valid, not one or another\n- I think we need to make sure to check this edge case)",
-        "created_at": "2024-03-19T16:42:49.254000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e hey! links are in here (re @InclusionList_bot: \u003cJochem Brouwer (jochem-brouwer)\u003e Hey @mikeneuder are there any changes proposed for the EL side (I can't seem to find it?). I would love to review it 🙂)",
-        "created_at": "2024-03-19T16:43:02.323000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e https://notes.ethereum.org/@mikeneuder/il-poc-spec",
-        "created_at": "2024-03-19T16:43:03.656000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e https://github.com/michaelneuder/execution-apis/pull/1\nhttps://github.com/michaelneuder/execution-specs/pull/1",
-        "created_at": "2024-03-19T16:43:24.634000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e have to respond to some comments in the EELS spec",
-        "created_at": "2024-03-19T16:43:34.278000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "Thanks 🙂",
-        "created_at": "2024-03-19T16:43:44.427000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e ofc :D",
-        "created_at": "2024-03-19T16:44:22.924000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e ty for looking",
-        "created_at": "2024-03-19T16:44:29.179000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "Is the spec up-to-date with the arguments for blob-txs? Before I start to comment about that 😅",
-        "created_at": "2024-03-19T16:44:55.018000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "(execution spec)",
-        "created_at": "2024-03-19T16:45:06.225000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e not compatible with blobs for now",
-        "created_at": "2024-03-19T16:45:31.261000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "That's fine, but I do not see this in the spec 🤔",
-        "created_at": "2024-03-19T16:46:04.216000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e ya how does it make sense to denote that ? a check that there are no type 3 txns in the list ?",
-        "created_at": "2024-03-19T16:46:48.085000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e (eels spec is the thing i understand the least as a warning xD)",
-        "created_at": "2024-03-19T16:47:01.846000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cterencechain\u003e 3 possible ways to key this\n1.) slot\n2.) parent_hash\n3.) slot + parent_hash\n\nI think we probably want parent_hash to be safe (re @mikeneuder: actually take a peek here: https://github.com/ethereum/consensus-specs/pull/3617/commits/4d5444534e37f7d62e0e036f9a623f8c98042832\n\nsince the IL is independent of the block it was gossiped with, we can just store that a given slot has a good IL for it right ? (might need to use the parent_root somewhere, but that is contained in the EL check). then we would just need to check that a slot has an IL for it at some pt, which is the thing we might need to ask fradamt)",
-        "created_at": "2024-03-19T16:48:16.177000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "I'm not super deep into how these APIs are structured but I would personally set it into the \"Specification\" section of the methods, effectively ban 0x03 txs",
-        "created_at": "2024-03-19T16:48:16.603000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "Side-note, where does the chat bridge come from? The bridge works but it feels a bit weird communicating like this 😅",
-        "created_at": "2024-03-19T16:48:55.973000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e ya can do slot,hash tuple (re @terencechain: 3 possible ways to key this\n1.) slot\n2.) parent_hash\n3.) slot + parent_hash\n\nI think we probably want parent_hash to be safe)",
-        "created_at": "2024-03-19T16:49:23.024000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e bridge is from telegram. (re @InclusionList_bot: \u003cJochem Brouwer (jochem-brouwer)\u003e Side-note, where does the chat bridge come from? The bridge works but it feels a bit weird communicating like this 😅)",
-        "created_at": "2024-03-19T16:49:44.214000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "Ah ok great, how do I join this telegram?",
-        "created_at": "2024-03-19T16:50:01.644000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "Can DM me on discord ofc 🙂",
-        "created_at": "2024-03-19T16:50:23.194000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e if you ping me on TG @mikeneuder i can add u",
-        "created_at": "2024-03-19T16:51:49.590000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e https://github.com/ethereum/consensus-specs/pull/3617/commits/920fab17713734e5ee7b5f10947f2eef727e4a35 (re @terencechain: 3 possible ways to key this\n1.) slot\n2.) parent_hash\n3.) slot + parent_hash\n\nI think we probably want parent_hash to be safe)",
-        "created_at": "2024-03-19T16:52:12.677000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jochembrouwer",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "Just ping'd",
-        "created_at": "2024-03-19T16:52:29.662000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cjochembrouwer\u003e Before I start asking stupid questions, are this the latest drafts to update the EIP?\n\nhttps://github.com/michaelneuder/execution-apis/pull/1\nhttps://github.com/ethereum/consensus-specs/pull/3617\n\n(there is no draft PR for ethereum/EIPs yet - right?)",
-        "created_at": "2024-03-19T16:56:07.029000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cpotuz0\u003e This is the same subtle point I raised above about different blocks for the same slot, this happens even without equivocation. Slot alone is not good enough, you need slot + block proposer. This leaves only equivocations here, but since we keep the parent hash then it's fine to keep them all. I don't think equivocations matter much here. Validators attest to one of the blocks and this means that whatever block the validators attested has an available IL,  the next builder can propose on top of that one (re @mikeneuder: actually take a peek here: https://github.com/ethereum/consensus-specs/pull/3617/commits/4d5444534e37f7d62e0e036f9a623f8c98042832\n\nsince the IL is independent of the block it was gossiped with, we can just store that a given slot has a good IL for it right ? (might need to use the parent_root somewhere, but that is contained in the EL check). then we would just need to check that a slot has an IL for it at some pt, which is the thing we might need to ask fradamt)",
-        "created_at": "2024-03-19T16:57:50.646000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e why dont you dm me so we dont spam ppl (re @jochembrouwer: Before I start asking stupid questions, are this the latest drafts to update the EIP?\n\nhttps://github.com/michaelneuder/execution-apis/pull/1\nhttps://github.com/ethereum/consensus-specs/pull/3617\n\n(there is no draft PR for ethereum/EIPs yet - right?))",
-        "created_at": "2024-03-19T16:58:11.147000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cmikeneuder\u003e yup agree (re @potuz0: This is the same subtle point I raised above about different blocks for the same slot, this happens even without equivocation. Slot alone is not good enough, you need slot + block proposer. This leaves only equivocations here, but since we keep the parent hash then it's fine to keep them all. I don't think equivocations matter much here. Validators attest to one of the blocks and this means that whatever block the validators attested has an available IL,  the next builder can propose on top of that one)",
-        "created_at": "2024-03-19T16:58:33.793000+00:00",
-        "attachments": null
-    }
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> thanks! looking at these and the items you commented on in the pr !! (re @terencechain: Hi @mikeneuder, Thanks for the nice work, I left a bunch of comments. Some high level notes:\n1. It seems like we are still using is_inclusion_list_available as a validity check. Instead, we should remove that and use fork choice (ie track seen for block tips)\n2. Why did we move state.parent_proposer_index. Even if summary contains proposer_index, we still need to check alignment between proposer indices across slot or else an evil proposer can change the previous proposer index to its own index\n3. We verify summary signature twice (forkchoice.md and beacon-chain.md). I think we can remove once\n4. Currently p2p spec rejects IL that's not current slot. Instead we should make a note that an IL can arrive earlier before slot start. Client may queue it or even import it)",
+    "created_at": "2024-03-19T12:17:33.054000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> sounds good, will visit the sig verifications (re @potuz0: Beacon chain has to be part of process execution payload)",
+    "created_at": "2024-03-19T12:18:10.052000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> wait in that case is it cleaner to keep the signed summary in the ExecutionPayload (re @InclusionList_bot: <g11tech> yea, otherwise a node which didn't see gossiped IL will not be able to verify that it was correct or a made up previous summary embedded in the block)",
+    "created_at": "2024-03-19T12:19:23.893000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> so that we can always have that signature around for syncing",
+    "created_at": "2024-03-19T12:19:35.541000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> ok updated consensus specs with latest round of revs from @terencechain :D \n\nhttps://github.com/ethereum/consensus-specs/pull/3617/commits/7545154453f911f8bb88f4e9d4c29a02e797e2e0\nchange log:\n- add back beacon state for parent_proposer_index. this is used to verify signature in `verify_inclusion_list_summary_signature` which is called during `process_execution_payload`. \n- remove signature check in fork-choice.md as discussed\n- remove is_il_available check from `verify_and_notify_new_payload`\n- rename “previous” to “parent” to match existing style",
+    "created_at": "2024-03-19T13:45:21.789000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> ok updated consensus specs with latest round of revs from @terencechain :D \n\nhttps://github.com/ethereum/consensus-specs/pull/3617/commits/7545154453f911f8bb88f4e9d4c29a02e797e2e0\nchange log:\n- add back beacon state for parent_proposer_index. this is used to verify signature in verify_inclusion_list_summary_signature which is called during process_execution_payload. \n- remove signature check in fork-choice.md as discussed\n- remove is_il_available check from verify_and_notify_new_payload\n- rename “previous” to “parent” to match existing style\n- fix types in `on_inclusion_list` \n- get rid of parent hash check and length check in p2p validation. \n- allow future ILs to be gossiped\n- add signature generation over IL received from the EL for honest validator spec",
+    "created_at": "2024-03-19T13:47:23.709000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> three remaining questions:\n1. when should the IL avaibility check happen for the block ? i removed it from the `verify_and_notify_new_paylad` function, so maybe it should happen in the `process_execution_payload`? \n2. does the EL need a signed summary or unsigned? i made it unsigned based on convos, but @gr3999 has a comment saying it might need to be signed for syncing. curious what you think. if its unsigned, we never store that signature, which might be fine but im unsure\n3. when should the `verify_and_notify_new_inclusion_list` get called ? this takes the execution engine as a parameter. in the deneb spec, the `verify_and_notify_new_payload` call happens happens in the `process_execution_payload` function. it feels like for the IL it should happen in the p2p validation somewhere ? curious what y’all think",
+    "created_at": "2024-03-19T13:52:31.929000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> left one open comment re: @terencechain https://github.com/ethereum/consensus-specs/pull/3617#discussion_r1529211094",
+    "created_at": "2024-03-19T13:53:05.301000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> is this back and forth useful ? i feel like yes, but want to make sure others do too :D",
+    "created_at": "2024-03-19T13:53:30.856000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> i think in general the stuff that goes in “fork-choice.md” vs “beacon-chain.md” is confusing tbh.",
+    "created_at": "2024-03-19T14:06:16.532000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> maybe the right place for the IL availability check is here in on_block. similar to is_data_available, we can queue the block for validity even if the IL is not there yer",
+    "created_at": "2024-03-19T14:07:55.464000+00:00",
+    "attachments": [
+      {
+        "type": "image/jpeg",
+        "origin_name": "file_15.jpg",
+        "content": "9fb932ef07c59d90b3c862c3b0e6ab0c35e96a1817e1f0ff3bbd98ee1a1a1e6c"
+      }
+    ]
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> maybe the right place for the IL availability check is here in on_block. similar to is_data_available, we can queue the block for validity even if the IL is not there yet",
+    "created_at": "2024-03-19T14:07:57.044000+00:00",
+    "attachments": [
+      {
+        "type": "image/jpeg",
+        "origin_name": "file_15.jpg",
+        "content": "9fb932ef07c59d90b3c862c3b0e6ab0c35e96a1817e1f0ff3bbd98ee1a1a1e6c"
+      }
+    ]
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "We don' t want to check on `on_block`  because we don' t want to tie availability with validity! the beauty of the design is that we can have a completely independent forkchoice handler whose only task is to simply set a boolean in the node",
+    "created_at": "2024-03-19T14:36:42.798000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "you need to add the bool to the protoarray node and set it in a handler `on_inclusion_list`",
+    "created_at": "2024-03-19T14:37:06.317000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> do you have a link to your spec on this ? having trouble following (re @InclusionList_bot: <potuz> [reply]: We don' t want to check on `on_block`  because we don' t want to tie availability with validity! the beauty of the design is that we can have a completely independent forkchoice handler whose only task is to simply set a boolean in the node)",
+    "created_at": "2024-03-19T15:56:48.233000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "my spec won´t help you here cause I had specified ILs as a validity condition, in ePBS the situation is different since the IL is seen without any Payload at all",
+    "created_at": "2024-03-19T15:57:29.778000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> i see. i feel like the on_block handler makes sense tho, same as deneb, “this block MAY be queued and subsequently considered when IL data becomes available\"",
+    "created_at": "2024-03-19T15:58:28.287000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> b/c the validity of the block is conditioned on existence of an IL",
+    "created_at": "2024-03-19T15:58:39.160000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> or i guess in process_execution_payload ?",
+    "created_at": "2024-03-19T16:00:15.016000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> e.g., after verifying the slot n-1 signature, we could also check that an IL is available ?",
+    "created_at": "2024-03-19T16:01:17.049000+00:00",
+    "attachments": [
+      {
+        "type": "image/jpeg",
+        "origin_name": "file_16.jpg",
+        "content": "a533ff6245b80a38f7ca2c700472729954156600c61311851cadaed91021dac8"
+      }
+    ]
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<potuz0> no: the IL is specifically independent than block, you could receive the IL after the block, and a VC for example may want to propose on top of a block whose IL was received after it was processed in `on_block`",
+    "created_at": "2024-03-19T16:01:43.849000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<potuz0> we do not need to check at all that the il is available",
+    "created_at": "2024-03-19T16:02:00.232000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "The whole point is that there is no longer a need to check for it",
+    "created_at": "2024-03-19T16:02:12.857000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "rather we mark the IL available when we receive it",
+    "created_at": "2024-03-19T16:02:22.748000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> but i shouldn’t attest to a block that i dont have an IL for",
+    "created_at": "2024-03-19T16:02:36.509000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "this is the difference between a validity condition and a head filtering condition",
+    "created_at": "2024-03-19T16:02:43.383000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> funny you switched from TG to discord hehe",
+    "created_at": "2024-03-19T16:02:46.207000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> ok gotcha, we want a head filtering condition. that makes sense (re @InclusionList_bot: <potuz> this is the difference between a validity condition and a head filtering condition)",
+    "created_at": "2024-03-19T16:03:07.426000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I dislike the TG interface, I get a ping everytime someone writes there 😄",
+    "created_at": "2024-03-19T16:03:11.228000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> so it should be in fork-choice somewhere",
+    "created_at": "2024-03-19T16:03:15.992000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Ok, so here's a summary about IL verification:",
+    "created_at": "2024-03-19T16:03:30.228000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "- We have an independent handler in forkchoice `on_inclusion_list` this handler checks the signature of the summary, request the EL to check the validity and puts a `in_available = true` in the corresponding node in forkchoice. for ease of implementation I would start by asserting that the beacon block is already imported and say that client can hold the IL until the block is known. \n- We have another handler in `process_execution_payload` that checks the signature of the summary and sends the payload for validation to the EL\n- We have another handler in p2p gossip that checks the signature on the summary and performs basic checks (like the proposer is supposed to be submitting an IL this slot or the next one). \n\nWe also need to be careful about the first point: if the beacon block root is explicit in the IL then it is easy to check for which block this IL belongs. However this prevents sending the IL before the block which is a good feature to have. So we send instead the slot and the proposer. This is a little more akward in forkchoice because we can have different blocks for the same slot",
+    "created_at": "2024-03-19T16:09:53.637000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> incredible (re @InclusionList_bot: <potuz> - We have an independent handler in forkchoice `on_inclusion_list` this handler checks the signature of the summary, request the EL to check the validity and puts a `in_available = true` in the corresponding node in forkchoice. for ease of implementation I would start by asserting that the beacon block is already imported and say that client can hold the IL until the block is known. \n- We have another handler in `process_execution_payload` that checks the signature of the summary and sends the payload for validation to the EL\n- We have another handler in p2p gossip that checks the signature on the summary and performs basic checks (like the proposer is supposed to be submitting an IL this slot or the next one). \n\nWe also need to be careful about the first point: if the beacon block root is explicit in the IL then it is easy to check for which block this IL belongs. However this prevents sending the IL before the block which is a good feature to have. So we send instead the slot and the proposer. This is a little more akward in forkchoice because we can have different blocks for the same slot)",
+    "created_at": "2024-03-19T16:12:26.728000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> and then in validator.md we say that you only attest to a block if il_available is true ?",
+    "created_at": "2024-03-19T16:12:53.933000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> right ?",
+    "created_at": "2024-03-19T16:12:54.960000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "that's probably not needed, probably better to wait up for Francesco on this, it may be easier to tweak `get_head` to do the filtering. And we may need to change the honest reorg spec to allow longer reorgs",
+    "created_at": "2024-03-19T16:13:56.887000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> ok sg!",
+    "created_at": "2024-03-19T16:15:35.961000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> still thinking on 2,3 in here! (re @mikeneuder: three remaining questions:\n1. when should the IL avaibility check happen for the block ? i removed it from the verify_and_notify_new_paylad function, so maybe it should happen in the process_execution_payload? \n2. does the EL need a signed summary or unsigned? i made it unsigned based on convos, but @gr3999 has a comment saying it might need to be signed for syncing. curious what you think. if its unsigned, we never store that signature, which might be fine but im unsure\n3. when should the verify_and_notify_new_inclusion_list get called ? this takes the execution engine as a parameter. in the deneb spec, the verify_and_notify_new_payload call happens happens in the process_execution_payload function. it feels like for the IL it should happen in the p2p validation somewhere ? curious what y’all think)",
+    "created_at": "2024-03-19T16:16:11.850000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<terencechain> 2 needs to be signed, that is `payload.signed_summary` because state transition requires that for `verify_inclusion_list_summary_signature`",
+    "created_at": "2024-03-19T16:17:14.629000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<terencechain> (I just left a comment about that)",
+    "created_at": "2024-03-19T16:17:25.470000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<terencechain> 3 `verify_and_notify_new_inclusion_list` is called on `on_inclusion_list`, that looks good to me. The remining thing is when/how you want to flip `il_available` to true",
+    "created_at": "2024-03-19T16:19:07.398000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> oh good pt! (re @terencechain: 2 needs to be signed, that is payload.signed_summary because state transition requires that for verify_inclusion_list_summary_signature)",
+    "created_at": "2024-03-19T16:21:42.379000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> nice",
+    "created_at": "2024-03-19T16:21:42.943000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "1. yes, this is the second handler mentioned in my previous message, you verify in `process_execution_payload` the validity of the IL included in the payload. There is **no need to verify availability of the IL** for the current slot when processing the current slot's block. \n2. The simplest is to let the signature in the payload, so that you include a signed summary as it is today. The EL will ignore the signature and the CL will verify it.  I think it's preferable to have the signature outside of the payload in a separate envelope so that the CL assembles the summary and checks the signature, and the EL does not need to keep objects it doesn't care about nor knows how to read. However, this is probably overkill for the PoC at this stage. \n3. This is part of the first handler in my message, in forkchoice `on_inclusion_list` should call the engine and verify it. If it returns without error then you flip the node's bool. The node needs to exist for this before. That's why the comment of asserting that the block is already processed, even though implementations will be different",
+    "created_at": "2024-03-19T16:21:49.386000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "The actual implementation in clients will be different: p2p will do a signature verification and then the forkchoice handler will not do it again",
+    "created_at": "2024-03-19T16:22:54.737000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> ok sounds great!",
+    "created_at": "2024-03-19T16:23:15.880000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "also clients will call the EL with the IL and cache the result",
+    "created_at": "2024-03-19T16:23:20.848000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> ill incorporate this",
+    "created_at": "2024-03-19T16:23:23.833000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "so that when the block is synced and added to forkchoice, immediately they set the boolean",
+    "created_at": "2024-03-19T16:23:32.481000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<terencechain> I think two signatures verifications. One on p2p, one one state transition. `process_execution_payload` -> ``verify_inclusion_list_summary_signature``",
+    "created_at": "2024-03-19T16:23:47.152000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I think this is fine",
+    "created_at": "2024-03-19T16:24:37.536000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> oh my reacts on tg dont show up in discord. acking",
+    "created_at": "2024-03-19T16:25:31.719000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "terencechain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Sorry for changing the topic to more of an edge case discussion. Say the following\n- IL arrives before block\n- IL is valid, we cache the result\n- Proposer equivocates and broadcasts two blocks\n- One single IL should allow the two blocks valid, not one or another\n- I think we need to make sure to check this edge case",
+    "created_at": "2024-03-19T16:32:03.664000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Hey <@750824368438771842> are there any changes proposed for the EL side (I can't seem to find it?). I would love to review it 🙂",
+    "created_at": "2024-03-19T16:39:53.779000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "(I will take on implementing IL in EthJS 😄 )",
+    "created_at": "2024-03-19T16:40:12.125000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> actually take a peek here: https://github.com/ethereum/consensus-specs/pull/3617/commits/4d5444534e37f7d62e0e036f9a623f8c98042832\n\nsince the IL is independent of the block it was gossiped with, we can just store that a given slot has a good IL for it right ? (might need to use the parent_root somewhere, but that is contained in the EL check). then we would just need to check that a slot has an IL for it at some pt, which is the thing we might need to ask fradamt (re @InclusionList_bot: <terence0083> Sorry for changing the topic to more of an edge case discussion. Say the following\n- IL arrives before block\n- IL is valid, we cache the result\n- Proposer equivocates and broadcasts two blocks\n- One single IL should allow the two blocks valid, not one or another\n- I think we need to make sure to check this edge case)",
+    "created_at": "2024-03-19T16:42:49.254000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> hey! links are in here (re @InclusionList_bot: <Jochem Brouwer (jochem-brouwer)> Hey @mikeneuder are there any changes proposed for the EL side (I can't seem to find it?). I would love to review it 🙂)",
+    "created_at": "2024-03-19T16:43:02.323000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> https://notes.ethereum.org/@mikeneuder/il-poc-spec",
+    "created_at": "2024-03-19T16:43:03.656000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> https://github.com/michaelneuder/execution-apis/pull/1\nhttps://github.com/michaelneuder/execution-specs/pull/1",
+    "created_at": "2024-03-19T16:43:24.634000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> have to respond to some comments in the EELS spec",
+    "created_at": "2024-03-19T16:43:34.278000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Thanks 🙂",
+    "created_at": "2024-03-19T16:43:44.427000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> ofc :D",
+    "created_at": "2024-03-19T16:44:22.924000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> ty for looking",
+    "created_at": "2024-03-19T16:44:29.179000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Is the spec up-to-date with the arguments for blob-txs? Before I start to comment about that 😅",
+    "created_at": "2024-03-19T16:44:55.018000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "(execution spec)",
+    "created_at": "2024-03-19T16:45:06.225000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> not compatible with blobs for now",
+    "created_at": "2024-03-19T16:45:31.261000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "That's fine, but I do not see this in the spec 🤔",
+    "created_at": "2024-03-19T16:46:04.216000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> ya how does it make sense to denote that ? a check that there are no type 3 txns in the list ?",
+    "created_at": "2024-03-19T16:46:48.085000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> (eels spec is the thing i understand the least as a warning xD)",
+    "created_at": "2024-03-19T16:47:01.846000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<terencechain> 3 possible ways to key this\n1.) slot\n2.) parent_hash\n3.) slot + parent_hash\n\nI think we probably want parent_hash to be safe (re @mikeneuder: actually take a peek here: https://github.com/ethereum/consensus-specs/pull/3617/commits/4d5444534e37f7d62e0e036f9a623f8c98042832\n\nsince the IL is independent of the block it was gossiped with, we can just store that a given slot has a good IL for it right ? (might need to use the parent_root somewhere, but that is contained in the EL check). then we would just need to check that a slot has an IL for it at some pt, which is the thing we might need to ask fradamt)",
+    "created_at": "2024-03-19T16:48:16.177000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I'm not super deep into how these APIs are structured but I would personally set it into the \"Specification\" section of the methods, effectively ban 0x03 txs",
+    "created_at": "2024-03-19T16:48:16.603000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Side-note, where does the chat bridge come from? The bridge works but it feels a bit weird communicating like this 😅",
+    "created_at": "2024-03-19T16:48:55.973000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> ya can do slot,hash tuple (re @terencechain: 3 possible ways to key this\n1.) slot\n2.) parent_hash\n3.) slot + parent_hash\n\nI think we probably want parent_hash to be safe)",
+    "created_at": "2024-03-19T16:49:23.024000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> bridge is from telegram. (re @InclusionList_bot: <Jochem Brouwer (jochem-brouwer)> Side-note, where does the chat bridge come from? The bridge works but it feels a bit weird communicating like this 😅)",
+    "created_at": "2024-03-19T16:49:44.214000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Ah ok great, how do I join this telegram?",
+    "created_at": "2024-03-19T16:50:01.644000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Can DM me on discord ofc 🙂",
+    "created_at": "2024-03-19T16:50:23.194000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> if you ping me on TG @mikeneuder i can add u",
+    "created_at": "2024-03-19T16:51:49.590000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> https://github.com/ethereum/consensus-specs/pull/3617/commits/920fab17713734e5ee7b5f10947f2eef727e4a35 (re @terencechain: 3 possible ways to key this\n1.) slot\n2.) parent_hash\n3.) slot + parent_hash\n\nI think we probably want parent_hash to be safe)",
+    "created_at": "2024-03-19T16:52:12.677000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Just ping'd",
+    "created_at": "2024-03-19T16:52:29.662000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<jochembrouwer> Before I start asking stupid questions, are this the latest drafts to update the EIP?\n\nhttps://github.com/michaelneuder/execution-apis/pull/1\nhttps://github.com/ethereum/consensus-specs/pull/3617\n\n(there is no draft PR for ethereum/EIPs yet - right?)",
+    "created_at": "2024-03-19T16:56:07.029000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<potuz0> This is the same subtle point I raised above about different blocks for the same slot, this happens even without equivocation. Slot alone is not good enough, you need slot + block proposer. This leaves only equivocations here, but since we keep the parent hash then it's fine to keep them all. I don't think equivocations matter much here. Validators attest to one of the blocks and this means that whatever block the validators attested has an available IL,  the next builder can propose on top of that one (re @mikeneuder: actually take a peek here: https://github.com/ethereum/consensus-specs/pull/3617/commits/4d5444534e37f7d62e0e036f9a623f8c98042832\n\nsince the IL is independent of the block it was gossiped with, we can just store that a given slot has a good IL for it right ? (might need to use the parent_root somewhere, but that is contained in the EL check). then we would just need to check that a slot has an IL for it at some pt, which is the thing we might need to ask fradamt)",
+    "created_at": "2024-03-19T16:57:50.646000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> why dont you dm me so we dont spam ppl (re @jochembrouwer: Before I start asking stupid questions, are this the latest drafts to update the EIP?\n\nhttps://github.com/michaelneuder/execution-apis/pull/1\nhttps://github.com/ethereum/consensus-specs/pull/3617\n\n(there is no draft PR for ethereum/EIPs yet - right?))",
+    "created_at": "2024-03-19T16:58:11.147000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<mikeneuder> yup agree (re @potuz0: This is the same subtle point I raised above about different blocks for the same slot, this happens even without equivocation. Slot alone is not good enough, you need slot + block proposer. This leaves only equivocations here, but since we keep the parent hash then it's fine to keep them all. I don't think equivocations matter much here. Validators attest to one of the blocks and this means that whatever block the validators attested has an available IL,  the next builder can propose on top of that one)",
+    "created_at": "2024-03-19T16:58:33.793000+00:00",
+    "attachments": null
+  }
 ]

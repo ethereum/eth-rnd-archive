@@ -1,296 +1,296 @@
 [
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "Yes, the general idea would be to split fees across IL committee members, now how they should be split exactly, or how to deal with it during congestion is still an interesting research question we have to explore!",
-        "created_at": "2024-09-17T07:49:23.174000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "fradamt",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "I think option 3 would be best. Not importing doesn't make sense to me because:\n1) It's a one-off thing. You don't want to vote for it this slot, but after that it doesn't matter\n2) It only concerns the committee members of this slot. Imho it's best to just import it, note somewhere that it failed this check and use that to not go down that branch in `get_head`",
-        "created_at": "2024-09-17T09:59:33.904000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "I remember back when discussing 7547 when I insisted on next-slot inclusion lists transactions should be forced to be top of block, that there were strong pushbacks because this would enable some edge cases exploitations when the tx sender has information of an event that will happen next slot. I ask though: what if we make next slot inclusion list transactions be top of block, but being semantically still in the current block? that is, timestamp, block number, everything would be as if these txs were still part of block N, but they are only executed and validated as part of N+1,  gas accounting for the block target would change and some other minor changes are needed, but this would make a design with the benefits of next slot inclusion lists (for example not having tradeoffs with the benefits of 7732 and moving away from the hot path any validation of the inclusion list) while at the same time being execution equivalent to bottom of current block inclusion lists.",
-        "created_at": "2024-09-17T11:22:29.694000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "jih2nn",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "Doesn't it still not resolve the forementioned edge cases as the IL transactions get executed earlier anyway?",
-        "created_at": "2024-09-17T11:45:24.341000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "you can't exploit the known information if it's bounded by the slot since it's not yet that slot.",
-        "created_at": "2024-09-17T12:10:47.297000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "terencechain",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "Thanks for these notes, sounds like you and \u003c@755590043632140352\u003e  need to settle this. In the spec writing, I'll find a way to black-box this behavior so that when we decide on importable vs filterable, it'll be an easy change : )",
-        "created_at": "2024-09-17T13:28:35.958000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "terencechain",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "There's one thing I realized that the original FOCIL writeup didn't specify: the edge case where the proposer or network changes the head after the `il_local release` and `il_aggregate release` intervals. For example, `il_local` builds on top of `0xa`, and everyone is happy until `t=0`, when the proposer calls `update_head`, changing the head to `0xb`. The proposer is no longer able to satisfy the inclusion list. I think this means two things: 1.) Lock the view based on the current head 2.) The evaluate function itself should be head-dependent",
-        "created_at": "2024-09-17T13:44:21.703000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "1) Seems sensible, it means the block would be valid without satisfying the IL in that case right? 2) It's already the case iirm, Eval just takes the local IL txns into account",
-        "created_at": "2024-09-17T14:20:44.765000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "terencechain",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "For 2.) I think it needs to be more than that. Here is an example:\n- Imagine two branches, `a` and `b`\n- At `t=6-\u003e9`, you observe local ILs from branch `a`\n- At `t=0`, you observe a block extending branch `b`\n\nThe question is, should you count a local IL that is not on the block's branch against the block or not?",
-        "created_at": "2024-09-17T14:31:20.182000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "intuitively it sounds a bit weird to count it \"against\" the block imo, couldn't you just discard/ignore local ILs building on a block that's not the one broadcast by the proposer?",
-        "created_at": "2024-09-17T14:58:30.287000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "terencechain",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003e couldn't you just discard/ignore local ILs building on a block that's not the one broadcast by the proposer\nThis is what I'm suggesting\n\n\u003e intuitively it sounds a bit weird to count it \"against\" the block imo\nThis is what focil ethresearch reads to me so I wanted to clarify,  As local ILs observed in their view may be on a different branch than what the new block is on\n\nSounds like we are on the same page here",
-        "created_at": "2024-09-17T15:02:36.525000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "I think the main concern with ToB ILs in general is more that searchers/builders will fight to get their valuable MEV txns (e.g., arbs) included in the IL so they can be executed before anyone else captures the opportunity. End of current block doesn't really work either, you already see EoB MEV happening to frontrun the next-slot ToB: Builders offer services where you get access to their state simulations so you can predict what the state will look like ahead of time",
-        "created_at": "2024-09-17T15:05:17.156000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "In this figure from our recent paper we see a few builders already doing EoB MEV",
-        "created_at": "2024-09-17T15:09:59.353000+00:00",
-        "attachments": [
-            {
-                "type": "image/png",
-                "origin_name": "Screenshot_2024-09-17_at_16.09.18.png",
-                "content": "ac41cf236846f02127bb6dc76b08dd768a7202b319109c49ba8ef65bf485c5a9"
-            }
-        ]
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "I don't see how 1 works if the IL for N+1 is built before the block N is revealed",
-        "created_at": "2024-09-17T15:18:01.372000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "terencechain",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "In this example. I presume\n- IL is built on `N-1`\n- The question is if `N+1` block built on top of `N` or `N-1`\n- If it's `N-1`, then IL can be satisfied\n- If it's `N`, then IL can not be satisifed, which means (my original point that I raised), the evaluation function needs to be head dependent",
-        "created_at": "2024-09-17T15:22:46.296000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "no IL is built during N, to be enforced at N+1",
-        "created_at": "2024-09-17T15:23:56.395000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "and I'm not talking about your issue though",
-        "created_at": "2024-09-17T15:24:19.762000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "terencechain",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "yes but which is the head. When I say `n-1`, it meant head at",
-        "created_at": "2024-09-17T15:24:30.054000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "still referring about this",
-        "created_at": "2024-09-17T15:24:42.923000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "terencechain",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "oh sorry, I didnt understand that sentence",
-        "created_at": "2024-09-17T15:24:56.967000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "so builders sell streaming services: they simulate what is likely to become a block in real-time so arbers can leverage this information to include their txns at the end of the block to frontrun n+1 ToB transactions",
-        "created_at": "2024-09-17T15:42:12.596000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "and they are willing to send these txs even seconds before the block is actually decided?",
-        "created_at": "2024-09-17T15:44:29.435000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "yes",
-        "created_at": "2024-09-17T15:44:46.234000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "so I get info from builder at second k that the block for N will look like, I submit my tx so that the IL committee includes it, then the block atually continues being built until say k+2, and my tx does appear in the IL and I risk that between k and k+2 my tx has become negative EV?",
-        "created_at": "2024-09-17T15:46:00.611000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "yeah, I mean the fact that we already see EoB happening today means it makes sense for them to do it. But you're right in pointing out there is a time delta between the IL deadline and the end of block construction so it should be riskier",
-        "created_at": "2024-09-17T15:50:16.815000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "I think it's different though, sending txs near the deadline for block construction and sending it seconds in advance are very different behaviors IMO",
-        "created_at": "2024-09-17T15:51:37.659000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "right, yeah that's what I was trying to say in the second sentence I wrote above",
-        "created_at": "2024-09-17T15:52:16.430000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "still, I'm generally against allocating dedicated block space at the top or end of block because the risk of sophisticated actors exploiting this to include MEV txns can't be ignored",
-        "created_at": "2024-09-17T15:52:34.785000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "I just simply want to get to a design where we don't lose the guarantees for fast processing in 7732, whih is why I'm bearish on same slot ILs",
-        "created_at": "2024-09-17T15:53:06.224000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "But I agree that having dedicated block space smells",
-        "created_at": "2024-09-17T15:53:58.066000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "I'm still hopeful we can really dig into timings and implementation details so we make it work in the end",
-        "created_at": "2024-09-17T15:55:59.956000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "to me there is value in getting proposals to a good place on their own but if they end up being considered for inclusion we'll have time to experiment and test what exact tradeoffs we would have to make. On the FOCIL side, knowing what each step requires in terms of resources (memory, compute, bandwidth, time, etc..) is something we have to figure out anyways",
-        "created_at": "2024-09-17T16:02:35.321000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "I don't want to step into the work that \u003c@363800010518822915\u003e is doing on the spec side, but the lift from it to ePBS is not trivial. I already did it for 7547 (or rather 7547 was taken from an ePBS spec) and it's very different than just the stand alone PR. So just pointing that the work of going from standalone to combined fork is actually complicated",
-        "created_at": "2024-09-17T20:31:12.956000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "terencechain",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "Yeah. I made the same comment in one of the documents. There needs to be a parallel effort to think about FOCIL on top of ePBS. If by chance they both land in the same fork, whoever merges to `dev` last will be very upset. Even though it's overall good for FOCIL to be part of ePBS, it gives more time to verify",
-        "created_at": "2024-09-17T20:38:10.184000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "ah yeah I wasn't trying to say it's trivial, just that it's best to consider both EIPs independently for now as there is no way to know how things will turn out, and I do think they're trying to solve very different issues that are pretty self-contained conceptually at the end of the day",
-        "created_at": "2024-09-17T20:50:42.570000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "terencechain",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "Hm. I ran into a blocker. I don't have a good solution, so I'm leaving it here to see if I'm missing something obvious. \n \n- Say I have a simple inclusion list container `{[]tx, []summary}` which represents a list of txs and their summaries  \n\n- I have a committee, and I want to aggregate the summaries to represent which validator sends which summary: `{bitfield, summary, signature}`  \n\n- I also don't want the validator to sign over every single summary, which makes it tricky",
-        "created_at": "2024-09-17T21:01:05.359000+00:00",
-        "attachments": null
-    }
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Yes, the general idea would be to split fees across IL committee members, now how they should be split exactly, or how to deal with it during congestion is still an interesting research question we have to explore!",
+    "created_at": "2024-09-17T07:49:23.174000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "fradamt",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I think option 3 would be best. Not importing doesn't make sense to me because:\n1) It's a one-off thing. You don't want to vote for it this slot, but after that it doesn't matter\n2) It only concerns the committee members of this slot. Imho it's best to just import it, note somewhere that it failed this check and use that to not go down that branch in `get_head`",
+    "created_at": "2024-09-17T09:59:33.904000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I remember back when discussing 7547 when I insisted on next-slot inclusion lists transactions should be forced to be top of block, that there were strong pushbacks because this would enable some edge cases exploitations when the tx sender has information of an event that will happen next slot. I ask though: what if we make next slot inclusion list transactions be top of block, but being semantically still in the current block? that is, timestamp, block number, everything would be as if these txs were still part of block N, but they are only executed and validated as part of N+1,  gas accounting for the block target would change and some other minor changes are needed, but this would make a design with the benefits of next slot inclusion lists (for example not having tradeoffs with the benefits of 7732 and moving away from the hot path any validation of the inclusion list) while at the same time being execution equivalent to bottom of current block inclusion lists.",
+    "created_at": "2024-09-17T11:22:29.694000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "jih2nn",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Doesn't it still not resolve the forementioned edge cases as the IL transactions get executed earlier anyway?",
+    "created_at": "2024-09-17T11:45:24.341000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "you can't exploit the known information if it's bounded by the slot since it's not yet that slot.",
+    "created_at": "2024-09-17T12:10:47.297000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "terencechain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Thanks for these notes, sounds like you and <@755590043632140352>  need to settle this. In the spec writing, I'll find a way to black-box this behavior so that when we decide on importable vs filterable, it'll be an easy change : )",
+    "created_at": "2024-09-17T13:28:35.958000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "terencechain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "There's one thing I realized that the original FOCIL writeup didn't specify: the edge case where the proposer or network changes the head after the `il_local release` and `il_aggregate release` intervals. For example, `il_local` builds on top of `0xa`, and everyone is happy until `t=0`, when the proposer calls `update_head`, changing the head to `0xb`. The proposer is no longer able to satisfy the inclusion list. I think this means two things: 1.) Lock the view based on the current head 2.) The evaluate function itself should be head-dependent",
+    "created_at": "2024-09-17T13:44:21.703000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "1) Seems sensible, it means the block would be valid without satisfying the IL in that case right? 2) It's already the case iirm, Eval just takes the local IL txns into account",
+    "created_at": "2024-09-17T14:20:44.765000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "terencechain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "For 2.) I think it needs to be more than that. Here is an example:\n- Imagine two branches, `a` and `b`\n- At `t=6->9`, you observe local ILs from branch `a`\n- At `t=0`, you observe a block extending branch `b`\n\nThe question is, should you count a local IL that is not on the block's branch against the block or not?",
+    "created_at": "2024-09-17T14:31:20.182000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "intuitively it sounds a bit weird to count it \"against\" the block imo, couldn't you just discard/ignore local ILs building on a block that's not the one broadcast by the proposer?",
+    "created_at": "2024-09-17T14:58:30.287000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "terencechain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "> couldn't you just discard/ignore local ILs building on a block that's not the one broadcast by the proposer\nThis is what I'm suggesting\n\n> intuitively it sounds a bit weird to count it \"against\" the block imo\nThis is what focil ethresearch reads to me so I wanted to clarify,  As local ILs observed in their view may be on a different branch than what the new block is on\n\nSounds like we are on the same page here",
+    "created_at": "2024-09-17T15:02:36.525000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I think the main concern with ToB ILs in general is more that searchers/builders will fight to get their valuable MEV txns (e.g., arbs) included in the IL so they can be executed before anyone else captures the opportunity. End of current block doesn't really work either, you already see EoB MEV happening to frontrun the next-slot ToB: Builders offer services where you get access to their state simulations so you can predict what the state will look like ahead of time",
+    "created_at": "2024-09-17T15:05:17.156000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "In this figure from our recent paper we see a few builders already doing EoB MEV",
+    "created_at": "2024-09-17T15:09:59.353000+00:00",
+    "attachments": [
+      {
+        "type": "image/png",
+        "origin_name": "Screenshot_2024-09-17_at_16.09.18.png",
+        "content": "ac41cf236846f02127bb6dc76b08dd768a7202b319109c49ba8ef65bf485c5a9"
+      }
+    ]
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I don't see how 1 works if the IL for N+1 is built before the block N is revealed",
+    "created_at": "2024-09-17T15:18:01.372000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "terencechain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "In this example. I presume\n- IL is built on `N-1`\n- The question is if `N+1` block built on top of `N` or `N-1`\n- If it's `N-1`, then IL can be satisfied\n- If it's `N`, then IL can not be satisifed, which means (my original point that I raised), the evaluation function needs to be head dependent",
+    "created_at": "2024-09-17T15:22:46.296000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "no IL is built during N, to be enforced at N+1",
+    "created_at": "2024-09-17T15:23:56.395000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "and I'm not talking about your issue though",
+    "created_at": "2024-09-17T15:24:19.762000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "terencechain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yes but which is the head. When I say `n-1`, it meant head at",
+    "created_at": "2024-09-17T15:24:30.054000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "still referring about this",
+    "created_at": "2024-09-17T15:24:42.923000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "terencechain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "oh sorry, I didnt understand that sentence",
+    "created_at": "2024-09-17T15:24:56.967000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "so builders sell streaming services: they simulate what is likely to become a block in real-time so arbers can leverage this information to include their txns at the end of the block to frontrun n+1 ToB transactions",
+    "created_at": "2024-09-17T15:42:12.596000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "and they are willing to send these txs even seconds before the block is actually decided?",
+    "created_at": "2024-09-17T15:44:29.435000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yes",
+    "created_at": "2024-09-17T15:44:46.234000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "so I get info from builder at second k that the block for N will look like, I submit my tx so that the IL committee includes it, then the block atually continues being built until say k+2, and my tx does appear in the IL and I risk that between k and k+2 my tx has become negative EV?",
+    "created_at": "2024-09-17T15:46:00.611000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yeah, I mean the fact that we already see EoB happening today means it makes sense for them to do it. But you're right in pointing out there is a time delta between the IL deadline and the end of block construction so it should be riskier",
+    "created_at": "2024-09-17T15:50:16.815000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I think it's different though, sending txs near the deadline for block construction and sending it seconds in advance are very different behaviors IMO",
+    "created_at": "2024-09-17T15:51:37.659000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "right, yeah that's what I was trying to say in the second sentence I wrote above",
+    "created_at": "2024-09-17T15:52:16.430000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "still, I'm generally against allocating dedicated block space at the top or end of block because the risk of sophisticated actors exploiting this to include MEV txns can't be ignored",
+    "created_at": "2024-09-17T15:52:34.785000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I just simply want to get to a design where we don't lose the guarantees for fast processing in 7732, whih is why I'm bearish on same slot ILs",
+    "created_at": "2024-09-17T15:53:06.224000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "But I agree that having dedicated block space smells",
+    "created_at": "2024-09-17T15:53:58.066000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I'm still hopeful we can really dig into timings and implementation details so we make it work in the end",
+    "created_at": "2024-09-17T15:55:59.956000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "to me there is value in getting proposals to a good place on their own but if they end up being considered for inclusion we'll have time to experiment and test what exact tradeoffs we would have to make. On the FOCIL side, knowing what each step requires in terms of resources (memory, compute, bandwidth, time, etc..) is something we have to figure out anyways",
+    "created_at": "2024-09-17T16:02:35.321000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I don't want to step into the work that <@363800010518822915> is doing on the spec side, but the lift from it to ePBS is not trivial. I already did it for 7547 (or rather 7547 was taken from an ePBS spec) and it's very different than just the stand alone PR. So just pointing that the work of going from standalone to combined fork is actually complicated",
+    "created_at": "2024-09-17T20:31:12.956000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "terencechain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Yeah. I made the same comment in one of the documents. There needs to be a parallel effort to think about FOCIL on top of ePBS. If by chance they both land in the same fork, whoever merges to `dev` last will be very upset. Even though it's overall good for FOCIL to be part of ePBS, it gives more time to verify",
+    "created_at": "2024-09-17T20:38:10.184000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "ah yeah I wasn't trying to say it's trivial, just that it's best to consider both EIPs independently for now as there is no way to know how things will turn out, and I do think they're trying to solve very different issues that are pretty self-contained conceptually at the end of the day",
+    "created_at": "2024-09-17T20:50:42.570000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "terencechain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Hm. I ran into a blocker. I don't have a good solution, so I'm leaving it here to see if I'm missing something obvious. \n \n- Say I have a simple inclusion list container `{[]tx, []summary}` which represents a list of txs and their summaries  \n\n- I have a committee, and I want to aggregate the summaries to represent which validator sends which summary: `{bitfield, summary, signature}`  \n\n- I also don't want the validator to sign over every single summary, which makes it tricky",
+    "created_at": "2024-09-17T21:01:05.359000+00:00",
+    "attachments": null
+  }
 ]

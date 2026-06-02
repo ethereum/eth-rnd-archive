@@ -1,168 +1,168 @@
 [
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "How about this? Very close to what \u003c@755590043632140352\u003e suggested but w/ some nuances\n\nN at `6s`: builder reveals\nN from `6s to 10s`: IL committee builds local ILs\nN at `10s`: IL deadline to broadcast local ILs\nN+1 at `0s`: Builder sends bids\nN+1 at `0s`: Proposer sends a block that commits to a builder_id (slot auction)\nN+1 at `3s`: Attesters verifies N's payload\nN+1 at `6s`: Builder releases payload including IL aggregate for N+1\nN+2 at `3s`: Attester verifies N+1's payload and IL aggregate\n\nThe IL agg validation time as \u003c@363800010518822915\u003e mentioned would be 4 seconds in this case, but it gives 2 seconds between seeing the IL and sending your bid",
-        "created_at": "2024-07-02T08:54:17.187000+00:00",
-        "attachments": [
-            {
-                "type": "image/png",
-                "origin_name": "Screenshot_2024-07-02_at_09.53.24.png",
-                "content": "8c04c07242090a6fe45d02d4133eaceab4c73c171c323c8c5bccab446640250e"
-            }
-        ]
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cnero_eth\u003e Regarding FOCIL's AA handling:\nI don't see why the following solves that:\n```\nIf the nonce has changed, some transaction from that address has been executed. If the balance has changed but the nonce has not, some AA transaction has touched that address. In either case, that address has transacted in the block, and the entry is satisfied.\n```\n\n\nThe last part, the entry is satisfied, isn't the case as it contains the FromAddress of the transaction that triggered the AA transaction and not the AA address.\n\nSo, as an example:\n1. Two accounts, one is an EOA, one is a AA wallet.\n2. The EOA can trigger a tx that drains AA.\n3. Committee puts [AA, 30k] into list (addressFrom + gas limit).\n4. At TOB at slot n, AA's balance is emptied by EOA.\n\nSo, point 4 invalidated the IL transaction of point 3.\nSince there is no tx with AA as the AddressFrom, the entry is not satified.\nAlso the balance comparison wouldn't help: We would see that the balance changed but cannot say that [AA, 30k] is therefore satisfied.\n\nI was thinking that leveraging the Access Lists (EIP-2930) could help in this regard. Also, enforcing a ToB inclusion would solve it.",
-        "created_at": "2024-07-02T08:59:52.952000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cfradamt\u003e There, an entry is defined to be satisfied if either the nonce or balance changes, so in your example [AA, 30k] is satisfied (re @nero_eth: Regarding FOCIL's AA handling:\nI don't see why the following solves that:\nIf the nonce has changed, some transaction from that address has been executed. If the balance has changed but the nonce has not, some AA transaction has touched that address. In either case, that address has transacted in the block, and the entry is satisfied.\n\n\nThe last part, the entry is satisfied, isn't the case as it contains the FromAddress of the transaction that triggered the AA transaction and not the AA address.\n\nSo, as an example:\n1. Two accounts, one is an EOA, one is a AA wallet.\n2. The EOA can trigger a tx that drains AA.\n3. Committee puts [AA, 30k] into list (addressFrom + gas limit).\n4. At TOB at slot n, AA's balance is emptied by EOA.\n\nSo, point 4 invalidated the IL transaction of point 3.\nSince there is no tx with AA as the AddressFrom, the entry is not satified.\nAlso the balance comparison wouldn't help: We would see that the balance changed but cannot say that [AA, 30k] is therefore satisfied.\n\nI was thinking that leveraging the Access Lists (EIP-2930) could help in this regard. Also, enforcing a ToB inclusion would solve it.)",
-        "created_at": "2024-07-02T09:58:09.965000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "bridge-bot",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "\u003cnero_eth\u003e Ah, this clarifies it. Thanks!",
-        "created_at": "2024-07-02T10:12:29.974000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "This is the case x=2 in the trade-off space above",
-        "created_at": "2024-07-02T10:36:15.169000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "yes yes nothing new, just wondering if this trade-off would be acceptable as a starting point or if there are strong arguments not to split time this way (keeping in mind it depends on a lot of other parameters/IL committee size, IL size, etc...)",
-        "created_at": "2024-07-02T12:21:47.577000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "I'm hopeful we can still have a design that doesn't compromize on block validation time. This is the biggest feature of ePBS: you get to increase dramatically gas limit if you solve for state growth, since block validation has now 6 seconds. I am a fan of first writing the list of constraints that we would want the system to have. Under any ePBS of the sort of auctions we are analyzing, the features that would be desirable for an IL would be\n\n- IL creators have as much time to validate the payload as the protocol without ILs provides (no compromises in validation because of ILs)\n- At  the time of bidding, builders have had time to validate and see the IL (prevents the arbitrage invalidation attack above)\n- At the time of revealing the IL aggregate, whichever player does this (the builder in the examples we've analyzed above) should deterministically be able to know what the aggregate should be. \n- Checking for IL satisfaction on a payload does not take time from payload validation (this seems always good on FOCIL designs so no problem here). \n\n1 and 2 are in contention, 3 in principle could be done without even an IL creator so without sacrificing on 1, for example Peter's mempool approach would be such a system. I'm hopeful that either we find a system with those or we prove that such system is impossible and then we are forced to have some tradeofs. \n\nAnother thing to notice is that there seem to be plenty of edge cases that keep popping up, for example the attack above by a single IL committee member could be in principle pretty bad, so it seems to me that setting in writing the whole landscape of design decisions for ILs in an ePBS world would be useful no matter what, if at least to have a place to keep the attacks that appear from the separation itself.",
-        "created_at": "2024-07-02T12:49:51.917000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "About the contention between 1 and 2, what if the IL committee members built and broadcast their list by only checking (or tracking as Terence mentioned) and excluding payload transactions, without full validation.\n\nThe attesters, when actually validating the payload and the IL agg can just adjust their votes based on whether the payload turned out to be valid or not.",
-        "created_at": "2024-07-02T13:47:45.620000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "would have to look as to how this is implemented without leaking free DA, typically to prove that something is valid (for example that the next payload satisfied some aggregate) you have to have the signed data committed. And committing invalid trasnsactions to the aggregate gives a free ride on DA",
-        "created_at": "2024-07-02T13:49:59.528000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "perhaps it can be fixed, but hard to know without seeing how it's speced.",
-        "created_at": "2024-07-02T13:50:19.794000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "terencechain",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "My naive vision is that I assume these IL committees mimic attester committees, hence they should be treated as unsophisticated actors. The builder is highly sophisticated and well-equipped. Based on that, it seems alright to favor 1 as much as possible and push 2 to the boundary. With that said, we should talk to the builders (big and medium-sized) and get their feedback on this design.",
-        "created_at": "2024-07-02T14:03:24.935000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "You wouldn’t have to “prove” anything per se right? As an attester, you validate the payload (regardless of the IL agg). If the payload is valid (as in it passes EL validation checks), you verify whether the IL agg entries are satisfied by the payload. Just as a reminder, the IL agg doesn’t contain raws transactions, only entries (`sender` and `gas_limit`)  \u2028\u2028As an IL committee member, you build your local IL assuming the payload that was revealed is valid, without actually running validation checks.",
-        "created_at": "2024-07-02T14:09:06.649000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "agreed, happy to ask some of them! The question should probably something like: how much time does it take for you to rebuild a payload given a new list of transactions (w/ different sizes)?",
-        "created_at": "2024-07-02T14:10:30.591000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "Suppose a Payload doesn't satisfy the IL but it's still attested for whatever reasons. Does it become canonical?",
-        "created_at": "2024-07-02T14:13:04.420000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "for whatever reasons would be a large share of the attesters are Byzantine? Isn't it the same as asking what would happen if a payload (without considering ILs at all) is attested for while not meeting other validity conditions?",
-        "created_at": "2024-07-02T14:15:15.057000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "It's not the same: an invalid block will not be synced by honest validators, no matter what, no matter if it's even finalized. What I'm asking is if IL satisfaction is part of Payload validity or not",
-        "created_at": "2024-07-02T14:17:51.169000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "soispoke",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "ah then yes IL satisfaction should be part of payload validity conditions otherwise there's no guarantee it'll be enforced",
-        "created_at": "2024-07-02T14:19:10.804000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "Ok then honest validators need to see deterministically that the IL was satisfied otherwise they can't sync the block",
-        "created_at": "2024-07-02T14:20:11.172000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "So if the IL committee is tricked into putting invalid txs in the aggregate that they haven't verified",
-        "created_at": "2024-07-02T14:20:42.134000+00:00",
-        "attachments": null
-    },
-    {
-        "author": "potuz",
-        "category": "Cross-layer",
-        "parent": "",
-        "content": "Then no Payload will be imported by honest validators",
-        "created_at": "2024-07-02T14:21:01.196000+00:00",
-        "attachments": null
-    }
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "How about this? Very close to what <@755590043632140352> suggested but w/ some nuances\n\nN at `6s`: builder reveals\nN from `6s to 10s`: IL committee builds local ILs\nN at `10s`: IL deadline to broadcast local ILs\nN+1 at `0s`: Builder sends bids\nN+1 at `0s`: Proposer sends a block that commits to a builder_id (slot auction)\nN+1 at `3s`: Attesters verifies N's payload\nN+1 at `6s`: Builder releases payload including IL aggregate for N+1\nN+2 at `3s`: Attester verifies N+1's payload and IL aggregate\n\nThe IL agg validation time as <@363800010518822915> mentioned would be 4 seconds in this case, but it gives 2 seconds between seeing the IL and sending your bid",
+    "created_at": "2024-07-02T08:54:17.187000+00:00",
+    "attachments": [
+      {
+        "type": "image/png",
+        "origin_name": "Screenshot_2024-07-02_at_09.53.24.png",
+        "content": "8c04c07242090a6fe45d02d4133eaceab4c73c171c323c8c5bccab446640250e"
+      }
+    ]
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<nero_eth> Regarding FOCIL's AA handling:\nI don't see why the following solves that:\n```\nIf the nonce has changed, some transaction from that address has been executed. If the balance has changed but the nonce has not, some AA transaction has touched that address. In either case, that address has transacted in the block, and the entry is satisfied.\n```\n\n\nThe last part, the entry is satisfied, isn't the case as it contains the FromAddress of the transaction that triggered the AA transaction and not the AA address.\n\nSo, as an example:\n1. Two accounts, one is an EOA, one is a AA wallet.\n2. The EOA can trigger a tx that drains AA.\n3. Committee puts [AA, 30k] into list (addressFrom + gas limit).\n4. At TOB at slot n, AA's balance is emptied by EOA.\n\nSo, point 4 invalidated the IL transaction of point 3.\nSince there is no tx with AA as the AddressFrom, the entry is not satified.\nAlso the balance comparison wouldn't help: We would see that the balance changed but cannot say that [AA, 30k] is therefore satisfied.\n\nI was thinking that leveraging the Access Lists (EIP-2930) could help in this regard. Also, enforcing a ToB inclusion would solve it.",
+    "created_at": "2024-07-02T08:59:52.952000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<fradamt> There, an entry is defined to be satisfied if either the nonce or balance changes, so in your example [AA, 30k] is satisfied (re @nero_eth: Regarding FOCIL's AA handling:\nI don't see why the following solves that:\nIf the nonce has changed, some transaction from that address has been executed. If the balance has changed but the nonce has not, some AA transaction has touched that address. In either case, that address has transacted in the block, and the entry is satisfied.\n\n\nThe last part, the entry is satisfied, isn't the case as it contains the FromAddress of the transaction that triggered the AA transaction and not the AA address.\n\nSo, as an example:\n1. Two accounts, one is an EOA, one is a AA wallet.\n2. The EOA can trigger a tx that drains AA.\n3. Committee puts [AA, 30k] into list (addressFrom + gas limit).\n4. At TOB at slot n, AA's balance is emptied by EOA.\n\nSo, point 4 invalidated the IL transaction of point 3.\nSince there is no tx with AA as the AddressFrom, the entry is not satified.\nAlso the balance comparison wouldn't help: We would see that the balance changed but cannot say that [AA, 30k] is therefore satisfied.\n\nI was thinking that leveraging the Access Lists (EIP-2930) could help in this regard. Also, enforcing a ToB inclusion would solve it.)",
+    "created_at": "2024-07-02T09:58:09.965000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "bridge-bot",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<nero_eth> Ah, this clarifies it. Thanks!",
+    "created_at": "2024-07-02T10:12:29.974000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "This is the case x=2 in the trade-off space above",
+    "created_at": "2024-07-02T10:36:15.169000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yes yes nothing new, just wondering if this trade-off would be acceptable as a starting point or if there are strong arguments not to split time this way (keeping in mind it depends on a lot of other parameters/IL committee size, IL size, etc...)",
+    "created_at": "2024-07-02T12:21:47.577000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I'm hopeful we can still have a design that doesn't compromize on block validation time. This is the biggest feature of ePBS: you get to increase dramatically gas limit if you solve for state growth, since block validation has now 6 seconds. I am a fan of first writing the list of constraints that we would want the system to have. Under any ePBS of the sort of auctions we are analyzing, the features that would be desirable for an IL would be\n\n- IL creators have as much time to validate the payload as the protocol without ILs provides (no compromises in validation because of ILs)\n- At  the time of bidding, builders have had time to validate and see the IL (prevents the arbitrage invalidation attack above)\n- At the time of revealing the IL aggregate, whichever player does this (the builder in the examples we've analyzed above) should deterministically be able to know what the aggregate should be. \n- Checking for IL satisfaction on a payload does not take time from payload validation (this seems always good on FOCIL designs so no problem here). \n\n1 and 2 are in contention, 3 in principle could be done without even an IL creator so without sacrificing on 1, for example Peter's mempool approach would be such a system. I'm hopeful that either we find a system with those or we prove that such system is impossible and then we are forced to have some tradeofs. \n\nAnother thing to notice is that there seem to be plenty of edge cases that keep popping up, for example the attack above by a single IL committee member could be in principle pretty bad, so it seems to me that setting in writing the whole landscape of design decisions for ILs in an ePBS world would be useful no matter what, if at least to have a place to keep the attacks that appear from the separation itself.",
+    "created_at": "2024-07-02T12:49:51.917000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "About the contention between 1 and 2, what if the IL committee members built and broadcast their list by only checking (or tracking as Terence mentioned) and excluding payload transactions, without full validation.\n\nThe attesters, when actually validating the payload and the IL agg can just adjust their votes based on whether the payload turned out to be valid or not.",
+    "created_at": "2024-07-02T13:47:45.620000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "would have to look as to how this is implemented without leaking free DA, typically to prove that something is valid (for example that the next payload satisfied some aggregate) you have to have the signed data committed. And committing invalid trasnsactions to the aggregate gives a free ride on DA",
+    "created_at": "2024-07-02T13:49:59.528000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "perhaps it can be fixed, but hard to know without seeing how it's speced.",
+    "created_at": "2024-07-02T13:50:19.794000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "terencechain",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "My naive vision is that I assume these IL committees mimic attester committees, hence they should be treated as unsophisticated actors. The builder is highly sophisticated and well-equipped. Based on that, it seems alright to favor 1 as much as possible and push 2 to the boundary. With that said, we should talk to the builders (big and medium-sized) and get their feedback on this design.",
+    "created_at": "2024-07-02T14:03:24.935000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "You wouldn’t have to “prove” anything per se right? As an attester, you validate the payload (regardless of the IL agg). If the payload is valid (as in it passes EL validation checks), you verify whether the IL agg entries are satisfied by the payload. Just as a reminder, the IL agg doesn’t contain raws transactions, only entries (`sender` and `gas_limit`)    As an IL committee member, you build your local IL assuming the payload that was revealed is valid, without actually running validation checks.",
+    "created_at": "2024-07-02T14:09:06.649000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "agreed, happy to ask some of them! The question should probably something like: how much time does it take for you to rebuild a payload given a new list of transactions (w/ different sizes)?",
+    "created_at": "2024-07-02T14:10:30.591000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Suppose a Payload doesn't satisfy the IL but it's still attested for whatever reasons. Does it become canonical?",
+    "created_at": "2024-07-02T14:13:04.420000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "for whatever reasons would be a large share of the attesters are Byzantine? Isn't it the same as asking what would happen if a payload (without considering ILs at all) is attested for while not meeting other validity conditions?",
+    "created_at": "2024-07-02T14:15:15.057000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "It's not the same: an invalid block will not be synced by honest validators, no matter what, no matter if it's even finalized. What I'm asking is if IL satisfaction is part of Payload validity or not",
+    "created_at": "2024-07-02T14:17:51.169000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "soispoke",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "ah then yes IL satisfaction should be part of payload validity conditions otherwise there's no guarantee it'll be enforced",
+    "created_at": "2024-07-02T14:19:10.804000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Ok then honest validators need to see deterministically that the IL was satisfied otherwise they can't sync the block",
+    "created_at": "2024-07-02T14:20:11.172000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "So if the IL committee is tricked into putting invalid txs in the aggregate that they haven't verified",
+    "created_at": "2024-07-02T14:20:42.134000+00:00",
+    "attachments": null
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Then no Payload will be imported by honest validators",
+    "created_at": "2024-07-02T14:21:01.196000+00:00",
+    "attachments": null
+  }
 ]
