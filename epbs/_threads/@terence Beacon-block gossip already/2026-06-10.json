@@ -168,5 +168,155 @@
         "content": "9bcf8b86f30ed2e8f900072a5a1b8bd3969eefcaf9184958f8f10372c24421d1"
       }
     ]
+  },
+  {
+    "author": "luca_zanolini",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "consensus-specs/specs/gloas/p2p-interface.md, lines 287–293, the beacon_block topic:\n\n- [IGNORE] The block's parent execution payload (defined by\n  bid.parent_block_hash) has been seen (via gossip or non-gossip sources) (a\n  client MAY queue blocks for processing once the parent payload is retrieved).\n- If execution_payload verification of block's execution payload parent by an\n  execution node is complete:\n  - [REJECT] The block's execution payload parent (defined by\n    bid.parent_block_hash) passes all validation.\n\nMy question is about the [IGNORE] on line 287–289: does “has been seen” there mean the parent payload has been verified (i.e., it's in store.payloads), or just received? It reads as “received” to me, and the separate [REJECT] is guarded by “if verification is complete”, which suggests a child can pass gossip before the parent payload is verified.",
+    "created_at": "2026-06-10T02:03:31.710000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Yup that's how I understand it as well. That first condition is just received.",
+    "created_at": "2026-06-10T02:06:01.019000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "That's a bit of a mess imo.",
+    "created_at": "2026-06-10T02:06:44.618000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "terencechain",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "for prysm it's recieved and have the result of verification",
+    "created_at": "2026-06-10T02:06:55.129000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "terencechain",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "which is more or less the same",
+    "created_at": "2026-06-10T02:07:03.882000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "luca_zanolini",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "If “seen” = just received, then:\n\n1. A block B that declares its parent FULL can pass gossip while the parent payload is received but not yet verified, the [IGNORE] is satisfied by “received”, and the [REJECT] is skipped because verification isn't complete.\n2. B is handed to on_block, which hits assert is_payload_verified(block.parent_root) (that needs the parent payload in store.payloads, not just received) , assert fails , B dropped.\n3. Nothing re-runs on_block when the parent verifies a moment later, B stays dropped.\n\nSo an honest, timely B can be dropped at a node purely because its parent payload hadn't finished verifying yet. That node then attests to a different head, and if enough nodes are in that state at T_att, B loses weight and can be reorged, even though it's a valid honest block.",
+    "created_at": "2026-06-10T02:09:06.138000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "luca_zanolini",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "That’s the reason of this thread",
+    "created_at": "2026-06-10T02:09:24.816000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Yes, I understand. This section of the spec needs improvements.",
+    "created_at": "2026-06-10T02:10:21.537000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I believe the executable spec solves this. I don't believe it's possible to do that there. There's another condition in which it will ignore/queue the block if the parent state (including the parent execution payload) is not valid.",
+    "created_at": "2026-06-10T02:12:37.859000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I need to say \"valid\" instead of \"available\" though.",
+    "created_at": "2026-06-10T02:13:48.095000+00:00",
+    "attachments": [
+      {
+        "type": "image/png",
+        "origin_name": "image.png",
+        "content": "de78ac0b75c7217d2f5aeaa57033c64a9ae7d61c072c4a76b69a949c68ac683d"
+      }
+    ]
+  },
+  {
+    "author": "luca_zanolini",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "That [IGNORE] parent state available checks block.parent_root in store.block_states. So for a FULL-declaring B: B' is in store.block_states but store.payloads[B'.root] is still empty => IGNORE passes => reaches on_block => parent-FULL assert fails => dropped.\n\nOr am I missing something? \n\nI think it has to gate on the parent payload, not just store.block_states. Then it's an IGNORE+ queue instead of the on_block drop,  which is the fix.",
+    "created_at": "2026-06-10T02:23:34.760000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "How would it reach on_block if it's ignored?",
+    "created_at": "2026-06-10T02:24:28.262000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "> I think it has to gate on the parent payload, not just store.block_states. Then it's an IGNORE+ queue instead of the on_block drop,  which is the fix.\nYou might still be right. Something about this still feels wrong.",
+    "created_at": "2026-06-10T02:25:06.369000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I'll need to dig more into it later though.",
+    "created_at": "2026-06-10T02:25:15.747000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "luca_zanolini",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "It’s not ignored. It passes, and the block proceeds. parent state is available, B' (the parent block) was processed, so B'.root is in store.block_states. So the predicate is satisfied => the block is not ignored on that basis => it continues to on_block.",
+    "created_at": "2026-06-10T02:27:07.894000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "luca_zanolini",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Would something like this make sense? \n\n/# [IGNORE] If the block builds on a full parent, that parent's execution\n/# payload must be verified (MAY be queued until the parent payload is verified)\nif is_parent_node_full(store, block) and not is_payload_verified(store, block.parent_root):\n    raise GossipIgnore(“block builds on a full parent whose payload is not yet verified”)",
+    "created_at": "2026-06-10T02:28:58.694000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "luca_zanolini",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Oh… bad format 🙉\n\nedit: fixed the # that created a huge title",
+    "created_at": "2026-06-10T02:29:12.112000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Possibly. I will look into this.",
+    "created_at": "2026-06-10T02:44:48.224000+00:00",
+    "attachments": []
   }
 ]
