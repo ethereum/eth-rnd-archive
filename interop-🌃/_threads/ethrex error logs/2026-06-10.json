@@ -148,5 +148,277 @@
     "content": "also honest attesters are not having full pariticipation (for whatever reason) so we miss a few votes there too",
     "created_at": "2026-06-10T12:05:25.413000+00:00",
     "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I am actually surprised how it's possible that Prysm is voting correctly even without 5222, you need to explain this to me. Does prysm keep track locally if it sees the payload timely and doesn't care about PTC votes in that case?",
+    "created_at": "2026-06-10T12:06:39.440000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Arresters never care about PTC, I've been telling you this forever. They only care in case the proposer reorgs and the PTC achieved quorum, which in this devnet never should happen",
+    "created_at": "2026-06-10T12:07:46.292000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "what's your definition of PTC achieved  quorum?",
+    "created_at": "2026-06-10T12:10:15.917000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "so consider this, if you don't count ptc votes correctly (ie. you don't reach >256 as timely then this shoulnd't be possible)",
+    "created_at": "2026-06-10T12:11:52.249000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "```\n1 - honest lighthouse FULL (slot 1 )\n2 - deathstar EMPTY (reorg 1 FULL) (slot 2)\n\nshould_extend_payload(1) = false\n- payload_is_timely = false\n- payload_data_is_available = false\n- proposer_root == Root() = false\n- store.blocks[proposer_root].parent_root != root = false\n- is_parent_node_full = false\n\n2 is on_block <-- proposer_root\n\nslot 1 lighthouse proposes block, slot 1 attester vote for lighthouse block as PENDING\nin slot 1 lighthouse reveals payload (ptc in slot 1 votes timely/available)\nslot 2  deathstar build on slot 1 empty\n\n\nprysm receive block from deathstar in slot 2 at ~2 seconds (no attestations yet)\n\nwhy does prysm set it as head? what you set as head will determine if you vote for 1 FULL or 2 EMPTY\n```",
+    "created_at": "2026-06-10T12:12:11.773000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "so here\n```\n- payload_is_timely = false\n- payload_data_is_available = false\n```\nis like this for prysm because you don't have 5222",
+    "created_at": "2026-06-10T12:13:06.962000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Well, in the situation yuou describe above: There is no quorum, slot N, full is our head, N+1 proposes on top of empty, we follow the proposer of N+1 as the spec says, so if we are voting agains the proposer there must be something else going on",
+    "created_at": "2026-06-10T12:29:11.599000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "but you are voting against deathstar blocks which is good, but I can't explain why",
+    "created_at": "2026-06-10T12:31:24.095000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "This is all the decision making:\n```\n257 func (s *Store) shouldExtendPayload(fn *PayloadNode) bool {\n258         if fn == nil {\n259                 return false\n260         }\n261         n := fn.node\n262         if n.payloadAvailabilityVote.Count() > fieldparams.PTCSize/2 && n.payloadDataAvailabilityVote.Count() > fieldparams.PTCSize/2 {\n263                 return true\n264         }\n265         if s.proposerBoostRoot == [32]byte{} {\n266                 return true\n267         }\n268         pn := s.emptyNodeByRoot[s.proposerBoostRoot]\n269         if pn == nil {\n270                 return true\n271         }\n272         if pn.node.parent.node != fn.node {\n273                 return true\n274         }\n275         return pn.node.parent.full\n276 }\n277\n278 // choosePayloadContent chooses between empty or full for the passed consensus node.\n279 func (s *Store) choosePayloadContent(n *Node) *PayloadNode {\n280         if n == nil {\n281                 return nil\n282         }\n283         fn := s.fullNodeByRoot[n.root]\n284         en := s.emptyNodeByRoot[n.root]\n285         if fn == nil {\n286                 return en\n287         }\n288         if fn.weight > en.weight {\n289                 return fn\n290         } else if fn.weight < en.weight {\n291                 return en\n292         }\n293         previousSlot := n.slot+1 == s.currentSlot()\n294         if !previousSlot || s.shouldExtendPayload(fn) {\n295                 return fn\n296         }\n297         return en\n298 }\n```",
+    "created_at": "2026-06-10T12:31:52.676000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I will remove 5222 from lodestar and see if we do the same",
+    "created_at": "2026-06-10T12:31:52.912000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "why is 288 to 293 not guarded by previous slot check? sure if the weight are all 0 this is fine, but if those are not?",
+    "created_at": "2026-06-10T12:39:46.398000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I'll leave that as an excercise, both Preston and Terence complained about this. Curious, did you get an AI to diagnose that?",
+    "created_at": "2026-06-10T12:40:47.563000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I am asking, I have a claude instance dedicated to your fork choice 😄",
+    "created_at": "2026-06-10T12:42:58.811000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "The weight must be zero for for previous slot",
+    "created_at": "2026-06-10T12:43:18.965000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "you cannot have counted attestations that differentiate between full or empty",
+    "created_at": "2026-06-10T12:43:31.736000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "because the max attestations you could have counted are for the previous committee that could not have voted either way",
+    "created_at": "2026-06-10T12:43:46.161000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "The python spec has a funny way of going through forkchoice because of the way it applies weights, we do something different, I don't need to care about proposer boost cause it's not in either of the weights for these nodes.",
+    "created_at": "2026-06-10T12:44:41.864000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "But what I want to stress is that the spec is phrased as is, just to deal with proposer boost. If for any reason later in the slot we do count attestations for the current committe, we definitely want to count them and differentiate by weight, not by the slot condition",
+    "created_at": "2026-06-10T12:46:14.411000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "yes, `fn.weight` and `en.weight` should be 0 is what you saying?",
+    "created_at": "2026-06-10T12:47:26.675000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "yes",
+    "created_at": "2026-06-10T12:47:34.326000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "assuming there is no bug this seems right",
+    "created_at": "2026-06-10T12:51:50.949000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "but https://dora.glamsterdam-devnet-5.ethpandaops.io/slot/43111#attestations, you clearly vote correctly here but how? only Nimbus votes (because Grandine is offline) are incorrect",
+    "created_at": "2026-06-10T12:52:17.576000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "hmm potuz can it be that you receive attestations over the wire and add them to the weight before you attest?",
+    "created_at": "2026-06-10T12:54:45.829000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "no, we don't count attestations for same slot committee, if we do that's a serious bug",
+    "created_at": "2026-06-10T12:55:09.336000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I'd be happy to get such a report 🙂",
+    "created_at": "2026-06-10T12:55:18.801000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I agree it would be a serious issue, but it shouldn't be relevant pre-gloas probably",
+    "created_at": "2026-06-10T12:55:53.108000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "my claude is insisting that prysm doesn't freeze te weights and counts attestations 🤷",
+    "created_at": "2026-06-10T12:56:49.082000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I refuse to listen to Claude without a report... I can help you avoid wasting my time: UpdateHead in PRysm indeed does count same slot attestations (which we do on purpose). But this is called only later in the slot and it would be the right behavior anyway",
+    "created_at": "2026-06-10T12:57:50.087000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I haven't even asked claude before you asked me",
+    "created_at": "2026-06-10T12:58:09.104000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "here",
+    "created_at": "2026-06-10T12:58:32.102000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "can you do an image which guards the weight comparison? it would be easy to see quickly on the devnet",
+    "created_at": "2026-06-10T12:59:11.793000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "That may make us work incorrectly on a bunch of scenarios",
+    "created_at": "2026-06-10T13:05:32.713000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "or at least it would make me have to spend time thinking if it is sound",
+    "created_at": "2026-06-10T13:05:53.845000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "that's why I rather not change that",
+    "created_at": "2026-06-10T13:05:59.804000+00:00",
+    "attachments": []
   }
 ]
