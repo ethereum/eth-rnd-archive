@@ -1,0 +1,133 @@
+package eth
+
+import (
+	"context"
+	"testing"
+
+	"github.com/erigontech/erigon/common"
+	"github.com/erigontech/erigon/common/empty"
+	"github.com/erigontech/erigon/db/datadir"
+	"github.com/erigontech/erigon/db/kv"
+	"github.com/erigontech/erigon/db/kv/temporal/temporaltest"
+	"github.com/erigontech/erigon/execution/chain"
+	"github.com/erigontech/erigon/execution/rlp"
+	"github.com/erigontech/erigon/execution/types"
+)
+
+type nilReceiptsGetter struct{}
+
+func (nilReceiptsGetter) GetCachedReceipts(context.Context, common.Hash) (types.Receipts, bool) {
+	return nil, false
+}
+
+func (nilReceiptsGetter) GetReceipts(context.Context, *chain.Config, kv.TemporalTx, *types.Block, ReceiptsOpts) (types.Receipts, error) {
+	return nil, nil
+}
+
+type snapshotOnlyReceiptBlockReader struct {
+	block  *types.Block
+	number uint64
+}
+
+func (r snapshotOnlyReceiptBlockReader) HeaderNumber(context.Context, kv.Getter, common.Hash) (*uint64, error) {
+	return &r.number, nil
+}
+
+func (r snapshotOnlyReceiptBlockReader) BlockWithSenders(context.Context, kv.Getter, common.Hash, uint64) (*types.Block, []common.Address, error) {
+	return r.block, nil, nil
+}
+
+func (r snapshotOnlyReceiptBlockReader) Header(context.Context, kv.Getter, common.Hash, uint64) (*types.Header, error) {
+	return r.block.HeaderNoCopy(), nil
+}
+
+func (r snapshotOnlyReceiptBlockReader) HeaderByNumber(context.Context, kv.Getter, uint64) (*types.Header, error) {
+	return r.block.HeaderNoCopy(), nil
+}
+
+func (r snapshotOnlyReceiptBlockReader) HeaderByHash(context.Context, kv.Getter, common.Hash) (*types.Header, error) {
+	return r.block.HeaderNoCopy(), nil
+}
+
+func (snapshotOnlyReceiptBlockReader) ReadAncestor(kv.Getter, common.Hash, uint64, uint64, *uint64) (common.Hash, uint64) {
+	panic("not expected")
+}
+
+func (snapshotOnlyReceiptBlockReader) HeadersRange(context.Context, func(*types.Header) error) error {
+	panic("not expected")
+}
+
+func (snapshotOnlyReceiptBlockReader) Integrity(context.Context) error {
+	panic("not expected")
+}
+
+func (snapshotOnlyReceiptBlockReader) BlockByNumber(context.Context, kv.Tx, uint64) (*types.Block, error) {
+	panic("not expected")
+}
+
+func (snapshotOnlyReceiptBlockReader) BlockByHash(context.Context, kv.Tx, common.Hash) (*types.Block, error) {
+	panic("not expected")
+}
+
+func (snapshotOnlyReceiptBlockReader) CurrentBlock(kv.Tx) (*types.Block, error) {
+	panic("not expected")
+}
+
+func (snapshotOnlyReceiptBlockReader) IterateFrozenBodies(func(uint64, uint64, uint64) error) error {
+	panic("not expected")
+}
+
+func (snapshotOnlyReceiptBlockReader) MinimumBlockAvailable(context.Context, kv.Tx) (uint64, error) {
+	panic("not expected")
+}
+
+func (snapshotOnlyReceiptBlockReader) BodyWithTransactions(context.Context, kv.Getter, common.Hash, uint64) (*types.Body, error) {
+	panic("not expected")
+}
+
+func (snapshotOnlyReceiptBlockReader) BodyRlp(context.Context, kv.Getter, common.Hash, uint64) (rlp.RawValue, error) {
+	panic("not expected")
+}
+
+func (snapshotOnlyReceiptBlockReader) Body(context.Context, kv.Getter, common.Hash, uint64) (*types.Body, uint32, error) {
+	panic("not expected")
+}
+
+func (snapshotOnlyReceiptBlockReader) CanonicalBodyForStorage(context.Context, kv.Getter, uint64) (*types.BodyForStorage, error) {
+	panic("not expected")
+}
+
+func (snapshotOnlyReceiptBlockReader) HasSenders(context.Context, kv.Getter, common.Hash, uint64) (bool, error) {
+	panic("not expected")
+}
+
+func (snapshotOnlyReceiptBlockReader) BlockForTxNum(context.Context, kv.Tx, uint64) (uint64, bool, error) {
+	panic("not expected")
+}
+
+func TestAnswerGetReceiptsQuery70_PreservesSnapshotEmptyReceiptsWhenRawdbHeaderMissing(t *testing.T) {
+	ctx := context.Background()
+	db := temporaltest.NewTestDB(t, datadir.New(t.TempDir()))
+	tx, err := db.BeginTemporalRo(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+
+	header := &types.Header{ReceiptHash: empty.RootHash}
+	header.Number.SetUint64(14091)
+	block := types.NewBlock(header, nil, nil, nil, nil)
+	hash := block.Hash()
+	reader := snapshotOnlyReceiptBlockReader{block: block, number: 14091}
+
+	result, lastBlockIncomplete, err := AnswerGetReceiptsQuery(ctx, &chain.Config{}, nilReceiptsGetter{}, reader, tx, GetReceiptsPacket{hash}, nil, eth70Opts(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lastBlockIncomplete {
+		t.Fatal("empty receipts block should be complete")
+	}
+	if len(result) != 1 {
+		t.Fatalf("expected empty receipts list to preserve request position, got %d entries", len(result))
+	}
+}
