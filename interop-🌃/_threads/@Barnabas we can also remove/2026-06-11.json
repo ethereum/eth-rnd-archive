@@ -490,5 +490,227 @@
     "content": "I asked you to check why `lodestar-ethrex-1` is stalling",
     "created_at": "2026-06-11T09:02:16.899000+00:00",
     "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Got enough to report. Posting the findings.\n\nYeah — `lodestar-ethrex-1` is hard-stalled at head **slot 44456** (~4767 slots / ~16h behind canonical, which is at ~slot 49223).\n\nTimeline from dora:\n- `44457` deathstar proposed → **canonical** (its own empty-payload block at exec_block 27224, overrode lodestar-ethrex-2's full payload at 27224)\n- `44520`, `44580` deathstar proposed → **orphaned** (network rejected them)\n- After slot 44580 → no more deathstar proposals; lodestar-ethrex-1's validator slots are all `Missing`\n\nSo it's not \"behind sync\" — it published 3 blocks (1 canonical, 2 orphaned) and then went silent ~15.5h ago. The pattern matches the deathstar getting wedged on its own minority empty-builder fork after PTC majority kept voting timely on others' FULL payloads, plus likely the ethrex EL \"block body missing below latest known block\" stall Barnabas was tracking on 2026-06-08. Can't differentiate CL fork-choice wedge vs EL crash without log access — would need Loki/SSH on the node to confirm.\n\nIf you want me to dig further, send Sam's panda creds or shell access on `lodestar-ethrex-1` and I'll pull the actual cause.",
+    "created_at": "2026-06-11T09:08:29.398000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "you should be able to ssh into `lodestar-ethrex-1.srv.glamsterdam-devnet-5.ethpandaops.io`, debug logs are at `/data/lodestar`",
+    "created_at": "2026-06-11T09:09:54.546000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Got the root cause. Posting it now.\n\nFound it. **Root cause: ethrex EL is the broken side, Lodestar is healthy but wedged downstream.**\n\nEthrex JSON-RPC right now:\n- `eth_blockNumber`: `0x6800` → block **26624**\n- `eth_syncing`: currentBlock=26624, highestBlock=27966 — doing **P2P sync, not engine-driven**, from block 0\n- ethrex logs flooding: `WARN [SYNCING] Didn't receive block bodies from peer, penalizing peer ...` + `WARN No messages from the consensus layer` every 30s\n\nLodestar beacon API:\n- head_slot=44456, sync_distance=4810, is_syncing=true, is_optimistic=true, el_offline=false\n- Lodestar log: 1170 errors in 47min, all `Error pushing notifyForkchoiceUpdate() - JSON RPC error: Too deep reorg, engine_forkchoiceUpdatedV4`\n- 13 restart loops since 08:23 UTC (last restart 08:47, current uptime 25min — backoff stabilizing)\n\nWhat happened: when the deathstar branch went out, ethrex ended up on some divergent chain (probably from importing the EMPTY-payload deathstar block at slot 44457). It then got reset / hit a bug and switched into eth-P2P sync mode targeting block 27966 — but its devnet peers refuse to serve block bodies. So ethrex is wedged at block 26624. Lodestar can't FCU past slot 44456 because each fcU asks ethrex to set head to a block hash it doesn't have, ethrex returns \"Too deep reorg\", Lodestar errors and eventually restarts.\n\nSecondary Lodestar bug worth flagging separately: 22× `error: Error onDiscovered - Cannot read properties of undefined (reading 'includes')` — peer discovery code (v1.43.0/8021d8c) crashing on some peer record. Not the cause of the stall, but noise. Worth a quick grep + fix.",
+    "created_at": "2026-06-11T09:14:04.815000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Fix is on ethrex side: nuke ethrex chaindb and let it engine-API-sync from CL, or swap to nethermind like you did on 2026-06-08. P2P sync to mainnet-style block bodies isn't going to work on a devnet where peers are also borked.\n\nWant me to save this as a memory entry so we don't re-derive it next time ethrex stalls?",
+    "created_at": "2026-06-11T09:14:05.358000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@1467247836117860547> the ethrex db has been wiped already",
+    "created_at": "2026-06-11T09:14:56.935000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Yeah that's the issue — after the wipe ethrex flipped into eth-P2P SYNCING mode (not engine-driven). It's at block 26624 trying to reach 27966 via `eth/getBlockBodies`, and peers keep refusing/penalizing:\n\n```\nWARN [SYNCING] Didn't receive block bodies from peer, penalizing peer 0x...\nWARN Failed to fetch block bodies (attempt 1/10), retrying in 2s eth_capable_peers=10\nWARN No messages from the consensus layer. Is the consensus client running?\n```\n\nSo Lodestar IS hitting ethrex's engine API but ethrex ignores fcU/newPayload while in P2P SYNCING — and returns `Too deep reorg, engine_forkchoiceUpdatedV4` because its head is ~600 blocks behind what Lodestar's asking for. Lodestar then can't advance past slot 44456.\n\nTwo ways out without waiting on ethrex devs:\n1. **Force engine sync only**: relaunch ethrex with `--syncmode full` (or whichever flag disables eth-P2P sync on ethrex) so it accepts newPayload from Lodestar instead of trying to fetch bodies P2P. Lodestar has the blocks locally.\n2. **Swap to nethermind** like the 2026-06-08 fix — quickest unblock.\n\nethrex going into network-P2P sync after a fresh DB on a CL-driven devnet looks like an ethrex default-mode bug worth filing upstream — same symptom Tersec/etc were seeing earlier. Want me to file an issue against `lambdaclass/ethrex` with this log evidence?",
+    "created_at": "2026-06-11T09:15:54.085000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "seems like he wants to blame it on ethrex 😂",
+    "created_at": "2026-06-11T09:23:18.083000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "edgl_dev",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "🥲",
+    "created_at": "2026-06-11T09:23:27.202000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@412614104222531604> can you roll out `078e689`, maybe I broke something on the latest image",
+    "created_at": "2026-06-11T09:23:44.173000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "definitely not ethrex issue here, should be fine to sync CL side while EL is syncing/optimistic",
+    "created_at": "2026-06-11T09:24:57.677000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "done",
+    "created_at": "2026-06-11T09:32:14.826000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "doesn't seem to matter :/",
+    "created_at": "2026-06-11T09:33:03.197000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "also peer count goes down like crazy from 24 to 5 in a few sec",
+    "created_at": "2026-06-11T09:33:22.104000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "so likely getting banned like crzy",
+    "created_at": "2026-06-11T09:33:28.834000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "seems like all peers it has left are behind\n```\n~ curl -s localhost:5052/eth/v1/lodestar/peers | jq \".data\" | grep head_slot\n      \"head_slot\": \"43817\",\n      \"head_slot\": \"43803\",\n      \"head_slot\": \"40374\",\n      \"head_slot\": \"43636\",\n      \"head_slot\": \"43562\",\n      \"head_slot\": \"49407\",\n      \"head_slot\": \"49407\",\n```",
+    "created_at": "2026-06-11T09:42:32.187000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "there are two ahead, but those don't serve us data",
+    "created_at": "2026-06-11T09:42:50.847000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "currently only ocnnected to prysm",
+    "created_at": "2026-06-11T09:45:15.739000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "so no shit they can't serve stuff",
+    "created_at": "2026-06-11T09:45:19.731000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "any ideas why `/eth/v1/lodestar/peers` not showing enr of the connected peers ? I see enr null for everyone",
+    "created_at": "2026-06-11T09:46:55.576000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "we don't expose that becasue you need to hook into discv5, but we have a PR for it, but even then, afaik you only have the enr of peers that you dial (outbound) and not inbound, might be wrong though",
+    "created_at": "2026-06-11T09:48:00.488000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "```\n  {\n    \"peer_id\": \"16Uiu2HAm7hkTP9vNJr9UkjA6572nrEgUYRiDLPV6Z1ANXHwEGtMx\",\n    \"enr\": \"enr:-QEYuEDOINcuaMZJIh_OHzQxDIhx8Xv6BYtKiv3cqQFEzrYnWD8zYoCw1AdBSt5ju8VBXSPUkt5rpwJxj2agSy35p7gmOIdhdHRuZXRziAAYAAAAAAAAg2NnY4GAhmNsaWVudM-IR3JhbmRpbmWFMi4wLjSEZXRoMpCk2jlNgHZlcf__________gmlkgnY0gmlwhLJpzR2DaXA2kCoBBPgMF9_iAAAAAAAAAAuDbmZkhAAAAACEcXVpY4IjKYVxdWljNoIjW4lzZWNwMjU2azGhArZqmML_32RYB4aZHqRzTd2zACCCPgrFl8BornwwVBLTiHN5bmNuZXRzD4N0Y3CCIyiEdGNwNoIjWoN1ZHCCIyiEdWRwNoIjWg\",\n    \"last_seen_p2p_address\": \"/ip4/178.105.205.29/udp/9001/quic-v1\",\n    \"state\": \"connected\",\n    \"direction\": \"inbound\"\n  },\n  {\n```",
+    "created_at": "2026-06-11T09:49:08.225000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "this is on lighthouse's",
+    "created_at": "2026-06-11T09:49:11.839000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "`/eth/v1/node/peers` endpoint tho",
+    "created_at": "2026-06-11T09:49:18.331000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "```\nJun-11 09:45:15.386[network]       verbose: Resp error method=beacon_blocks_by_range, version=2, client=Prysm, peer=16...q8i4bh, requestId=1320, status=3, errorMessage=Requested range is before earliestAvailableSlot startSlot=40567 count=32 earliestAvailableSlot=44384\n```\n```\nJun-11 09:51:39.828[network]       verbose: Resp error method=execution_payload_envelopes_by_range, version=1, client=Prysm, peer=16...q8i4bh, requestId=1864, status=3, errorMessage=Requested range is before earliestAvailableSlot startSlot=40438 count=64 earliestAvailableSlot=44384\n```\nseeing bunch of these could be us requesting wrongly, or prysm, but anyways prysm doesn't have useful data right now to serve us",
+    "created_at": "2026-06-11T09:53:55.167000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "yeah idk right now <@412614104222531604> everyone but prysm disconnected (maybe banned?) us, but on our dev infra node that could sync I don't see any prysm peers",
+    "created_at": "2026-06-11T09:56:34.877000+00:00",
+    "attachments": [
+      {
+        "type": "image/png",
+        "origin_name": "image.png",
+        "content": "19b467bbf462f8e7850667029d405a39bfb023c8811587ccbd7dbf2ac09e6e83"
+      }
+    ]
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "lodestar seems to get 26 peers very fast",
+    "created_at": "2026-06-11T09:59:45.899000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "then gets booted yeah",
+    "created_at": "2026-06-11T09:59:49.010000+00:00",
+    "attachments": []
   }
 ]
