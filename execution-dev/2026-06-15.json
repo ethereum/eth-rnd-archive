@@ -46,5 +46,149 @@
     "content": "we seem to be able to implement this quickly",
     "created_at": "2026-06-15T16:00:05.914000+00:00",
     "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "general",
+    "parent": "",
+    "content": "<@360491619402776577> <@808969530608451584> can we have a short talk here about the contract? what will it take to also store the timestamp in which the deposit was made?",
+    "created_at": "2026-06-15T16:20:03.675000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "general",
+    "parent": "",
+    "content": "for <@360491619402776577> context: the idea is to remove the awkward logic of onboarding builders at the fork, which is subject to the same kinds of attacks that the EIP aims to removing, and instead of allowing builders to deposit before the fork, allowing them to deposit in the new contract before the fork, in this case, for them to be active at the fork, we need to store the timestamp so that when we dequeue we know those deposits are actually finalized",
+    "created_at": "2026-06-15T16:21:56.413000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "pk910",
+    "category": "general",
+    "parent": "",
+    "content": "I missed one more thing in the initial idea:\nThe queue contract is designed to prevent any deposit before gloas by requiring a uint256 max fee before the first system calls \"unlocks\" it at the fork boundary.\nThat could be easily changed too,  but another change to be aware of.",
+    "created_at": "2026-06-15T16:23:38.968000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "pk910",
+    "category": "general",
+    "parent": "",
+    "content": "cc <@534934855113506836>  (contract dev)",
+    "created_at": "2026-06-15T16:24:23.613000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "pk910",
+    "category": "general",
+    "parent": "",
+    "content": "yea, the idea is to track when the actual deposit transaction was made instead of using the block where it was dequeued as finalization constraint.\nIt requires to record the enqueue timestamp in the queue record in the system contract, and adding it to the dequeue result. \nI think it's mainly contract and cl side work,  the el clients just pass through what they get from the contract into prefixed execution requests, right?",
+    "created_at": "2026-06-15T16:31:06.848000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "general",
+    "parent": "",
+    "content": "Cayman, that was copied from the original contract? I assume <@543900561460822016> coded that? was that to prevent deposits before the fork or does it make the whole system call easier to implement? Because if it's a requirement that there aren't deposits before the fork then that may be a blocker for the whole idea",
+    "created_at": "2026-06-15T16:32:45.224000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lightclient",
+    "category": "general",
+    "parent": "",
+    "content": "the main issue you have if you accept requests before the fork is that the fee isn’t updated and so you dont get the exponential increase to stop dos",
+    "created_at": "2026-06-15T16:43:55.565000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lightclient",
+    "category": "general",
+    "parent": "",
+    "content": "because the fee is updated by the system call",
+    "created_at": "2026-06-15T16:44:08.836000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "pk910",
+    "category": "general",
+    "parent": "",
+    "content": "I checked the current contract proposal, there are 8 unused bytes in  the last slot of each entry,   so the enqueue timestamp could nicely fit in there without extending the storage slot requirement",
+    "created_at": "2026-06-15T16:44:58.085000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "pk910",
+    "category": "general",
+    "parent": "",
+    "content": "oh yea, that's right.  but the deposits are gated by a 1ETH min value anyway,  so might not be a blocker here",
+    "created_at": "2026-06-15T16:47:42.759000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "general",
+    "parent": "",
+    "content": "ahh crap that kinda runs into a separate DOS then <@808969530608451584> cause then builders can prevent other builders from entering by dossing this contract",
+    "created_at": "2026-06-15T16:47:43.212000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "general",
+    "parent": "",
+    "content": "it's very cheap since they get their 1ETH back, and being the unique builder at the fork surely is worth it",
+    "created_at": "2026-06-15T16:48:06.815000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "pk910",
+    "category": "general",
+    "parent": "",
+    "content": "hmm,  we agreed to unqueue like 256 deposits per slot, right?   so blocking the queue for 1 slot costs 256 ETH.. \nBut yea, I see this is getting a race for the first slots then,  and the whole point of the timestamp addition is to allow onboading early which might be blocked by 8192 ETH per epoch.",
+    "created_at": "2026-06-15T16:51:23.593000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lightclient",
+    "category": "general",
+    "parent": "",
+    "content": "you could create a branch of the code for pre-fork where the fee isn’t updated computed on demand",
+    "created_at": "2026-06-15T16:51:34.380000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lightclient",
+    "category": "general",
+    "parent": "",
+    "content": "or you could make it do that all the time. the reason we rely on the system call to update the fee is just to minimize cost of creating the request",
+    "created_at": "2026-06-15T16:52:10.065000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lightclient",
+    "category": "general",
+    "parent": "",
+    "content": "but if they put up 1 eth, it’s probably okay to do some more computation",
+    "created_at": "2026-06-15T16:52:29.486000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "pk910",
+    "category": "general",
+    "parent": "",
+    "content": "right.  that would also lead to a fee adjustment per tx, which probably makes sense for builder deposits (not mass actions for staking pools, which was one of the arguments for the static fee per block, so they can do batches with same fee)",
+    "created_at": "2026-06-15T16:54:18.146000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "general",
+    "parent": "",
+    "content": "> so blocking the queue for 1 slot costs 256 ETH.\nIt doesn't cause the money is recovered, with the exponential fee it does cost something",
+    "created_at": "2026-06-15T16:56:40.098000+00:00",
+    "attachments": []
   }
 ]
