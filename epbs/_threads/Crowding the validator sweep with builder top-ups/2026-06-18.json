@@ -278,5 +278,85 @@
     "content": "reduce state growth",
     "created_at": "2026-06-18T08:01:29.729000+00:00",
     "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "So this is already sort of the case btw. Builder exits use a target=2 and max=16 per payload. The only way a builder can be in the withdrawal sweep is if its exited.",
+    "created_at": "2026-06-18T08:18:24.351000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "so basically: \n```python\ndef apply_deposit_for_builder(\n    state: BeaconState,\n    pubkey: BLSPubkey,\n    withdrawal_credentials: Bytes32,\n    amount: uint64,\n    signature: BLSSignature,\n    slot: Slot,\n) -> None:\n    builder_pubkeys = [b.pubkey for b in state.builders]\n    if pubkey not in builder_pubkeys:\n        # Verify the deposit signature (proof of possession) which is not checked by the deposit contract\n        if is_valid_deposit_signature(pubkey, withdrawal_credentials, amount, signature):\n            add_builder_to_registry(state, pubkey, withdrawal_credentials, amount, slot)\n    else:\n        # Increase balance by deposit amount\n        builder_index = builder_pubkeys.index(pubkey)\n        state.builders[builder_index].balance += amount\n        # Re-arm the withdrawability delay so a top-up to an exited builder is not\n        # immediately sweepable (prevents crowding the validator sweep).\n        if state.builders[builder_index].withdrawable_epoch != FAR_FUTURE_EPOCH:\n            state.builders[builder_index].withdrawable_epoch = (\n                get_current_epoch(state) + MIN_BUILDER_WITHDRAWABILITY_DELAY\n            )\n```\n```",
+    "created_at": "2026-06-18T08:20:14.575000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Ah I should have opened the doc first. The attack is repeated top-ups to an exited builder. This is a good find. We knew that validator withdrawals could be limited to one btw (see https://github.com/ethereum/consensus-specs/pull/4832) but I agree this would be pretty easy to abuse. <@586161934425128960>'s suggestion of limiting deposits to 8 is a good solution.",
+    "created_at": "2026-06-18T08:21:51.787000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "is that relevant here, don't you only need 1 exited builder to do this?",
+    "created_at": "2026-06-18T08:21:52.878000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "yeah Brechy's suggestion to reset the clock is probably the easiest and best solution here",
+    "created_at": "2026-06-18T08:23:18.623000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Yup this is a good solution as well. An attacker could only sustain this for so long.",
+    "created_at": "2026-06-18T08:28:34.703000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "<@586161934425128960> do you feel that this is better than adjusting limits? What would you think about doing both?",
+    "created_at": "2026-06-18T08:36:13.006000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Regardless, I think resetting the builder's withdrawal epoch on top-ups is a good idea.",
+    "created_at": "2026-06-18T08:37:40.367000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I don't really understand why potuz wants such a high max, I don't think we need 256, having 8/64 should be fine? but doesn't matter if we reset the withdrawal epoch",
+    "created_at": "2026-06-18T08:38:49.976000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "To expand a bit... it would cost ~$150k/minute to sustain this. If we reset the withdrawal epoch on top-ups, they wouldn't be able to re-use the same ETH to do this, so an attacker would be limited by the total amount of ETH they have. I would say this is sufficient & we don't need to lower the builder deposit target/limit in 8282.",
+    "created_at": "2026-06-18T08:50:34.459000+00:00",
+    "attachments": []
   }
 ]
