@@ -158,5 +158,85 @@
     "content": "the lighthouse one is probably a simple issue. need to investigate the lodestar one",
     "created_at": "2026-06-19T09:23:20.323000+00:00",
     "attachments": []
+  },
+  {
+    "author": "bharath.vedartham",
+    "category": "Testing",
+    "parent": "",
+    "content": "lodestar builder is up now. it seemed to have a low peer count and upon restart it seems fine",
+    "created_at": "2026-06-19T10:33:54.499000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "bharath.vedartham",
+    "category": "Testing",
+    "parent": "",
+    "content": "not sure of the core reason why peers disconnected from it",
+    "created_at": "2026-06-19T10:34:05.601000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "maybe related to bid you publish, could get downscored due to that",
+    "created_at": "2026-06-19T10:35:00.094000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "bharath.vedartham",
+    "category": "Testing",
+    "parent": "",
+    "content": "yeah i did consider that, the reject cases are:\n```\n- _[REJECT]_ `bid.builder_index` is a valid/active builder index -- i.e.\n  `is_active_builder(state, bid.builder_index)` returns `True`. (1)\n- _[REJECT]_ `bid.execution_payment == 0`. (2)\n- _[REJECT]_ `bid.fee_recipient == proposer_preferences.fee_recipient`. (3)\n- _[REJECT]_ The length of KZG commitments is less than or equal to the\n  limitation defined in the consensus layer -- i.e. validate that\n  `len(bid.blob_kzg_commitments) <= get_blob_parameters(compute_epoch_at_slot(bid.slot)).max_blobs_per_block`. (4)\n- _[REJECT]_ The bid is for a higher slot than its parent block -- i.e. validate\n  that `bid.slot` is greater than the slot of the block with root\n  `bid.parent_block_root`. (5)\n- _[REJECT]_ `bid.prev_randao` is the correct RANDAO mix -- i.e. validate that (6)\n  `bid.prev_randao == get_randao_mix(parent_state, get_current_epoch(parent_state))`.\n- _[REJECT]_ `signed_execution_payload_bid.signature` is valid with respect to\n  the `bid.builder_index`. (7)\n```\nI dont think (1), (2), (4), (5), (7)  are possible.  I wonder if we are setting the fee recipient incorrectl",
+    "created_at": "2026-06-19T10:39:30.604000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "bharath.vedartham",
+    "category": "Testing",
+    "parent": "",
+    "content": "but i assume the entire devnet has 1 fee recipient so its hard to get that wrong lmao",
+    "created_at": "2026-06-19T10:39:41.342000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "bharath.vedartham",
+    "category": "Testing",
+    "parent": "",
+    "content": "unclear if the randao i m sending is wrong too. i m not sure if buildoor is doing anything wrong here. let me investigate more",
+    "created_at": "2026-06-19T10:40:34.910000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "bharath.vedartham",
+    "category": "Testing",
+    "parent": "",
+    "content": "i see a lot of such logs in lodestar:\n```\nJun-19 10:35:06.000[]                 info: Synced - slot: 107275 - head: 0xcf4a…0ca3 - exec-block: valid(74373 0x9bfe…) - finalized: 0x3862…b09d:3350 - peers: 18\nJun-19 10:35:07.043[chain]            info: Publishing execution payload envelope slot=107275, blockRoot=0xcf4a9a6face1916279ed61f1672e23b536c83a50fae77c9ea1f7121dbdc80ca3, blockHash=0xacd35a4b1417f7eb8e9aabb490a5c8c07c4e3d8f4c19ad33e7e04d0b88deafb7, builderIndex=502, isSelfBuild=false, dataColumns=128\nJun-19 10:35:07.103[chain]            warn: Published data columns to 0 peers, increased risk of reorg slot=107275, blockRoot=0xcf4a9a6face1916279ed61f1672e23b536c83a50fae77c9ea1f7121dbdc80ca3, columns=8\n```\nI am not sure what `Published data columns to 0 peers`  means? cause the payload is successfully revealed https://dora.glamsterdam-devnet-5.ethpandaops.io/slot/107275 and i dont think majority of PTC seems to vote for it https://dora.glamsterdam-devnet-5.ethpandaops.io/slot/107276#ptcVotes ? i",
+    "created_at": "2026-06-19T10:44:51.609000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "we aren't validating the randao yet on p2p though, that's a new gossip rule",
+    "created_at": "2026-06-19T10:45:31.601000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "bharath.vedartham",
+    "category": "Testing",
+    "parent": "",
+    "content": "i m not sure what the warn means here",
+    "created_at": "2026-06-19T10:46:27.691000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "yeah that's a funny thing I noticed before, so we publish the block first, then peers use getblobs and get them from EL then disseminate columns before we actually publish the payload, so in some cases we receive them via gossip before, so during publish it's tracked as duplicate and the publish count stays 0 hence the warning",
+    "created_at": "2026-06-19T10:48:26.281000+00:00",
+    "attachments": []
   }
 ]
