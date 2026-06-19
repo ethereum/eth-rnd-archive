@@ -310,5 +310,77 @@
     "content": "used; panda-server handles refresh now. I kept a one-line `chmod 640` on the cred file in the preflight, since the server reads the host-mounted credential via group `docker` and a refresh can leave it `0600` (that was the original `datasources=null` cause) — happy to drop even that if you'd rather it be fully hands-off.",
     "created_at": "2026-06-19T11:59:52.364000+00:00",
     "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "yes please investigate further who is emitting wrong proposer preferences",
+    "created_at": "2026-06-19T12:11:11.833000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Done. Replying with the definitive answer.\n\n---\n\n**It's Nimbus** — pinned it cold. Teku conveniently logs the full decoded SSZ in its reject, so I pulled `validator_index` out of every rejected message and mapped each to its publishing node via validator-ranges:\n\n- **43 / 43 distinct rejected validators are Nimbus**: nimbus-ethrex-1 (18), nimbus-erigon-1 (15), nimbus-nethermind-1 (10). **Zero** non-Nimbus.\n\n(So scratch my Lighthouse guess from earlier — that was just coincidental publish timing; LH/Lodestar/Prysm/Grandine/Teku preferences aren't rejected.)\n\n**The bug:** Nimbus computes the proposer-preferences `dependent_root` one slot too late. Spec `get_proposer_dependent_root` = block at `start_slot(epoch − MIN_SEED_LOOKAHEAD) − 1`, but Nimbus uses `start_slot(epoch − MIN_SEED_LOOKAHEAD)` — it drops the `− 1` and grabs the epoch-boundary block instead of the last slot of the previous epoch. Tell-tale: every Teku reject reads *\"dependent root is at slot X, must be before checkpoint boundary slot X\"* with the **same** X (the boundary) — exactly the signature of the missing `− 1`. Teku rejects correctly per spec; the lenient clients accept it, which is why only Teku surfaces it.\n\n**The kicker:** Nimbus is the source of *both* problems — it emits the off-by-one preferences here, **and** it's the client rejecting bids for \"preferences not seen\" (#8631). So Nimbus poisons its own preferences propagation and then penalizes the resulting bids.\n\nWant me to file this as a second Nimbus issue (proposer-preferences `dependent_root` off-by-one), or fold it into #8631?",
+    "created_at": "2026-06-19T12:19:46.510000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "cc <@654267572107083777>",
+    "created_at": "2026-06-19T12:20:13.517000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Nico's looped in tersec (Nimbus core dev). The most useful thing now is to hand the Nimbus dev a tight, actionable summary of both findings with the exact mechanism and evidence, so they're not parsing the whole thread. I have everything I need — no further digging required (the spec math is solid: dependent slot = `start_slot(epoch − MIN_SEED_LOOKAHEAD) − 1`, Nimbus emits the boundary slot, off by exactly the `−1`).\n\n---\n\n@tersec — quick tl;dr so you don't have to read the whole thread. Two separate Nimbus things on `glamsterdam-devnet-5` (image `ethpandaops/nimbus-eth2:glamsterdam-devnet-5`), and they compound:\n\n**1. proposer_preferences `dependent_root` off-by-one (Nimbus as publisher).** Nimbus broadcasts `proposer_preferences` whose `dependent_root` resolves to the block at `start_slot(epoch − MIN_SEED_LOOKAHEAD)` — the epoch-boundary slot — instead of `… − 1`. Spec `get_proposer_dependent_root` (gloas `p2p-interface.md`) is `get_block_root_at_slot(state, start_slot(epoch − MIN_SEED_LOOKAHEAD) − 1)`, so it should be the last slot of the previous epoch. Teku is the only client strict enough to reject it (gossip P4): *\"dependent root is at slot X, must be before checkpoint boundary slot X\"* — same X in both halves, i.e. exactly the missing `−1`. I decoded `validator_index` out of every Teku reject over 60 min and mapped via validator-ranges: **43/43 distinct rejected validators are Nimbus** (nimbus-ethrex-1, -erigon-1, -nethermind-1); zero non-Nimbus.\n\n**2. bid REJECT-vs-IGNORE (Nimbus as receiver)** — already filed: <https://github.com/status-im/nimbus-eth2/issues/8631>. Nimbus REJECTs `execution_payload_bid` when it hasn't seen the matching proposer_preferences; spec marks that `[IGNORE]` (*\"The matching signed_proposer_preferences has been seen\"*), so the REJECT P4-penalizes honest builders.\n\nThey reinforce each other: (1) means Nimbus's own preferences get dropped by spec-strict peers, and (2) means Nimbus then penalizes the bids that depend on preferences",
+    "created_at": "2026-06-19T12:21:32.931000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "the network never converged on.\n\nI can open a separate issue for #1 (or you can fold it into #8631 — your call). Happy to share the raw decoded reject messages and per-validator counts if useful.",
+    "created_at": "2026-06-19T12:21:33.493000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "yes, seen the one-epoch-off",
+    "created_at": "2026-06-19T12:21:57.021000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "(2) doesn't practically matter currently because Nimbus hasn't set up its libp2p topic parameters to make a difference, but sure",
+    "created_at": "2026-06-19T12:23:25.568000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "no penalization actually happens",
+    "created_at": "2026-06-19T12:23:58.193000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "we're already tracking the sending side of this, and mixing this with 8631 isn't helpful, they're separate things",
+    "created_at": "2026-06-19T12:25:24.875000+00:00",
+    "attachments": []
   }
 ]
