@@ -6,5 +6,45 @@
     "content": "https://github.com/status-im/nimbus-eth2/pull/8632 should fix this and is deployed on `glamsterdam-devnet-5`",
     "created_at": "2026-06-20T12:08:33.447000+00:00",
     "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "cc <@1467247836117860547>",
+    "created_at": "2026-06-20T17:30:06.931000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Updated. Now the reply.\n\n---\n\nConfirmed it's live, tersec 🙏 — #8632 (*\"use gloas proposer dependent root for ProposerPreferences\"*) is exactly the root cause. And it's genuinely deployed, not just tagged: the Nimbus nodes report `v26.5.0-d5c3ff`, and `d5c3ff` is 1 commit ahead of the #8632 merge (`d4e897`, 02:45 UTC) with 0 behind, so the fix is in the running build.\n\nOne scope note for the thread: #8632 fixes the **publisher** side (the `dependent_root`) and re-keys the seen-preferences store by dependent_root — that should stop the Teku rejects *and* sharply cut the downstream \"matching preferences not seen\" bid rejects, since the bid's dependent_root will now line up with the stored preferences. But it keeps `checkedReject(\"ExecutionPayloadBid: matching preferences not seen\")`, so the **receiver-side** point in #8631 is still open — per gloas p2p-interface that condition is `[IGNORE]`, not `REJECT`, so a genuine timing miss will still P4-penalize a builder. Mostly mooted by the dependent_root fix, but worth a follow-up.\n\n@nflaig — I wanted to post the live before/after (Teku's Nimbus-preference reject rate → ~0 since the 02:48 deploy), but panda's blocked: the cred file `~/.config/panda/credentials/…json` is owned by `nico` at `0600` (looks like a manual `panda auth login` ~17:30), so the container and I can't read it and I can't chmod it (not owner, no sudo). A quick `chmod 640` unblocks me — or re-run the login as the `openclaw` user so ownership is right and the preflight perm-heal keeps it working (stops this recurring). I'll drop the numbers as soon as it's readable.",
+    "created_at": "2026-06-20T17:36:22.100000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "> <@586161934425128960> — I wanted to post the live before/after (Teku's Nimbus-preference reject rate → ~0 since the 02:48 deploy), but panda's blocked: the cred file ~/.config/panda/credentials/…json is owned by nico at 0600 (looks like a manual panda auth login ~17:30), so the container and I can't read it and I can't chmod it (not owner, no sudo). A quick chmod 640 unblocks me — or re-run the login as the openclaw user so ownership is right and the preflight perm-heal keeps it working (stops this recurring). I'll drop the numbers as soon as it's readable.\nshould work now",
+    "created_at": "2026-06-20T17:41:23.934000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Verified. Replying with the data.\n\n---\n\nWorks now — and the data confirms #8632 fixed it cleanly. ✅\n\n**Teku `proposer_preferences` rejects:** ~1,800/hr right up to the deploy, then a clean cliff to **0** once the rollout completed (06-20 ~04:00→05:00 UTC), sustained 0 for 12h including the last 30 min:\n```\n06-20 03:00  1772\n06-20 04:00   519   ← rollout\n06-20 05:00     0\n   …            0   (12h, sustained)\nlast 30 min     0\n```\nSo the dependent_root fix fully stopped the preference rejects.\n\nOne honest correction to what I said earlier, though: I expected the dependent_root fix to also cut the **bid** \"matching preferences not seen\" rejects — it didn't. Those are the #8631 receiver-side condition, and they're still firing — **~378 in the last 30 min**, actually *higher* than before (~500–750/hr now vs ~270/hr yesterday). Most likely because the network's healthier now (preferences propagate, more bids flowing), so more bids race ahead of the preferences gossip — and Nimbus still `REJECT`s that case instead of `[IGNORE]` per gloas p2p-interface. So #8631 is now the dominant remaining penalty source rather than being mooted — worth pushing the REJECT→IGNORE fix.",
+    "created_at": "2026-06-20T17:43:43.895000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Want me to file/track #8631 as its own issue, or are you and tersec good to take it from here?",
+    "created_at": "2026-06-20T17:43:44.453000+00:00",
+    "attachments": []
   }
 ]
