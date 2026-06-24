@@ -126,5 +126,157 @@
     "content": "> AFAIK EIP text in this section is still wrong. It does not mention source based refunds anywhere and explicity says \"refill the state reservoir...\"\nYes it's true, we update the 7702 processing before the LIFO mechanism, the EIP is a bit inaccurate there. Thanks for pointing it out",
     "created_at": "2026-06-24T13:59:18.305000+00:00",
     "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "But isn;t that the whole point of IntrinsicCost?\n\nWe need a static validation mechanism that allows the mempool to reject transactions earlier if they can never be accepted. Such validation should not depend on state, otherwise the outcome may differ between nodes or over time.\n\nBlock processing should follow the same rule, treating mempool validation as a precondition and enforcing the same checks consistently.",
+    "created_at": "2026-06-24T14:05:27.606000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "I think one thing I disagree is: we can't use the one rule in mempool validation while another rule in block processing. If we need to enforce this property with a consistent precondition, then the validation must be stateless.",
+    "created_at": "2026-06-24T14:06:03.825000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lu_pinto",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "I was thinking further I actually think there could be a consensus difference between right now and returning funds to intrinsic costs during tx processing. So picture the following case:\n- You start with an empty reservoir because user provided `gas_limit <= MAX_TX_GAS_LIMIT`. You pay the max charges for the authorization list in `intrinsic_gas` and then put them back into `gasLeft` which is where you took them from initially, as per the source based refund mechanism.\n- Then you get a halt at the top frame so you loose all remaining gas - > you lost all the funds, even those overcharged for the EIP-7702 authorization processing.\n\nMight be missing something but if that's the case I don't think this is fair UX",
+    "created_at": "2026-06-24T14:15:03.269000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lu_pinto",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "> I think one thing I disagree is: we can't use the one rule in mempool validation while another rule in block processing\nhow is that the case with what I'm proposing? I'm saying do the same validation step in both cases but give funds back after to where you charged them -> `intrinsic_cost`",
+    "created_at": "2026-06-24T14:17:15.778000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Why? The fund losing is caused by the exceptional halt, it's consistent for all scenarios (except for non-empty reservoir)",
+    "created_at": "2026-06-24T14:17:22.471000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lu_pinto",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "but you were overcharged initially though",
+    "created_at": "2026-06-24T14:18:09.004000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lu_pinto",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "yeah I guess you loose all funds anyway, never mind",
+    "created_at": "2026-06-24T14:18:36.076000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "we can use another scenario for comparison, we halt for some reasons and there are still non-zero `gasLeft`, we burn them anyway",
+    "created_at": "2026-06-24T14:19:04.420000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "> but give funds back after to where you charged them -> intrinsic_cost\nYes, but how will you implement that: intrinsic_cost represents a cost, we charge it beforehand, then we process the auths and need to refund the cost to somewhere",
+    "created_at": "2026-06-24T14:20:47.632000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "intrinsic_cost is an immutable variable, we need to repay the cost to somewhere, we can't decrease the intrinsic_cost afterwards",
+    "created_at": "2026-06-24T14:21:21.656000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lu_pinto",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "well you are thinking conceptually, it doesn't mean it's immutable at the implementation level 😄\nBut I guess if there's no difference from a consensus POV, these are all implementation details. I'm fine with that",
+    "created_at": "2026-06-24T14:23:06.807000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lu_pinto",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "but what about the `refund_counter` part for `ACCOUNT_WRITE` ? That looks wrong though?",
+    "created_at": "2026-06-24T14:24:01.321000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "My argument is:\n\n> The `(STATE_BYTES_PER_NEW_ACCOUNT + STATE_BYTES_PER_AUTH_BASE) × CPSB` portion is credited back to `intrinsic_state_gas` and the `ACCOUNT_WRITE` portion is credited back to `intrinsic_regular_gas`.\nI don't know how to implement it. The only way I will do is returning the cost back to it's original source, like what we did now. Honestly this text is confusing for me.",
+    "created_at": "2026-06-24T14:24:47.061000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "I think we are using the legacy refund rule for regular cost. `ACCOUNT_WRITE` represents a database write, in term of regular dimension. If we refund that, we just put it in the refund counter",
+    "created_at": "2026-06-24T14:26:51.732000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lu_pinto",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "yeah but my point is that no database write happened and you are being charged for it",
+    "created_at": "2026-06-24T14:27:36.352000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "I agree. I guess your concern is we over-charge `ACCOUNT_WRITE` and the ultimate refunded amount is only 20% at most, this asymmetry makes you unhappy",
+    "created_at": "2026-06-24T14:29:50.997000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "But we do the same thing for SSTORE. \nFor example, we do 0->x->0,\nfor `0->x`, we charge 20000;\nfor `x->0`, we charge 100, refund 19900;\n\nthe effective cost of the combo is 200.\n\nbut unfortunately, the 19900 won't be fully returned even the database write doesn't happen",
+    "created_at": "2026-06-24T14:34:08.927000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lu_pinto",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "yes it's the same if clients are optimized to not write during transaction execution but protocol does not see it that way?",
+    "created_at": "2026-06-24T14:56:30.637000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lu_pinto",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "also that case is spread throughout execution, whereas the case we are discussing is localized even before execution starts",
+    "created_at": "2026-06-24T14:57:23.091000+00:00",
+    "attachments": []
   }
 ]
