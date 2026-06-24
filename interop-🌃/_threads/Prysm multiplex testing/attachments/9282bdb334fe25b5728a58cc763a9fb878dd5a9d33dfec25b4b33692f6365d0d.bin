@@ -1,0 +1,59 @@
+## Setup (no local patching)
+- ethereum-package: `ethpandaops/ethereum-package@5ff8db70` — official #1432 ("set --builder-api-url per instance")
+- buildoor image: `ethpandaops/buildoor:main` (devnet-5 spec + --extra-data, both merged upstream)
+- prysm: gcr.io/offchainlabs/prysm/beacon-chain:latest (c80ca9986055) (carries the `Builder bid fan-out` log)
+- two buildoors on participant 1 (lodestar): `buildoor-lodestar-nethermind-1-1` and `-1-2`
+
+## What this proves
+prysm queries ALL configured builders in parallel, receives a bid from each, selects one,
+and that builder's payload is included on-chain. Both builders win (bids are tied, so the
+tie-break falls to whichever builder responds first in the fan-out).
+
+## 1. Each buildoor has its OWN --builder-api-url (per-instance, official #1432 launcher)
+```
+buildoor-1-1: --builder-api-url=http://buildoor-lodestar-nethermind-1-1:8080
+buildoor-1-2: --builder-api-url=http://buildoor-lodestar-nethermind-1-2:8080
+```
+
+## 2. prysm — fan-out: received 2 bids from BOTH builders (one line per proposal)
+```
+[2026-06-24 00:21:58.15]  INFO builder: Builder bid fan-out for slot 205: queried 2 builder(s) [http://buildoor-lodestar-nethermind-1-2:8080, http://buildoor-lodestar-nethermind-1-1:8080]; received 2 bid(s): [http://buildoor-lodestar-nethermind-1-1:8080{builder=1 value=0 payment=142000}, http://buildoor-lodestar-nethermind-1-2:8080{builder=0 value=0 payment=142000}]
+[2026-06-24 00:22:10.16]  INFO builder: Builder bid fan-out for slot 207: queried 2 builder(s) [http://buildoor-lodestar-nethermind-1-1:8080, http://buildoor-lodestar-nethermind-1-2:8080]; received 2 bid(s): [http://buildoor-lodestar-nethermind-1-2:8080{builder=0 value=0 payment=142000}, http://buildoor-lodestar-nethermind-1-1:8080{builder=1 value=0 payment=142000}]
+[2026-06-24 00:22:16.19]  INFO builder: Builder bid fan-out for slot 208: queried 2 builder(s) [http://buildoor-lodestar-nethermind-1-1:8080, http://buildoor-lodestar-nethermind-1-2:8080]; received 2 bid(s): [http://buildoor-lodestar-nethermind-1-1:8080{builder=1 value=0 payment=142000}, http://buildoor-lodestar-nethermind-1-2:8080{builder=0 value=0 payment=142000}]
+[2026-06-24 00:22:22.15]  INFO builder: Builder bid fan-out for slot 209: queried 2 builder(s) [http://buildoor-lodestar-nethermind-1-1:8080, http://buildoor-lodestar-nethermind-1-2:8080]; received 2 bid(s): [http://buildoor-lodestar-nethermind-1-2:8080{builder=0 value=0 payment=142000}, http://buildoor-lodestar-nethermind-1-1:8080{builder=1 value=0 payment=142000}]
+[2026-06-24 00:22:34.15]  INFO builder: Builder bid fan-out for slot 211: queried 2 builder(s) [http://buildoor-lodestar-nethermind-1-2:8080, http://buildoor-lodestar-nethermind-1-1:8080]; received 2 bid(s): [http://buildoor-lodestar-nethermind-1-1:8080{builder=1 value=0 payment=142000}, http://buildoor-lodestar-nethermind-1-2:8080{builder=0 value=0 payment=142000}]
+[2026-06-24 00:22:40.15]  INFO builder: Builder bid fan-out for slot 212: queried 2 builder(s) [http://buildoor-lodestar-nethermind-1-1:8080, http://buildoor-lodestar-nethermind-1-2:8080]; received 2 bid(s): [http://buildoor-lodestar-nethermind-1-2:8080{builder=0 value=0 payment=142000}, http://buildoor-lodestar-nethermind-1-1:8080{builder=1 value=0 payment=142000}]
+[2026-06-24 00:22:52.17]  INFO builder: Builder bid fan-out for slot 214: queried 2 builder(s) [http://buildoor-lodestar-nethermind-1-1:8080, http://buildoor-lodestar-nethermind-1-2:8080]; received 2 bid(s): [http://buildoor-lodestar-nethermind-1-1:8080{builder=1 value=0 payment=142000}, http://buildoor-lodestar-nethermind-1-2:8080{builder=0 value=0 payment=142000}]
+[2026-06-24 00:23:34.19]  INFO builder: Builder bid fan-out for slot 221: queried 2 builder(s) [http://buildoor-lodestar-nethermind-1-1:8080, http://buildoor-lodestar-nethermind-1-2:8080]; received 2 bid(s): [http://buildoor-lodestar-nethermind-1-1:8080{builder=1 value=0 payment=142000}, http://buildoor-lodestar-nethermind-1-2:8080{builder=0 value=0 payment=142000}]
+```
+
+## 3. buildoor-1-1 (builder idx 1) — payloads it WON
+```
+time="2026-06-24T00:22:28Z" level=info msg="Our payload was included in a beacon block!" bid_value=42000000000000 block_hash=706c2d315e5df39a component=epbs-service slot=210
+time="2026-06-24T00:22:34Z" level=info msg="Our payload was included in a beacon block!" bid_value=42000000000000 block_hash=62d799ca116fa591 component=epbs-service slot=211
+time="2026-06-24T00:22:46Z" level=info msg="Our payload was included in a beacon block!" bid_value=42000000000000 block_hash=8053ba70695cbb9e component=epbs-service slot=213
+time="2026-06-24T00:22:52Z" level=info msg="Our payload was included in a beacon block!" bid_value=42000000000000 block_hash=fe13ff68be475be4 component=epbs-service slot=214
+time="2026-06-24T00:23:22Z" level=info msg="Our payload was included in a beacon block!" bid_value=42000000000000 block_hash=d4c7038ce05431da component=epbs-service slot=219
+time="2026-06-24T00:23:34Z" level=info msg="Our payload was included in a beacon block!" bid_value=42000000000000 block_hash=acb3ea6f5956f8f5 component=epbs-service slot=221
+```
+
+## 4. buildoor-1-2 (builder idx 0) — payloads it WON
+```
+time="2026-06-24T00:22:22Z" level=info msg="Our payload was included in a beacon block!" bid_value=42000000000000 block_hash=81597955d7116984 component=epbs-service slot=209
+time="2026-06-24T00:22:40Z" level=info msg="Our payload was included in a beacon block!" bid_value=42000000000000 block_hash=c0d6123275000fa2 component=epbs-service slot=212
+time="2026-06-24T00:22:58Z" level=info msg="Our payload was included in a beacon block!" bid_value=42000000000000 block_hash=b245df28a493bc0e component=epbs-service slot=215
+time="2026-06-24T00:23:04Z" level=info msg="Our payload was included in a beacon block!" bid_value=42000000000000 block_hash=eed0e983c45071ee component=epbs-service slot=216
+time="2026-06-24T00:23:10Z" level=info msg="Our payload was included in a beacon block!" bid_value=42000000000000 block_hash=da84c430b54c1674 component=epbs-service slot=217
+time="2026-06-24T00:23:28Z" level=info msg="Our payload was included in a beacon block!" bid_value=42000000000000 block_hash=c83af9008ae7a5d9 component=epbs-service slot=220
+```
+
+## 5. Correlation (best-of-N across both builders)
+Same slots where prysm logged "received 2 bid(s)" → which builder's payload was included:
+
+| slot | prysm received | winner |
+|------|----------------|--------|
+| 209  | 2 bids (idx 0 + idx 1) | buildoor-1-2 (idx 0) |
+| 211  | 2 bids (idx 0 + idx 1) | buildoor-1-1 (idx 1) |
+| 212  | 2 bids (idx 0 + idx 1) | buildoor-1-2 (idx 0) |
+| 214  | 2 bids (idx 0 + idx 1) | buildoor-1-1 (idx 1) |
+| 221  | 2 bids (idx 0 + idx 1) | buildoor-1-1 (idx 1) |
