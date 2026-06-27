@@ -1,0 +1,98 @@
+[
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "",
+    "created_at": "2026-06-27T12:35:38.884000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@1467247836117860547> who is to blame here, the CL or the EL? you already sent me an alert earlier, please dig into it more, also specifically at slot 13965",
+    "created_at": "2026-06-27T12:35:39.880000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tbenr",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": ".....",
+    "created_at": "2026-06-27T12:39:55.210000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Verdict's in, and it's well-evidenced. Posting to the thread:\n\n---\n\n**It's the EL, not the CL.** Neither flamingo is innocent on the consensus side — every CL (Lodestar, LH, Prysm, Nimbus, Teku) is faithfully following whatever its paired EL declares valid. The re-orgs, \"block not found\", PTC/payload-attestation failures and the finality halt are all *downstream* of the execution clients disagreeing on block validity.\n\n**Root cause: EIP-7928 Block-Level Access List (BAL) encoding is not interoperable across besu / geth / ethrex.** The chain shattered at EL height **12609** (epoch-436 boundary, 10:02:27Z) — there are **at least 5 competing blocks at that one height**: `e0f2bc`(156tx), `e52da8`(174tx), `f66751`(3tx), `fea449`(47tx), `8be1fe`(299tx).\n\nSmoking gun — block 12609 `0xe52da8` (besu-built, slot 13961) is rejected by **two different ELs, both on the BAL**:\n- besu → `status: INVALID, validationError: Invalid block access list encoding`\n- geth → `error=\"failed to decode BAL: EOF\"`\n\nTwo independent clients can't decode the same block's BAL → the bytes are malformed / the encoding is disputed. besu's fork-choice then oscillates back to the common parent `0x69379d` (block 12608) because it can't accept any 12609 the rest of the network follows.\n\n**Slot 13965 specifically:** proposed by **prysm-ethrex-1** (proposer 83), CL root `0xc167a6aa`, EL payload = block 12609 `0xfea44960` (47 tx, ethrex-built). geth + ethrex accepted it and it **re-org'd all three lighthouse nodes** (head `0x49fe343d` → `0xc167a6aa`). The besu-paired nodes never followed it — stuck at parent 12608 — which is exactly why nimbus-besu was dropping attestations \"block not found\". So 13965 is just *one of the 5 competing 12609s*: a symptom of the EL split, not the cause.\n\n**Lodestar is not implicated** — it only relays the payload to its EL and honors the verdict; the BAL-undecodable block (geth's EOF) never transited a Lodestar node, so the bug is EL-side.",
+    "created_at": "2026-06-27T12:48:08.489000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "**Next step is on the EL teams:** besu + geth should diff the BAL SSZ bytes of a rejected 12609 (e.g. `0xe52da8`) against the EIP-7928 spec encoding — geth's \"EOF\" smells like a truncated or over-long BAL field. I can pull the raw bytes if that helps.",
+    "created_at": "2026-06-27T12:48:08.930000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "lol",
+    "created_at": "2026-06-27T12:48:39.014000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Enrico, we can enjoy our weekend",
+    "created_at": "2026-06-27T12:48:53.679000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tbenr",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "🫡  you too 🙂",
+    "created_at": "2026-06-27T12:49:33.708000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@&1460290804898861117> happy weekend",
+    "created_at": "2026-06-27T12:50:04.910000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tbenr",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "LoooooL",
+    "created_at": "2026-06-27T12:50:14.665000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I am out going for a ride, it's sunny and really nice weather here 😎",
+    "created_at": "2026-06-27T12:50:59.220000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I've confirmed the full picture from my own notes and the live thread:\n\n- The CL-vs-EL investigation Nico asked for (including the slot 13965 deep-dive) is **already done and posted** to this exact thread (BACKLOG line 173: \"✅ Posted slot-13965 CL-vs-EL verdict\"). Verdict: it's the **EL (flamingos)**, not the CL (beavers) — genuine EIP-7928 BAL non-interop (besu-built block 12609 `0xe52da8` rejected by both besu *and* geth's decoder; slot 13965 is a downstream symptom of the EL fork). Lodestar/CL not implicated.\n- The current message (\"happy weekend\" + role ping) is weekend wind-down banter — Nico's \"we can enjoy our weekend\" and tbenr's \"you too 🙂\" are direct reactions to that delivered verdict. The team is wrapping up *because* the CL side was cleared.\n\nThere's no outstanding task and no new question directed at me — just a social sign-off that tbenr already reciprocated. A reply from me would be a low-value echo, which is exactly the banter case to stay quiet on.",
+    "created_at": "2026-06-27T12:52:16.217000+00:00",
+    "attachments": []
+  }
+]
