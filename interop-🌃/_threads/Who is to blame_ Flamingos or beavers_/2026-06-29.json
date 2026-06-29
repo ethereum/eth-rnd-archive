@@ -30,5 +30,21 @@
     "content": "Done — investigation complete, notes + BACKLOG corrected. Here's my answer to Nico:\n\n---\n\nChecked all 19 devnet-6 nodes via panda otel-logs. Short answer: **yes — in the live incident window (08:00→10:02:27Z) every BAL reject was on a Prysm-paired EL.**\n\n- `prysm-besu-1` (CL=prysm) → besu `Invalid block access list encoding` ×10\n- `bootnode-1` → geth `failed to decode BAL: EOF` ×2 — and **its beacon is Prysm too** (the `blockchain: Synced new block … builderIndex= … chainServiceProcessedTime` logs are Prysm's; the `Lighthouse/v8.2.0` string was just a remote peer)\n\nAll 4 other besu nodes (lodestar/lighthouse/nimbus/teku) + every other geth/ethrex: **0** BAL rejects in-window.\n\nThe one non-Prysm host that shows up — `lodestar-geth-1` (10,396) — is **not** a counterexample. It's entirely *post*-incident (15:30→next day): a retry loop wedged on a single early block (#9940 `0x921c11`, ~01:00Z) it fell back to after peer-starving — separate Lodestar net bugs (PR #9560 + the DIAL_ERROR self-ban), not BAL. geth re-rejected that one poisoned block ~10k×. Meanwhile `lodestar-besu-1` had **0** BAL rejects ever — and since besu strict-rejects bad BALs (proven on prysm-besu), that confirms **Lodestar's BAL serialization is fine**; it just relays the upstream bytes, and geth is stricter than besu.\n\nSmoking gun on the mechanism: block `e52da8` (slot 13961) was **self-built** — `builderIndex = 2^64−1` (no external builder). Prysm produced the local payload with an empty/malformed BAL and handed it to its own ELs, which **correctly** rejected it (empty byte-list ⇒ geth \"EOF\", besu \"Invalid encoding\"). Non-Prysm CLs followed a different competing block at that height and never fed the bad BAL to their ELs.\n\n**Verdict: CL (Prysm), not the EL** — matches pk910's Friday call. The rejecting ELs were the symptom; my earlier \"EL non-interop\" read was wrong. Lodestar's clean on BAL handling.",
     "created_at": "2026-06-29T11:17:54.770000+00:00",
     "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Lodestar and Teku seems fine in this regard, this seems isolated to Prysm to me, so might be worth to have <@755590043632140352> or <@363800010518822915> chime in, we can also have lodekeeper dig into the bug and open a PR if you guys prefer that, I am guessing something is messed up how you pass the BAL to the EL that changes in glamsterdam-devnet-6 since we haven't seen that before",
+    "created_at": "2026-06-29T13:23:20.993000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I'm not reading all that from an AI, it will start with \"I'm pretty sure it's A\" and end with \"Oh you are absolutely right it is B\". .. Sifting through logs with Besu right now myself cause Claude wastes my time when I ask to do this. Ping me here again if there's something I really need to look at.",
+    "created_at": "2026-06-29T13:33:59.093000+00:00",
+    "attachments": []
   }
 ]
