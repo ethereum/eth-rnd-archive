@@ -54,5 +54,77 @@
     "content": "<@1467247836117860547> can you dig into the Prysm bug and open a PR on their repo",
     "created_at": "2026-06-29T14:50:18.977000+00:00",
     "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "↪️ Model Fallback: openai/gpt-5.5 (selected claude-cli/claude-opus-4-8; timeout)",
+    "created_at": "2026-06-29T15:28:01.139000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Opened the Prysm PR: <https://github.com/OffchainLabs/prysm/pull/17050>\n\nRoot cause looks Prysm-side: the bad block itself was imported fine via non-Prysm paths, but Prysm’s payload-envelope/newPayload replay handed the EL an empty BAL (`0x`), which Besu/geth correctly rejected (`Invalid block access list encoding` / `EOF`). Slot 13965 looks like downstream fork fallout; the actionable bug is the empty BAL handoff around slot 13961/block 12609.\n\nPatch rejects empty Gloas `blockAccessList` in engine JSON decode, self-built envelope caching, and publish validation.\n\nTests passed:\n- `go test ./proto/engine/v1`\n- focused validator envelope tests\n\nFull validator package still has unrelated existing failures, noted in the PR.",
+    "created_at": "2026-06-29T15:28:20.968000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "⚠️ 🛠️ `go test ./proto/engine/v1 ./beacon-chain/rpc/prysm/v1alpha1/validator (in ~/prysm-empty-bal)` failed",
+    "created_at": "2026-06-29T15:28:30.907000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "terencechain",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Do you guys really do this? (ie validate what a \"trusted\" EL client returns to you)",
+    "created_at": "2026-06-29T15:44:47.492000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I have the full picture now. Context: Nico asked me to dig into a Gloas/ePBS interop bug and open a Prysm PR (#17050). My PR proposed rejecting empty `0x` block-access-lists in three places, including the `engine` JSON-decode path. Terence (Prysm) is pointedly — and fairly — asking whether a CL really validates what its trusted EL returns. He's also openly AI-skeptical in-thread, so this needs to be precise and code-backed, not waffle.\n\nWhat I verified in Lodestar:\n- `notifyNewPayload` (http.ts:211+) acts on the EL's VALID/INVALID verdict — no re-execution.\n- `parseExecutionPayload` (types.ts:403-417) only does **null-presence** guards on Gloas fields (`blockAccessList`/`slotNumber`), and the comment at L373 shows those exist because Geth can reply `null`, not to police the EL.\n- Critically: `blockAccessList == null` is **false** for `\"0x\"`, so an empty BAL passes decode as a zero-length buffer. Lodestar would *not* catch it today.\n\nSo Terence has a real point about the weakest part of my PR, and the honest answer is \"no, not the content.\"\n\nStraight answer: no, not the content. We trust the EL's verdict — `newPayload` returns VALID/INVALID and we act on it, no re-execution, no recompute. The only validation Lodestar does on an engine response is structural presence: for Gloas, `parseExecutionPayload` (engine/types.ts ~L403) throws if `blockAccessList`/`slotNumber`/`withdrawals`/`blobGasUsed` are null — and that guard mostly exists because Geth can legitimately reply `null` on some fields, not to police the EL.\n\nOn the `0x` case specifically, Lodestar wouldn't even catch it today: `blockAccessList == null` is false for `\"0x\"`, so an empty BAL sails through decode as a zero-length buffer and only dies later in SSZ.\n\nSo fair hit on the PR — the getPayload-decode reject is the one spot that treats the trusted EL as untrusted. I'd only defend it as a fail-fast tripwire at a boundary we already null-guard; it's not load-bearing. A `0x` BAL is malformed no matter where it",
+    "created_at": "2026-06-29T15:49:51.866000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "came from, and the real root cause is wherever the self-built envelope zeroes the BAL between getPayload and the cached envelope it replays on `newPayload` — that's CL-internal integrity, not EL distrust.",
+    "created_at": "2026-06-29T15:50:01.396000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "terencechain",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "no no, this has nothing to do with `newPayload`, what you are modifying is `getPayload` and to verify BAL from `getPayload`",
+    "created_at": "2026-06-29T15:51:11.685000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Can you review it too? 😝",
+    "created_at": "2026-06-29T15:51:39.722000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Confirmed from source. `BlockAccessList = new ByteListType(...)` — opaque bytes, not a structured container. And `parseExecutionPayload` does `blockAccessList = dataToBytes(blockAccessList, null)` — it takes the EL's hex straight to raw bytes, no structural decode. My note's audit holds: Lodestar carries the BAL opaque end-to-end, which is exactly why it dodged the devnet-6 rejects. I can answer Terence with confidence.\n\n getPayload, got it. Honest answer to \"do you really validate what your trusted EL hands back\": no — on getPayload we trust our own EL, no re-execution, no re-derivation.\n\nFor the BAL specifically there isn't even a verify step, and that's by design: Lodestar carries it as an opaque ByteList the whole way. getPayload hex → `dataToBytes` → SSZ ByteList → gossip envelope → same bytes back out on newPayload. We never decode it into the structured {addresses/slots/changes} container, so there's no re-encode step that could empty it. That's why we never showed up in the besu/geth BAL rejects on devnet-6 — there's nothing to mangle.\n\nSo verifying the BAL from getPayload only buys you something if you round-trip the structured form (decode → re-serialize for the envelope), which is exactly where it got dropped. Pass the EL's bytes through untouched and there's nothing to verify — every importing EL re-derives the BAL on newPayload anyway. So genuine q: are you arguing every CL should re-derive/verify post-getPayload, or is the real takeaway \"don't re-encode what the EL gave you\"? Opaque passthrough feels like the cheaper, safer fix.",
+    "created_at": "2026-06-29T15:57:06.385000+00:00",
+    "attachments": []
   }
 ]
