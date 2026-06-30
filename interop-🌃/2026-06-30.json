@@ -22,5 +22,131 @@
     "content": "Thanks, will look when I wake up. Will need to figure out why we go into init sync to start with.",
     "created_at": "2026-06-30T08:06:48.075000+00:00",
     "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "did you guys restart the execution node? I'd like to get the logs around epoch 980 to see what caused the split",
+    "created_at": "2026-06-30T12:27:07.817000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "edgl_dev",
+    "category": "Testing",
+    "parent": "",
+    "content": "not that i know, maybe a watchtower push made it restart",
+    "created_at": "2026-06-30T12:29:13.162000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "",
+    "content": "panda cli can fetch them",
+    "created_at": "2026-06-30T12:33:02.262000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "ok, anyway I did find a stupid lack of optimization on our part: We submit a block and our peers start immediately sending us our own data column sidecars and we ignore them cause we haven't imported our own block yet",
+    "created_at": "2026-06-30T12:33:15.327000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "and we then fail to build the next block correctly",
+    "created_at": "2026-06-30T12:33:29.332000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "This shouldn't break the chain though and it seems that ethrex fails to construct the next block in 31388, we get this message \n``` \n[2026-06-29 20:07:48.39] DEBUG rpc/validator: Received execution payload from local engine value=&{neg:false abs:[195389954000000000]}\n```",
+    "created_at": "2026-06-30T12:34:52.785000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "Yeah <@1443132403001589771> I'm pretty sure ethrex had a problem to sync the payload envelope for 31388 which would have caused a reorg on ethrex",
+    "created_at": "2026-06-30T12:37:16.345000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "and that breaks Prysm there, we had a bug that made us attempt to reorg that payload (because we never synced it) but ethrex never recovers from that",
+    "created_at": "2026-06-30T12:37:45.865000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "I'll fix our issue, but the stall seems to come from ethrex not recovering from that slot",
+    "created_at": "2026-06-30T12:38:03.702000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "We declare that payload unavailable cause we can't get the columns and then we're stuck forever",
+    "created_at": "2026-06-30T12:39:34.648000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "I'll restart that node cause it'll catch up to head now, that I have the diagnosis, but you guys should look into what happened at that slot, will fix our broadcasting issue as well",
+    "created_at": "2026-06-30T12:40:11.198000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "edgl_dev",
+    "category": "Testing",
+    "parent": "",
+    "content": "just installed the panda cli to check\n\n ethrex logs for that window show that it didn't fail to build or reorg at 31388 ( 2026-06-29):\n20:07:31  FCU V4 (payload attrs) -> building slot=31388\n20:07:43  BLOCK 22927 0x0e5fb318… executed, valid          (canonical 31388)\n20:07:48  FCU V4 (payload attrs) -> building slot=31389\n20:07:48  BLOCK 22927 0x76eccfbc… executed, valid          (the 31389 that got orphaned)\n20:18:51  FCU V4 (payload attrs) -> building slot=31445     (resumes as soon as the CL calls again)\nIt built payloads for both 31388 and 31389, executed both fork candidates without an error, and there are zero error/warn/reorg lines on the EL from 20:00 (06-29) until a watchtower image update restarted it at 12:02 (06-30). The EL only goes idle in the spans where it receives no FCU/newPayload from the beacon\ni can't see anything odd from the logs",
+    "created_at": "2026-06-30T12:59:27.543000+00:00",
+    "attachments": [
+      {
+        "type": "text/plain; charset=utf-8",
+        "origin_name": "prysm-ethrex-1_execution_2026-06-29_1955-2030Z.log",
+        "content": "ea7ea94a2cd0f4caf8bf088376f8a32c196efc6c57e6169a79dd10f1c395db7d"
+      }
+    ]
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "That's very weird, we never get to sync the payload for 31388, but in fact it's not your payload, we ditched your payload and took Buildoors, so it wasn't our columns that we didn't sync, it was buildoors",
+    "created_at": "2026-06-30T13:01:31.234000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "may be the same thing as always, we get data columns before the block and we do not sync them",
+    "created_at": "2026-06-30T13:02:06.690000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "What do other clients do here? do you guys put the columns in a pending queue? isn't this a brutal DOS?",
+    "created_at": "2026-06-30T13:02:49.415000+00:00",
+    "attachments": []
   }
 ]
