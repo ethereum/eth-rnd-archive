@@ -6,5 +6,21 @@
     "content": "We are considering how best to handle direct-connected builders in Lighthouse, and hit a small snag in how `SignedRequestAuthV1` needs to be managed. This is the auth that is sent in the body when requesting a bid:\n\nhttps://ethereum.github.io/builder-specs/?urls.primaryName=dev#/Builder/getExecutionPayloadBid\n\nThe problem is, the `produce_block_v4` API is a _GET_ API, and this is where you would naturally want to send the `SignedRequestAuthV1`. Yes, you probably also want to send it ahead of time via the `builder_preferences` endpoint, but you probably also want to send it with the bid request. We are thinking of relying on caching in the BN so that the flow is something like:\n\n1. VC send a `SignedRequestAuthV1` when it has a proposal coming up\n2. BN posts that `SignedRequestAuthV1` to the builder and caches it in memory\n3. VC requests a block via `produce_block_v4` (GET)\n4. BN makes bid requests to all builders that it has configured for the proposer, _and_ which it has `SignedRequestAuthV1` cached in memory.\n5. BN selects best bid and includes it in the block for the VC to sign.\n\nThe problem is the potential failure case at step (4). Should we avoid sending the request if the auth isn't cached? Should we sent a request with no auth and hope for the best? Does this imply we need to persist these auth objects to _disk_ in the BN, so that a restart doesn't remove them?\n\n<@554799849288105986> is the main one working on this from our side. He mentioned that <@363800010518822915> had solved this in Prysm by including the auth in their gRPC block request (basically like using a POST for produce_block_v4?)",
     "created_at": "2026-07-02T05:30:04.524000+00:00",
     "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "This is very similar to how it's handled in Prysm, and yes, eventually it'd be nice to get this speced out in produce_block_v4. See my open issue in https://github.com/ethereum/beacon-APIs/issues/620. I believe the best way to handle this is to add this `BuilderPreferences` object in the call to `produce_block_v4` and the builder preferences is a map per-builder, which includes the signed auth as an optional parameter.",
+    "created_at": "2026-07-02T13:07:18.478000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "so it doesn't rely on caching in step 4 <@602753420033785856>",
+    "created_at": "2026-07-02T13:07:49.068000+00:00",
+    "attachments": []
   }
 ]
