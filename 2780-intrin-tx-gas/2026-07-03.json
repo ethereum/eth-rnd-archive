@@ -78,5 +78,101 @@
     "content": "Will change PR to address this and include cold charge in intrinsic, this is supported by Maria, Gary, Guru and i see spencer put 100 emoji 🙂",
     "created_at": "2026-07-03T09:59:07.948000+00:00",
     "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "<@968526635735326741> <@429719902363058177> <@1126229231572094976> for authorization processing in new EIP-2780\n\nWith new 2780, we process all the authorizations in runtime, it's still possible to cancel the previous delegation, e.g., delegate from 0->a->0. The net state change will be zero and nothing should be charged for state growth.\n\nWe have a few options here:\n- process authorizations one by one and charge the gas accordingly, for 0->a, we charge the state cost (and the regular), for a->0, we refund the state cost and charge the regular. In this way, we can minimize the BAL size just in case the remaining gas is insufficient to cover all auths (prevent authority access for following auths)\n- we calculate the gas for the entire authorizations and then charge them in one shot. As we will pay the cold access in IntrinsicCost, so it's fine to blindly access all the authorities. The good side is we can get rid of the charge-and-refund mechanism, the downside is we may include some extra authorities in BAL which can be prevent by checking the gas step by step\n\nWould be appreciated to get some insights!",
+    "created_at": "2026-07-03T12:16:00.906000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "draganrakita",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Isn't nonce bumped in account?",
+    "created_at": "2026-07-03T12:18:42.196000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Yes, i think charging gas step by step is semantically more correct, but we still need the refund mechanism there (for delegation indicator)",
+    "created_at": "2026-07-03T12:20:11.953000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "draganrakita",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "refund about what, account gets changed right?",
+    "created_at": "2026-07-03T12:21:27.820000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "draganrakita",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Can you be more precise what item goes from 0->a->0",
+    "created_at": "2026-07-03T12:21:49.009000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "For the delegation marker.",
+    "created_at": "2026-07-03T12:22:42.104000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "`STATE_BYTES_PER_AUTH_BASE × CPSB`",
+    "created_at": "2026-07-03T12:23:06.677000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "draganrakita",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "I see",
+    "created_at": "2026-07-03T12:26:24.559000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "draganrakita",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Imo if we want with simplification on cold load gas, i would just ignore this case, if user added three authorization that does nothing, let him pay and not complicate things.",
+    "created_at": "2026-07-03T12:26:56.677000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "In both approaches i proposed, user will all pay nothing for state cost (it's correct). \n\nThe main difference is for (1) we charge the gas step by step, and if gas is insufficient, we can abort this process earlier and minimize the BAL size, for (2), the only good side is we can simplify the implementation by getting rid of the auth-charge-then-refund, but we may do more work than the gas supplied.\n\nI think (1) is better in general",
+    "created_at": "2026-07-03T12:38:49.161000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jochembrouwer",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "We should think of the edge cases as well. For (1), we need to strictly specify the order of gas cost deductions are handled with the newly introduced gas costs. Especially EIP-7702 is tricky here. The test set would be something like EIP-7702 transactions with up to N authorizations (which could for instance set delegation, remove delegation, set delegation on same account) where we test for an exact range of tx gasLimit (which is exactly on the boundary where something \"else\" happens, e.g. a BAL item inserted or changed)\n\nNote that the pre-execution gas costs deduction is a new concept. This is especially weird in the EIP-7702 context: currently, the gas cost to do any operation is always there by definition (part of intrinsic gas cost). If the execution part fails/OOGs, then all the state changes in the execution part are rolled back, but the authorizations stay. Current EIP draft changes this, where if the pre-exec gas cost deduction fails, it rolls back authorizations (?).\n\nWhy are we not raising the intrinsic gas cost of EIP-7702 such that this state creation gas is covered? Then we don't have to change anything regarding this logic. Has this been considered?",
+    "created_at": "2026-07-03T12:49:25.345000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "> For (1), we need to strictly specify the order of gas cost deductions are handled with the newly introduced gas costs.\nYes true.\n\n> Current EIP draft changes this, where if the pre-exec gas cost deduction fails, it rolls back authorizations (?).\nI think the authorizations will also be reverted",
+    "created_at": "2026-07-03T12:54:31.622000+00:00",
+    "attachments": []
   }
 ]
