@@ -52,5 +52,13 @@
     "content": "<@412614104222531604> <@808969530608451584> I think I am hitting a bug in buildoor's builder-api reveal path on my local gloas devnet. On a subset of builder won slots, the envelope is never revealed and the slot ends up with a missed payload.  When the proposer POSTs the signed block to `/eth/v1/builder/beacon_block`, buildoor publishes the block and then immediately publishes the envelope to its backend CL in the same handler. If the backend hasn't finished importing the block yet, the envelope submit fails:\n\n  `failed to submit envelope: status 404: {\"code\":404,\"message\":\"Block not found for beacon block root 0xff7ab3...\"}`\n\n  and buildoor gives up, there's no retry. The head event for that exact root arrives within the same second (visible in the logs right after the failure), so the block was fine, the envelope POST just lost the race against the backend's block import. Buildoor then returns 500 to the proposer's block submission even though the block itself was broadcast fine.\n\n  Timeline for one instance:\n  1. proposer broadcasts block + POSTs it to buildoor\n  2. buildoor: submitSignedBeaconBlock: broadcasted beacon block\n  3. buildoor: failed to publish execution payload envelope ... 404 Block not found (lodestar hasn't imported the block yet)\n  4. buildoor: Head event received... same root that 404'd\n\n  It's intermittent since it depends on import timing, I'm seeing roughly 9 failed reveals on one buildoor instance and 14 on the other over ~150 slots, the rest succeed. Everything on localhost makes the race easy to lose, but the same window exists on real devnets whenever the backend CL is slow to import",
     "created_at": "2026-07-03T02:46:44.338000+00:00",
     "attachments": []
+  },
+  {
+    "author": "matkt0",
+    "category": "Testing",
+    "parent": "",
+    "content": "we tried to change the behavior to move the head when we have an engineNewPayload during CL catchup and now we are failing this hive test https://hive.ethpandaops.io/#/test/generic/1780826725-23b3689da5cf04261e4295623c40be7d?page=1&testnumber=257\n\nTest #257, \"NewPayload with Missing ForkchoiceUpdated (Cancun),\" It verifies that the client accepts a series of valid engine_newPayloads without an intermediate forkchoiceUpdated, keeps the chain header unchanged, and then correctly updates the header after the final forkchoiceUpdated.\n\nIf we don't change the head, we can't advance the state, etc. Is this decision to remove the FCU due to a real technical problem, or is it something we can put back?\n\ncc <@741651225576996935> <@905058765022310460>",
+    "created_at": "2026-07-03T05:31:46.187000+00:00",
+    "attachments": []
   }
 ]
