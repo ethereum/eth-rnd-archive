@@ -54,5 +54,43 @@
     "content": "Yeah that's why fuzzing STF is hard",
     "created_at": "2026-07-03T11:52:12.471000+00:00",
     "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I just asked claude opus 4.8 whether the report is valid or not and it found the flaw\n```\n  Why it can't actually happen\n\n  The double payment requires a single state where payment[P] both (a) reached quorum (so epoch settlement paid it) and (b) has P as the immediate parent that is ≥2 epochs stale (so the\n  direct-append branch fires). Those two are mutually exclusive on any one chain history:\n\n  - latest_execution_payload_bid is written in exactly one place — process_execution_payload_bid (beacon-chain.md:1590), once per block, to that block's own bid. So parent_bid.slot is always\n  the slot of the immediately preceding canonical block. For the elif to fire, that preceding block must be P and must be 2+ epochs old ⇒ a 2+ epoch gap of empty slots between P and the\n  current block.\n  - Weight on payment[P] only comes from same-slot attestations for slot P, which are added by process_attestation — and that only runs inside process_block. Those attestations must be\n  included in blocks built on top of P, during epochs E/E+1 (process_attestation rejects target.epoch older than previous: beacon-chain.md:1751).\n\n  The clean way to see the contradiction: a block built directly on P inherits P's post-state, in which payment[P] has weight = 0 (attestations for P are only ever added by later blocks,\n  which would then be the parent instead of P). So whenever the elif parent_bid.value > 0 branch fires, the evicted entry provably had weight 0 → epoch settlement never paid it → the direct\n  append is the sole payment. Conversely, any block that gave payment[P] quorum weight becomes the new parent, so P is never the stale immediate parent. The two branches partition cleanly;\n  no entry is paid twice.\n\n```",
+    "created_at": "2026-07-03T12:24:46.546000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "mushow0x",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Also quick question but what's the rationale behind the 256 here? \n\n[Here](https://github.com/ethereum/consensus-specs/blob/master/specs/gloas/beacon-chain.md?plain=1#L218) : `MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD    uint64(2**8) (= 256)`\n\nIn the EL [EIP 8282](https://eips.ethereum.org/EIPS/eip-8282) the deposit cap seems to be `MAX_DEPOSIT_REQUESTS_PER_BLOCK = 64`, and the builder exit constant on the CL side (`MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD = 16`) matches its EIP counterpart (`MAX_EXIT_REQUESTS_PER_BLOCK = 16`)\nSo the deposit side is the odd one out at 4x the EIP value?\n\n The EL EIP also gives a security rationale for that cap, *see screenshot below.*\n\nSo is the CL's `256` intentionally a looser wire-format ceiling (relying on the EL to enforce the `64` drain cap, so a valid payload never actually exceeds `64`), or should it track `64` to match the per-block verification bound the EIP describes? \nJust want to understand the reasoning.",
+    "created_at": "2026-07-03T12:27:41.522000+00:00",
+    "attachments": [
+      {
+        "type": "image/png",
+        "origin_name": "Capture_decran_2026-07-03_a_16.22.13.png",
+        "content": "9b63038d3c35858f644cc1c2f58be109fcb39bb95a89c869f3269a41ab045afb"
+      }
+    ]
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "no, we just haven't updated the CL spec yet, we merged https://github.com/ethereum/sys-asm/pull/50 yesterday",
+    "created_at": "2026-07-03T12:29:16.042000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "https://github.com/ethereum/EIPs/pull/11859 also, fixes some stuff in the EIP",
+    "created_at": "2026-07-03T12:30:16.963000+00:00",
+    "attachments": []
   }
 ]
