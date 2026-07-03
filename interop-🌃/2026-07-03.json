@@ -30,5 +30,27 @@
     "content": "Yeah that's more like it. The generator of that BAL is the one that should send the right bytes here. We just forward whatever we get. Modulo SSZ engine subtleties this should remain",
     "created_at": "2026-07-03T02:00:32.332000+00:00",
     "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Testing",
+    "parent": "",
+    "content": "`nimbus-geth-1` having trouble proposing because Geth is not respecting `is_gas_limit_target_compatible`:\n```python\n>>> def is_gas_limit_target_compatible(\n...     parent_gas_limit: uint64, gas_limit: uint64, target_gas_limit: uint64\n... ) -> bool:\n...     \"\"\"\n...     Check if ``gas_limit`` is compatible with ``target_gas_limit`` under the\n...     EIP-1559 transition rule from ``parent_gas_limit``.\n...     \"\"\"\n...     max_gas_limit_difference = max(parent_gas_limit // 1024, 1) - 1\n...     min_gas_limit = parent_gas_limit - max_gas_limit_difference\n...     max_gas_limit = parent_gas_limit + max_gas_limit_difference\n... \n...     if target_gas_limit >= min_gas_limit and target_gas_limit <= max_gas_limit:\n...         return gas_limit == target_gas_limit\n...     if target_gas_limit > max_gas_limit:\n...         return gas_limit == max_gas_limit\n...     return gas_limit == min_gas_limit\n...     \n>>> is_gas_limit_target_compatible(0xb532b80, 0xb5056b7, 0xb532b80)\nFalse\n```",
+    "created_at": "2026-07-03T02:41:56.602000+00:00",
+    "attachments": [
+      {
+        "type": "text/plain; charset=utf-8",
+        "origin_name": "nimbus-geth-1-gas-limit-incompatible.txt",
+        "content": "69ac39082c3fec08cd071211b4ca4a03792ec99746f690ae7ffc352be34f69fc"
+      }
+    ]
+  },
+  {
+    "author": "terencechain",
+    "category": "Testing",
+    "parent": "",
+    "content": "<@412614104222531604> <@808969530608451584> I think I am hitting a bug in buildoor's builder-api reveal path on my local gloas devnet. On a subset of builder won slots, the envelope is never revealed and the slot ends up with a missed payload.  When the proposer POSTs the signed block to `/eth/v1/builder/beacon_block`, buildoor publishes the block and then immediately publishes the envelope to its backend CL in the same handler. If the backend hasn't finished importing the block yet, the envelope submit fails:\n\n  `failed to submit envelope: status 404: {\"code\":404,\"message\":\"Block not found for beacon block root 0xff7ab3...\"}`\n\n  and buildoor gives up, there's no retry. The head event for that exact root arrives within the same second (visible in the logs right after the failure), so the block was fine, the envelope POST just lost the race against the backend's block import. Buildoor then returns 500 to the proposer's block submission even though the block itself was broadcast fine.\n\n  Timeline for one instance:\n  1. proposer broadcasts block + POSTs it to buildoor\n  2. buildoor: submitSignedBeaconBlock: broadcasted beacon block\n  3. buildoor: failed to publish execution payload envelope ... 404 Block not found (lodestar hasn't imported the block yet)\n  4. buildoor: Head event received... same root that 404'd\n\n  It's intermittent since it depends on import timing, I'm seeing roughly 9 failed reveals on one buildoor instance and 14 on the other over ~150 slots, the rest succeed. Everything on localhost makes the race easy to lose, but the same window exists on real devnets whenever the backend CL is slow to import",
+    "created_at": "2026-07-03T02:46:44.338000+00:00",
+    "attachments": []
   }
 ]
