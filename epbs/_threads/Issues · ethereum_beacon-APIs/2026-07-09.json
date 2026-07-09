@@ -750,5 +750,165 @@
     "content": "this is how terrence's PR (https://github.com/OffchainLabs/prysm/pull/17124) works currently although it doesn't send `min_bid` or `builder_boost` which potuz's PR has",
     "created_at": "2026-07-09T16:52:28.271000+00:00",
     "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "My PR is part of the beacon API: I do not think these values should be mandatory on the builder API",
+    "created_at": "2026-07-09T17:32:50.676000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "<@1155148587890638969> I think there's a lot of confusion on how Gloas affects operators. Please organize an ethstaker's AMA with us, I'll be happy to participate.  cc <@935504619554107392> staking pools should also be interested in these topics. We need to start making clear these things early on. \n\nBut answering some of your questions:\n\nNo, PRysm will not support neither mev boost nor commit boost. There are two paths being conflated here, the builder API regulates how the beacon node contacts and gets bids from the builder. Then there is the beacon API that regulates how the VC communicates with the beacon node. \n\nBoth of these APIs become very much intertwined in Gloas. Here's how I envision the full block proposal pipeline. \n\n1. The VC contains all of the configuration necessary to perform bid selection. These for example contains a list of builders to contact directly, if you take trusted bids from them or not, min bids, etc... this is the part that the user configures on their VC.\n\n2. The BN gets a list of validator keys that it's serving. The VC finds out that it will be proposing in the next epoch, so it signs and caches a bunch of signed auths to contact later on the builders. IT signs one for each builder. \n\n3. The VC contacts early on the builder and informs that it will be requesting a bid in the upcoming slots. It sends some parameters that it may think will be useful (for example: \"I will take a trusted bid from you\"). This part is currently not specified and not being developped, it's useful, not critical yet. \n\n4. The VC contacts the beacon node JIT to get it a beacon block. Here is the beacon API that was talked today in ACDC: the VC needs to send in this call all the information so that the BN contacts the right builders and the BN is in charge of picking the right bid. The VC sends the signed auths, the list of builders that it needs to contact and the parameters of those contacts ... to be continued..",
+    "created_at": "2026-07-09T17:40:55.896000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "... In this call is the issue of the \"proxy\" that you mention, the problem is in the auth object itself, that has a generic field to identify the builder (we'll get to that below). But the BN needs to have not only builder information but also an URL to where to contact the builder. Having these two fields separate helps off-protocol systems like relays and preconfirmation gateways to exploit this. That's all there is. The BN will send the request to one URL with a signature over any identifying message that the builder may find useful. \n\n5. The BN now calls the builders over those URLs with the builder API (this is something that before was carried by MEV-Boost). It is in this call that the beacon node submits information to the builder regarding what it wants. Not necessarily the parameters that the VC passed to the BN should be forwarded to the builder. For example, min bid I suspect is not something that I would want to advertise. Max trusted bid may be useful... etc",
+    "created_at": "2026-07-09T17:44:33.464000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "dgusakov",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "I can not get why the auth is needed here",
+    "created_at": "2026-07-09T17:44:35.303000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "should've waited a second, I hope that 5 solved your question.",
+    "created_at": "2026-07-09T17:45:00.838000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "6. The beacon node now has received the replies from the builders and choses the best bid, then assembles the block and gives it back to the VC for signing and the process follows exactly as today.",
+    "created_at": "2026-07-09T17:45:34.471000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "dgusakov",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "It did not",
+    "created_at": "2026-07-09T17:46:56.909000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "dgusakov",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "If it works now, why it will not work with ePBS?",
+    "created_at": "2026-07-09T17:47:32.719000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "The BN needs to request bids from builders via the builder API, this request is done right at the moment that the VC requests a block from the BN via the beacon API. To submit the signed auth via the builder API to the builder it needs to get the auths from the VC at that moment, this is the reason why the VC sends the auths at that moment",
+    "created_at": "2026-07-09T17:48:20.646000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jvranek",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "there's a thread related [on this](https://github.com/ethereum/builder-specs/issues/156)\n\nwithout authorizations, since builders are now entities with public endpoints, it's possible for other builders to query each other to try to learn their bids. the auth is how the builder knows the request originated from the proposer and not someone else\n\nwith pbs, relays broadcasted bids to everyone by default so auths werent needed",
+    "created_at": "2026-07-09T17:49:00.118000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "If your question is \"why is the auth mandatory\"? then no, the auth is not mandatory, it can be ommitted if the builder does not require it and the proposer does not want to send it",
+    "created_at": "2026-07-09T17:49:04.940000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "dgusakov",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "The bid and the payload are two distinct things, right? So by knowing bid you can’t learn how this bid was obtained since you can see the payload",
+    "created_at": "2026-07-09T17:51:55.621000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "it is not about knowing how it was obtained, it is about protecting yourself from revealing your value",
+    "created_at": "2026-07-09T17:53:10.412000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "The values for these configuration flags are extremely important, and getting the defaults correctly on clients will shape and change dramatically how these auctions are carried if we can avoid a builder cartel or a relay shifting the auction to their own terms. So that's why it is important to get operators to understand the effects of these",
+    "created_at": "2026-07-09T17:55:50.728000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "dgusakov",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "So you think that blinded auction will force builders to pay more to validators?",
+    "created_at": "2026-07-09T17:56:54.235000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "It depends on how this auction is carried and how many participants are there. At any rate, my own personal hope is that we can get rid of this auction altogether and we do MEV burn in the next fork or so",
+    "created_at": "2026-07-09T17:58:28.922000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "and have builders not pay anything to validators",
+    "created_at": "2026-07-09T17:58:48.887000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "or rather go back to mev boost in a sense",
+    "created_at": "2026-07-09T17:59:01.969000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "dgusakov",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "Jesus. I was just thinking of MEV burn. Is it still on the table?",
+    "created_at": "2026-07-09T17:59:14.440000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "epbs",
+    "content": "well, I'm hoping it is",
+    "created_at": "2026-07-09T17:59:26.586000+00:00",
+    "attachments": []
   }
 ]
