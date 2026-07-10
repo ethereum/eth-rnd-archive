@@ -6,5 +6,53 @@
     "content": "> If the transaction goes out-of-gas in this pre-execution phase, the sender pays for all gas consumed\nClarification needed. In the pre-execution, the gas is already split into regular and state. If OOG, shall we preserve the state portion or burn the entire tx.GasLimit? According to the latest 2780 EIP, we need to consume the entire `tx.GasLimit`, just want to double-confirm it",
     "created_at": "2026-07-10T04:23:36.306000+00:00",
     "attachments": []
+  },
+  {
+    "author": "misilva73",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Happy to make an edit to the EIP. Not sure what the best approach is. I would tend towards the option that makes implementation more consistent and with less edge cases. At first glance, it should be to use the same rules as 8037 in the pre-execution phase.\nWhat do you think <@830368514225340436> ? What about client devs?",
+    "created_at": "2026-07-10T07:05:12.216000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "gurukamath",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "I don't think the interpretation of \"we consume the entire `tx.GasLimit`\" is strictly true. The way I reconciled these two (and please let me know if I got something wrong here - it is a bit complex) is: on OOG, the regular part is zeroed out (consumed fully), the state reservoir is is restored.\n\nFor example, A type-4 transaction with many auths and a non-zero reservoir enters the top frame with `R` regular gas and a state gas reservoir of `S` (and a non-zero `S` implies `R` is the full regular budget, `TX_MAX_GAS_LIMIT − intrinsic`). Suppose the preparation demands more than `R + S` and OOGs. The halt rolls back the entire preparation — the delegations and account leaves the state charges paid for never materialize — so every state charge is refilled, in LIFO order: first back into `gas_left` (undoing any spill), then into the reservoir, which returns to exactly `S`. The halt then consumes all remaining regular gas. At settlement the sender is charged `tx.GasLimit − gas_left − state_gas_left = tx.GasLimit − S`, which is exactly `TX_MAX_GAS_LIMIT`. So \"an OOG consumes the full tx.GasLimit\" is only true when the reservoir is zero; with a non-zero reservoir, the burn is capped at the regular dimension and the reservoir comes back untouched.",
+    "created_at": "2026-07-10T07:12:23.109000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "gurukamath",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "I will include this as a test case in the next release, it is important to get these edge cases right",
+    "created_at": "2026-07-10T07:14:10.933000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "garyrong",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "So, just to summarize, \n\n- if OOG occurs in pre-execution, **before entering the first frame**, revert state changes, refill the state costs with LIFO, burn any leftover regular with reservoir preserved;\n\n- if OOG occurs **after entering the first frame**, keep the state changes made in pre-execution (auths), refill the state cost with LIFO (such as pre-charged account-creation cost), burn any leftover regular with reservoir preserved;\n\nThe reservoir portion will be preserved once it's initialized conceptually, in the pre-execution step. EIP-2780 needs to be edited\n\nIs it correct? <@830368514225340436>",
+    "created_at": "2026-07-10T07:22:24.938000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "gurukamath",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "**if OOG occurs in pre-execution** (authorization processing or the recipient's dispatch charges): everything rolls back — including already-applied delegations — so every state charge is refilled, LIFO. Regular gas burns, and the sender gets the full reservoir back. Your first bullet is right.\n\n**if OOG occurs after entering the first frame** (while executing code): the applied delegations persist, per EIP-7702, so the state gas that paid for them — the authorities' account-creation and delegation-indicator bytes — ***stays consumed***.\nThe LIFO refill covers only charges whose state dies with the frame: storage writes inside the call, and the recipient's account-creation charge (the recipient leaf materializes with the value transfer and rolls back with it). So \"refill the state cost, such as pre-charged account-creation cost\" is not true for the authorities.",
+    "created_at": "2026-07-10T07:37:00.956000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "gurukamath",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "<@968526635735326741> Please let me know if something is off in my understanding",
+    "created_at": "2026-07-10T07:38:43.838000+00:00",
+    "attachments": []
   }
 ]
