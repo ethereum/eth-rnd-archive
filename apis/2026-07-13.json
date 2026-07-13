@@ -6,5 +6,93 @@
     "content": "Hey guys, couple of points on the topic from Charon middleware DV's perspective.\n\nWe currently send the `/eth/v1/validator/prepare_beacon_proposer` requests to the beacon node directly from Charon and swallow the requests Charon receives from the VC. This is done purely for simplicity, as the requests are not signed either way.\n\nThe `/eth/v1/builder/validators` from the Builder API we are forced to swallow, because the signed data includes the validator's pubkey. In our setup the VC has only a partial key and we aggregate the signatures from each DV peer. Here though, the signed data in a Charon cluster differs from peer to peer as VCs are signing over different pubkeys. So we cannot aggregate the signatures we receive from the VC. We do pre-sign the builder registrations at Charon level during cluster creation and just use those pre-signed messages, saved on disk.\n\nThat said, I see there are couple of proposals for moving forward here, but afaict none of them will be signing the data? This should be fine on our end. However, would it be an issue to use a validator index, rather than a pubkey as a key in the schema? For example looking at terence's PR https://github.com/OffchainLabs/prysm/pull/17124, to change it to:\n```\n{\n  \"version\": 2,\n  \"proposer_config\": {\n    \"12345\": {\n      \"fee_recipient\": \"0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3\",\n      ...\n    }\n  }\n}\n```\n\n\nAlso, non-DV related, but just my personal 2¢ on the per-validator builder configuration. We have some DV users that are utilising a 0x02 address per client of theirs. And I can definitely see those different clients of theirs having different preferences over builders, especially regulated and non-regulated.",
     "created_at": "2026-07-13T10:02:43.007000+00:00",
     "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Consensus Layer",
+    "parent": "",
+    "content": "This was one of my only requests on the API, to use the index instead of pubkey but was rejected. Perhaps you can raise it as an issue? As for the signing. It's the authorization are signed, they are optional though, but I think it'll be a disadvantage for DVT clusters if they can't sign authorizations so a solution for that problem needs to be done. These can be signed over an epoch in advance so not in the hot path, but also can't be prepared with the client since they sign over the slot number",
+    "created_at": "2026-07-13T11:22:12.236000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Consensus Layer",
+    "parent": "",
+    "content": "> but also can't be prepared with the client since they sign over the slot number\nI asked this Bharath before and the spec says i'ts the bid slot/proposal slot, or is it the current slot? really not clear from a spec pov",
+    "created_at": "2026-07-13T11:52:39.325000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Consensus Layer",
+    "parent": "",
+    "content": "on the api it says bid slot, in the `.md` it says current slot iirc",
+    "created_at": "2026-07-13T11:53:02.955000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Consensus Layer",
+    "parent": "",
+    "content": "It's the slot in which you will be proposing",
+    "created_at": "2026-07-13T11:54:26.882000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Consensus Layer",
+    "parent": "",
+    "content": "To avoid authorization replays",
+    "created_at": "2026-07-13T11:54:38.220000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Consensus Layer",
+    "parent": "",
+    "content": "even if you submit them AOT?",
+    "created_at": "2026-07-13T11:54:39.449000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Consensus Layer",
+    "parent": "",
+    "content": "Yes and you can do this for N+1 at epoch N",
+    "created_at": "2026-07-13T11:55:01.341000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Consensus Layer",
+    "parent": "",
+    "content": "yes, I was saying that here https://discord.com/channels/595666850260713488/892088344438255616/1518936679161925672, it was the last discussion on a public record where Bharath was part of 😢  but he said it should be current slot, I disagree though, we should use the proposal slot for JIT **and** AOT (if we decide to do that at all)",
+    "created_at": "2026-07-13T11:57:07.346000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Consensus Layer",
+    "parent": "",
+    "content": "Yeah definitely, current slot works for that specific replay attack but it doesn't make sense not to send the proposal one",
+    "created_at": "2026-07-13T11:58:36.496000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Consensus Layer",
+    "parent": "",
+    "content": "sorry @Bharath, seems like your overruled 😁",
+    "created_at": "2026-07-13T11:59:14.130000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Consensus Layer",
+    "parent": "",
+    "content": "someone has to polish the builder specs at some point, it's not entirely clear and there are inconsistencies",
+    "created_at": "2026-07-13T11:59:57.273000+00:00",
+    "attachments": []
   }
 ]
