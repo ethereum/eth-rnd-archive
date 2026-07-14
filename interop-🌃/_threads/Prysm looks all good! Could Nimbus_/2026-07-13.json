@@ -94,5 +94,173 @@
     "content": "Well, the only other available implementation atm is Prysm's. From what I've seen, they emit both events on head update, but only `head_v2` on payload import - which makes sense because head v1 can't reflect a payload status change anyways and that also prevents event duplication.",
     "created_at": "2026-07-13T22:44:46.412000+00:00",
     "attachments": []
+  },
+  {
+    "author": ".paulharris",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "doesnt that mean head is incorrect any time the payload doesnt arrive? that doesnt sound correct either",
+    "created_at": "2026-07-13T23:32:29.670000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "the prysm behavior is definitley wrong if that's how it works",
+    "created_at": "2026-07-13T23:37:26.140000+00:00",
+    "attachments": []
+  },
+  {
+    "author": ".paulharris",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "starting to seem pointless having this v2 at all",
+    "created_at": "2026-07-13T23:38:34.962000+00:00",
+    "attachments": []
+  },
+  {
+    "author": ".paulharris",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "so the main point was the dependent root meaning changes",
+    "created_at": "2026-07-13T23:41:49.271000+00:00",
+    "attachments": []
+  },
+  {
+    "author": ".paulharris",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "https://github.com/ethereum/beacon-APIs/pull/590/changes so this whole discussion about payload available isn't really why it was even introduced",
+    "created_at": "2026-07-13T23:42:07.889000+00:00",
+    "attachments": []
+  },
+  {
+    "author": ".paulharris",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "but also from description `The node may emit a second head event for the same beacon block and slot if there is an update in the `payload_status` from empty to full.`",
+    "created_at": "2026-07-13T23:43:12.243000+00:00",
+    "attachments": []
+  },
+  {
+    "author": ".paulharris",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "so, it seems like its fine to emit both like teku does",
+    "created_at": "2026-07-13T23:43:29.553000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "also to <@498331483732312075>'s point about the payload reorg, maybe he meant the following, you have `(B1, EMPTY)` and `(B1, FULL)`, then `get_head` for slot 1 would be `(B1, FULL)`, and for slot 2 `get_head` would be based on `should_extend_payload`, let's assume attsters vote for `(B1, EMPTY)` and slot 2 had no block, so in slot 3 `get_head` would be `(B1, EMPTY)` so the head flipped from `FULL` to `EMPTY` that is a reorg, but in regard to the `head` event, I don't think we would trigger that if we wanna match our current head (v1) emit pattern",
+    "created_at": "2026-07-13T23:44:13.947000+00:00",
+    "attachments": []
+  },
+  {
+    "author": ".paulharris",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "so based on that pr, yes theres a fair point that the dependent root meaning is fundamentally different - so v2 is important.",
+    "created_at": "2026-07-13T23:44:16.258000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "yes, that confuses me too, who and for what do we consume it, I doubt there is any usage from the vc side, at least right now I don't see it",
+    "created_at": "2026-07-13T23:45:04.449000+00:00",
+    "attachments": []
+  },
+  {
+    "author": ".paulharris",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "to me teku complies with that description but i dont know who would be consuming the payload status",
+    "created_at": "2026-07-13T23:45:37.191000+00:00",
+    "attachments": []
+  },
+  {
+    "author": ".paulharris",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "maybe a builder? dont know",
+    "created_at": "2026-07-13T23:45:44.219000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "so for slot 1, before you receive the payload your head is `(B1, EMPTY)` then it changes to `(B1, FULL)` on payload import, but both nodes have 0 weight, so for current slot, what value does this bring that `execution_payload` not already solves?",
+    "created_at": "2026-07-13T23:47:42.674000+00:00",
+    "attachments": []
+  },
+  {
+    "author": ".paulharris",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "maybe <@523051247884959744> or <@602753420033785856> have opinions, to me its inconsequential but i could definitely be missing something",
+    "created_at": "2026-07-13T23:48:38.053000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "there was an issue from potuz here https://github.com/ethereum/beacon-APIs/issues/609\n\nthe note worth pointing out is the following:\n> we trigger a payload event but there is no signal as whether this payload was timely or not.\n\nseems like potuz is saying this should consider timeliness, but just from the conversation I don't think that's what teku does, even if payload is untimely, you will emit the 2nd event since head still changes to `(B, FULL)` in current slot, is that right?",
+    "created_at": "2026-07-13T23:50:56.237000+00:00",
+    "attachments": []
+  },
+  {
+    "author": ".paulharris",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "i wonder if ptc is not timely but we build or something weird i wonder if theres 3... not sure we have a test case like that",
+    "created_at": "2026-07-13T23:52:11.497000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "for the `head_v2` you mean?",
+    "created_at": "2026-07-13T23:53:32.056000+00:00",
+    "attachments": []
+  },
+  {
+    "author": ".paulharris",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "yeh if it re-emits if ptc is not timely and we saw a payload it'd have to emit again to say payload not present even though we might have seen it?",
+    "created_at": "2026-07-13T23:54:10.189000+00:00",
+    "attachments": []
+  },
+  {
+    "author": ".paulharris",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "this seems all kinds of messy anyway if the field isnt even needed",
+    "created_at": "2026-07-13T23:54:44.845000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "so for any use case the vc has, the `payload_status` is definitely not needed",
+    "created_at": "2026-07-13T23:58:11.377000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I am not sure how to interpret this https://github.com/ethereum/beacon-APIs/issues/609, but `whether this payload was timely or not` is fair point, we don't have such a event, unless I am missing something",
+    "created_at": "2026-07-13T23:59:22.866000+00:00",
+    "attachments": []
   }
 ]
