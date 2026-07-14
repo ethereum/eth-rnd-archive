@@ -46,5 +46,141 @@
     "content": "it's just hard to know for me what behavior we want if I don't know what the consumer wants out of it",
     "created_at": "2026-07-14T00:04:05.274000+00:00",
     "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": ">  if theres 3\nthat just reminded me, if we are proposer in next slot I wanna send fcu for full if we have payload at like 8 seconds, but if ptc threshold >50% for untimely is reached, then I wanna sent fcu for empty, not sure any client does that, but seems useful to make sure EL prepares on right head",
+    "created_at": "2026-07-14T00:06:38.859000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I see I'm pinged and I only read this message in the whole thread. We emit a head event as soon as we import the Payload and it does become head for us regardless of PTC",
+    "created_at": "2026-07-14T00:07:44.975000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "yes that's how I understood your code, but in https://github.com/ethereum/beacon-APIs/issues/609 you mentioned the following\n> no signal as whether this payload was timely or not.\n\nwith how prysm implements `head_v2` there is still no signal",
+    "created_at": "2026-07-14T00:08:58.792000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Yeah our validator doesn't use this event to propose so we neglected this. I do not know what a good solution for rest VCs is. It looks to me as the difference between head and proposer head in the usual CL block case. The beacon will emit a head event on a late block. Even though you'll be building on top of the parent",
+    "created_at": "2026-07-14T00:11:50.592000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "so <@680234424037670912> it seems like what teku does is fine, I still don't understand the purpose though 😅",
+    "created_at": "2026-07-14T00:15:29.570000+00:00",
+    "attachments": []
+  },
+  {
+    "author": ".paulharris",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "idk why we need to re-emit, i dont know the use case but it was simple to plugin",
+    "created_at": "2026-07-14T00:15:53.836000+00:00",
+    "attachments": []
+  },
+  {
+    "author": ".paulharris",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "but if we're all doing totally different things its kinda pointless imo",
+    "created_at": "2026-07-14T00:16:19.089000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "regarding  https://github.com/ethereum/beacon-APIs/issues/609 for consumers to determine whether payload was timely they can already do\n- listen to `execution_payload_available` and check if it's emitted pre deadline for local timeliness\n- or `payload_attestation_message` and count ptc votes themselves and decide what they wanna do\nmy guess is builders would get use out of this? but also they can use `payload_attributes` if CL re-emits that based on ptc voting untimely",
+    "created_at": "2026-07-14T00:18:26.173000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I am not even sure client emit `head` event the same way currently",
+    "created_at": "2026-07-14T00:20:50.366000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "in case, we can just align lodestar with what teku does, the prysm behavior seems like a bug",
+    "created_at": "2026-07-14T00:21:07.864000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Honestly I don't know how the rest client handles honest reorgs but notice the timelines of the Payload by itself is not all. This is his I would do it (which mimics Prysm when my PR merges). Assuming you're the proposer next slot\n\n1. Listen to the head event. \n2. If the head goes empty -> full and it happens timely send FCU with arguments. \n3. If the head goes empty -> full and it's not timely withhold FCU.\n4. Listen to see what the PTC voted. If you sent FCU and PTC doesn't have a quorum for late, keep your FCU and build on full. Regardless of PTC \n4. If you sent FCU but PTC has quorum for late, here, and only here, send another FCU to roll back the EL and build on empty. \n5. If you didn't send FCU and PTC doesn't have a quorum for early, keep your bet and try to build on empty. \n6. If you didn't send FCU but PTC has a quorum for early, send and FCU and try to build on full. \n\nRepeat the last 4 points at the beginning of the slot right before proposing",
+    "created_at": "2026-07-14T00:39:52.814000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I think we need to agree on the difference between a quorum for late and a lack of quorum for early. My interpretation is as above",
+    "created_at": "2026-07-14T00:40:44.420000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "so be clear, that's only if your are the proposer of next slot? in that case, makes sense",
+    "created_at": "2026-07-14T00:43:12.851000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "but not sure it's entirely relevant or applicable for `head_v2` emission",
+    "created_at": "2026-07-14T00:43:44.531000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Exactly, head emission is independent of all the above and it happened in step 1, it is emitted when the Payload has been processed and the validator can check the timeliness then",
+    "created_at": "2026-07-14T00:45:30.926000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Then later it can query for PTC on a different endpoint perhaps",
+    "created_at": "2026-07-14T00:46:03.920000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "terencechain",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "i think i have implemented sending the rollback FCU as a feature flag for those users that may prefer that UX, not sure if it got merged",
+    "created_at": "2026-07-14T00:48:24.160000+00:00",
+    "attachments": []
   }
 ]
