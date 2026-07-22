@@ -158,5 +158,149 @@
     "content": "Hey there. So what Prysm does is exactly how [the spec is written](https://github.com/ethereum/consensus-specs/blob/e310d1c0d316e4dcc822164966c5bfa592adae2b/specs/gloas/p2p-interface.md?plain=1#L432-L433):\n> - _[IGNORE]_ this bid is the highest value bid seen for the tuple `(bid.slot, bid.parent_block_hash, bid.parent_block_root)`.",
     "created_at": "2026-07-22T13:01:32.169000+00:00",
     "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yeah, I was mostly concerned with the anti-DOS features, but yeah, the filter being by hash/root is good enough",
+    "created_at": "2026-07-22T13:27:06.626000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Terence made me notice this earlier",
+    "created_at": "2026-07-22T13:27:14.615000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "The issue we had was a bit more brutal though 🙂 we were validating the bid with the incorrect block hash lol",
+    "created_at": "2026-07-22T13:28:22.415000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "alextes",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "One thing i'm not entirely clear on: is this discussion only about how long a CL waits for a reply? (and you want to fix it to always 300ms or 500ms, no config). Are you then also saying operators will get a config parameter to control how deep into the slot the request is fired? Making the bid reply deadline (this is what matters most to us) slot_start (protocol controls) + bid_request_delay (protocol sets max 3s, proposer controls 0 - 3s, relay / builder utilizes maximally) + bid_request_timeout (CL dev controls, 300 - 500ms, relay / builder utilizes maximally)?",
+    "created_at": "2026-07-22T13:35:01.818000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "alextes",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "And then what does this mean for a proposer who would like to call say three times? Still fine, just all requests would have the CL controlled timeout?",
+    "created_at": "2026-07-22T13:35:44.523000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "what do you mean a proposer who would like to call three times? if any clients provides that feature, that's definitely not part of what we are planning to specify or standardize",
+    "created_at": "2026-07-22T13:39:08.469000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "alextes",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "a proposer asking for a bid three times. so that they may balance getting a high late bid, with having any bid better than the local block at all. imo fine if CLs don't provide this as long as side-cars can. but that discussion deserves its own thread maybe  😅 .",
+    "created_at": "2026-07-22T13:41:17.183000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "serenita_io",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Is there a good reason to want to call three times? Why not just once with a large delay? That way you still get the same late bid?",
+    "created_at": "2026-07-22T13:41:54.698000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "serenita_io",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "The node operator is in full control over the full timing as long as they set the `Date-Milliseconds` + `X-Timeout-Ms` headers. Why not make them required and call it a day?",
+    "created_at": "2026-07-22T13:43:08.293000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "why would you want to call with a large delay instead of calling later?",
+    "created_at": "2026-07-22T13:46:25.627000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "serenita_io",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "It simplifies things. You simply call at the start of a slot and expect to receive a response by your deadline/timeout.",
+    "created_at": "2026-07-22T13:47:30.022000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "If anything I see more of a usage to what <@177711679977684993> says of calling twice with a short deadline instead of once with a larger delay",
+    "created_at": "2026-07-22T13:47:30.039000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "how is it different than calling at your deadline/timeout time with zero delay?",
+    "created_at": "2026-07-22T13:47:53.556000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "serenita_io",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "In this case you need to account for latency to the various relays you connect to",
+    "created_at": "2026-07-22T13:48:19.496000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "how isn' t this latency also not at play with the deadline?",
+    "created_at": "2026-07-22T13:48:39.794000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "serenita_io",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "If you call at the start of slot and tell all relays to get a response back to you by 1s into the slot, they can all calculate how far into the slot they need to send their response back (by the headers). All responses will be back to you by ~1s into the slot.\n\nIf you call say 500ms into the slot with a 0 timeout, a close relay will return a bid by 510ms whereas a relay further away returns a bid by 600ms into the slot.",
+    "created_at": "2026-07-22T13:51:18.194000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "that's not how the deadline works though, you aren' t passing an absolute value but rather a timeout from the time of the call.",
+    "created_at": "2026-07-22T13:54:28.037000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "serenita_io",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Unless I'm missing something, it is effectively how the combination of the two headers work.\n\nYou set the `Date-Milliseconds` to the actual time that you make the request, and `X-Timeout-Ms` header to the time you're willing to wait for a response. Based on those two headers, the relay can tell roughly how much latency there is and time its response.",
+    "created_at": "2026-07-22T13:56:59+00:00",
+    "attachments": []
   }
 ]
