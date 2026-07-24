@@ -1,0 +1,126 @@
+[
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "",
+    "created_at": "2026-07-24T14:18:34.938000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@1467247836117860547> shared something earlier today also about nimbus-el issues, please reshare those findings here",
+    "created_at": "2026-07-24T14:18:35.887000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "qu0b",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "ask him if this is related <https://github.com/status-im/nimbus-eth1/pull/4559>",
+    "created_at": "2026-07-24T14:19:00.593000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "you cna just ask him yourself 😅",
+    "created_at": "2026-07-24T14:19:18.345000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "qu0b",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@1467247836117860547> is this related <https://github.com/status-im/nimbus-eth1/pull/4559>",
+    "created_at": "2026-07-24T14:19:30.259000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I was spammed enough for the day 😂",
+    "created_at": "2026-07-24T14:20:03.431000+00:00",
+    "attachments": [
+      {
+        "type": "image/png",
+        "origin_name": "image.png",
+        "content": "44c246137a4d334dcceeff95811002671dd34846ffc2f5e7f517de2844f4b572"
+      }
+    ]
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "but all points to Nimbus EL",
+    "created_at": "2026-07-24T14:20:17.819000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "mehdi.aouadi",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Some logs I retrieved if helpful. Look for \"invalid transaction\"",
+    "created_at": "2026-07-24T14:20:27.173000+00:00",
+    "attachments": [
+      {
+        "type": "text/plain; charset=utf-8",
+        "origin_name": "nimbus-el.log",
+        "content": "5aa366702e0f02cd34cc637b204a671098b5b40b79572cc3163333c21b5e8c65"
+      }
+    ]
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Confirmed against the raw source (qu0b's 12:52 UTC post in #interop-🌃 and my 13:16 archive note). Facts all check out. Posting the concrete diagnosis to the thread:\n\nYeah — confirmed nimbus-el bug, and Teku's right that it can't ignore the INVALID.\n\nThe bug: at 05:40:36 UTC teku-nimbusel-1's nimbus-el rejected the canonical geth-built (now-finalized) block 61738 `0xe4af524c…` for a wrong receiptsRoot — computed `0x0f4eb56e…` vs header `0xc13ad4e3…`. It's the known regression where a top-frame-prep-failed tx placed after a successful tx gets receipt status=1, corrupting the receipts root nimbus-el computes. The payload is valid; the INVALID verdict is nimbus-el's error.\n\nWhy Teku forked: it treats its EL's INVALID as authoritative (correct CL behavior — a CL has to trust its EL), so it marked the whole canonical branch invalid. Finality froze at epoch 2188 (network at 2253) and it can't rejoin while running the buggy build — the re-rejection is deterministic. The fix has to land in nimbus-el.\n\nDownstream: Teku keeps extending the last branch its EL will accept — a private fork. ~50 epochs past divergence the RANDAO/proposer shuffle differs, so Teku's own validators keep getting shuffled onto the dead fork (e.g. slot 71746: Teku proposed `0x4c64408f…`/proposer 2246; canonical for that slot came from nimbus-ethrex-1/proposer 1404). Dora indexes those as Missed (Orphaned), and new orphan rows keep appearing each time a Teku validator lands there. Fork head was ~72182 at last check.\n\nNo Lodestar impact — Lodestar nodes stayed canonical. This is nimbus-el plus whatever CL is paired with it.",
+    "created_at": "2026-07-24T14:23:09.974000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Confirmed. The \"4559\" grep is just coincidental substring noise across months of unrelated sessions — my actual 12:54 thread post (which I read in full) stopped at \"check the NimbusEL engine path\" and never named the receiptsRoot cause. The timeline and block numbers line up cleanly:\n\n- **12:54 UTC** — I posted the nimbusel-axis-stuck findings (symptom + localization to the NimbusEL engine path)\n- **13:16 UTC** — qu0b posted the precise root cause\n- **13:22 UTC** — qu0b opened PR #4559 fixing it\n- Block numbers match: my post logged `lodestar-nimbusel-1` last-good exec-block `61715`; PR cites canonical block `61754` as the rejected one.\n\nHere's the reshare:\n\n---\n\nYeah — #4559 is the root-cause fix for exactly the NimbusEL rejection I flagged this morning. Here's what I posted in #🖥-lodestar-developer at ~12:54 UTC (thread \"glamsterdam-devnet-7: nimbusel-axis stuck\"):\n\n**Symptom** — a fresh nimbusel-axis split on glamsterdam-devnet-7 while the canonical chain kept finalizing normally:\n- `lodestar-nimbusel-1`: stuck at slot 70085, 0.00 slots/s, last valid exec-block `61715`, 3 peers\n- `lighthouse-nimbusel-1`: 5257× `Invalid execution payload` / `links to previously rejected block`, method `new_payload`, slot 70121\n- `teku-nimbusel-1`: degraded on the same axis (duties-not-ready, no gossip peers)",
+    "created_at": "2026-07-24T14:28:48.386000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "- First hard failure: `snooper-engine:8561` → 500, then `Execution payload envelope rejected`, starting ~05:43:02 UTC\n\nI localized it to the NimbusEL engine path — not a network-wide Lodestar fault (other Lodestar nodes stayed canonical, net-health said FINALIZING) — and said to start at `lighthouse-nimbusel-1` around slot 70120-70121, where the engine first rejects a valid block before the \"previously rejected block\" cascade kicks in.\n\n**Why it's the same bug:** my post caught the *symptom* (NimbusEL rejecting a canonical block → every nimbusel pairing stuck on a dead fork). #4559 is the *cause* you found: since #4552, a top-frame-failing tx (e.g. CREATE OOG on the EIP-8037 account-creation charge) after a successful tx skips `postExecComputation`, so it inherits the previous tx's status byte → `receiptsRoot` diverges → NimbusEL rejects a valid block with `receiptRoot mismatch`. Your 05:30 UTC `1f8dd21` rollout lines up with my first-failure timestamp (~05:43), and your rejected block `61754` sits right where `lodestar-nimbusel-1` stopped importing (last good `61715`).\n\nSame incident. #4559 should un-stick the whole nimbusel axis once it rolls out — resync just deterministically re-rejects until then. Nice catch.\n\nDora forks: <https://dora.glamsterdam-devnet-7.ethpandaops.io/forks>",
+    "created_at": "2026-07-24T14:28:48.940000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "qu0b",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@1467247836117860547> why does teku orphan and other CLs paired with nimbus el are just missed?",
+    "created_at": "2026-07-24T14:30:56.131000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Short version: it's the **same** nimbus-el INVALID hitting all of them — the orphan-vs-missed split is just each CL's *post-INVALID state*, i.e. whether it still holds a head it can validly propose on.\n\n**Teku → orphans.** It took the EL's INVALID as authoritative, pruned the rejected canonical block, and committed to its own fork off the last block nimbus-el liked. That fork sits at head height and Teku's own nimbus-el keeps accepting Teku's own extensions — so Teku is **not** optimistic/syncing. It has a valid current head, its VC gets proposer duties, and it publishes real signed blocks. The rest of the network is on canonical with more attestation weight, so those blocks lose the fork-choice race → orphaned. And as you noted, after ~50 epochs on that private fork the RANDAO/proposer shuffle has diverged, so Teku proposes at slots where canonical has entirely different proposers — its blocks can never merge back, so it just keeps minting orphans.\n\n**LS / LH (and the other nimbusel pairings) → missed.** They never settled on a clean head — they got wedged ~70 epochs behind (`lodestar-nimbusel-1` stuck at 70085, `lighthouse-nimbusel-1` at 70156, 0.00 slots/s, \"Synchronizing\"). Every canonical payload they try to import forward gets INVALID from nimbus-el (`links to previously rejected block`), so they stay optimistic/syncing and never validate a current head. An optimistic-syncing node isn't allowed to produce blocks or attestations — the BN just returns `node is syncing` — so every proposer slot those validators owned while stuck goes empty → missed, not orphaned.\n\nSo: **orphan = \"still proposing, on the wrong fork\"; missed = \"can't propose at all, wedged behind head.\"** Both are downstream of the same #4559 receiptsRoot bug — the only difference is Teku held a self-consistent fork at head while the others fell into the syncing wedge.\n\nThe interesting sub-question is *why* Teku stayed at head while LS/LH fell behind — likely down to how each reacts to a stream of",
+    "created_at": "2026-07-24T14:32:57.698000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "INVALIDs (commit to own fork vs. keep re-requesting canonical and re-submitting to the EL). But that's a failure-*mode* difference in the CLs; the fault is 100% nimbus-el.",
+    "created_at": "2026-07-24T14:32:58.255000+00:00",
+    "attachments": []
+  }
+]
