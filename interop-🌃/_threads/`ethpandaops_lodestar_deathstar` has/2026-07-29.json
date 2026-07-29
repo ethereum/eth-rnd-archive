@@ -540,5 +540,109 @@
     "content": "but as proposer you pre-compute the epoch transition on the proposer head right? so I think if lodestar is proposer, we have 0 issue with those reorgs, but for attesters it's more tricky",
     "created_at": "2026-07-29T19:03:57.363000+00:00",
     "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I need to add more logging, will push something",
+    "created_at": "2026-07-29T19:07:22.636000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "You're right, it's not a race — I chased it into the code. Two things I got wrong in the first pass:\n\n**1. The Gloas attestation deadline is 3.0s, not 4s.** `ATTESTATION_DUE_BPS_GLOAS = 2500` → 2500/10000 × 12s = **3.0s** (pre-Gloas is 3333 bps = 4.0s). So \"head set >4s\" doesn't apply — the deadline moved earlier.\n\n**2. The 28.128 publish time is a red herring.** The attestation *data* wasn't read at 28.128 (that's just sign+submit lag). The VC actually fetched it at **16:22:27.073** — BN REST log: `Req req-4oaq 172.18.0.10 produceAttestationData` → `Res 200` immediately (172.18.0.10 = our validator container).\n\nTimeline, slot 109312 (start 24.000, Gloas attest deadline 27.000):\n• VC attestation routine races `sleep(3.0s)` vs `waitForBlockSlot(109312)`. `waitForBlockSlot` only fires on the chainHead event (full import + fork-choice head) → didn't happen until 27.455. So the 3.0s sleep won.\n• **27.073** — VC fetches attestation data. Head at that instant = deathstar `0x5305` (our head since 16:22:16.945). Prysm `0x305e` was received 26.685, validated 27.075, **but not made head until 27.455.**\n• BN correctly returns head-at-request-time → `0x5305`.\n• **27.455** — reorg to prysm `0x305e` (3.455s) — i.e. **382ms AFTER we'd already locked the vote at 27.073.**\n• 28.128 — sign+publish completes (stale `0x5305`).\n\nSo the vote was decided at **3.07s, ~0.38s _before_ the head flipped** — not 0.5s after. The BN served the correct head for the moment it was asked; there's no stale-head/caching bug in `produceAttestationData` (it reads `forkChoice.getHead()` live).\n\nRoot cause = the honest prysm block missed the **3.0s** Gloas deadline: it arrived 2.685s late from the proposer **and** took ~380ms to import (first block of epoch 3416, skipped slot 109311 → 266ms state transition + fork-choice) → head at 3.455s. That's a Gloas-wide timing squeeze, which is why LH + LS both mis-voted. Lever is faster epoch-boundary import (your precompute-epoch-after-payload idea) / proposers",
+    "created_at": "2026-07-29T19:12:47.419000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "not sending late — margin was only ~0.45s.",
+    "created_at": "2026-07-29T19:12:48.102000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I think the issue is <@586161934425128960> that Prysm nodes probably all got the block immediately and had already the epoch transition performed? at least prysm-nimbusel-1 had it",
+    "created_at": "2026-07-29T19:15:07.189000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I wanna see how the `lodestar-nethermind-1` voted correctly, it must have seen the block a bit earlier",
+    "created_at": "2026-07-29T19:16:45.239000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "do you pre-compute 2 epoch transition?",
+    "created_at": "2026-07-29T19:19:05.879000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "only on some cases, and pre-Gloas we should handle this case well, but I'm not sure if Gloas changed this situation, I'm looking into this",
+    "created_at": "2026-07-29T19:21:39.599000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "it is the note-to-self that I added above",
+    "created_at": "2026-07-29T19:21:48.517000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "for the NSC",
+    "created_at": "2026-07-29T19:21:50.749000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Both notes updated. Now posting the breakdown in-thread.\n\n`lodestar-nethermind-1` — same slot 109312 (epoch-3416 boundary), and the result flips: **it voted CORRECTLY for the prysm block `0x305e`, not deathstar.** Opposite of besu-1, and the contrast is the whole story.\n\nTimeline (slot start 16:22:24.000, Gloas attest deadline = 3.0s = :27.000):\n- :17.368 — head = deathstar `0x5305` (109311, 4.81s late) — same starting point as besu\n- :20.488 — epoch-3416 transition precomputed, durationMs=483 (~3.5s early) → NOT a stall, hypothesis ruled out here too\n- :26.225 — prysm `0x305e` received, delaySec **2.223** (~460ms earlier than besu's 2.685)\n- :26.866 — state transition verified, validationTime 258ms (epoch tx + skipped slot, ~2.3× normal)\n- **:27.023 — New chain head → `0x305e`, reorg depth=2 = 3.023s** (besu was 3.455s → 432ms earlier here)\n- :27.000 — VC fires produceAttestationData (3.0s timer)\n- **:27.080 — BN services the fetch, getHead() = `0x305e`** (BN was mid block-import, so the request queued ~80ms behind it)\n- :27.084 — Signed attestation head=`0x305e`; **:27.806 — Published attestations head=`0x305e`, count=3** ✓ (PTC also fresh `0x305e`)\n\n**Why nethermind voted right and besu voted wrong — same 3.0s deadline, opposite interleave on the BN event loop:**\n- nethermind: head flip (:27.023) landed **57ms BEFORE** the BN serviced the attn fetch (:27.080) → returned fresh prysm\n- besu: BN serviced the fetch (:27.073) **382ms BEFORE** its head flip (:27.455) → returned stale deathstar",
+    "created_at": "2026-07-29T19:39:46.059000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "The only real difference was ~460ms of gossip-propagation luck: nethermind got the prysm block early enough that its block-import (head flip) beat the attestation-service call by a hair. So whether a Lodestar node mis-votes here comes down to whether its block-import/head-flip lands before or after the BN services the ~3.0s attestation fetch — a razor-thin margin at the Gloas 3.0s deadline, not an attestation-path bug. `produceAttestationData` read the live head correctly on both nodes; it just got asked at different points relative to the import. Lever is unchanged: faster epoch-boundary import / proposers not sending 2.2–2.7s late.\n\nSide note, unrelated to the vote: nethermind-1 is carrying a large failed-payload-download backlog (`Error downloading payload in BlockInputSync` / pendingPayloads=99 across slots ~106k–109k). Didn't touch this live vote, but it's a health signal on that node if you want me to dig.",
+    "created_at": "2026-07-29T19:39:46.660000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@412614104222531604> can we run the clients with debug logs instead of info?",
+    "created_at": "2026-07-29T19:59:09.214000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "on the devnet?",
+    "created_at": "2026-07-29T19:59:13.628000+00:00",
+    "attachments": []
   }
 ]
