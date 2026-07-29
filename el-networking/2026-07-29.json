@@ -1,0 +1,110 @@
+[
+  {
+    "author": "cskiraly",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "I was running discv5 only kurtosis tests in preparation for turning off discv4 support. Here are the results and some observations: \n```\n| Client | joins discv5 mesh | supports discv5 only | discv5-only flag | discv5 from enode | discv5 from ENR |\n|---|---|---|---|---|---|\n| geth | ✅ 5 | ✅ | `--discovery.v4=false` | ✅ | ✅ |\n| nethermind | ✅ 5 | ✅ | `--Discovery.DiscoveryVersion V5` | ✅ | ✅ |\n| ethrex | ✅ 5 | ✅ | `--p2p.discv4=false` | ✅ | ✅ |\n| erigon | ✅ 5 | ✅ | `--discovery.v4=false` | ❌ | ✅ |\n| besu | ✅ 5 | ❌ | `--Xv5-discovery-enabled=true` (adds v5, keeps v4) | ❌ (enode→discv4) | ✅ |\n| nimbus-eth1 | ✅ 5 | ❌ | `--discv5=true` (all-or-nothing) | ❌ (enode→discv4) | ✅ |\n| reth | ❌ | ✅ flag, unusable | `--disable-discv4-discovery` | ❌ | ❌ |\n```\n\n- by default kurtosis is serving EL bootnodes as \"enode\", not as \"ENR\".  Only **geth/nethermind/ethrex** actually bootstrap discv5 from a bare **enode**; erigon, besu, nimbus and reth need an **ENR** for discv5. I had to patch to serve ENRs.\n- I had to play around with the bootnode in kurtosis to make this work. Now there are 3 options (still in PRs):\n   - use bootnodoor (open PR to support erigon)\n   - use an EL client as bootnode (geth by default (in a PR)\n   - use the geth devp2p tool as a bootnode (in a PR)\n\nAfter these workarounds 3 issues remain:\n- <@&836981603216654336> and <@&595681804422479873> has no option to turn off discv4 support. Please add it (I think there is already a merged PR for besu, maybe just not on the branch I've used).\n- <@&1070471163219824730> fails to connect, please check and correct",
+    "created_at": "2026-07-29T03:08:15.981000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "usmans.info",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "If you are on Besu main branch, you can now use `--discovery-mode=AUTO|V5|V4`. The experimental flag has been removed.",
+    "created_at": "2026-07-29T03:14:34.129000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "cskiraly",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "thats the merged PR I've seen, but I think it is not on the glamsterdam-devnet-7 branch I'm using. Just make sure it is included in the -8 branch.",
+    "created_at": "2026-07-29T03:16:06.371000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "our plan is to remove discv4 entirely soon enough (https://github.com/status-im/nimbus-eth1/pull/4476), and we actually simplified the discovery options to turn both on/off deliberately to allow for this. but we'll make sure to have a version/branch/maybe temporary debug option to do this somehow",
+    "created_at": "2026-07-29T03:18:23.469000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "\"soon enough\" == when the network allows for it",
+    "created_at": "2026-07-29T03:18:45.571000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "cskiraly",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "Here is a Kurtosis config I've used. Note that this uses my bootnode PR. You can find it here https://github.com/ethpandaops/ethereum-package/pull/1460 \n\n(or just remove the bootnode service and its params, and use bootnodoor after it gets the eragon fix).",
+    "created_at": "2026-07-29T03:19:15.540000+00:00",
+    "attachments": [
+      {
+        "type": "text/plain; charset=utf-8",
+        "origin_name": "testnet-el-discv5-clients.yaml",
+        "content": "cd4f5d63e21acf57ce63de3291e9efcffb57546d543b569282d3594fdca41def"
+      }
+    ]
+  },
+  {
+    "author": "cskiraly",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "we only need the flag for testing, so disabling it on the right test branches will also work I think.",
+    "created_at": "2026-07-29T03:20:20.723000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "we can definitely do at least that much, yes",
+    "created_at": "2026-07-29T03:20:32.994000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "cskiraly",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "I know, I've checked the code 🙂",
+    "created_at": "2026-07-29T03:20:55.544000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "usmans.info",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "<@857052906495017000> Let me confirm from <@680337202521440470>  who has most commits on that branch, I'll cherry-pick discv5 related commits there (or on devnet-8 branch).",
+    "created_at": "2026-07-29T03:22:33.933000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "cskiraly",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "For <@&1070471163219824730> , I did not go into the details, but I've checked it with 3 different bootnode setups (bootnodoor, geth, devp2p tool), and none of those worked.  Also failing on some hive tests, so it needs some work for sure.",
+    "created_at": "2026-07-29T03:25:07.578000+00:00",
+    "attachments": [
+      {
+        "type": "image/png",
+        "origin_name": "image.png",
+        "content": "486c48f0d202a5df8808c052b9544ae2cd7769b180e956c475dfb461a29cdde2"
+      }
+    ]
+  },
+  {
+    "author": "cskiraly",
+    "category": "Execution Layer",
+    "parent": "",
+    "content": "Thanks everyone, lets do this last small step so that we can finalize the switchover.",
+    "created_at": "2026-07-29T03:27:04.321000+00:00",
+    "attachments": []
+  }
+]
