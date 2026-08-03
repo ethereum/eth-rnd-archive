@@ -246,5 +246,53 @@
     "content": "I’m a fair way away from my laptop sorry, but it’s all in panda so Claude should be able to check very quickly if you just copy in this chat transcript😂🙏",
     "created_at": "2026-08-03T16:36:05.617000+00:00",
     "attachments": []
+  },
+  {
+    "author": "vladimir_ea",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Claude says: \"Ran it — over 1,788 mainnet slots (six hours spread across Aug 1), p40 attestation arrival exceeded 5 s in exactly 1 slot — 0.06% — and never exceeded 6 s.\"",
+    "created_at": "2026-08-03T17:32:01.368000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "vladimir_ea",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "using ethpandaops data",
+    "created_at": "2026-08-03T17:32:16.741000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "vladimir_ea",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "using this query in duckDB:\n```\n  WITH first_seen AS (\n      SELECT slot,\n             slot_start_date_time // 3600 AS hr,\n             attesting_validator_index AS v,\n             min(propagation_slot_start_diff) AS ms\n      FROM read_parquet([\n          'https://data.ethpandaops.io/xatu/mainnet/databases/default/libp2p_gossipsub_beacon_attestation/2026/8/1/0.parquet',\n          'https://data.ethpandaops.io/xatu/mainnet/databases/default/libp2p_gossipsub_beacon_attestation/2026/8/1/4.parquet',\n          'https://data.ethpandaops.io/xatu/mainnet/databases/default/libp2p_gossipsub_beacon_attestation/2026/8/1/8.parquet',\n          'https://data.ethpandaops.io/xatu/mainnet/databases/default/libp2p_gossipsub_beacon_attestation/2026/8/1/12.parquet',\n          'https://data.ethpandaops.io/xatu/mainnet/databases/default/libp2p_gossipsub_beacon_attestation/2026/8/1/16.parquet',\n          'https://data.ethpandaops.io/xatu/mainnet/databases/default/libp2p_gossipsub_beacon_attestation/2026/8/1/20.parquet'])\n      WHERE propagation_slot_start_diff < 60000\n      GROUP BY 1, 2, 3\n  ),\n  per_slot AS (\n      SELECT slot, hr,\n             quantile_cont(ms, 0.4) AS p40_ms,\n             count(*) AS seen\n      FROM first_seen \n      GROUP BY 1, 2\n  ),\n  trimmed AS (\n      SELECT * FROM per_slot\n      WHERE slot NOT IN (SELECT min(slot) FROM per_slot GROUP BY hr)\n        AND slot NOT IN (SELECT max(slot) FROM per_slot GROUP BY hr)\n  )\n  SELECT count(*) AS slots,\n         round(avg(seen)) AS avg_validators_seen,\n         round(quantile_cont(p40_ms, 0.5)) AS median_p40_ms,\n         round(quantile_cont(p40_ms, 0.9)) AS p90_p40_ms,\n         round(quantile_cont(p40_ms, 0.99)) AS p99_p40_ms,\n         count(*) FILTER (p40_ms > 5000) AS slots_over_5s,\n         round(100.0 * count(*) FILTER (p40_ms > 5000) / count(*), 2) AS pct_over_5s,\n         round(100.0 * count(*) FILTER (p40_ms > 6000) / count(*), 2) AS pct_over_6s\n  FROM trimmed;\n```",
+    "created_at": "2026-08-03T17:37:05.385000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "vladimir_ea",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Ran a different sample. Claude has opinions..\n```\nSame picture, near-identically — Aug 2, six different hours (02/06/10/14/18/22 UTC), another 1,788 slots:\n\n  ┌──────────────────────┬───────────┬───────────┐\n  │        metric        │   Aug 1   │   Aug 2   │\n  ├──────────────────────┼───────────┼───────────┤\n  │ median per-slot p40  │ 2.6 s     │ 2.6 s     │\n  ├──────────────────────┼───────────┼───────────┤\n  │ p90                  │ 4.0 s     │ 3.9 s     │\n  ├──────────────────────┼───────────┼───────────┤\n  │ p99                  │ 4.4 s     │ 4.4 s     │\n  ├──────────────────────┼───────────┼───────────┤\n  │ slots with p40 > 5 s │ 1 (0.06%) │ 1 (0.06%) │\n  ├──────────────────────┼───────────┼───────────┤\n  │ slots with p40 > 6 s │ 0         │ 0         │\n  └──────────────────────┴───────────┴───────────┘\n\n  The distributions are so close (median identical to the millisecond, tails within ~100 ms) that this looks like a stable structural property of current mainnet propagation, not something that varies day to day or by time of day: the 40% mark lands mid-slot-third with a long thin tail, and a slot where it slips past 5 s happens roughly once per ~1,800 slots (~6 hours),\n  essentially never past 6 s.\n\n  So across both samples: 2 of 3,576 slots would have left a gloas builder still waiting on its 40% evidence at the 5 s mark, and none at the reveal deadline itself.\n```\nof course this is current mainnet with different attestation time, so hard to conclude anything I guess.",
+    "created_at": "2026-08-03T17:47:02.156000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "That's not the data you want: you now want that 1 slot **and also** want that the block got more than 60% attestations",
+    "created_at": "2026-08-03T17:51:49.113000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I very much doubt that can exist on mainnet",
+    "created_at": "2026-08-03T17:52:03.487000+00:00",
+    "attachments": []
   }
 ]
