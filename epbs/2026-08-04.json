@@ -14,5 +14,93 @@
     "content": "Yes it's mostly about the extra computation. However that should be cached by clients and we suspect there's just still unoptimized paths here. This is the only reason we can't move attestation deadline to 2 seconds at the fork. \n\nAlso in addition after <@703742742135570499> report on the topic. Terence found out that one of the major operators being reorged is because of the combination between timing games and min bid: they play timing games and request bids at the latest, but anyway end up producing locally and they broadcast then themselves. If their blocks have many blobs, they're more likely to be reorged. People should be smarter playing timing games or at least not use a min bid on the first slot if they're playing timing games",
     "created_at": "2026-08-04T10:47:26.156000+00:00",
     "attachments": []
+  },
+  {
+    "author": "vladimir_ea",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "with ePBS the timing of the release of the `SignedBeaconBlock` (and preceding requests for bids from builders) is entirely in the hands of the proposer. \nThe incentive for waiting as a proposer is that you will generally receive a higher payment the longer you wait: value of blocks tends to increase as a slot progresses because more transactions become available to include as time goes on, so builders in most cases build blocks of increasing value as the slot proceeds.",
+    "created_at": "2026-08-04T13:12:21.140000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "certainly, the biggest threat here is however the fact that the proposer can release the block later than when the builder has given them a bid. So even if a builder is careful and does not give out trustless bids for requests that come too late, the proposer can still request very early and broadcast late the block with a committing bid for the builder.",
+    "created_at": "2026-08-04T13:15:11.824000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "vladimir_ea",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yes - but its not clear what they would gain by doing that deliberately? I suppose they could be trying to force the payload to be revealed and not included so they might exploit the transactions? I suppose there might be incentive to do such a thing for a block with a particularly valuable opportunity and the attacker controls 2 consecutive slots.",
+    "created_at": "2026-08-04T13:21:16.449000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "vladimir_ea",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "do you se some incentive for proposers to routinely release the beacon block late?",
+    "created_at": "2026-08-04T13:25:08.239000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "there isn't much incentives to do so from the proposer, and the margins were chosen so that grieving the builder is very hard/impossible. As I said above, if you just release if you have seen 20% of attestations right after the CL block, then only a modified proposer can reorg you (assuming that the block never receives 40% of the votes, and if it does receive 40% then it can't be reorged). If OTOH you wait until 40% then there's reorging that block, the situation of 14899328 which you found is more of an edge case on slot 0 which has to become much better in Gloas, with a reduction of the attestation deadline and the block being propagated being much smaller/faster to validate.",
+    "created_at": "2026-08-04T13:25:47.224000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yes, the incentives to play timing games do not seem to me to have changed at all",
+    "created_at": "2026-08-04T13:26:11.975000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "which is the reason why I want to reduce the attestation deadline to a minimum viable",
+    "created_at": "2026-08-04T13:26:27.847000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<@1257246783503994940> btw my panda query seems to disagree with you about the existence of that block:\n```\n⏺ Slot 14899328 (mainnet, epoch 465604, slot start 2026-08-01 20:25:59 UTC)\n\n  Committee for the slot: 64 committees, 27,849 validators, 1,268,155 ETH total effective balance.\n  Block: 0x9441de4c…a9e679 (proposer 2131372) — arrived late: first seen by xatu sentries at 3,096 ms, median 3,261 ms. First attestation of any kind appears at 3,357 ms.\n\n  Attestations received by 5.0 s into the slot\n\n  ┌─────────────────────────────────────┬────────────┬─────────────────────────────────────────────┐\n  │                                     │ validators │               % of committee                │\n  ├─────────────────────────────────────┼────────────┼─────────────────────────────────────────────┤\n  │ Any vote seen (raw or in aggregate) │ 12,617     │ 45.3%                                       │\n  ├─────────────────────────────────────┼────────────┼─────────────────────────────────────────────┤\n  │ Of those, voting for this block     │ 11,813     │ 42.4% by count / 46.2% by effective balance │\n  └─────────────────────────────────────┴────────────┴─────────────────────────────────────────────┘\n\n  All 11,813 were seen as unaggregated attestations — no aggregate-only contributions that early.\n\n  When the block crossed 40% of committee weight\n\n  ≈4,785 ms into the slot (4.79 s), measured as cumulative effective balance of committee members voting for 0x9441de4c…. Counting validators equally instead of by balance, the crossing is at 4,919 ms.\n\n  Nearby thresholds (effective-balance weight): 20% → 4,158 ms; 30% → 4,338 ms; 50% → 5,123 ms; 2/3 → 5,673 ms.\n\n  Context\n\n  1,345 committee validators (4.8%) voted for the parent root 0x4438c505… instead — they hadn't received the late block by their attestation deadline. 58 committee members were never seen attesting at all.\n```",
+    "created_at": "2026-08-04T13:35:07.155000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "So only pandaops to verify this dispute 😅",
+    "created_at": "2026-08-04T13:35:37.620000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Seems to me that according to that panda query, the builder would have released",
+    "created_at": "2026-08-04T13:36:26.925000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "vladimir_ea",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "hm - perhaps i queried wrong then:\n```\nWITH first_seen AS (\n      SELECT attesting_validator_index AS v,\n             beacon_block_root AS root,\n             min(propagation_slot_start_diff) AS ms\n      FROM read_parquet('https://data.ethpandaops.io/xatu/mainnet/databases/default/libp2p_gossipsub_beacon_attestation/2026/8/1/20.parquet')\n      WHERE slot = 14899328 AND propagation_slot_start_diff < 60000\n      GROUP BY 1, 2\n  ),\n  block_votes AS (\n      SELECT ms FROM first_seen\n      WHERE root = (SELECT root FROM first_seen GROUP BY root ORDER BY count(*) DESC LIMIT 1)\n  )\n  SELECT (SELECT ms FROM block_votes ORDER BY ms LIMIT 1 OFFSET 11139) AS ms_40pct_committee,\n         (SELECT count(*) FROM block_votes WHERE ms <= 5000) AS block_votes_by_5s,\n         (SELECT count(*) FROM block_votes WHERE ms <= 6000) AS block_votes_by_6s,\n         (SELECT count(*) FROM block_votes) AS block_votes_total;\n```\n11,139 is the number of votes for 40%. \nthis gives:\n```\n  - by 5,000 ms — 10,063 block votes = 36.1% of committee\n  - 5,108 ms — 11,140 votes = 40.0% ✓\n```\nthis is just counting number of attestations - not sure why it comes out different ? \n\nanyway, the point is I guess that its borderline - if the builder were to allow more than 1s for payload to propagate then we hit that problem case again. how long should be allowed for the payload to propagate? its not entirely clear",
+    "created_at": "2026-08-04T14:01:28.289000+00:00",
+    "attachments": []
   }
 ]
