@@ -1034,5 +1034,171 @@
     "content": "https://api-buildoor-lighthouse-geth-1.srv.glamsterdam-devnet-7.ethpandaops.io/  <  this instance does not see all votes due to a lighthouse bug.  So it flags it as a UI warning,  but still reveals when seeing 60%+ votes or hitting the 5s reveal mark",
     "created_at": "2026-08-06T15:55:28.901000+00:00",
     "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "there was some discussion here https://discord.com/channels/595666850260713488/874767108809031740/1533864880552153190, I am curious if <@755590043632140352> has some thoughts, how should buildoor behave if there is a proposer equivocation",
+    "created_at": "2026-08-06T16:26:18.442000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I don't think it's safe to reveal the payload in that case, but also if you observed 60%+ of attestations for your block then it seems fine?",
+    "created_at": "2026-08-06T16:27:07.169000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "builders should reveal even if there's an equivocation if the block is strong. Forkchoice is such that it defends them if the beacon block that included their bid was strong. If the block is weak there's no saving them. So for builders, looking at equivocations is probably not the right thing to do, but rather look at attestations only",
+    "created_at": "2026-08-06T16:28:49.453000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "so 40% and no equivocation is safe for the builder, but  this number goes up if there's an equivocation",
+    "created_at": "2026-08-06T16:30:08.043000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "https://github.com/ethereum/beacon-APIs/pull/580#discussion_r2887819954 was initially proposed by sproul to have equivocation checks, so in that case they won't have to pay, but I suppose they lose potential mev and rewards they could make otherwise, but if there is a split view how should they deal with this, I am not sure what % makes it safe to reveal in that case",
+    "created_at": "2026-08-06T16:32:49.437000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "there is also this new fork choice behavior in gloas like [`should_apply_proposer_boost`](https://github.com/ethereum/consensus-specs/blob/master/specs/gloas/fork-choice.md#new-should_apply_proposer_boost), I don't even know if every client has this implemented",
+    "created_at": "2026-08-06T16:35:18.278000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "we did some proposer equivocations here, deathstar behavior is kinda silly though because we publish block with builder bid first, so it was canonical in the end, what I also found during testing is that both lodestar and prysm produce proposer slashing on the fly correctly and deathstar got slashed in both cases we had",
+    "created_at": "2026-08-06T16:36:37.944000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I am tring to cause a split view now, but it's bit hard on such a small network",
+    "created_at": "2026-08-06T16:37:08.084000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "what do you mean they won't have to pay. Equivocations are not part of consensus, if they don't broadcast and the block is canonical they end up paying unless the slashing is included and this changes consensus dramatically. The timings are such that the builder is very much guaranteed that an equivocation cannot unbundle it nor reorg it. The equivocating block by definition has to come after the original one and that guarantees it that the builder's block will be canonical if it waited for enough attestations",
+    "created_at": "2026-08-06T16:45:49.998000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "PB won't be applied to the equivocating block but **will** be applied to the builder's block",
+    "created_at": "2026-08-06T16:46:11.581000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "> they don't broadcast and the block is canonical they end up paying unless the slashing is included \nwhy would that not be the case?",
+    "created_at": "2026-08-06T16:48:29.017000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "in the devnet at least, the slashing was included by the next proposer",
+    "created_at": "2026-08-06T16:48:54.652000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "it does not need to be, there is no guarantees that the slashings are included...",
+    "created_at": "2026-08-06T16:49:42.422000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "but anyway, that's a big uplift to something that can be monitored by builders without even looking for equivocations, as I say if they wait for 60% attestations they win, if they wait for 40 then they need to check for no equivocations. If they are willing to rely on the next proposer being honest, then 20 + no equivocation is good enough",
+    "created_at": "2026-08-06T16:50:46.782000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "who is \"they\" here, this sounds really complex, should the beacon node take care of this?",
+    "created_at": "2026-08-06T16:51:55.718000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I don't think so honestly... if you do onboard this work on us... don't push it to be in devnet 8",
+    "created_at": "2026-08-06T16:52:43.423000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "well we do have `consensus_and_equivocation` on the api, I have a simple implementation for that, but it doesn't consider different attestation thresholds (yet)",
+    "created_at": "2026-08-06T16:53:23.370000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "https://ethereum.github.io/beacon-APIs/?urls.primaryName=dev#/Beacon/publishExecutionPayloadEnvelope it's documented here as proposed by sproul initially, but it seems to me we need to consider attestations more even if there is an equivocation",
+    "created_at": "2026-08-06T16:54:41.412000+00:00",
+    "attachments": [
+      {
+        "type": "image/webp",
+        "origin_name": "image.png",
+        "content": "773bf04553f42331f00003393bb788431be159a8a062f62991f9a30dd92a9ed3"
+      }
+    ]
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "The point is that builders **want** to submit even in the presence of equivocations now, and this is something that probably wants to be communicated to them. \n\nAlso I don't think we should be implementing these paths cause they'll have different strategies if the bids are trustless or not. If the bid is trusted then I'd just not submit on equivocations and that's it",
+    "created_at": "2026-08-06T16:57:31.062000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "but if the bid is trustless I think attestation threshold is more important than the presence of equivocations",
+    "created_at": "2026-08-06T16:57:56.127000+00:00",
+    "attachments": []
   }
 ]
