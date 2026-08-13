@@ -6,5 +6,13 @@
     "content": "<@755590043632140352> \n\nIt seems possible to me for process_attestation to double-count equivocating attesters in payment.weight.\n\nThe credit fires whenever an inclusion sets a new participation flag (will_set_new_flag). Since TIMELY_SOURCE and TIMELY_TARGET are separate flags, a validator that equivocates on the target is credited twice right? \n\nA1 (right source, wrong target) sets TIMELY_SOURCE on the first inclusion; A2 (right source, right target) then sets TIMELY_TARGET (a new flag so credited again). Both point at the canonical slot-N block, so both are same-slot and hit the same payment entry.\n\nThis contradicts the \"each validator contributes exactly once per slot\" comment. The equivocation is slashable, but no attester-slashing path touches payment.weight, so the extra credit survives. \n\nAm I missing something or is this a concern?",
     "created_at": "2026-08-13T01:48:55.680000+00:00",
     "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Hmmm, I'm still a little sleepy but this seems valid to me! the FFM-LMD check that would prevent these sort of slashings is only applied on `on_attestation` which happens when inserting on forkchoice, but not on block processing.  Worst part is that this is my doing, when looking at that function I wanted to avoid the per flag looping. Just checking if it's going to add the target flag should be enough.\n\nI will leave this to theoreticians if they want to change the loop to deal with this. Here are some comments:\n\n1. One of the equivocations **cannot gossip**, this is because one of the attestations is for certain not FFG-LMD compatible and gossip checks this path, so the only one that can include these attestations is the proposer. \n2. This can only change trustless payment weight by substantially slashing a set of validators, which have to be owned by the single proposer by the above point. So that block must have been worth a whole lot of money 😅 \n\nEither we can do a single loop to check if any flag was set before, or we can just change that flag on right target (this adds a new if on that loop). The latter approach was the original design if I remember correctly, and then I changed it back to avoid extra checks. \n\nIt's a simple change if people want to fix this though, and it's statically testable, so probably it's not a big deal to change this so late.",
+    "created_at": "2026-08-13T11:30:57.729000+00:00",
+    "attachments": []
   }
 ]
