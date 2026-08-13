@@ -30,5 +30,181 @@
     "content": "This would be much more compelling if the RPC provided a way to actually query the block time for a chain.  Since that isn't possible last I checked, even if people *knew* that block times after the merge could change in a hard fork, they can't actually code for that.",
     "created_at": "2026-08-13T12:02:06.423000+00:00",
     "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I'm not following, there's a timestamp that is available even on chain. And similarly the node exposes seconds per slot in the config endpoint if you're referring to that",
+    "created_at": "2026-08-13T12:15:10.801000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sky.cactus",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "There is no `eth_getBlockTime` method.  This is for apps that are speaking to the execution client's RPC endpoint, not the internal config endpoint.",
+    "created_at": "2026-08-13T12:26:43.029000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sky.cactus",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Block timestamp is accessible, but it is non-trivial to *derive* the block time from that.  You have to deal with missed slots, changes around hard forks, etc. which are edge cases that will either cause support problems or require development time and complexity to implement.",
+    "created_at": "2026-08-13T12:27:17.268000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sky.cactus",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "The easier solution is to just hard code the block time for Ethereum to 12 seconds and deal with hard forks manually when they happen (fail walk away test) or accept degraded user experience and bugs if it changes.",
+    "created_at": "2026-08-13T12:27:50.533000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "what do you mean? the block timestamp is literally the wallclock time at which the slot started that delivered that block. At any rate, adding that RPC endpoint and making it backwards compatible is absolutely trivial",
+    "created_at": "2026-08-13T12:29:25.137000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sky.cactus",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "1. Add RPC.\n2. Wait 2-5 years for adoption.\n3. Change timestamp and accept that some walked-away apps from before (1) will degrade a bit.",
+    "created_at": "2026-08-13T12:31:44.358000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sky.cactus",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Block timestamp != time between blocks.",
+    "created_at": "2026-08-13T12:32:03.621000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sky.cactus",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Slot 1, t=0: block 1, t=0\nSlot 2, t=12; <empty>\nSlot 3, t=24; block 2, t=24\nIf you look at block timestamp here, you'll assume time between blocks is 24 seconds.",
+    "created_at": "2026-08-13T12:33:16.783000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sky.cactus",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Sorry, I think my terminology was bad.  I meant \"slot time delta\", not \"block time\".  Slot time delta (time between slots) is the thing that apps care about, and isn't available from the JSON-RPC server.",
+    "created_at": "2026-08-13T12:34:00.814000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "l03443",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "What's the share of missed slots atm? Seems you could just take the last N slots and take the average block time?",
+    "created_at": "2026-08-13T12:40:25.427000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sky.cactus",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Yes, that would be a reasonable strategy.  My claim isn't that it is impossible, just that it is not as trivial as it seems at first glance.  The fork issue is another one that immediately comes to mind, since there is no way I know of from the JSON-RPC to know when a fork is coming or has occurred, so you can't know when you should re-check.  You can constantly recheck and take the median, and when it moves you just have a brief bit of degredation.  Again, not impossible just more complicated than \"get slot time delta\" (the thing really desired).",
+    "created_at": "2026-08-13T12:45:55.183000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sky.cactus",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I suspect there are other issues I'm not thinking of (but maybe not).",
+    "created_at": "2026-08-13T12:46:32.143000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "l03443",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I'm sure there are many valid concerns around reducing slot times but unless I'm missing something this seems like a very trivial thing to add? Doesn't even need to be part of the RPC spec, you just take a moving average of the last 1000 block times and no need for special handling around forks since it adjusts quickly",
+    "created_at": "2026-08-13T12:51:02.244000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sky.cactus",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "\"just take moving average over last 1000 block times\" requires fetching the last 1000 blocks, which is not a reasonable thing to do for a web app.",
+    "created_at": "2026-08-13T12:52:41.906000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sky.cactus",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "This *is* something that the execution clients could do trivially, they can just read the config and know what the slot time delta is.  The problem is that the execution clients do not (last I checked) expose this information to applications, which has resulted in applications hard-coding the block time.",
+    "created_at": "2026-08-13T12:53:46.085000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "l03443",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "How about this, once a day you fetch the last 100 blocks and take the average block time for the rest of the day, block time hardly changes anyways so just means whenever there's a fork you take a bit longer to confirm for a day or so. Sure having it on the rpc makes it easier to fetch, that also seems like something super quick to be added in clients",
+    "created_at": "2026-08-13T12:59:28.776000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sky.cactus",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "\"Once a day\" doesn't really make sense for a web app that the user transiently browses.  They may only stay on your site for a few minutes, just long enough to do a transaction.",
+    "created_at": "2026-08-13T13:00:11.383000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sky.cactus",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I have several apps that I use for maybe 2 minutes total.  Just long enough to open -> transact -> wait for receipt -> close.",
+    "created_at": "2026-08-13T13:00:45.723000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sky.cactus",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "The \"wait for receipt\" generally involves polling.  You need to know time between slots to know how frequently to poll.  Polling every second for data that is impossible to change in under 12 seconds is just a waste of bandwidth for the user, and whoever is providing the RPC.",
+    "created_at": "2026-08-13T13:02:05.297000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sky.cactus",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "These are solvable problems, but the *right* place to solve the initial problem is the RPC server (execution clients) by adding a standardized way for wallets and apps to request the configured slot time.  Once that exists, then we hope that over time people start using it, and then maybe one day we can change it without breaking anything.",
+    "created_at": "2026-08-13T13:03:01.576000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sky.cactus",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "All of this was just to make the illustrative argument that reducing slot time from 12 second to 10 seconds isn't a categorical win with no trade offs.",
+    "created_at": "2026-08-13T13:03:26.601000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "sky.cactus",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Any time you change the tires of a moving bus full of children, there are risks.  No change is free.",
+    "created_at": "2026-08-13T13:03:55.756000+00:00",
+    "attachments": []
   }
 ]
