@@ -1,0 +1,66 @@
+[
+  {
+    "author": "luca_zanolini",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "the double-count happens because the payment.weight credit fires on will_set_new_flag (any new flag), so an equivocator sets TIMELY_SOURCE via A1 and TIMELY_TARGET via A2 and gets counted on both. \n\nA fix could be to gate the credit on whether the validator had no participation flags *before* this attestation instead — capture had_no_participation = epoch_participation[index] == ParticipationFlags(0b0000_0000) before the flag loop and add it as a conjunct to the credit condition. Then only the first flag-setting inclusion counts, honest validators are unaffected, no new state, and it matches the “exactly once per slot’ comment.",
+    "created_at": "2026-08-14T01:14:13.488000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "luca_zanolini",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Happy to open a PR and discuss there",
+    "created_at": "2026-08-14T01:15:42.407000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Yes, doing it that way is an extra loop or keeping track of previous flags within the loop. Another way is *just* consider right target attestations. Either way works fine",
+    "created_at": "2026-08-14T01:30:21.938000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "But as I say this really is impossible to trigger any form of attack, the two different attestations cannot gossip",
+    "created_at": "2026-08-14T01:31:10.333000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "luca_zanolini",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Right that it needs the proposer to include it — but that doesn't really save it. payment.weight is credited by on-chain inclusion, not gossip, so a malicious proposer just puts the wrong-target attestation straight into its own block (the gossip check doesn't apply there). And the guarantee at stake (that an honest builder who withholds isn't charged) has to hold against malicious proposers/attesters in the first place; that's the whole point of trustless payments, it can't assume the proposer is honest, right?. \n\nSo the double-count is reachable within the normal threat model, and it drops the safe honest-majority margin: instead of tolerating <20% malicious stake you only tolerate <10%. The only way the gossip point rescues 20% is to assume honest proposers.\n\nSo imo still worth the one-line fix, but ofc its just my opinion",
+    "created_at": "2026-08-14T01:49:07.631000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "The point is that the proposer that is willing to make this attack has to be the same as the stake enough to slash it and with the corresponding correlation penalties that means the grieving here has to be for a huge block worth several hundred million dollars, which also the builder needs to be tricked into not revealing, which is hard given that if the builder has seen the attestations for it, it will reveal. The only way this works is with an attacker that has 30% of the stake, reveals the block very late. Gets zero attestations. And then they release 30% of the stake voting twice, achieving 60% to grieve the builder. At the same time they lose their entire stake",
+    "created_at": "2026-08-14T01:53:48.031000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Well, not their entire stake cause it's 30% of the committee stake, not the whole chain, but still",
+    "created_at": "2026-08-14T01:55:07.011000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "luca_zanolini",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Yeah, agreed the economics don't work. You'd burn tens/hundreds of million… Not a practical attack. Only narrow point: right now \"exactly once per slot\" holds because breaking it is uneconomical, not because the code enforces it, so it can get a bit tricky for the formal analysis. I’ll try to see what I can do there, as I’m following the code to analyze epbs. Thanks for walking through it.",
+    "created_at": "2026-08-14T01:58:39.591000+00:00",
+    "attachments": []
+  }
+]
