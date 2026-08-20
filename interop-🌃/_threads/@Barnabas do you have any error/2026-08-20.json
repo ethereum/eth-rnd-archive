@@ -1,0 +1,50 @@
+[
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "",
+    "created_at": "2026-08-20T08:07:22.630000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "use panda cli to fetch anything",
+    "created_at": "2026-08-20T08:07:23.614000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "stefanbratanov",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "ok we have a quick meeting with team and will see after",
+    "created_at": "2026-08-20T08:08:01.271000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Here are the teku error logs, with the noise stripped out. Bottom line: all 14 teku nodes are still stuck at slot 49149, and the logs show the DA retriever failing on early Gloas blocks plus a corrupted RPC-abort path underneath it.\n\nThe load-bearing failure — DA never completes for Gloas blocks. Teku's custody retriever fails continuously on the first post-fork blob blocks (here slot 49176, block 0x0282dc78…):\n\nDEBUG - SimpleSidecarRetriever.Request failed for DataColumnSlotAndIdentifier[slot=49176,\n  blockRoot=0x0282dc78…d6d048, columnIndex=70] due to: DasColumnNotAvailableException\n\nIts outbound data_column_sidecars_by_root requests fail two ways: peers answer response: <empty> (0 of the ~70–94 columns requested), or the request times out — RpcTimeoutException: Rpc request timed out after 10 sec: Timed out waiting for response chunk 0 (343 occurrences on teku-geth-1 alone in 40 min). Without the columns, the availability check never passes, imports stall, and the head stays at 49149. Notably, an inbound request at 08:04 shows teku itself serving 94 columns for a newer block (#49220) — so post-fork gossip decode works (the #9929 highest-milestone schema bug did self-heal at the fork as expected); it's specifically the req/resp backfill for the blocks it must import first that's dead.\n\nSecondary teku bugs on the request-abort path (worth reporting upstream — this is teku-internal corruption, not network weather):\n```\nERROR - Encountered error while processing response\njava.util.ConcurrentModificationException\n  at java.util.ArrayList.forEach\n  at ...snappy.SnappyFramedCompressor$SnappyFramedDecompressor.close\n  at ...LengthPrefixedPayloadDecoder.close(LengthPrefixedPayloadDecoder.java:134)\n  at ...RpcResponseDecoder.close(RpcResponseDecoder.java:143)\n  at ...Eth2OutgoingRequestHandler.abortRequest(Eth2OutgoingRequestHandler.java:242)\n\n```",
+    "created_at": "2026-08-20T08:09:30.209000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "with companions IllegalStateException: Trying to reuse disposed decoder instance (13x) and io.netty.util.IllegalReferenceCountException: refCnt: 0 (37x). When a column request times out and gets aborted, the decoder is closed from one thread while another is still feeding it — under the post-fork timeout storm this fires constantly.\n\nGeneral p2p distress (symptom, not cause): 550x StreamTimeoutException on ping, 175x on goodbye, 524x Connection reset, 403x PeerDisconnectedException, 50x DroppedRpcPartsException: Queued low priority RPC parts were dropped — teku is churning through peers, which is partly self-inflicted (half its peer set is wedged lighthouse/prysm nodes) and partly the abort-path corruption killing connections.\n\nThe one WARN flooding the fleet otherwise is just Validator *** Skipped aggregation … nothing to aggregate — a downstream consequence of not following the head, not a lead. Also seen once per node at 07:44: Failed to publish proposer preferences for epoch 1536, the first Gloas-duty failure pre-fork.\n\nThe open question for the teku team is why every peer returns empty for by_root column requests on early Gloas blocks while the chain's active clients (lodestar/nimbus/grandine) clearly hold that data — that could be a request-encoding/digest mismatch on teku's side or a serving gap on theirs.",
+    "created_at": "2026-08-20T08:09:33.111000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "claude analysis",
+    "created_at": "2026-08-20T08:09:38.489000+00:00",
+    "attachments": []
+  }
+]
