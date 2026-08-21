@@ -86,5 +86,53 @@
     "content": "I guess an attacker could pre-register using the pre-registration mechanism too (it's just that similarly they would not gain anything)",
     "created_at": "2026-08-21T11:03:20.405000+00:00",
     "attachments": []
+  },
+  {
+    "author": "george_avs",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "> Explicitly distinguishing between topups and registrations\nOverall, this is a good approach, and it's pretty much what we're trying to suggest, but from a slightly different angle. The difference is that 8205 uses a separate flow to do so, in order to avoid interfering with the current deposit process and keep it backward-compatible",
+    "created_at": "2026-08-21T11:40:54.426000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "george_avs",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "If we reuse an existing flow (via a deposit contract), some interesting issues arise:\n- The race is still on, but only for registrations, and yes, it can be resolving with a refund as you sudgested. However, for the app level (staking protocols), this isn't an ideal solution. Although this scenario is less likely since the attack would no longer be profitable – it still needs to be handled (it will become griefing instead of theft). Such returns must be accounted for separately and the ETH that is deposited with the registration is still blocked on CL for a while (depending on the implementation, it might even have to wait all the entry queue since we need to think about churn consumption), although it is recoverable\n- Registration timing – currently, a validator is registered only after it has waited through the entire entry queue. If registration is moved earlier, problems arise: the number of deposit requests in a block is not limited (unlike in blocks 7002 or 7251, for example), only by gas. So it opens a DoS attack vector when the chain need to check lots of BLS signature to process registrations in one block (8205 reuse 7002 queue logic to limit the number of requests per block and current approach limit's it by churn and number of request that can be processed in a block). Maybe there's a good way to solve this, but that's what we were struggling with when we were thinking about the design of the 8205\n- Not the biggest problem, but this will also change the way validators are created. I see it like a validator is first created with a zero balance (so that it's registered in the same block, but we don't bypassing churn), and its ETH are placed in pending_deposits. For staking protocols that calculates TVL on CL, this is no backward-compatible. For example, Lido encountered a similar issue with Pectra (https://github.com/ethereum/consensus-specs/blob/master/specs/electra/fork.md - we have adapted to this migration)",
+    "created_at": "2026-08-21T11:40:57.409000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "george_avs",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "> Making a registration of an already registered BLS credential, be refundable to the withdrawal credential that was used in the registration\n\nThere is a related EIP (https://eips.ethereum.org/EIPS/eip-7684) addressing returns if WCs do not match. It partially solves the problem, but not completely  (the attack becomes griefing instead of theft). We’re comparing it to the approach in 8205 here: https://hackmd.io/@george-avs/r1oK_afsbe (at the very bottom of the document)",
+    "created_at": "2026-08-21T11:40:59.089000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "george_avs",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "So, the key idea is the same: to separate registration and deposit in time and provide verifiability that the WCs are correctly registered",
+    "created_at": "2026-08-21T11:42:43.539000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "george_avs",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "> I guess an attacker could pre-register using the pre-registration mechanism too (it's just that similarly they would not gain anything)\n\nBy having preregistration in the beacon state, we can build a guaranteed deposit mechanism with specific WCs using beacon proofs (https://eips.ethereum.org/EIPS/eip-4788)\n\nWe plan to write a contract (I already have a draft ready) that will accept the proof and verify that the proof is in the beacon state and that it has not yet expired. And this contract can be used by any staking protocol to securely process deposits.",
+    "created_at": "2026-08-21T11:49:34.617000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "george_avs",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "For the staking protocol, the process will be as follows: the node operator provides a deposit data and pre-registration (this can be treated as a permanent commitment that this public key is tied to specific WCs).\n\nThe protocol can deposit to this key at any time in two steps: pre-registration, followed by a deposit with proof. \nIn this process, no funds are at risk and there is no double entry queue for stake",
+    "created_at": "2026-08-21T11:55:40.078000+00:00",
+    "attachments": []
   }
 ]
