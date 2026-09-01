@@ -1,0 +1,87 @@
+# E2E test for the gloas builder API flow (nflaig/builder-api-2).
+#
+# Participant 2 runs the Lodestar dev image with the VC configured to request builder API
+# bids from Buildoor. Buildoor itself is wired to participant 1's beacon node (legacy single
+# buildoor mode), so the proposer's node and the builder's node are different, as in production.
+# Expected observations once Buildoor's lifecycle registration completes (~3 minimal epochs
+# before bidding starts):
+# - VC submits builder preferences ahead of proposals ("Submitted builder preferences")
+# - BN fans out getExecutionPayloadBid requests with signed request auths
+# - a winning builder API bid produces a block carrying Buildoor's builder index
+#   ("Selected builder block ... bidSource=http://buildoor:8080") and the BN forwards the
+#   signed block to Buildoor via submitSignedBeaconBlock (Eth-Builder-Url echo)
+#
+# Build the dev image first: docker build -f Dockerfile.dev -t lodestar:builder-api-dev .
+#
+# Buildoor advertises http://buildoor:8080 as its builder API URL (service name + API port
+# per the ethereum-package buildoor launcher). The VC's --builder.urls must BYTE-match that
+# URL (auth_data defaults to the UTF-8 bytes of the configured url), otherwise requests
+# fail with DataMismatch.
+
+participants:
+  # Buildoor's beacon node, no builder API configured on this VC
+  - el_type: geth
+    el_image: ethpandaops/geth:glamsterdam-devnet-8
+    cl_type: lodestar
+    cl_image: lodestar:builder-api-dev
+    vc_image: lodestar:builder-api-dev
+    cl_log_level: debug
+    vc_log_level: info
+    supernode: true
+    validator_count: 64
+
+  # Node under test, requests builder API bids from Buildoor
+  - el_type: geth
+    el_image: ethpandaops/geth:glamsterdam-devnet-8
+    cl_type: lodestar
+    # Same image as participant 1: mixing an unstable-based image with the older
+    # glamsterdam-devnet-7 release causes chain splits (payload by root sync fails cross-version)
+    cl_image: lodestar:builder-api-dev
+    vc_image: lodestar:builder-api-dev
+    cl_log_level: debug
+    vc_log_level: debug
+    vc_extra_params:
+      - --builder.urls=http://buildoor:8080
+      - --builder.selection=maxprofit
+      - --graffiti=builder-api-flow
+    supernode: true
+    validator_count: 64
+
+mev_type: buildoor
+buildoor_params:
+  image: ethpandaops/buildoor:main
+  builder_api: true
+  epbs_builder: true
+  lifecycle: true
+  extra_args:
+    - --log-level=debug
+    # Serve builder API bids above the p2p bid ladder so the builder API channel wins
+    # selection, exercising the Eth-Builder-Url forward path end to end
+    - --builder-api-value-override=200000000
+    # Strictly require and verify the SignedRequestAuth on bid requests
+    - --builder-api-require-auth
+
+network_params:
+  preset: minimal
+  seconds_per_slot: 6
+  gloas_fork_epoch: 0
+  withdrawal_type: "0x01"
+  validator_balance: 32
+  builder_count: 1
+  builder_balance: 100
+  deploy_eip8282_contracts: true
+
+additional_services:
+  - dora
+
+dora_params:
+  image: ethpandaops/dora:master-latest
+
+port_publisher:
+  cl:
+    enabled: true
+    public_port_start: 39000
+  additional_services:
+    enabled: true
+
+global_log_level: info

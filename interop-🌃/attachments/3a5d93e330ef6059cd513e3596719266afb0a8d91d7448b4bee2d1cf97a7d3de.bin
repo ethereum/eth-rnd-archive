@@ -1,0 +1,91 @@
+```
+$ cat scripts/devnet/crysm-custody.conf
+# crysm-vc.conf's twelve nodes, plus enough blob traffic that custody means something.
+#
+#   docker build -t crysm:mainnet --build-arg CRYSM_COMMIT=$(git rev-parse HEAD) .
+#   kurtosis run ../ethereum-package --args-file scripts/devnet/crysm-custody.conf --verbosity brief
+#
+# 128 validators a node is 4096 ETH, so 128 custody groups: every crysm node here should raise
+# itself from CUSTODY_REQUIREMENT to a supernode on its own, and say so in the ENR and the MetaData.
+#
+# Without blobs there are no columns and none of that is observable, which is what spamoor is for.
+#
+# Pull ethpandaops/spamoor:latest before a run: a stale one predates this fork, the same way a stale
+# geth:master silently forks the chain.
+participants:
+  - el_type: geth
+    el_image: ethpandaops/geth:master
+    cl_type: lighthouse
+    cl_image: ethpandaops/lighthouse:glamsterdam-devnet-8
+    vc_type: lighthouse
+    vc_image: ethpandaops/lighthouse:glamsterdam-devnet-8
+    validator_count: 128
+    count: 4
+
+  - el_type: geth
+    el_image: ethpandaops/geth:master
+    cl_type: prysm
+    cl_image: ethpandaops/prysm-beacon-chain:glamsterdam-devnet-8
+    vc_type: prysm
+    vc_image: ethpandaops/prysm-validator:glamsterdam-devnet-8
+    validator_count: 128
+    count: 4
+
+  - el_type: geth
+    el_image: ethpandaops/geth:master
+    cl_type: crysm
+    cl_image: crysm:mainnet
+    # Its own validator client, in the same binary: the keyring is where the node reads which
+    # validators are attached.
+    use_separate_vc: false
+    validator_count: 128
+    # Every category. A run with one switched off cannot answer the question it was started to
+    # ask: `gossip` alone carries "block arrived", so without it a block that came late and a block
+    # that came and was dropped look identical.
+    cl_extra_params:
+      - --log-categories=all
+      - --log-level=debug
+    count: 4
+
+network_params:
+  gloas_fork_epoch: 0
+  preset: mainnet
+  bpo_1_epoch: 0
+  bpo_2_epoch: 0
+
+additional_services:
+  - dora
+  - spamoor
+  - prometheus_grafana
+
+dora_params:
+  image: ethpandaops/dora:master
+
+# Nine blobs a slot against a ceiling of twenty-one. Asking for more than a block can carry builds a
+# backlog that grows all run, and no two runs measured under one can be compared.
+spamoor_params:
+  spammers:
+    - name: "Blobs, at a rate the chain can clear"
+      description: "3 blob transactions a slot of 3 sidecars each, against a ceiling of 21"
+      scenario: blob-combined
+      config:
+        throughput: 3
+        sidecars: 3
+        max_pending: 6
+        max_wallets: 20
+        base_fee: 20
+        blob_fee: 20
+    - name: "EOA background"
+      description: "ordinary traffic, so blocks are not blobs alone"
+      scenario: eoatx
+      config:
+        throughput: 100
+        max_pending: 200
+        max_wallets: 100
+        base_fee: 20
+
+ethereum_genesis_generator_params:
+  image: ethpandaops/ethereum-genesis-generator:6.2.0
+
+global_log_level: info
+```
