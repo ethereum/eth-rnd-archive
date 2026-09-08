@@ -1,0 +1,146 @@
+[
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "",
+    "created_at": "2026-09-07T07:10:17.452000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "https://github.com/besu-eth/besu/issues/11248 has a bunch more details if that helps, was created on the weekend when lodeekeper debugged why lodestar nodes are not proposing",
+    "created_at": "2026-09-07T07:10:18.411000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@&836981603216654336> ^^",
+    "created_at": "2026-09-07T07:10:35.078000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "https://github.com/ethpandaops/glamsterdam-devnets/commit/2a98dd8afcec8ea901833e492d989d7597de1507",
+    "created_at": "2026-09-07T07:11:06.106000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "`nimbus-besu-1` seeing basically the same thing by the way",
+    "created_at": "2026-09-07T07:11:19.533000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "pandaops has been trying to work around this for at least the last couple hours",
+    "created_at": "2026-09-07T07:11:43.565000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "fab_10",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "does the increased heap help?",
+    "created_at": "2026-09-07T08:03:09.793000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "`java.lang.IllegalStateException: Cannot remove 0x…11c37937e080000 wei from account, balance is only 0x…75be58e1e13102` seems like a separate issue to me (see #11248)",
+    "created_at": "2026-09-07T08:22:01.992000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ahamlat",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "It depends if the node (besu) is resync'ed after OOM error or not. The error can corrupt the database and have inconsistencies like the one above, cc. <@680337202521440470>",
+    "created_at": "2026-09-07T08:25:14.991000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "ah so we wanna check if the account error only happened **after** the OOM crash, right?",
+    "created_at": "2026-09-07T08:29:32.978000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "we can ask lodekeeper 🙂",
+    "created_at": "2026-09-07T08:29:38.383000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ahamlat",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Yes, exactly",
+    "created_at": "2026-09-07T08:31:29.375000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@1467247836117860547> can you check the besu nodes again that had the account error, did you observe it already before the OOM crashes, or only strictly after?",
+    "created_at": "2026-09-07T08:31:54.352000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "btw I did wipe the besu dbs and they resynced afterwards fine",
+    "created_at": "2026-09-07T08:32:05.668000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "so plausible it was db corruption",
+    "created_at": "2026-09-07T08:32:22.177000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Confirmed. The picture is now airtight across all 13 besu nodes on the devnet. Answering in the thread.\n\nThe account error is on the `eth_estimateGas` simulation path with an identical stack and identical sender/value — at **05:56 on 09-07 (post-OOM)**, on **09-04 (pre-OOM)**, and back to **08-30** — never the block-import path.\n\nHere's my reply to the thread:\n\nChecked every besu node on glamsterdam-devnet-8 via otel-logs. Answer: **before** — the account error predates the OOM crashes by about a week, so it's not a post-OOM corruption artifact.\n\nTimeline is the same story on all 13 besu-paired nodes:\n- first `Cannot remove … wei from account`: **2026-08-30 13:45 UTC**\n- first `OutOfMemoryError`: **2026-09-06** (earliest 02:54 on buildoor-lodestar-besu-1, the rest 05:30–07:40)\n\nAnd it's not the block-import path — it's `eth_estimateGas`:\n```\nIllegalStateException: Cannot remove 0x…011c37937e080000 wei from account, balance is only 0x…75be58e1e13102\n  at MutableAccount.decrementBalance\n```",
+    "created_at": "2026-09-07T08:38:08.905000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "```\n  at MainnetTransactionProcessor.processTransaction\n  at TransactionSimulator.processOnPending\n  at EthEstimateGas.simulate      ← vert.x RPC worker, read-only pending sim\n```\nSame sender, same value (a 0.08 ETH transfer against a ~0.033 ETH balance), byte-identical stack before OOM (08-30, 09-04 — node importing at head, 29ms exec at the time) and after OOM (09-07 05:56+). It's a read-only simulation on the pending block, so it never touches persisted state and can't be a symptom of a corrupted DB.\n\nSo: independent of the OOM — exactly the \"likely separate\" issue I flagged in #11248. Looks like something hammering `eth_estimateGas` for a transfer that exceeds the sender's balance, and besu surfaces it as an internal `IllegalStateException` / \"Critical Exception Processing Transaction\" instead of a clean insufficient-funds JSON-RPC error. Happy to drop this timeline into #11248 if useful.",
+    "created_at": "2026-09-07T08:38:09.437000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ahamlat",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Interesting, so it is more related to eth_estimageGas implementation.",
+    "created_at": "2026-09-07T10:29:34.039000+00:00",
+    "attachments": []
+  }
+]
