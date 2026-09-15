@@ -14,5 +14,37 @@
     "content": "well, the point stands: if a builder actually checks against some string and doesn't want to verify twice or add a list of strings to match against, it should be very clear in the specifics of what the string must be, otherwise the response would probably be indistinguishable from \"no bids here\"",
     "created_at": "2026-09-15T18:35:56.713000+00:00",
     "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "deathstar has a feature already to do proposer equivocations, however, only 2 blocks currently which are send to different peers, I already caused 50/50 splits on attestation votes doing that on the devnet (https://discord.com/channels/595666850260713488/892088344438255616/1535200204901326918) but we probably wanna send more equivocating blocks so that attestation weight is more split?",
+    "created_at": "2026-09-15T19:08:36.643000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "> otherwise the response would probably be indistinguishable from \"no bids here\"\nthis is defined in the spec\n- if signature is invalid or not signed by the expected proposer = 401\n- if auth data is not what the builder was expecting = 400\n- \"no bid\" = 204\nI guess builders can be as strict or lax as they want when it comes to checking the `auth.data`, seems silly to fail the request due to a trailing slash",
+    "created_at": "2026-09-15T19:16:37.361000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "this is not so much about the splitting behavior, my main concern is about `should_apply_proposer_boost` which deals with the next slot's attesters and those are critical to enforce builder safety but also about `get_head`, , `get_proposer_head` and `should_build_on_full` which should  actually make the next proposer build on full, even when it knows that the proposer has equivocated this slot. We just need to make sure that we cover all cases: the crucial one is that if the next proposer built on top of (A, full), then even validators that had (B, full) or (B, empty) as head, and B was a late equivocation, would reorg to the new incoming block on the A chain. This is **not easy to trigger**, we need\n\nA comes in slot N before the deadline, B comes later, after the deadline in slot N. \n\nB gets more attestations than A! this is the crucial point, it can only happen with malicious attesters, A needs to be split, some people see it right before and some right after the boundary so that A doesn't get much support. And B should definitely be late and get votes only from malicious operators. The proposer could send B right before the deadline to some peers and those will also vote for B. The point is that we need to trigger the situation in which B had actually more votes than A, still not enough to not beat proposer boost, and then the builder of A reveals a payload. At this point honest nodes would pick B if they advance slot and call `get_head` as it has more attestations. But A needs to be strong anyway so that `get_proposer_weight` does not reorg it too!\n\nIn this case all honest nodes should not apply proposer boost to B but apply it to A when the next proposer builds on top of B. And moreover, the next proposer should also build on top of A!",
+    "created_at": "2026-09-15T19:42:09.052000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "So we need forkchoice tests for all these scenarios with all the different weights between A and B, I honestly do not know if we have these tests, but I think it's impossible to test this properly in kurtosis that's why I called for the brainstorm, to at least enumerate the list of cases",
+    "created_at": "2026-09-15T19:43:42.534000+00:00",
+    "attachments": []
   }
 ]
