@@ -1,0 +1,29 @@
+# Gloas: late builder payment can be double-withdrawn after exit
+
+## Summary
+
+An old builder payment can be absent from both payment queues when its payload's exit request is processed, allowing the builder to exit immediately before that payment is restored. If the restored payment remains queued until exit maturity, the spec can commit both the payment `P` and the builder's full balance `B` as withdrawals, while deducting only `B` from the CL.
+
+## Contributing bugs
+
+1. **Exit is processed before the late payment is restored.** In `apply_parent_execution_payload`, builder exits are handled before payment settlement; for a parent older than the previous epoch, the rolling `builder_pending_payments` entry has already been evicted, so the exit guard observes no obligation and the code appends `P` to `builder_pending_withdrawals` only afterward (`specs/gloas/beacon-chain.md:1762-1784`, `2305-2320`).
+
+2. **The payment queue can remain frozen while the exit matures.** Fifteen earlier builder withdrawals can consume the `MAX_WITHDRAWALS_PER_PAYLOAD - 1` builder quota on the mandatory FULL-parent pass, leaving `P` queued; subsequent EMPTY parents skip `process_withdrawals` while epoch processing continues toward the 64-epoch withdrawability delay (`specs/gloas/beacon-chain.md:1819-1847`, `2006-2014`).
+
+3. **Pending payouts and the exit sweep are computed from the same balance snapshot.** `get_expected_withdrawals` selects `P` first, but the later builder sweep still emits `amount=builder.balance` (`B`) because withdrawals are applied only after the complete list is built; saturating subtraction then accepts the overcommitted list instead of exposing an underflow (`specs/gloas/beacon-chain.md:1853-1887`, `1893-1921`, `1937-1945`).
+
+## Root cause
+
+The same builder obligation is represented across an expiring payment window, the durable parent bid, and a settled withdrawal queue without one invariant governing exit eligibility and sweep construction. State-transition ordering permits authorization against a temporarily incomplete view and later constructs multiple withdrawals without reserving earlier same-builder amounts.
+
+## Impact
+
+The EL credits `P + B`, while the CL applies `saturating_sub(saturating_sub(B, P), B) = 0`, reducing CL supply by only `B`; the resulting net issuance is exactly `P`. Saturation leaves a plausible zero builder balance, so the invalid overcommitment is accepted rather than failing visibly.
+
+## Prerequisites
+
+The sequence requires an active builder bid with value `P` and a valid exit request in its payload, enough missed beacon blocks to cross two epoch boundaries and evict the zero-weight payment record, fifteen earlier queued payouts for other builders, and suitable sweep-cursor alignment. Withdrawal processing must then remain suppressed until the 64-epoch delay matures, for example through EMPTY parents, followed by an eventual FULL-parent pass; these are severe liveness conditions and are not an immediate one-transaction exploit.
+
+## Suggested fix
+
+Settle or reconstruct the parent builder payment before processing builder exit requests, so the existing pending-balance guard sees `P` and rejects the exit. As defense in depth, compute a builder sweep from its balance remaining after all earlier same-builder withdrawals selected in that payload (or skip the sweep), and assert that aggregate expected withdrawals for each builder never exceed its pre-application balance.
