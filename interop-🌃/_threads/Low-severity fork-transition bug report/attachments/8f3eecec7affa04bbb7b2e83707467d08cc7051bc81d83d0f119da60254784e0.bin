@@ -1,0 +1,52 @@
+diff --git a/specs/gloas/beacon-chain.md b/specs/gloas/beacon-chain.md
+index 855f1484e..4bee547ea 100644
+--- a/specs/gloas/beacon-chain.md
++++ b/specs/gloas/beacon-chain.md
+@@ -90,6 +90,7 @@
+     - [New `is_active_builder`](#new-is_active_builder)
+     - [New `is_builder_withdrawal_credential`](#new-is_builder_withdrawal_credential)
+     - [New `is_attestation_same_slot`](#new-is_attestation_same_slot)
++    - [New `is_pre_gloas_slot`](#new-is_pre_gloas_slot)
+     - [New `is_valid_indexed_payload_attestation`](#new-is_valid_indexed_payload_attestation)
+     - [New `is_pending_validator`](#new-is_pending_validator)
+   - [Misc](#misc-2)
+@@ -1088,6 +1089,18 @@ def is_attestation_same_slot(state: BeaconState, data: AttestationData) -> bool:
+     return blockroot == slot_blockroot and blockroot != prev_blockroot
+ ```
+ 
++#### New `is_pre_gloas_slot`
++
++```python
++def is_pre_gloas_slot(state: BeaconState, slot: Slot) -> bool:
++    """
++    Check if ``slot`` precedes the Gloas fork.
++    """
++    if state.fork.current_version != GLOAS_FORK_VERSION:
++        return False
++    return compute_epoch_at_slot(slot) < state.fork.epoch
++```
++
+ #### New `is_valid_indexed_payload_attestation`
+ 
+ ```python
+@@ -1333,7 +1346,10 @@ processed. Since the timely head flag requires both the minimum inclusion delay
+ and a head root that matches the block root at the attestation slot, an
+ attestation can only receive the flag if it attests to the parent block. The
+ payload availability of the attested block is therefore tracked at
+-`parent_slot`, even when `data.slot` is a skipped slot.
++`parent_slot`, even when `data.slot` is a skipped slot. A pre-Gloas parent has
++no payload envelope, so no attester can observe its payload as revealed and the
++fork choice only ever considers it empty. Such a parent is therefore scored as
++empty here, regardless of `state.execution_payload_availability`.
+ 
+ ```python
+ def get_attestation_participation_flag_indices(
+@@ -1362,6 +1378,8 @@ def get_attestation_participation_flag_indices(
+     if is_attestation_same_slot(state, data):
+         assert data.index == 0
+         payload_matches = True
++    elif is_pre_gloas_slot(state, parent_slot):
++        payload_matches = data.index == 0
+     else:
+         slot_index = parent_slot % SLOTS_PER_HISTORICAL_ROOT
+         payload_index = state.execution_payload_availability[slot_index]
