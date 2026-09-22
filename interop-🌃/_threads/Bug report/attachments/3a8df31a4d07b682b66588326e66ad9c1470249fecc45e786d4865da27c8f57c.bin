@@ -1,0 +1,178 @@
+diff --git a/tests/core/pyspec/eth_consensus_specs/test/gloas/block_processing/test_process_parent_execution_payload.py b/tests/core/pyspec/eth_consensus_specs/test/gloas/block_processing/test_process_parent_execution_payload.py
+index 31b90bf88..ae81b456d 100644
+--- a/tests/core/pyspec/eth_consensus_specs/test/gloas/block_processing/test_process_parent_execution_payload.py
++++ b/tests/core/pyspec/eth_consensus_specs/test/gloas/block_processing/test_process_parent_execution_payload.py
+@@ -3,7 +3,11 @@ from eth_consensus_specs.test.context import (
+     spec_state_test,
+     with_gloas_and_later,
+ )
+-from eth_consensus_specs.test.helpers.block import build_empty_block_for_next_slot
++from eth_consensus_specs.test.helpers.block import (
++    build_empty_block,
++    build_empty_block_for_next_slot,
++)
++from eth_consensus_specs.test.helpers.builders import add_builder_to_registry
+ from eth_consensus_specs.test.helpers.builder_deposit_requests import (
+     prepare_process_builder_deposit_request,
+ )
+@@ -14,6 +18,9 @@ from eth_consensus_specs.test.helpers.deposits import (
+ from eth_consensus_specs.test.helpers.execution_requests import (
+     get_non_empty_execution_requests,
+ )
++from eth_consensus_specs.test.helpers.execution_payload_bid import (
++    prepare_signed_execution_payload_bid,
++)
+ from eth_consensus_specs.test.helpers.keys import pubkeys
+ from eth_consensus_specs.test.helpers.withdrawals import set_parent_block_full
+ 
+@@ -446,6 +453,150 @@ def test_process_parent_execution_payload__older_than_previous_epoch(spec, state
+     )
+ 
+ 
++@with_gloas_and_later
++@spec_state_test
++def test_late_builder_payment_and_matured_sweep_inflate_withdrawals(spec, state):
++    """
++    Reproduce the reachable late-payment/full-sweep accounting collision.
++
++    A builder payment is allowed to age out of the two-epoch payment ring.
++    A later FULL child processes that builder's exit before reconstructing the
++    old payment, and a full pending-withdrawal batch leaves the reconstructed
++    payment queued. After the 64-epoch withdrawal delay, the next FULL child
++    snapshots both that payment and the builder's full balance.
++    """
++    builder_index = spec.BuilderIndex(0)
++    payment_amount = spec.Gwei(250_000_000)
++    builder_balance = spec.Gwei(2_000_000_000)
++    payment_block_hash = spec.Hash32(b"\x11" * 32)
++    child_block_hash = spec.Hash32(b"\x22" * 32)
++    final_block_hash = spec.Hash32(b"\x33" * 32)
++
++    # Put the payment block in the last slot of an epoch. The later child at
++    # the start of epoch + 2 then has exactly SLOTS_PER_EPOCH intervening slots.
++    payment_slot = spec.Slot(3 * spec.SLOTS_PER_EPOCH - 1)
++    spec.process_slots(state, payment_slot - 1)
++
++    # This is a reachable finalized epoch at the current epoch and activates
++    # genesis-epoch builders without affecting the payment construction.
++    state.finalized_checkpoint.epoch = spec.Epoch(1)
++    builder = state.builders[builder_index]
++    builder.balance = builder_balance
++    assert spec.is_active_builder(state, builder_index)
++    assert spec.can_builder_cover_bid(state, builder_index, payment_amount)
++
++    exit_requests = spec.ExecutionRequests(
++        builder_exits=spec.BuilderExitRequests.of(
++            spec.BuilderExitRequest(
++                source_address=builder.execution_address,
++                pubkey=builder.pubkey,
++            )
++        )
++    )
++
++    # Import a value-bearing builder bid whose future payload carries the exit.
++    payment_block = build_empty_block(spec, state, payment_slot)
++    payment_block.body.signed_execution_payload_bid = prepare_signed_execution_payload_bid(
++        spec,
++        state.copy(),
++        builder_index=builder_index,
++        value=payment_amount,
++        slot=payment_slot,
++        parent_block_root=payment_block.parent_root,
++        fee_recipient=builder.execution_address,
++        block_hash=payment_block_hash,
++        execution_requests_root=spec.hash_tree_root(exit_requests),
++    )
++    spec.process_slots(state, payment_slot)
++    spec.process_block(state, payment_block)
++
++    payment_index = spec.SLOTS_PER_EPOCH + payment_slot % spec.SLOTS_PER_EPOCH
++    assert state.builder_pending_payments[payment_index].withdrawal.amount == payment_amount
++
++    # Fill the pending-withdrawal capacity with other builders. The late
++    # payment reconstructed below is appended after these entries.
++    blockers = int(spec.MAX_WITHDRAWALS_PER_PAYLOAD) - 1
++    for offset in range(blockers):
++        blocker_index = offset + 1
++        if blocker_index >= len(state.builders):
++            add_builder_to_registry(spec, state, blocker_index)
++        blocker = state.builders[blocker_index]
++        state.builder_pending_withdrawals.append(
++            spec.BuilderPendingWithdrawal(
++                fee_recipient=blocker.execution_address,
++                amount=spec.Gwei(1),
++                builder_index=spec.BuilderIndex(blocker_index),
++            )
++        )
++
++    # Explicitly cross two epoch boundaries. The first rotation moves the
++    # payment into the previous-epoch half; the second evicts it.
++    child_slot = spec.compute_start_slot_at_epoch(
++        spec.compute_epoch_at_slot(payment_slot) + 2
++    )
++    spec.process_slots(state, child_slot)
++    evicted_index = payment_slot % spec.SLOTS_PER_EPOCH
++    assert state.builder_pending_payments[evicted_index] == spec.BuilderPendingPayment()
++    assert spec.compute_epoch_at_slot(payment_slot) < spec.get_previous_epoch(state)
++
++    # The FULL child processes the exit first. Because the ring entry is gone,
++    # the pending-balance guard passes; only afterwards is the old payment
++    # reconstructed and appended behind the blockers.
++    child_block = build_empty_block(spec, state)
++    child_block.body.parent_execution_requests = exit_requests
++    child_bid = child_block.body.signed_execution_payload_bid.message
++    child_bid.parent_block_hash = payment_block_hash
++    child_bid.block_hash = child_block_hash
++    spec.process_block(state, child_block)
++
++    assert state.builders[builder_index].withdrawable_epoch == (
++        spec.get_current_epoch(state) + spec.config.MIN_BUILDER_WITHDRAWABILITY_DELAY
++    )
++    assert len(state.builder_pending_withdrawals) == 1
++    assert state.builder_pending_withdrawals[0].builder_index == builder_index
++    assert state.builder_pending_withdrawals[0].amount == payment_amount
++    assert state.builders[builder_index].balance == builder_balance
++
++    # No block (and therefore no FULL-parent processing) occurs during the
++    # complete withdrawal delay. On mainnet this is exactly 64 * 32 = 2,048
++    # process_slot transitions.
++    withdrawable_epoch = state.builders[builder_index].withdrawable_epoch
++    final_slot = spec.compute_start_slot_at_epoch(withdrawable_epoch)
++    delay_slots = final_slot - state.slot
++    assert int(delay_slots) == (
++        int(spec.config.MIN_BUILDER_WITHDRAWABILITY_DELAY) * int(spec.SLOTS_PER_EPOCH)
++    )
++    spec.process_slots(state, final_slot)
++
++    final_block = build_empty_block(spec, state)
++    final_bid = final_block.body.signed_execution_payload_bid.message
++    final_bid.parent_block_hash = child_block_hash
++    final_bid.block_hash = final_block_hash
++
++    pre_balance = state.builders[builder_index].balance
++    yield "pre", state
++    yield "block", final_block
++    spec.process_block(state, final_block)
++    yield "post", state
++
++    encoded_builder_index = spec.convert_builder_index_to_validator_index(builder_index)
++    builder_withdrawals = [
++        withdrawal
++        for withdrawal in state.payload_expected_withdrawals
++        if withdrawal.validator_index == encoded_builder_index
++    ]
++    el_credit = sum(int(withdrawal.amount) for withdrawal in builder_withdrawals)
++    cl_debit = int(pre_balance) - int(state.builders[builder_index].balance)
++
++    assert [withdrawal.amount for withdrawal in builder_withdrawals] == [
++        payment_amount,
++        builder_balance,
++    ]
++    assert el_credit == 2_250_000_000
++    assert cl_debit == 2_000_000_000
++    assert el_credit - cl_debit == payment_amount
++
++
+ @with_gloas_and_later
+ @spec_state_test
+ def test_process_parent_execution_payload__new_builder_does_not_reuse_topped_up_builder_slot(
