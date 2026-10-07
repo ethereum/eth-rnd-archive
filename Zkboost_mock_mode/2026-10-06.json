@@ -1,0 +1,194 @@
+[
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "",
+    "created_at": "2026-10-06T08:38:14.823000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "han0110",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "yeah unfortunately mock mode is not available.. Because the verify is ran in CL now and can't be skipped, so asking for mock mode in zkboost is same as asking to forge a valid proof, which is not possible if the proof system is sound.\n\nThe mock mode still exists in zkboost repo only for its own testing, in that mode it submit the same valid proof every time, so the public values will be mismatch so still invalid to CL, so I removed that from the `ethereum-package`\n\nA mitigation is to override the guest vk with some mock guest, which takes same input/output but verifies nothing, but this still takes several dozen of seconds to prove on CPU, but GPU in this case is fast enough to produce >2 proofs in 9 seconds.",
+    "created_at": "2026-10-06T08:49:18.133000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Could we add a standard for mock proofs that the CL verifier aligns with? So we can add a model on CL —zkvm-mock that instantiates a verifier that follows the mock verification standard",
+    "created_at": "2026-10-06T10:08:20.381000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "han0110",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I think skipping the public values check will be the approach with minimum changes on CL side, so zkboost submit the same valid proofs for all blocks of configured zkVMs, and CL can still verify the proof with the default vk, but the public values will be mismatch. Does that sounds reasonable?",
+    "created_at": "2026-10-06T10:13:05.755000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Why will be public values be mismatch? Can’t we set the standard for public values to be correct but proof data some constant reference string?",
+    "created_at": "2026-10-06T10:21:24.789000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "manunlp",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "It's exactly the strategy I'm implementing in Prysm right now.\nThere is a public value mismatch, but for the POC I only log it and I don't fail the whole verification for that.\n\nThat way, it allows CL dev to work on a POC without needing a GPU for proving.",
+    "created_at": "2026-10-06T10:42:57.015000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "manunlp",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "for info mock mode has been removed from the kurto ETH package. Re-adding it on my branch",
+    "created_at": "2026-10-06T10:44:00.533000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "han0110",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "right we can do \"correct public values + mock proof\", what I said is \"mock public values + correct proof\", I think both are easy to do in zkboost. In the former case we can mock the proof size as before btw so probably more flexible.",
+    "created_at": "2026-10-06T11:09:41.209000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "han0110",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "If we agree on one of the approach above, I'd also update my PR https://github.com/ethpandaops/ethereum-package/pull/1492 to bring that back.",
+    "created_at": "2026-10-06T11:11:10.919000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I think current public values + custom reference string proof data makes more sense. What are others thoughts?",
+    "created_at": "2026-10-06T11:17:03.879000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "The public input is fundamental to block <-> public input binding and I do not think this should be mocked as it has implications across different stages of the import pipeline. In the other hand proof data is an opaque byte string and has no semantic meaning to the CL. Hence my preference to mock proof data and provide valid public input",
+    "created_at": "2026-10-06T11:19:57.814000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "han0110",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Yeah this makes sense to me, so the e2e flow can be tested.\n\nShould we just concat the public values ssz bytes with the mock proof (random bytes)? Or should we have an additional ssz container for it so it’s easier to impl? (I’d prefer the latter)",
+    "created_at": "2026-10-06T11:30:08.943000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Hmm aren’t they separate fields?",
+    "created_at": "2026-10-06T11:30:49.488000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I need to double check but not sure why we would need a different container type?",
+    "created_at": "2026-10-06T11:31:56.845000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "han0110",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I think currently they are opaque bytes in the envelope https://github.com/eth-act/lighthouse/blob/optional-proofs/consensus/types/src/execution/execution_proof/envelope.rs#L16, and the ere lib verifies the proof and returns the public values for checking.",
+    "created_at": "2026-10-06T11:43:28.897000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "ok I think I understand this proposal now - are you suggesting something like `proof_data: bytes!(dummy_proof+{ssz_public_inputs})` where `dummy_proof` is the reference string and sssz_public_inputs are the proof specific inputs?",
+    "created_at": "2026-10-06T13:39:33.723000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "han0110",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "yes, just wondering how the `proof_data` should be like so CL can extract the `ssz_public_inputs` easily",
+    "created_at": "2026-10-06T13:41:27.445000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Do you mean the proof verifier?",
+    "created_at": "2026-10-06T13:47:39.483000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "han0110",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "yep, the mock verifier",
+    "created_at": "2026-10-06T13:49:05.264000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "yep makes sense to me - I think your proposal or some constant reference string followed by the ssz encoded public inputs makes sense",
+    "created_at": "2026-10-06T14:02:29.988000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "I think we should standardise around that",
+    "created_at": "2026-10-06T14:02:37.863000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "That also allows us to send invalid proofs etc by modifying the public inputs and proof data",
+    "created_at": "2026-10-06T14:03:04.676000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "han0110",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Is it possible to define an additional ssz container so the encoding is less ambiguous? for example:\n\n```rust\n#[derive(SszEncode, SszDecode)]\nstruct MockProof {\n    pub public_values: ProgressiveList<u8>,\n    pub proof: ProgressiveList<u8>,\n}\n```\n\nand I'd imagine the CL will do:\n\n```rust\nfn verify_execution_proof(\n    &self,\n    proof_type: u8,\n    proof_data: &[u8],\n) -> Result<Vec<u8>> {\n    let public_values = if self.mock_proof {\n        if let Ok(mock_proof) = MockProof::from_ssz_bytes(proof_data) {\n            // use public_values from mock proof\n            mock_proof.public_values.into_inner()\n        } else {\n            // fallback to real proof\n            self.ere_verifiers[&proof_type].verify(proof_data)?.to_vec()\n        }\n    } else {\n        // default to real proof\n        self.ere_verifiers[&proof_type].verify(proof_data)?.to_vec()\n    };\n    Ok(public_values)\n}\n```",
+    "created_at": "2026-10-06T15:44:26.965000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "taulepton_",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Yes I think we can use the MockProof type. Could you explain why you think we should have both real and mock proofs in the same verifier handled. IMO I think we should have different verifiers that implement ProofEngineT trait, one for real proofs and one for mock proofs. Or do you think there’s value in being able to verify both real and mock with the mock verifier?",
+    "created_at": "2026-10-06T16:20:10.880000+00:00",
+    "attachments": []
+  }
+]
