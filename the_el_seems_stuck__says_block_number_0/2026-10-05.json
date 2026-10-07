@@ -1,0 +1,494 @@
+[
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "",
+    "created_at": "2026-10-05T08:55:45.845000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "It's a CL sync bug, not an EL one. The buildoor's Lodestar beacon node can't range-sync, so the buildoor sits on a chain that's 20k slots stale. Its deposit transactions time out, it never registers, and its stats stay at zero.\n\nWhat the buildoor page shows (api/status, api/stats): it's running, but current_slot: 0 and is_registered: false. It has tried every 5 minutes since Oct 2 to submit its deposit, and each attempt fails with transaction confirmation timeout. That's expected, because its EL is stuck at block 5225 (0x1469).\n\nWhy it's a CL bug:\n- The EL kept up the whole time. During the genesis sync on Oct 2, Nethermind returned Valid for every payload Lodestar sent. It stops at 5225 only because Lodestar stopped sending payloads. Its own log says Not receiving ForkChoices from the consensus client.\n- Lodestar's sync died on its own. It restarted from genesis at 12:58, synced at about 9 slots/s up to head 5375 at 13:32, then slowed to 0 over about two minutes. Peers were steady at 6–11 and there were no errors at info level. Slot 5375 is the last slot of epoch 167.\n- Checkpoint sync didn't fix it. At 13:58 it was checkpoint-synced to slot 7968, which is canonical: same root as lodestar-ethrex-1 and teku-besu-1. Since then it has fetched zero blocks with 10 peers. The EL still shows syncing(0) because the CL has never sent it anything after the anchor.\n- The common factor is Lodestar. bootnode-1 runs Lodestar with ethrex and is stuck the same way, at 7648. Its ethrex restarted at 12:56 on Oct 2, it fell behind, and it never caught up. Both ELs are healthy; both stuck nodes need range sync. The other Lodestar nodes are fine because they never fell behind and just follow gossip.",
+    "created_at": "2026-10-05T08:55:46.705000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "I'm gonna test syncing locally now with kt",
+    "created_at": "2026-10-05T08:56:54.821000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "what's the state of this node, does it have any peers left?",
+    "created_at": "2026-10-05T08:56:55.147000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "this is probably not related to focil",
+    "created_at": "2026-10-05T08:57:21.713000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "This node has plenty of CL/EL peers, including synced Lodestar and Teku nodes, so peer count isn't the issue—range sync looks like the culprit.",
+    "created_at": "2026-10-05T08:58:17.818000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "teku syncing fine, lodestar gets stuck .",
+    "created_at": "2026-10-05T09:08:14.694000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "",
+    "created_at": "2026-10-05T09:08:27.833000+00:00",
+    "attachments": [
+      {
+        "type": "image/png",
+        "origin_name": "Screenshot_2026-10-05_at_11.08.24.png",
+        "content": "d5909a598995b28df26fa80672ef9d2e9a8786501a18c4857be3a1c8f9dc8271"
+      }
+    ]
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "did your claude check debug logs?",
+    "created_at": "2026-10-05T09:08:40.562000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "1. Lodestar's range sync deadlocks on missing data columns (the requesting side).\nAll four local Lodestar nodes are stuck on the same batch: slots 28096–28127, held up only by slot 28122's data columns.\n- cl-1 (besu): needs columns 39 and 70.\n- cl-2 (ethrex): needs 31, 69, 70 and 107.\n- cl-3 (nethermind): needs 3 and 85.\n- cl-4 (reth): needs only column 3.\n\nEvery node does the same thing:\n1. It downloads all 32 blocks and envelopes fine. Only some columns come back, and peers answer DOWNLOAD_BY_RANGE_ERROR_MISSING_COLUMNS slot=28122.\n2. It logs Partially downloaded batch by range. Attempting another round of downloads … status=AwaitingDownload.\n3. Then nothing. The last sync activity on every node was at about 09:14:20, and the batch sits at AwaitingDownload with downloadAttempts=0.\n\nSo once each peer that claims to custody those columns has failed once, Lodestar doesn't retry, doesn't penalize the peer, and doesn't fail the batch. Sync stays stuck while still reporting 11 peers. cl-2 also logged Block error slot=28096 … No block for root 0x89b8… 137 times. That's a second problem at the anchor block, and I haven't dug into it.\n\n2. Remote Lodestar nodes advertise columns they don't store (the serving side).\nThe peers returning MISSING_COLUMNS are all five remote Lodestar nodes. They advertise custodyGroupCount=100, but lodestar-besu-1 returns dataColumnSidecars not found in db for slot=28122 … blobs=9, meaning it stores no columns at all for a canonical slot with 9 blobs. The Teku nodes do have that slot. teku-reth-1 has its 69 columns, and the local Teku nodes imported it with their 4 custody columns (cl-7 has column 3, the one cl-4 is waiting for). I stopped the wider scan of how many slots have these gaps, since you wanted me on the enclave.",
+    "created_at": "2026-10-05T09:24:38.103000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "my claude is saying it's a focil bug",
+    "created_at": "2026-10-05T09:25:14.964000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "that;s good 🙂",
+    "created_at": "2026-10-05T09:25:37.650000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "I found that lodestar-nethermind-1 proposed slot 28122, built all 128 columns, but published to 0 peers, and today it even returns \"not found in db\" for that slot itself. I'll check how common this warning is and whether Teku proposers show the same issue.",
+    "created_at": "2026-10-05T09:28:32.483000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "If nflaig's Claude pointed at specific IL code, I'd like to see that evidence. And whatever is causing the holes, the range-sync deadlock is a separate bug and worth fixing on its own.",
+    "created_at": "2026-10-05T09:29:19.684000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "😂",
+    "created_at": "2026-10-05T09:29:26.175000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "my claude is demanding evidence",
+    "created_at": "2026-10-05T09:29:32.449000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "> built all 128 columns, but published to 0 peers\nthat happens sometimes because the peers see the block and construct blob via getblobsv2, not sure if it's same thing here but not the first time i see this",
+    "created_at": "2026-10-05T09:29:40.288000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "can't we just let the claudes talk directly?",
+    "created_at": "2026-10-05T09:30:31.426000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "yeah we should cut out all these meat proxy bs",
+    "created_at": "2026-10-05T09:30:43.319000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "https://github.com/ChainSafe/lodestar/pull/10265 my claudes pr",
+    "created_at": "2026-10-05T09:31:33.619000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "The PR is right about a real bug, and I missed it earlier",
+    "created_at": "2026-10-05T09:33:15.931000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "cc <@1035747431461167125> he is working on focil right now mostly",
+    "created_at": "2026-10-05T09:35:13.241000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "we need our focil code merged to trunk, I can also cook up a censoring builder",
+    "created_at": "2026-10-05T09:35:57.442000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "https://github.com/ethpandaops/eth-client-docker-image-builder/actions/runs/37291035132",
+    "created_at": "2026-10-05T09:36:00.238000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "do we want this in buildoor as an option?",
+    "created_at": "2026-10-05T09:36:25.205000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "bharath promsed me this for months",
+    "created_at": "2026-10-05T09:36:43.117000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "now he is gone",
+    "created_at": "2026-10-05T09:36:46.853000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "I am just doing it on `lodestar builder` but blocked on few things first",
+    "created_at": "2026-10-05T09:37:01.060000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "so  you might be able to cook it up in buildoor faster",
+    "created_at": "2026-10-05T09:37:10.197000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "wouldn't hold that against him",
+    "created_at": "2026-10-05T09:38:21.809000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "nah not intend to do that was joke",
+    "created_at": "2026-10-05T09:39:30.046000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "there was more important work like builder api stuff",
+    "created_at": "2026-10-05T09:39:36.918000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "regarding the censoring, I guess there is smart way to do this and simple way, simple would be to just build an empty block I suppose",
+    "created_at": "2026-10-05T09:41:03.266000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "if we wanna be smarter, could be explicitly looking at ILs and omitting 1-2 txs from that list",
+    "created_at": "2026-10-05T09:41:21.688000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "we would need a malicous el for this no?",
+    "created_at": "2026-10-05T09:49:56.918000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "or how would you fake the bals ?",
+    "created_at": "2026-10-05T09:50:02.901000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "or maybe testing build block v1 ?",
+    "created_at": "2026-10-05T09:51:39.677000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nc1234",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "merged. rebuilding image. should get the two nodes unstuck. But the range sync waiting for peer connect event thing still needs to be fixed on our unstable branch",
+    "created_at": "2026-10-05T09:52:35.085000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nc1234",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "How did you run this?",
+    "created_at": "2026-10-05T09:53:42.164000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "geth for example has a testing api to produce payloads, I have a branch of lodestar builder that uses it, so you can control tx ordering etc.",
+    "created_at": "2026-10-05T09:54:22.441000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "```yaml\nparticipants:\n  - cl_type: lodestar\n    cl_image: ethpandaops/lodestar:nflaig-focil-il-dependent-root-anchor\n    el_type: besu\n    el_image: ethpandaops/besu:focil-devnet-0\n  - cl_type: lodestar\n    cl_image: ethpandaops/lodestar:nflaig-focil-il-dependent-root-anchor\n    el_type: ethrex\n    el_image: ethpandaops/ethrex:focil-devnet-0\n  - cl_type: lodestar\n    cl_image: ethpandaops/lodestar:nflaig-focil-il-dependent-root-anchor\n    el_type: nethermind\n    el_image: ethpandaops/nethermind:focil-devnet-0\n  - cl_type: lodestar\n    cl_image: ethpandaops/lodestar:nflaig-focil-il-dependent-root-anchor\n    el_type: reth\n    el_image: ethpandaops/reth:focil-devnet-0\n  - cl_type: teku\n    cl_image: ethpandaops/teku:focil-devnet-0\n    el_type: besu\n    el_image: ethpandaops/besu:focil-devnet-0\n  - cl_type: teku\n    cl_image: ethpandaops/teku:focil-devnet-0\n    el_type: ethrex\n    el_image: ethpandaops/ethrex:focil-devnet-0\n  - cl_type: teku\n    cl_image: ethpandaops/teku:focil-devnet-0\n    el_type: reth\n    el_image: ethpandaops/reth:focil-devnet-0\n\nnetwork_params:\n  network: focil-devnet-0\n\ncheckpoint_sync_enabled: true\n\nadditional_services:\n  - dora\n\npersistent: true\n\n```",
+    "created_at": "2026-10-05T09:55:12.460000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "all el's have testing ns",
+    "created_at": "2026-10-05T09:55:23.550000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "",
+    "created_at": "2026-10-05T10:56:04.512000+00:00",
+    "attachments": [
+      {
+        "type": "image/png",
+        "origin_name": "image.png",
+        "content": "9aadf231632c028a0734d30933afedcb0b1b0fb52314b5049e41fe1a7d688a33"
+      }
+    ]
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "> ▎ 0 peers on columns is the gossipsub duplicate-dedup false alarm (peers rebuilt all 128 via getBlobsV2 before our publish, envelope went to 5 peers, PTC voted present+available \n>   ▎ unanimously). 28122 was orphaned on FOCIL grounds: our own node logged Payload did not satisfy inclusion list constraints for its self-built payload, then proposing 28123 logged Refusing\n>   ▎ to extend payload, inclusion list not satisfied and built on EMPTY; at finality we Deleted non canonical data columns … slotRange=[28122], hence not found in db. Today 48 self-built \n>   ▎ payloads were flagged by all 5 lodestar nodes (38 lodestar-, 10 teku-proposed), and all 48 were orphaned, incl. 25 where teku proposed next. Suspect lodestar takes the IL snapshot for \n>   ▎ the payload at exactly the 8s IL deadline and never refreshes it, investigating.\n>   ▎ Evidence for the range-sync IL bug: No block for root 0x5683… at ForkChoice.getDependentRoot ← getInclusionListDependentRoot ← importExecutionPayload, where 0x5683… is the parent of the \n>   ▎ checkpoint anchor 7968; details in #10265.",
+    "created_at": "2026-10-05T10:56:18.135000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "teku had no issues syncing 28122",
+    "created_at": "2026-10-05T10:56:31.252000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": ">  28122 was orphaned on FOCIL grounds",
+    "created_at": "2026-10-05T10:56:42.510000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "ehm teku wrong?",
+    "created_at": "2026-10-05T10:56:46.528000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": ">  0 peers on columns is the gossipsub duplicate-dedup false alarm (peers rebuilt all 128 via getBlobsV2 before our publish, envelope went to 5 peers, PTC voted present+available \nyeah exactly it's becasue peers recovered it faster than we can publish it becasue beaocn block is sent first",
+    "created_at": "2026-10-05T10:57:36.306000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "<@412614104222531604> my claude is saying teku publishes ils late",
+    "created_at": "2026-10-05T11:12:30.477000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "but I really don't have time for this stuff now, need to sort out gloas first",
+    "created_at": "2026-10-05T11:12:42.107000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "I found another sync bug potentially",
+    "created_at": "2026-10-05T11:12:57.545000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "also I am debugging stuff that might be fixed, our focil branch needs a rebase",
+    "created_at": "2026-10-05T11:13:14.511000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "sounds like an NC problem",
+    "created_at": "2026-10-05T11:13:16.885000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "<:whip:1554215206815666327>",
+    "created_at": "2026-10-05T11:13:39.263000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "my pr is merged to our focil branch",
+    "created_at": "2026-10-05T11:14:54.675000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "and who is calling `blob_sidecars` maybe dora? or some of your tooling",
+    "created_at": "2026-10-05T11:14:55.210000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "I updated our `focil-devnet-0` against unstable, so by tomorrow there should be a new image",
+    "created_at": "2026-10-05T22:23:41.664000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "https://github.com/ChainSafe/lodestar/pull/10266 was a secondary fix which will be part of that",
+    "created_at": "2026-10-05T22:24:00.711000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "I don't think there is anything to fix at least as of now, both prs are merged, might be other stuff, who knows",
+    "created_at": "2026-10-05T22:24:28.662000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "inclusion-lists",
+    "content": "I've build a new `focil-devnet-0` image now which has both prs, I don't think NC will be here tomorrow since he is traveling, but we should be good to go for relaunch",
+    "created_at": "2026-10-05T22:55:41.232000+00:00",
+    "attachments": []
+  }
+]
