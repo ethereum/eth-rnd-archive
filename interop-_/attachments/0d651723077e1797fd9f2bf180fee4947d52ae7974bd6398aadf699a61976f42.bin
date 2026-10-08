@@ -1,0 +1,44 @@
+# The 4 MiB block access list cap rejects valid blocks from about 268M gas
+
+**Severity:** latent on mainnet, with a thin margin. Mainnet at Glamsterdam is planned at 200M gas, where the largest valid access list is about 3.13 MB, roughly 25% under the cap. **Deadline:** a valid block crosses the cap at a gas limit of about 268 million, so the cap has to change before any gas-limit increase past that.
+
+## What happens
+
+Erigon caps a block access list's RLP payload at 4 MiB when it decodes one (`maxBlockAccessListBytes = 4 << 20` in `execution/types/block_access_list.go`, checked in `decodeBlockAccessList` and in the per-account, slot-list and read-list decoders). EIP-7928 has no byte limit; it bounds the list by items, at `block_gas_limit // 2000`. So once a valid block's access list passes 4 MiB, erigon rejects a block every other client accepts.
+
+Two valid Amsterdam blocks, one just under the cap and one just over, run through erigon, geth, besu, nethermind, ethrex and reth on both the block-import and the Engine API paths:
+
+| block | list payload | gas limit | erigon | geth, besu, nethermind, ethrex, reth |
+| --- | --- | --- | --- | --- |
+| under | 4,194,296 bytes (8 under 4 MiB) | 268,222,385 | accepted | accepted |
+| over | 4,194,329 bytes (25 over 4 MiB) | 268,224,490 | **rejected** | accepted |
+
+Erigon's errors on `over`:
+
+- block import: `block #[2 0 0 0] insertion into chain failed: updateForkChoice: [4/6 Execution] exec blocks error: block access list payload exceeds maximum size (4194329 bytes)`
+- `engine_newPayload`: `payload status INVALID: invalid block access list: decode failed: block access list payload exceeds maximum size (4194329 bytes)`
+
+## Seen on a devnet
+
+On glamsterdam-msf-1 (a mainnet shadowfork), erigon v3.7.1 rejected slot 1428's payload, block 24,404,132, with the same error: its access list is 5,142,951 bytes of RLP payload, 97% of it deployed contract code. The affected erigon nodes stalled at that block while the network kept finalizing. This devnet runs a gas limit of about 253 billion, and a code-heavy list costs about 1,535 gas per byte (EIP-8037's state cost per byte of code), so it does not change the mainnet picture above: cold reads at about 268M gas remain the cheapest way to reach the cap. What it shows is that the cap is live in a release, on a real network.
+
+## Why about 268M gas
+
+Under Amsterdam's gas rules the densest access list a block can build is cold reads of distinct 32-byte storage keys: each costs 2,105 gas (cold `SLOAD` 2,100, `PUSH32`, `POP`) and adds 33 bytes, about 2,110 gas with call and transaction overhead. Cold account touches give 27 bytes for 3,005 gas, a cold storage write costs 12,100 gas for about 75 bytes, and an access-list key plus a warm read costs the same as a cold read, so nothing is denser. System calls add only about 2 KB even with every request queue draining its maximum, and EIP-7928's item cap does not bind first (one item per about 2,110 gas against a cap of one per 2,000).
+
+| block gas limit | largest valid access list |
+| --- | --- |
+| 200M | 3.13 MB (2.98 MiB) |
+| about 268M | 4 MiB |
+| 300M | 4.69 MB (4.47 MiB) |
+| 500M | 7.82 MB (7.46 MiB) |
+
+The attached blocks are that construction: in each fixture the first block fills the EIP-7002, EIP-7251 and both EIP-8282 request queues, and the second is 68 transactions cold-reading distinct keys, with the gas limit equal to the second block's gas used.
+
+## Suggested fix
+
+Derive the cap from the block's gas limit instead of fixing it at 4 MiB. Every byte of a valid list costs at least about 64 gas, so a bound like `gas_limit / 60` plus a small fixed allowance for system calls and withdrawals covers every valid block. EIP-7928's item cap already bounds the list by gas. Or remove the byte cap and rely on the item cap and the gas limit.
+
+The other fixed caps in the same file have the same shape and bind later: 2^18 reads in one account near 550M gas, if a block puts all its reads in one account, and 2^19 accounts near 1.6B gas.
+
+## Reproduction
