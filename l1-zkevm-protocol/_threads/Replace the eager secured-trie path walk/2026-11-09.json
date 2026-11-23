@@ -1,0 +1,106 @@
+[
+  {
+    "author": "somnergy",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Much of the prose here is implementation-aligned when we approach this discussion. The relationship between the pre-state, the witness bytes, the array of MPT nodes and the order and way of processing are inter-linked. EELS is one way, but it cannot afford to encompass all of these at once. In fact, for performance reasons, more and more tight coupling and complex interlinking happened for these in Zilkworm over time.\n\nIt's hard to read the code, for me, a human. But I went through it and I would have to add my two.5 cents. I will keep these abstract.\n\nA guest (or spec) that says \"MUST accept bad data\" if that data was redundant is not acceptable to me. Meaning, a fixture that passes only if a guest accepts malformed nodes (or any data) that isn't strictly \"touched\" during block execution is not a good practice.\n\nConversely, a fixture that says \"MUST reject good part of the data\" if any unnecessary bits of data is present is also too harsh.\n\nA fixture that derives from EELS's write order is not healthy (not that this PR introduces one). EELS collapses on the deletes, for example, and decodes the sibling even when that's an intermediate state. Zilkworm's GridMPT doesn't fold on intermediate states as the \"minimal\" data doesn't warrant presence additional openings of hashes like that. Even if EELS needed some data that may or may not be well-formed (eager or lazy) that isn't theoretically needed, there is a semantic clash which I am not comfortable with (in this PR or otherwise).",
+    "created_at": "2026-11-09T12:31:40.187000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "somnergy",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Also my AI doesn't \"understand\" anything really, it remaps language avenues, correlates that to a multi-dimensional graph thing and reduces it all back to give me something that almost makes sense. But I thank you for caring about my AI in that statement. *(I am just joking)*\n\nMy AI both strongly agrees and disagrees with this!",
+    "created_at": "2026-11-09T12:32:16.851000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "<@976542403269910539> thanks for the feedback, I think this makes sense. TL;DR: relax the tests so they don't force guest programs to accept a block when the execution witness has a malformed node the block doesn't need. Feels reasonable to me, mainly because: i) a malformed node reachable from the parent state root shouldn't exist, since the parent block was valid, ii) if one does exist, we have a bigger problem.\n\nI'm fine if some guest program decides to do eager checks if it thinks it's a good idea -- at least we'll know from someone that keccak is doomed or something went quite wrong \"for free\".\n\nI'll adjust the PR to only force guests to reject the block if a node it actually needs is malformed, which sounds like the \"non-negotiable\" baseline (even though it's already a weird situation). The spec itself stays lazy, but I'll add a  docstring will say guests don't have to match it on nodes the block doesn't need.\n\nOn the write-order point... storage tries already apply insertions and updates before deletions, so a deletion only collapses a branch that stays collapsed in the post-state. The account trie can only see a deletion in a narrow case (i.e. conterfactual CREATE2 funding and then SELFDESTROYing it)... I think i need to look a bit more into this case, but prob will leave it to a following PR.",
+    "created_at": "2026-11-09T13:31:49.132000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "as psa: PR merged. i've to catchup on many things this week; but next steps reg this front is me cutting a release soon so we have a release with this (and #3913).. so everybody can adjust in clients.",
+    "created_at": "2026-11-09T15:03:30.408000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "omerfirmak",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "> TL;DR: relax the tests so they don't force guest programs to accept a block when the execution witness has a malformed node the block doesn't need\n\noh, i was assuming this already.",
+    "created_at": "2026-11-09T15:06:06.921000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Just to be clearer on what this last change was:\n- Before this last change: if an unread node was malformed, the tests forced the guest program to accept the block. (kind of forcing the lazy check style of the witness)\n- After this last change: for that case, the guest program is free to accept or reject the block.\n\nThing we still keep: if you read a node, it must be well-formed.",
+    "created_at": "2026-11-09T15:09:43.623000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "omerfirmak",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "> if an unread node was malformed, the guest program is free to accept or reject the block\n\nwould be weird if guest programs disagreed in production due to something like this",
+    "created_at": "2026-11-09T15:16:32.926000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Prob means that keccak is completely broken 😅",
+    "created_at": "2026-11-09T15:20:56.093000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "plus the prover provided an execution witness to show that was the case. so yeah, very werid",
+    "created_at": "2026-11-09T15:21:33.999000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "omerfirmak",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "i meant, if witness has an malformed-but-not-reached node.  the behaviour is undefined in that case, right?",
+    "created_at": "2026-11-09T15:48:17.904000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "From the specs side, no. From the testing side, yes.\nSo a fair answer is probably that is undefined, yes.",
+    "created_at": "2026-11-09T16:51:19.553000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "somnergy",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "malformed-but-not-reached shouldn't be passed in by an honest prover. There would be different versions of guest programs, i suppose. Unlike regular execution, all witness should be treated as \"very possibly malicious\" by the guest program. And tbf, it is a malicious (even if honestly malformed) witness. If a guest program, for some reason, rejects it (even with lazy access) it should be allowed to. The coverage of honest witnesses should not depend on spec dictating acceptance of malicious witnesses. \n\nThat said, a guest program MUST have its own test suite that adds coverage to its specific behaviour. Like testing that additional unused nodes added to the tree doesn't cause massive cycle difference, if it is lazy caching. Or that a truly unused but not malformed node is processed correctly before execution begins, for eager caching. Point is, implementation-specific cases should be implementation's responsibility.\n\nGuest behaviour should be complete and sound, and only that.",
+    "created_at": "2026-11-09T19:44:42.096000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "somnergy",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Yes, account created before being accessed by sending funds and the selfdestructed, or outright zeroed out for some reason is a possible case. I know that it has happened in the actual mainnet at leas 3-4 times in the last 4 months or so, because I stumbled upon them. \nAccounts do get deleted from the Trie and that causes collapses too.",
+    "created_at": "2026-11-09T19:48:47.770000+00:00",
+    "attachments": []
+  }
+]

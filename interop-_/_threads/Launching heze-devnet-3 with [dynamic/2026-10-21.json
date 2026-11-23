@@ -1,0 +1,770 @@
+[
+  {
+    "author": "manunlp",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "",
+    "created_at": "2026-10-21T11:24:32.500000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "manunlp",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Prysm has some orphaned payloads. Will take a look",
+    "created_at": "2026-10-21T11:24:33.464000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "1. Orphaned payloads: prysm builds before the inclusion lists are in. This is the cause.\n- All 30 orphaned payloads since the fork were proposed by prysm, except one before the fork at slot 32. They are exactly the 30 block hashes that every ethrex node rejects with Payload does not satisfy its inclusion list.\n- The other clients don't hit this: lighthouse, lodestar and teku have no orphans since the fork.\n- Slot 396 (prysm-ethrex-2) as an example. Prysm asked its EL to start building at 11:25:37 UTC, the start of slot 395. The inclusion-list field in that request held one transaction. Prysm never sent another build request after the inclusion-list deadline, and fetched the payload at 11:25:46.\n  - Inclusion lists for slot 396 keep arriving during slot 395 (prysm logs Received inclusion list ... slot=396). Transaction 0x216c4e2e… from those lists never made it into the payload.\n  - ethrex on the node itself immediately flagged the payload as not satisfying its inclusion list. The other nodes treated it as missing and built the next block on top of the slot's block without its payload.\n- Teku sends about twice as many forkchoiceUpdatedV5 calls (458 vs 224 in 15 minutes), which looks like it re-sends the build request with the final inclusion lists. Prysm doesn't.\n- This hits both prysm nodes, so it's a prysm FOCIL timing bug, not config. A restart won't fix it.",
+    "created_at": "2026-10-21T11:30:57.986000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "fcuv5 supposed to be fully implemented <@531934490826768418> ?",
+    "created_at": "2026-10-21T11:32:19.061000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Nothing re-sends the FCU with the final inclusion-list set at or after InclusionListDue for the next slot's proposer.",
+    "created_at": "2026-10-21T11:39:20.149000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I think this is the main problem. Prysm seem to be able to follow the chain fine, but not prpoose",
+    "created_at": "2026-10-21T11:39:33.779000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Code pointers at `b56dda97`:\n- beacon-chain/blockchain/execution_engine.go:389: the IL txs (proposalInclusionListTransactions) are only read when payload attributes are computed for an FCU, i.e. on head update at the start of slot N−1, or in lateBlockTasks at AttestationDue (25%, 2.25s, see process_block.go:851). Both are before the IL deadline.\n- Nothing re-sends the FCU with the final inclusion-list set at or after InclusionListDue for the next slot's proposer.\n- beacon-chain/rpc/prysm/v1alpha1/validator/proposer_execution_payload.go:76-95: getLocalPayloadFromEngine reuses the cached payload ID and goes straight to GetPayload, without checking whether new inclusion lists arrived since that ID was created.\n- Accepting lists works: inclusion_list.go:143 judges timeliness against InclusionListDue correctly.\n\nPossible fix: when this node proposes the next slot, send a fresh FCU with the current inclusion lists at the IL deadline (or just before getPayload), or skip the cached payload ID when the inclusion-list set has changed. Teku makes about twice as many FCUs per slot as prysm, which suggests it already does the refresh.",
+    "created_at": "2026-10-21T11:41:15.436000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "junsong_eth",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Looking into this",
+    "created_at": "2026-10-21T12:20:28.569000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "junsong_eth",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "new image is building",
+    "created_at": "2026-10-21T13:39:49.739000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "cc <@755590043632140352> <@586161934425128960> <@543900561460822016> did we agree to including quick slots in heze-devnet-3? Without merging this into heze specs, this isn't practical. Clients are using a config which doesn't even exist yet; `SLOT_DURATION_MS_HEZE`. Maybe quick slots needs it's own eip8198-devnet-0 based on-top of the latest heze spec?",
+    "created_at": "2026-10-21T13:42:59.221000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I don't think it was explicitly stated, but I support including this in devnet-3 (and even 2 for that matter)",
+    "created_at": "2026-10-21T13:44:31.279000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I think consensus was to add it to the next devnet as soon as possible",
+    "created_at": "2026-10-21T13:44:41.777000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "barnabas-devnet-1 rather?",
+    "created_at": "2026-10-21T13:44:46.242000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "junsong_eth",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@412614104222531604> https://github.com/ethpandaops/eth-client-docker-image-builder/actions/runs/39609488224 action is failing, seems like `Scheduled` workflows are also failing for Prysm. Could you take a look?\n\nTip of the [PR](https://github.com/OffchainLabs/prysm/pull/17680)/branch: `3cc4d4e`",
+    "created_at": "2026-10-21T13:44:48.218000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I just don't want to merge it on the main branch unless it's SFId",
+    "created_at": "2026-10-21T13:44:58.132000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Yeah that's fine. But it shouldn't be part of the *heze* devnets then.",
+    "created_at": "2026-10-21T13:46:17.974000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "We really not gonna be doing per EIP-devnets lmfao",
+    "created_at": "2026-10-21T13:47:24.232000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "checking",
+    "created_at": "2026-10-21T13:47:51.104000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Why not?",
+    "created_at": "2026-10-21T13:48:52.682000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Clients are implementing stuff which doesn't really exist.",
+    "created_at": "2026-10-21T13:49:06.575000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "this was the request tho?",
+    "created_at": "2026-10-21T13:49:17.019000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "It's going to get complicated when two CFI'd EIPs are included in a devnet.",
+    "created_at": "2026-10-21T13:49:18.106000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I don't really understand why this is the case, I don't see why there must be a 1-1 correspondence betwee fork-xxx-devnets and fork-xxx releases",
+    "created_at": "2026-10-21T13:49:18.645000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "have the pr open and lets impl before its merged",
+    "created_at": "2026-10-21T13:49:23.888000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I think you can keep the devnet branches separated in the spec and just tag those, that seems optimal for everyone",
+    "created_at": "2026-10-21T13:49:50.034000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Eg, `SLOT_DURATION_MS_HEZE`... This doesn't exist. In the feature, it's `SLOT_DURATION_MS_EIP8198`. This is just a basic example. I'm sure it could get more complicated.",
+    "created_at": "2026-10-21T13:50:01.022000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "you can call `SLOT_DURATION_MS_HEZE` in the feature branch",
+    "created_at": "2026-10-21T13:50:25.999000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "there's no need for the feature not to be called HEZE",
+    "created_at": "2026-10-21T13:50:39.246000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Hmm sure. But what if two EIPs interact in some way?",
+    "created_at": "2026-10-21T13:51:55.277000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "all clients implemented SLOT_DURATION_MS_HEZE",
+    "created_at": "2026-10-21T13:51:59.035000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "this is not at all practical btw I completely agree",
+    "created_at": "2026-10-21T13:52:10.372000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "but I really dont' want us not to test just because of some politics",
+    "created_at": "2026-10-21T13:52:19.739000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "esp when clients are ready to test",
+    "created_at": "2026-10-21T13:52:25.376000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "yeah that's the whole point why I don't want them on the main branch, cause that interaction is what breaks tests for production code. I think the rebase of the devnet branch has to deal with this and the tag is to that rebase",
+    "created_at": "2026-10-21T13:53:30.175000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@412614104222531604> this is not about politics, this is about what is in the specs or not. I don't really care what ACD decides to ship or not, I want to test this as early as possible just like you",
+    "created_at": "2026-10-21T13:54:22.793000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "we are bumping go version and it should work now: https://github.com/ethpandaops/eth-client-docker-image-builder/actions/runs/39612157948",
+    "created_at": "2026-10-21T13:57:35.996000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "junsong_eth",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@412614104222531604> looks good",
+    "created_at": "2026-10-21T14:07:10.656000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "parithosh",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "how do you propose we do this though? if we wanna add like 4-5 EIPs into one devnet because they arent big, then we target 4-5 different spec branches? and activate each EIP individually?",
+    "created_at": "2026-10-21T14:07:28.458000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "parithosh",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "(asking potuz i guess)",
+    "created_at": "2026-10-21T14:07:39.694000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@543071464212004864> looks good indeed",
+    "created_at": "2026-10-21T14:11:50.966000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "we good to sfi now? 😂 <@755590043632140352>",
+    "created_at": "2026-10-21T14:11:57.308000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I think <@755590043632140352> is suggesting they're activated together. But merging these together into `upgrade-devnet-n` is going to be complicated, especially if there are conflicts.",
+    "created_at": "2026-10-21T14:13:04.856000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "No I think you want to target a single branch and tag it's tip",
+    "created_at": "2026-10-21T14:13:08.801000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "And you wouldn't be able to run reference tests (spectests) on these devnet branches.",
+    "created_at": "2026-10-21T14:14:03.106000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "It should be equally complicated as merging them on Heze given that the conflicts should be exactly the same. In particular, every devnet branch MUST be a linear forward from Heze",
+    "created_at": "2026-10-21T14:14:06.588000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "You should be able to run tests on these branches, why not?",
+    "created_at": "2026-10-21T14:14:45.577000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I don't think it's equally complicated. It would be a one-time cost, as opposed to continuously dealing with conflicts are CFI'd EIPs are improved.",
+    "created_at": "2026-10-21T14:15:12.661000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "How would we do this? There wouldn't be a combined spec...",
+    "created_at": "2026-10-21T14:15:29.075000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Err you mean like put the combined spec in someone's fork?",
+    "created_at": "2026-10-21T14:15:58.729000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I don't get this what is the difference between the Heze branch and the devnet branch?",
+    "created_at": "2026-10-21T14:16:09.172000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I don't want Heze diverging from the devnet, it should be a strict subset",
+    "created_at": "2026-10-21T14:16:59.549000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I'm confused. What are you proposing exactly? For example, say 8015 and 8365 were not merged into heze. How would you generate reference tests with both of those?",
+    "created_at": "2026-10-21T14:17:22.915000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "so basically you would want to see a heze-devnet-3 branch that has all the 8015+8365+8198?",
+    "created_at": "2026-10-21T14:17:44.419000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "and then we would have a cl spec release of this branch",
+    "created_at": "2026-10-21T14:17:55.962000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "and clients would be targeting that branch as for their tests",
+    "created_at": "2026-10-21T14:18:04.953000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "and master would get focil updates only?",
+    "created_at": "2026-10-21T14:18:22.247000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Okay I see. But that's not the standard way of doing this for us.",
+    "created_at": "2026-10-21T14:18:37.232000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Plus anything that is SFId",
+    "created_at": "2026-10-21T14:18:41.308000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "yeah this is swapping the process upside down imo",
+    "created_at": "2026-10-21T14:19:03.679000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "And it will also get fairly complicated to deal with. Maintenance wise.",
+    "created_at": "2026-10-21T14:19:08.441000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Like when a change is made to Heze in the master branch, it will require someone to backport that change to every devnet branch. Sure it might be easy, but when there's some conflict it might not be.",
+    "created_at": "2026-10-21T14:19:52.475000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "parithosh",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "why is it you want to change to this approach of devnet branches potuz?",
+    "created_at": "2026-10-21T14:20:29.706000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "parithosh",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "what didnt work in the way we did it till now?",
+    "created_at": "2026-10-21T14:20:36.485000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "It is the exact same conflict if you had included those EIPs in Heze to start with",
+    "created_at": "2026-10-21T14:20:38.100000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Because the main branch is used by production code to pass tests, and I want production code to be ready early. I can merge focil to our develop branch if it's SFId but I don't want to merge things to our develop branch that aren't SFId",
+    "created_at": "2026-10-21T14:21:51.233000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "this feels like a personal preference tho?",
+    "created_at": "2026-10-21T14:22:29.317000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "We have EIPs that clients must implement and are expected to implement. There are others that clients are not required to implement and I don't want the latter to belong in the same branch of the ones we must pass tests for",
+    "created_at": "2026-10-21T14:22:50.223000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "No it's not",
+    "created_at": "2026-10-21T14:22:59.412000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "It's a matter of transparency",
+    "created_at": "2026-10-21T14:23:18.493000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Why wasn't this a problem for you during Glamsterdam?",
+    "created_at": "2026-10-21T14:23:58.379000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "or all the other previous forks",
+    "created_at": "2026-10-21T14:24:18.032000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Seriously because we didn't have pressure to merge into trunk early. We kept a glamsterdam branch up to the very last minute. This is no longer viable",
+    "created_at": "2026-10-21T14:26:42.947000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "who is pressuring you now to merge into trunk early?",
+    "created_at": "2026-10-21T14:27:05.434000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "You gotta be kidding me right?",
+    "created_at": "2026-10-21T14:30:49.478000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Let me put this plain and simple: it makes no sense to require from everyone that writes code and PRs to the spec to make them compatible with code that may never be part of the fork. I don't care if this was practice before or not",
+    "created_at": "2026-10-21T14:32:22.179000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I sort of agree with you about this, but let me play devils advocate. Clients are going to implement this anyway, no? If a CFI'd feature is DFI'd, is it really _that_ difficult to remove them? Work on Hegota is still a work-in-progress & it sounds like you're treating this code as ready for production.",
+    "created_at": "2026-10-21T14:35:38.738000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "No, clients don't need to implement this anyway, this is the whole point of CFI vs SFI",
+    "created_at": "2026-10-21T14:36:38.629000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Whenever clients are expected to implement something then yes merge them. But afaik clients are only expected to implement SFId EIPs",
+    "created_at": "2026-10-21T14:37:11.553000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "But clients should implement these so that they can be SFI'd. We cannot SFI something without a majority of clients implementing it.",
+    "created_at": "2026-10-21T14:37:55.230000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "parithosh",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "^ this, you cannot SFI something until almost all cilents implemented and we tested it",
+    "created_at": "2026-10-21T14:38:09.547000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "parithosh",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "that could sometimes take months and iteration of the EIPs",
+    "created_at": "2026-10-21T14:38:22.528000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "parithosh",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "e.g 8037 took quite a lot of iteration and each time it looked \"done\"",
+    "created_at": "2026-10-21T14:38:34.174000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "This still doesn't mean that I am expected to implement anything: we must have a mechanism to test CFId EIPs that aren't SFId. Forcing all clients and code writers to implement and keep the conflicts to these EIPs is not the mechanism",
+    "created_at": "2026-10-21T14:39:18.180000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "having a separate branch for each CFI EIP is also not a mechanism",
+    "created_at": "2026-10-21T14:39:45.469000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I don't know what the best mechanism that is least disruptive is. But forcing absolutely everyone to deal with code that isn't necessary is definitely not",
+    "created_at": "2026-10-21T14:40:40.365000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "CFI = should be implemented so I don't think its a that disruptive to ask people to implement shit that has been CFI-ed.",
+    "created_at": "2026-10-21T14:41:25.750000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "This is just false",
+    "created_at": "2026-10-21T14:41:35.456000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "`Considered for Inclusion signals that client developers intend to attempt to include the EIP in devnets.`",
+    "created_at": "2026-10-21T14:42:40.879000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "how are you attempt to include it in a devnet if its not implemented?",
+    "created_at": "2026-10-21T14:42:50.031000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "parithosh",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Woudnt prysm just keep the CFI-ed EIPs in their `hegota-devnet-x` branch until its SFI-ed and then move it to trunk? so yes there's an implementation, but its in a long lived branch meant for devnets",
+    "created_at": "2026-10-21T14:42:51.636000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "The criteria for moving to SFI:\n \"It has been included in a devnet that has demonstrated stability (e.g., high participation, no critical bugs for ≥1 week).\"",
+    "created_at": "2026-10-21T14:43:32.336000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I'm honestly happy to change the CFI requirement to be \"MUST\" implement, if you can sleep better that way lol",
+    "created_at": "2026-10-21T14:44:25.095000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "but if we do must, then we assume that all clients will be onboarded for all devnets",
+    "created_at": "2026-10-21T14:44:38.215000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "which is not needed",
+    "created_at": "2026-10-21T14:44:40.313000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "we are more than happy to test specific devnets with just 2-3 clients most of the time",
+    "created_at": "2026-10-21T14:44:52.027000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "we even made an EIP for this: https://eips.ethereum.org/EIPS/eip-7723",
+    "created_at": "2026-10-21T14:47:18.451000+00:00",
+    "attachments": []
+  }
+]

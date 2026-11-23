@@ -1,0 +1,476 @@
+[
+  {
+    "author": "kalo9480",
+    "category": "Testing",
+    "parent": "",
+    "content": "Hey guys! I've been looking into different CLs' implementation of direct calls to builders and found some interesting differences for the `X-Timeout-Ms` header.\n```\n┌────────────┬──────────────┬──────────────┐\n│   Client   │ X-Timeout-Ms │ Configurable │\n├────────────┼──────────────┼──────────────┤\n│ Lighthouse │ 400          │ No           │\n├────────────┼──────────────┼──────────────┤\n│ Lodestar   │ 500          │ No           │\n├────────────┼──────────────┼──────────────┤\n│ Prysm      │ 600          │ Yes          │\n├────────────┼──────────────┼──────────────┤\n│ Teku       │ 1000         │ No           │\n├────────────┼──────────────┼──────────────┤\n│ Nimbus     │ 1500         │ No           │\n├────────────┼──────────────┼──────────────┤\n│ Grandine   │ 1000         │ No           │\n└────────────┴──────────────┴──────────────┘\n```\n\nI'm not sure if this was discussed before, but has someone thought about having the same value here? I believe those differences will inevitably cause clients like Teku, Nimbus and Grandine to be building higher yielding blocks than let's say Lighthouse for the same builders. Not saying this is a good or bad thing, just something to note, as it may be a big driving factor for operators to switch to Teku/Nimbus/Grandine/configured Prysm. I know there are a lot of strong opinions regarding timing games here 🙂",
+    "created_at": "2026-10-16T09:43:06.199000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "the default timeout needs to be standardized and we likely wanna have that defined in the spec, making it configurable it up to client implementations, so from that, the defaults that lighthouse, lodestar and prysm use seem to be in the sane range post-gloas, maybe can sort out some value we can put into the spec  cc <@&1417820113981145228>",
+    "created_at": "2026-10-16T09:54:31.607000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "also related https://discord.com/channels/595666850260713488/874767108809031740/1559924997894578209",
+    "created_at": "2026-10-16T09:54:59.242000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Testing",
+    "parent": "",
+    "content": "maybe, Nimbus tends to prefer reasonable-defaults over configurability where feasible. So the question is, are Lighthouse/Lodestar/Prysm reasonable defaults, or not, and I'd be a bit skeptical, seems on the low side due compared with RTT ping times\n\nPart of this is that I'm _specifically_ wary because <@755590043632140352> has kept trying to push this number down as low as possible explicitly not caring about highish-ping-time scenarios (or the New Zealand/Australia-accessing-distant server scenario, etc).\n\nSo this comes across as potentially a way to get unreasonably low times in",
+    "created_at": "2026-10-16T09:57:15.101000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Testing",
+    "parent": "",
+    "content": "because he views these as \"useless\" parts of the slot etc",
+    "created_at": "2026-10-16T09:57:27.053000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Testing",
+    "parent": "",
+    "content": "now, 1500 is probably too high",
+    "created_at": "2026-10-16T09:57:49.815000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "biggest issue with timing games is that right now with the attestation deadline being at 3 seconds, the node is just gonna be idle and wait for a http request to resolve and operators will abuse that",
+    "created_at": "2026-10-16T09:59:17.041000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Testing",
+    "parent": "",
+    "content": "(1500 is just a carryover from Fulu, it's not designed in any way for Gloas yet)",
+    "created_at": "2026-10-16T09:59:24.175000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kalo9480",
+    "category": "Testing",
+    "parent": "",
+    "content": "IMO builders are expected to have fairly even geo distribution as they are directly incentivised the requests from proposers to have as low latency as possible. If this geo distribution is true or not, I do not have the data as of now. Also good to note that they should be using both `X-Timeout-Ms` and `Date-Milliseconds` in order to determine when to send the response back.",
+    "created_at": "2026-10-16T10:06:28.930000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "serenita_io",
+    "category": "Testing",
+    "parent": "",
+    "content": "One of the reasons why I really want to see this https://ptb.discord.com/channels/595666850260713488/1556640385789591564 \n\nIf a node operator runs 5 different client combinations, they shouldn't need to figure out these subtle differences between them, and configure each of them.\n\nTiming games are going to be played, whether we make this timeout value configurable or not will not matter to \"sophisticated\" proposers.\n\nMy take:\n- ship a sensible default, unified across all clients (I'm personally fine with up to 1000ms, as today, since Gloas blocks are much smaller)\n- make it configurable",
+    "created_at": "2026-10-16T10:17:17.544000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "to add to Luca's take: give the p2p the same time as api bids and not pick it earlier, so p2p can be competitive",
+    "created_at": "2026-10-16T10:26:32.659000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "> Also good to note that they should be using both X-Timeout-Ms and Date-Milliseconds in order to determine when to send the response back.\nyes my builder uses those to optimize the payload, you can also call get_bid multiples times to get a higher value",
+    "created_at": "2026-10-16T10:27:49.100000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "I disagree with a higher yielding block being given by a longer deadline.  If anything the operator can just delay the request itself. And it seems to be that the best strategy for an operator playing timing games is to request multiple times with a short return value",
+    "created_at": "2026-10-16T11:26:16.424000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "can you connect to my builder with crysm and test mutliple bid requests? should be at least 25ms apart but otherwise you should get higher bids",
+    "created_at": "2026-10-16T11:43:41.637000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "Focil devnet 1 or devnet 8?",
+    "created_at": "2026-10-16T11:44:12.647000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "https://builder-plataberget.nflaig.dev/",
+    "created_at": "2026-10-16T11:44:36.675000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "",
+    "content": "potuz is back?",
+    "created_at": "2026-10-16T11:44:50.992000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "",
+    "content": "or he's got a bot to chat on his behalf?",
+    "created_at": "2026-10-16T11:45:05.739000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "manunlp",
+    "category": "Testing",
+    "parent": "",
+    "content": "Potuz is a bot",
+    "created_at": "2026-10-16T11:45:16.214000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "",
+    "content": "seems like he is more active on discord when he's OOO than when he's \"working\" 😂",
+    "created_at": "2026-10-16T11:45:45.578000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "why does prysm use 600ms? just based on vibes or any data backing this up?",
+    "created_at": "2026-10-16T11:45:57.148000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "I think I wiped the whole data for that devnet but can try. The main problem is that I need to run from a branch to request not your best bid. Specially if you run from the mempool your bids will be always increasing so the actual test is to request a previously sent one. I checked only Titan and they handle this well",
+    "created_at": "2026-10-16T11:46:17.556000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "> request not your best bid\nwhat does this mean?",
+    "created_at": "2026-10-16T11:46:54.904000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "I think it's a bad measurement. We tried 300ms and were seeing some timeouts. But the problem is that the relay adds an artificial timeout and probably 300 were fine. With ultrasound even 600ms were timing out and it turns out it was their heuristic to compute how long it would take to return the bid.",
+    "created_at": "2026-10-16T11:49:05.401000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "First bid 10\nSecond bid 30\nThird bid 50\n\nI propose including the 30 bid, you should reveal that block",
+    "created_at": "2026-10-16T11:49:58.587000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "ah yes, that works with my builder",
+    "created_at": "2026-10-16T11:50:15.203000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "<@412614104222531604> or someone else, can you sent less annoying txs on the devnet and also spam more? testing the network for block building sucks",
+    "created_at": "2026-10-16T11:50:45.613000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "But for me to test it will require a branch cause you won't naturally produce 10, 50, 30",
+    "created_at": "2026-10-16T11:50:53.599000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "yeah my get bid api always increments, never return a lower value for same parent root/hash tuple",
+    "created_at": "2026-10-16T11:51:22.243000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "Yeah that's not realistic for a real life builder",
+    "created_at": "2026-10-16T11:53:00.373000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "",
+    "content": "what txs you want ?",
+    "created_at": "2026-10-16T11:57:29.332000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "more realistic ones, no real users will do this crazy stuff that loads tons of contract code and output 10k bal entries",
+    "created_at": "2026-10-16T11:58:03.856000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "I mean just realistic user traffic",
+    "created_at": "2026-10-16T11:58:09.786000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "",
+    "content": "i think benchmarking guys are running tests tho",
+    "created_at": "2026-10-16T11:58:47.954000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "",
+    "content": "test your builder on sepolia?",
+    "created_at": "2026-10-16T11:58:59.613000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "I am",
+    "created_at": "2026-10-16T11:59:05.003000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "block are empty",
+    "created_at": "2026-10-16T11:59:24.441000+00:00",
+    "attachments": [
+      {
+        "type": "image/webp",
+        "origin_name": "image.png",
+        "content": "6105d909a43b8ac37fe68017dcf3e4a2b1f7de19b79053404082cb717c2f7582"
+      }
+    ]
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "and some pandaops builder keeps burning 0.1 eth per bid",
+    "created_at": "2026-10-16T11:59:58.417000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "",
+    "content": "this ain’t sepolia",
+    "created_at": "2026-10-16T12:02:17.646000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "I am not talking about sepolia, I said devnet-8 sucks",
+    "created_at": "2026-10-16T12:02:33.316000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "",
+    "content": "yeah but it’s for benchmarking the els now",
+    "created_at": "2026-10-16T12:02:52.701000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "but ti's not happening right now",
+    "created_at": "2026-10-16T12:03:06.211000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "qu0b",
+    "category": "Testing",
+    "parent": "",
+    "content": "i started regular chain load scenario",
+    "created_at": "2026-10-16T12:04:34.955000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "qu0b",
+    "category": "Testing",
+    "parent": "",
+    "content": "we were just fuzzing before",
+    "created_at": "2026-10-16T12:04:40.226000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "yeah it's fine it's also stress testing building software but can we at least stop burning 0.1 eth per bid, you guys are outbidding everyone",
+    "created_at": "2026-10-16T12:05:54.723000+00:00",
+    "attachments": [
+      {
+        "type": "image/webp",
+        "origin_name": "image.png",
+        "content": "b09b72b1624cbc8438c1876e8fd69e7f0cfeab33e4e150cea4263dc365b17009"
+      }
+    ]
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "",
+    "content": "we have disabled all our buildoors on devnet 8",
+    "created_at": "2026-10-16T12:34:09.586000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "I'm surprised it takes that long to snap sync this devnet",
+    "created_at": "2026-10-16T12:52:26.168000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "should be online and requesting twice from your builder now https://dora.glamsterdam-devnet-8.ethpandaops.io/slot/461128",
+    "created_at": "2026-10-16T13:11:50.895000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "you did ask twice but both requests returned a 400: `Invalid SignedBuilderRequestAuth: auth.message.data does not match the value agreed with this builder`",
+    "created_at": "2026-10-16T13:47:09.589000+00:00",
+    "attachments": [
+      {
+        "type": "image/webp",
+        "origin_name": "image.png",
+        "content": "5dc621d8760532aad0b559acdcc7d938f93aac75bbc5b01b9679a2b9a58a5c0f"
+      }
+    ]
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "Oh probably the URL again",
+    "created_at": "2026-10-16T13:47:44.502000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "Although I copied it from your site. Will only be able to diagnose this tonight late",
+    "created_at": "2026-10-16T13:48:14.027000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "you need to sign over `builder-plataberget.nflaig.dev`",
+    "created_at": "2026-10-16T13:51:54.961000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "I didn't even see what I was copying 🙂",
+    "created_at": "2026-10-16T13:52:34.631000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "",
+    "content": "maybe you don't follow the spec? https://github.com/ethereum/builder-specs/pull/168",
+    "created_at": "2026-10-16T13:55:47.901000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "Yeah I didn't care about that commit I pass an arbitrary string set manually and I just blind copied with your link in your site",
+    "created_at": "2026-10-16T14:16:08.013000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "working, the first round seems to show that 600ms is tight for Brazil (/ Germany?) \n```\n┌────────┬───────────────────────────────┬─────────────────────────┬───────────────────────────────────────┐\n│  Slot  │            Round 0            │         Round 1         │             Block went to             │\n├────────┼───────────────────────────────┼─────────────────────────┼───────────────────────────────────────┤\n│ 464022 │ timed out (605 ms, limit 600) │ bid, value 22170233     │ builder 10021, value 129374912        │\n├────────┼───────────────────────────────┼─────────────────────────┼───────────────────────────────────────┤\n│ 464024 │ bid, value 26283373 (230 ms)  │ same bid again (233 ms) │ nflaig (builder 9990), value 26283373 │\n└────────┴───────────────────────────────┴─────────────────────────┴───────────────────────────────────────┘\n```",
+    "created_at": "2026-10-16T22:46:27.810000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "Seems I landed yours\nhttps://dora.glamsterdam-devnet-8.ethpandaops.io/slot/464024",
+    "created_at": "2026-10-16T22:47:32.576000+00:00",
+    "attachments": []
+  }
+]

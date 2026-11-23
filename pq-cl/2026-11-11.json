@@ -1,0 +1,413 @@
+[
+  {
+    "author": "vladimir_ea",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Why does anything need to be removed? If the proof covers all attestations for 9 heads then it is still a valid proof for 8 of them.",
+    "created_at": "2026-11-11T07:38:44.484000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "vladimir_ea",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Someone mentioned in the context of mempool proofs that it is cheap to exclude txs from the proof - clearly in that case you don’t always include the whole mempool nor do you re-aggregate the tx signatures - but I don’t know if it is anything more than drop the claims.",
+    "created_at": "2026-11-11T08:02:34.900000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "> The aggregator can maintain a running aggregate and continuously fold new data into it\nImagine the situation when VC requests BN for an aggregate to be singed and then broadcast. How much time would it take to \"finalize\" an aggregate and serve it to VC?",
+    "created_at": "2026-11-11T08:31:27.418000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Whether we want an EIP for each part affected by PQ is an open question to me. I think it's easier form many perspectives to bundle consensus and p2p changes that are required to switch to PQ signatures, including p2p optimisations and aggregation strategy.\n\nIt also makes sense to me because consensus and p2p changes can't be delivered separately -- that would be my main justification to put them all into a single EIP. In case if we start to work on it as on a single EIP and then there is a strong opposition to that we can unbundle and move p2p changes into a separate EIP or EIPs.",
+    "created_at": "2026-11-11T08:37:53.147000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "At least my plans to work on DC haven't changed. I don't want to speak on behalf of anyone else, but at least so far I haven't heard from anyone who is involved in DC that they aren't going to keep working on it.\n\nThe only thing I can say for myself is that I will spend time working on PQ-Gasper as well, if PQ-Gasper doesn't happen these efforts are going to be useful for the PQ- part of the PQ-DC.",
+    "created_at": "2026-11-11T08:43:45.830000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "> Unwanted heads can be filtered out.\nHow expensive is it?",
+    "created_at": "2026-11-11T08:44:10.792000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "If it suddenly happens and a proposer is unable to include any aggregate it has prepared, the next proposer on that branch might have time to prepare and include compatible aggregates. Assuming synchrony, it shouldn't be much of a problem and in the worst case delay justification by an epoch. In the asynchrony case PQ might make Gasper even worse; PQ-Gasper non-finality periods might become much worse than it would be today.",
+    "created_at": "2026-11-11T08:52:32.639000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "This is immediate. The most recently completed proof is returned directly. The trade-off is that any signatures that arrived while the current proof was in progress are not included.",
+    "created_at": "2026-11-11T10:39:09.094000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "It doesn't work quite like that, because a leanVM proof is tied to the exact list of its claims—this list is part of what the verifier checks. If you provide a proof that includes 9 heads but only specify 8, the verifier won't find the expected list and will reject the proof. In other words, you cannot simply remove a head from an already-generated proof.\n\nInstead, the `declare` operation works as follows:\nGiven an existing proof `P` that covers 9 heads, you perform `P' = aggregate([P], declare = [the 8 desired heads])`. This results in a new proof, `P'`, which covers only those 8 heads.\n\nThus, `P'` is a genuinely new proof, which requires some additional work from the prover.",
+    "created_at": "2026-11-11T10:43:59.317000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "vladimir_ea",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Right ok - thanks. And what is the cost of that? Relative to, say, 16 -> 1 recursion?",
+    "created_at": "2026-11-11T10:45:36.338000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Filtering is similar to recursion, but with a single proof as input. Thus, we have:\n\n- `P`: covers 9 heads\n- `P' = aggregate([P], declare = 8 heads)`\n\nIn the VM, this works as follows:\n1. Verify P (this is the primary cost);\n2. Retrieve each claim from P;\n3. Publish only the claims for the 8 selected heads.\n\nThe `declare` operation only performs step 3, which is virtually costless. The cost stems from step 1—verifying P—just as it would in any recursion step. You can estimate this at approximately 0.2 seconds, similar to a 2-to-1 recursion step (likely even slightly less).\n\nIt is important to note that removing 1 head costs the same as removing 50, because the cost is incurred by verifying P, not by the number of heads being removed.\n\nFurthermore, if you perform both aggregation and filtering simultaneously—as a proposer might do with received aggregates:\n`block = aggregate([A1, A2, A3], declare = the 8 desired heads)`,\n\nthen the filtering step adds no extra cost. It only incurs an additional cost if the proposer were to reuse a proof exactly as it is, without performing any new proof work.\n\ncc <@1257246783503994940> this also answers your question I think.",
+    "created_at": "2026-11-11T10:51:45.155000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "vladimir_ea",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "If a proposer has performed the 16 -> 1 recursive aggregation themselves, then presumably they do not need to re-verify the proof they have just created? \nand any aggregate proof received over the network would need to be verified whether or not claims were being removed?",
+    "created_at": "2026-11-11T10:57:25.343000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "nice! sounds like keep aggregating until VC requests the aggregate would be an optimal strategy, and if no request happening discard the aggregation at after the duty deadline",
+    "created_at": "2026-11-11T11:34:37.763000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Actually, it depends: if you perform the filtering during the aggregation stage, then no, you don’t need to re-verify. The process works as follows:\n\n`P = aggregate([A1..A16], declare = 8 heads)`\n\nHowever, if you choose to carry it out in two stages, resulting in a new proof, then a re-verification does indeed take place:\n1. `P  = aggregate([A1..A16])`\n2. `P' = aggregate([P], declare = 8 heads)` (in this case, P is re-verified within the VM, as this constitutes a distinct step and the goal is to generate a new proof through this process).\n\nWhat the second step does is perform a verification within the VM. The proposer never needs to natively verify their own proof.",
+    "created_at": "2026-11-11T12:19:59.953000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Proposer will have to verify an *externally* produced aggregate before including it into a block. In the case when some aggregate passed verification already, imagine just a general case, there is a way to skip the verification step in leanVM, right?",
+    "created_at": "2026-11-11T12:23:48.485000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Two cases here to distinguish:\n\n1. Including the aggregate as is: the proposer doesn't need to verify it again. The client just remembers that this proof was already checked on gossip. Proofs have a single encoding, so they can be identified by their bytes.\n\n2. Merging it into a new proof: aggregate doesn't run the native verifier on its inputs. The verification happens inside the VM, as part of the proof being produced, and that part can't be skipped because it is part of the recursion process. Checking inputs natively before hand is only a safeguard: an invalid input would make the merge fail and waste the proving time.",
+    "created_at": "2026-11-11T12:35:14.526000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabemonnot",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "In cambridge and mumbai there were discussions about XMSS compatibility for DVT. Do we have more clarity on this? iirc <@427491045308235776> had asked some stakers about it",
+    "created_at": "2026-11-11T13:04:48.788000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "From speaking with big stakers, it seemed that they mostly wanted a way to mitigate super majority bug(node diversity) as opposed to having K out of N different participants come to agreement on what needs to be attested to.\n\nThe VRF tree will be hard to make DVT friendly imo, so that will likely be shared amongst the N, alternatively the DVT nodes can make a tree that has a smaller lifetime.",
+    "created_at": "2026-11-11T13:19:23.391000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Another reason some stakers didn't use DVT is because it imposes additional latency on the validator; you need to come to consensus with your small quorum before sending your vote the consensus layer",
+    "created_at": "2026-11-11T13:20:22.065000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "The current default is a double layer XMSS which is amenable to DVT, but without caching related optimisations it makes the signature sizes 2x bigger.",
+    "created_at": "2026-11-11T13:21:07.988000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "One alternative is to use a single layer XMSS, and then as Multiparty Computation(MPC) gets better, the single layer XMSS tree becomes feasible. But noone can predict when this will be likely",
+    "created_at": "2026-11-11T13:23:07.035000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabemonnot",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Thank you, this is great context! Single vs double layer is on the path of freezing the signature scheme, which is required for audits and tooling, correct? (but not on the path of preregistrations, as those can be more \"receipt-based\", right?)\n\nSeems default answer is we'll make DVT work, but without much conviction that it's the right answer. How could we settle this conclusively? Deeper user research?",
+    "created_at": "2026-11-11T13:27:19.408000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "yannvonlanthen",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Are you refering to the optimization that Emile mentioned in Mumbai, where you can send half of the 2.4kB signature ahead of time / outside the critical path?",
+    "created_at": "2026-11-11T13:33:21.118000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "I wish this point was explicitly stated in Mumbai, I was one of the ones opposing doubling the attestation size just for DVTs, but I didn't know that the whole DVT thing was mostly about protecting operators from key compromise/bugs. This was pointed to me by Lido yesterday along with the request to be able to do key rotation (which I think we can do simply by keeping the pre-registration contract operational in the second \"Q\" fork and change the execution request handler to simply change the VRF+PQ data of an existing PQ validator, so that the preregistration contract becomes in fact at the Q fork the \"key rotation contract\").",
+    "created_at": "2026-11-11T14:05:58.944000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "The preregistration contract is the same for both schemes, but we should deploy it only after the signature scheme has been completely frozen IMO",
+    "created_at": "2026-11-11T14:07:01.399000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "I think we should do pre-registration after choosing the scheme.\n\nI was waiting for the user research to finish to know how many validators we may be not supporting",
+    "created_at": "2026-11-11T14:22:22.683000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "There are entities like SSV and Obol that rely on it inherently though",
+    "created_at": "2026-11-11T14:22:45.540000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "yeah exactly, the top layer for a validator only changes every 2^16 slots",
+    "created_at": "2026-11-11T14:23:41.339000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "I floated operator key registration 4 or so weeks ago, and I was told that its undesirable because we now have the nice property where every fork will have the same public key corresponding to a validator.\n\n<@520034910149410861> was there another point here related to CL caching?",
+    "created_at": "2026-11-11T14:25:52.079000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Yes changing the pubkey of a validator is a pain given that we have global caches for them. But if we do this on finalization it should be fine",
+    "created_at": "2026-11-11T14:27:07.758000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "This was my preferred option, but I may be missing an argument that fradamt made",
+    "created_at": "2026-11-11T14:29:08.877000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "I was told the following by large staking pool\n\n>  On validation side, dropping dvt is okay if it's accompanied by dramatically reduced slashing consequences and a fast key rotation mechanism",
+    "created_at": "2026-11-11T14:34:47.160000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "none of this needs to come in the \"Q\" fork, but given that we will have the prereg contract still alive we would either have to do something with whatever interaction happens on the EL with that contract (by default I think we were going to just disable the Engine's consumption of those and simply not emit the system's call) or we could allow for key rotation. The problem is that it's not as obvious as just modifying it in the request handler. Electra already set the pattern for this:\n\nThe handler should take the request, add it to a pending queue for pubkey changes, that queue is consumed after finalization.",
+    "created_at": "2026-11-11T14:38:35.153000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabemonnot",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "can you say more about the user research? who is doing it/what will be the deliverable?",
+    "created_at": "2026-11-11T14:38:35.338000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Kev these were 2MB correct?",
+    "created_at": "2026-11-11T14:53:57.998000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "As far as I can see the only way to implement such a cache would be to create a new RPC request for that global topic and also commit to the root in the beacon state, otherwise there's no way to validate the RPC reply. It will force a few more GB in memory just to validate signatures and the beacon state will grow by at least the validator registry list of tires l roots. Did I get the trade-off correctly? We get half the size of the attestation with the corresponding reduction in broadcasting at the cost of 2MB infrequent gossip outside of the hot path (that's fine) plus a very large in memory cache to validate them (this seems to be the critical one unless I misunderstood the sizes) and also about 32MB more in the beacon state",
+    "created_at": "2026-11-11T15:00:19.961000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "terencechain",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "makes sense to keep the necessary consensus and P2P changes together. Happy to open a PR against your EIP covering the aggregation behavior changes like when to start proving, when to publish, and what the BN returns when the VC requests an aggregate",
+    "created_at": "2026-11-11T15:00:25.323000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "I must be misunderstanding the numbers cause napking math says that cache is 2TB lol",
+    "created_at": "2026-11-11T15:09:08.612000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Ah no, probably each message is just 512Bytes instead of 2MB, do they send just the first 16 roots of the Merkle proof?",
+    "created_at": "2026-11-11T15:14:31.825000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "In that case the cache is about 512MB which is not so bad",
+    "created_at": "2026-11-11T15:19:12.297000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Now I'm curious, if I understand the cache correctly, the same applies without the DVT shenanigans. If we just divide duties per large periods of time we could cache the first part of the Merkle proof and change it only at that time boundary",
+    "created_at": "2026-11-11T15:24:47.489000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "ladislaus was doing the report and setting up the calls. We basically went to large stakeholders and asked them:\n\n- What do their setups look like?\n- If you are/are not using DVT, why?\n- If you are using DVT, would it be damaging if we no longer had very efficient ways to do DVT?\n\nThen we answered general questions on PQ, which gave us a sense of what their worries were and what sort of operational friction they envision when switching",
+    "created_at": "2026-11-11T16:25:35.694000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "It should be ~1KB per validator, so half of the signature size for the double XMSS tree which is ~2KB",
+    "created_at": "2026-11-11T16:27:11.291000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Just to be clear for everyone, the double-layer XMSS scheme is structured as shown in this figure, with two trees—one stacked on top of the other—each containing 2^{16} leaves.\n\nThis is why the signature size is doubled: the Merkle paths for both trees must be transmitted by the signer to the verifier. However, as mentioned above, while operating within a given tree at the lower level, the path for the upper-level tree remains constant. Consequently, it only needs to be transmitted once; one can then wait for 2^{16} slots before transmitting the updated path—which only occurs when moving to the next leaf in the upper-level tree.",
+    "created_at": "2026-11-11T16:57:20.066000+00:00",
+    "attachments": [
+      {
+        "type": "image/webp",
+        "origin_name": "Capture_decran_du_2026-11-11_17-49-56.png",
+        "content": "a72e0371532c812c96c6eb4b7a44d56b7a02ad0a26d27b33d31a37e8fac52ddf"
+      },
+      {
+        "type": "image/png",
+        "origin_name": "Capture_decran_du_2026-11-11_17-56-18.png",
+        "content": "369e25ec10a51fabc03f38897c97ea92d3d1d561c8864edecb0095ef016462e5"
+      }
+    ]
+  },
+  {
+    "author": ".just_kk",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Not sure if it was proposed before but Is it too ugly design to allow both 2.4KB and 1.2KB signatures at the same time? 🙂",
+    "created_at": "2026-11-11T17:20:51.037000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "I think that complexifies a lot of things for the signature scheme and the proving, etc. This is much cleaner to have a single one. I can see various problems, including conceptual complexity but also multiple encodings, some changes inside leanVM probably, different gossip as well, etc.\n\nI think that we should target simplicity here.",
+    "created_at": "2026-11-11T17:30:18.502000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "<@755590043632140352> reg [this comment](https://github.com/ethereum/EIPs/pull/12609#discussion_r4528120096): do you see a way to enforce uniqueness without the proof of possession going through the EL? If it has to be in the request, every registration carries a ~2.4 KB leanXMSS signature, which changes the contract and its limits quite a bit. And if there's no proof of possession at all, what stops someone from copying another validator's `pq_data` and registering it first?",
+    "created_at": "2026-11-11T20:26:43.566000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Created a spec PR for EIP-8483: https://github.com/ethereum/consensus-specs/pull/5809",
+    "created_at": "2026-11-11T20:33:57.154000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "hmm I had computed only 16 roots, perhaps it's 32, anyway it would be about 1GB for the cache. It's considerable, but doable.",
+    "created_at": "2026-11-11T21:31:53.756000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "I think there would be two things contributing to the signature size:\n\n- The roots/tree nodes. This proves that the leaf we open is a part of the merkle root in the top tree.\n\n- The one time signing key that is in the leaf. This then allows the leaf to delegate to another tree of size 2^16",
+    "created_at": "2026-11-11T21:45:04.239000+00:00",
+    "attachments": []
+  }
+]

@@ -1,0 +1,346 @@
+[
+  {
+    "author": "jtraglia",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Hey CL devs. We've started working on [an EIP for transition from BLS to XMSS](https://github.com/jtraglia/EIPs/pull/1) signatures on the consensus layer. I would like to keep the EIP itself pretty basic; save specific technical details for the consensus-specs feature. My goal is to have a proper pull request for this soonish. I would love to get your feedback on it.",
+    "created_at": "2026-11-10T12:58:05.782000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "This channel is dedicated to Ethereum's consensus layer transition to post-quantum cryptography.",
+    "created_at": "2026-11-10T14:00:59.839000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "There are several important topics we need to discuss here, along with some useful links:",
+    "created_at": "2026-11-10T14:01:04.873000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "- XMSS signature scheme: The specification can be found here: https://github.com/ethereum/EthLib/tree/master/EthLib/Cryptography/Xmss",
+    "created_at": "2026-11-10T14:01:09.692000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "- Validator public key registration with XMSS: We currently have two EIPs proposing different approaches: https://github.com/ethereum/EIPs/pull/12609 and https://github.com/ethereum/EIPs/blob/master/EIPS/eip-8450.md",
+    "created_at": "2026-11-10T14:01:16.836000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "- Transition from BLS to XMSS: https://github.com/jtraglia/EIPs/pull/1 as <@592004585506340885> just shared.",
+    "created_at": "2026-11-10T14:01:26.027000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "- XMSS signature aggregation via SNARKs: The underlying machinery can be found here: https://github.com/leanEthereum/leanVM",
+    "created_at": "2026-11-10T14:01:30.476000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "- Networking: Post-quantum cryptographic objects are significantly larger than their elliptic-curve counterparts, which introduces new challenges for network communication and data propagation. Work is currently underway, with ongoing discussions and simulations.",
+    "created_at": "2026-11-10T14:01:36.384000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "It is important to note here that some of the elements specified above remain a work in progress. For instance, regarding the XMSS signature scheme, keccak is currently our strongest candidate for a hash function; however, discussions among researchers are still ongoing to ensure the right choice is made, as these decisions could shape Ethereum for decades to come.",
+    "created_at": "2026-11-10T14:01:40.376000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Hello, I have a question regarding leanVM aggregation for XMSS signatures. When aggregating BLS, the aggregator can cheaply keep the most current aggregate up to now, and when the validator client requests the aggregate to sign and broadcast, the beacon doesn't need to do any work, it just returns the current aggregate. This is a property of EC aggregation: a sum is pretty cheap and is associative. \n\nFor XMSS it looks to me that this property is lost, is this correct? that is, I imagine that aggregators will need to be smart at which time they start aggregating? if you start too early your aggregate will be useless and if you start too late your aggregate will also be useless as most of the coverage will already be included in previous aggregates. Also this could make the recursion step also worse since you may be aggregating aggregates with very little marginal gain. \n\nI just want to get confirmation of the above statements from the PQ crowd cause depending on the answer to these issues we would have to specify very different strategies for the validator.md file on the fork. cc <@363800010518822915> <@592004585506340885>",
+    "created_at": "2026-11-10T17:46:49.711000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "It is possible to merge aggregates from leanXMSS within leanVM, much like one would with BLS; however, while BLS—thanks to pairing properties—is extremely fast, the process for aggregating leanXMSS via leanVM is significantly slower (think seconds rather than microseconds).\n\n- In BLS, an aggregate is a sum of points; adding a signature is essentially cost-free.\n- With leanXMSS, an aggregate is a SNARK proof; updating it requires re-running the proof generation process.\n\nCurrently, the setup in leanVM is as follows:\n- An aggregation step can accept up to 16 prior aggregates (child aggregates) as well as raw signatures.\n- It outputs the union of the signers; if a signer appears twice, they are included and counted only once.\n- The aggregator can maintain a running aggregate and continuously fold new data into it: `acc ← aggregate([acc], new_signatures)`. Given that prover time must be factored in, an aggregate produced at time T contains signatures received up to approximately time T minus the duration required for proof generation.\n\nAdditionally, a proof is roughly 250–350 KiB in size, compared to 96 bytes for BLS.",
+    "created_at": "2026-11-10T18:05:20.104000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Yeah this is correct. One strategy is to aggregate every X second, where X is how long it takes to aggregate N signatures.\n\nSo for example, we can set X to 1 which makes N = 1024.  The validator would then aggregate 1024 signatures every second (assuming they have received that many)",
+    "created_at": "2026-11-10T18:28:00.672000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "terencechain",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "I’m interested in opening an EIP that lets aggregators publish earlier, for example, once they’ve received 95% of their committee’s attestations instead of waiting for the scheduled aggregation time. This could make better use of the slot and let proposers start processing or merging aggregates earlier, while still allowing for late votes.\nWould you prefer this as a separate EIP, or as part of the main PQ EIP? <@592004585506340885> <@425572898787426305>",
+    "created_at": "2026-11-10T18:32:19.102000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Unlike today, I'd imagine that the final aggregates are not done by the proposer on the global topic but by a second set of aggregators since its relatively expensive",
+    "created_at": "2026-11-10T18:43:53.089000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "vladimir_ea",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Are the final aggregates the 16 -> 1? They seem to have similar cost to the subnet aggregation (http://leanvm.org)",
+    "created_at": "2026-11-10T18:51:36.198000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "terencechain",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "it takes less than 2s on my MacBook pro (one recursion, 16 committees). I do agree if builder can help it would be great but we would still want a local fallback",
+    "created_at": "2026-11-10T18:52:28.396000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "ok, so your comment and Thomas' are a confirmation of the above. I think 4 aggregators per subnet will be a bit of a stretch, we're not going to be able to find them quite often, and even if you do, the timing at which your attestation reaches that aggregator will be a bit decisive.",
+    "created_at": "2026-11-10T19:05:31.788000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "those are the most intense and are on the proposer, which triggers some very nasty edge cases if you pay the recursion and after that you realize that your head just moved to a branch that makes the recursion invalid.",
+    "created_at": "2026-11-10T19:06:23.251000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "vladimir_ea",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "This can happen whoever aggregates can’t it? If it’s a committee you could also end up without an aggregate?\n\nI understand that 16->1 is work but it is not more work that the subnet aggregation. And adding another committee means another round of message propagation across the network.\n\nIs time taken to propagate first aggregates, 16->1 in second committee and propagate final greater than or less than time it would take the proposer to aggregate?",
+    "created_at": "2026-11-10T19:14:48.561000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "vladimir_ea",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Also, does it matter if your head changes? It doesn’t invalidate the attestations does it?",
+    "created_at": "2026-11-10T19:17:43.407000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "vladimir_ea",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "(I think I must be missing the point..)",
+    "created_at": "2026-11-10T19:20:03.641000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabemonnot",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "meta question: some of the work is reusable, but iiuc this current effort/EIP is pq-gasper, right? is anyone pushing on pq-dc in parallel?",
+    "created_at": "2026-11-10T19:22:14.341000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "yep exactly. Assuming that we choose the best aggregate from each subnet",
+    "created_at": "2026-11-10T19:22:27.438000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "what do you mean by not going to be able to find them?",
+    "created_at": "2026-11-10T19:24:39.519000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "pre-mumbai I was working on the aggregator topology. I think this is the main part wrt pq that doesn't cleanly transfer over from pq-gasper.\n\nI imagine that we will make a round == epoch == 32 slots to make it easier for PQ aggregators?",
+    "created_at": "2026-11-10T19:29:57.917000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabemonnot",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "wouldn't be my default assumption, but more generally seems there should be an effort to build conviction on the pq-dc path, including specs and some answers to open questions (signature release schedule, duty allocation, incentives)",
+    "created_at": "2026-11-10T19:33:26.718000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "vladimir_ea",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "A leanXMSS proof of aggregated signatures can be an aggregation of attestations for different blocks can't it? So the subnets aggregations provide proofs of all the attestations and the recursion likewise can cover all the attestations, not just those for one block? Is that correct?",
+    "created_at": "2026-11-10T19:34:23.446000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "yeah it is possible to aggregate attestations for different blocks (this is useful also for late votes) and the final aggregate will cover all attestations (for this block and previous blocks)",
+    "created_at": "2026-11-10T19:37:43.497000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Just to share with everyone, a group of us were prototyping specs for PQ at devcon. I've put these here: https://github.com/ethereum/consensus-specs/tree/pq",
+    "created_at": "2026-11-10T19:41:45.823000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "I'm thinking this should be part of the main PQ EIP, since it might be necessary for PQ aggregates.",
+    "created_at": "2026-11-10T19:45:49.244000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "yeah but this gets tricky though because the proposer will need to deagregate them likely. If aggregates are too comprehensive, the proposer won't be able to fit them in a block, or we increase the number of attestations that we allow in a block.",
+    "created_at": "2026-11-10T20:11:17.164000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Do we cap the number of attestations that we allow in a block or is the number of aggregations?",
+    "created_at": "2026-11-10T20:16:54+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "the head changing by a short reorg is not an issue, but the head switching branches to another long fork does, if suddenly you're including attestations for a contenting justification. Just an edge case, but still, the issue at large is the change of the way from preparing the beacon block after choosing our head (except for the payload that kinda requires this pre-work anyway) to start preparing the beacon block before we can actually choose our head. This I believe will be one of the many invasive changes.",
+    "created_at": "2026-11-10T20:16:55.510000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "we cap the number of attestation objects. Currently it's 8, we raised it to 16 in the above spec shared by <@592004585506340885> but when I left we were talking about making it 64.",
+    "created_at": "2026-11-10T20:17:44.715000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "I'm still studying this path as well since it was my default mental model before Mumbai.",
+    "created_at": "2026-11-10T22:17:44.449000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Is there a particular rationale behind those numbers which are pretty different?",
+    "created_at": "2026-11-10T22:23:04.603000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "The number 8 came from Electra. It was deemed that 8 different heads was good enough to make the chain finalized even when 88% of the blocks were missing. \n\nThe thing is that with BLS aggregation, all attestations for the same head go in the same aggregate, the proposer does the final aggregation and there's never a need to include more than 8 heads. With XMSS, we can easily get more than 8 heads, or 16 or 64 for that matter. The attacker can force aggregates to include his own attestation for old blocks creating aggregates that can't be included unless we increase the number of heads allowed in a block. If we do increase the number of attestations allowed in a block then the top size explodes... but that analysis needs to be redone given that the STARK is 300KB",
+    "created_at": "2026-11-10T22:30:06.743000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "vladimir_ea",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "a single Stark can be proof for attestations to different blocks: \n\n{\n    proof,\n    block_a: validator_bitset,\n    block_b: validator_bitsef,\n    ...\n}\n\nthe proof is the proof of both sets of attestations - so is a 'head' here the 'block_a, block_b' etc?",
+    "created_at": "2026-11-10T22:33:52.312000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "vladimir_ea",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "I mean, notwithstanding number of heads, you only need one proof.",
+    "created_at": "2026-11-10T22:34:47.061000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Understood, then let me clarify a bit. Indeed, with BLS, one aggregate can only hold one message, so the number of heads in a block is the number of aggregates, I guess this is why we have the 8 stuff you describe.\n\nleanVM works differently on two points.\n\n**1. One proof can cover several heads.**\nA proof attests to a set of `(pubkey, message)` pairs, with any messages. So, a block can carry one proof whether it covers 1 head or 64. Then, an extra head adds its message and its signer list, not another ~300 KB proof.\n\n**2. Unwanted heads can be filtered out.**\nEach aggregation step takes earlier aggregates as inputs, plus an explicit list of the pairs to publish (`declare`, see this line https://github.com/leanEthereum/leanVM/blob/64f80302521d8d51a2de03c7f257855b084f57bd/crates/rec_aggregation/src/aggregation/node.rs#L55). The pairs left out are still checked inside the proof, but they are not published. The aggregator re-proves at every step anyway, so filtering costs nothing extra.\n\nTo give an example:\n- `P = aggregate(900 sigs on head H + 5 attacker sigs on old head V)` so that P covers H and V\n- `P' = aggregate([P], declare = the 900 pairs on H) `so that P' covers H only",
+    "created_at": "2026-11-10T22:44:26.817000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "<@1257246783503994940> <@923866336382316594> have you guys looked at Justin's branch? I believe many of the comments above will be clarified when you look at that. We can wipe entirely clients and start fresh with a new spec. We can on the other hand try to keep a minimum fork that gets us to a PQ world. Changing the attestation data for example over gossip is a \"no no\".  On blocks is simpler, which is the reason why a proof say for `{ heads {a,b,c},  committes { {list1}, {list2}, {list3}} , proof: STARK}` it will be encoded in the block as `attestations = {{ a, list1 }, {b, list2}, {c, list3}}, proof = STARK}`, that is, we keep the exact same attestation type we had before, and put the Stark outside the list.",
+    "created_at": "2026-11-10T23:55:13.574000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "If the Stark covers more than 8 attestation heads, then we can't include it unless the proposer does extra work to remove some proofs.",
+    "created_at": "2026-11-10T23:55:41.677000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Adding proofs on the fly is expensive, and so is removing them",
+    "created_at": "2026-11-10T23:56:09.089000+00:00",
+    "attachments": []
+  }
+]

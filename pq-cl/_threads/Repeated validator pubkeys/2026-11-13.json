@@ -1,0 +1,74 @@
+[
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "pq-cl",
+    "content": "",
+    "created_at": "2026-11-13T10:16:38.615000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "pq-cl",
+    "content": "So even filtering doesn't solve the underlying problem of repeating the pubkey. Even without any deposit, I can pre register a key that will be equal to an abandoned validator key since I can compute it in advance.",
+    "created_at": "2026-11-13T10:16:39.655000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Post-Quantum",
+    "parent": "pq-cl",
+    "content": "This is because we don't verify proof of possession after the fork, right? sounds like BLS deposits become insecure; moreover, XMSS deposits without proof of possession are susceptible to front-running",
+    "created_at": "2026-11-13T10:49:57.268000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "pq-cl",
+    "content": "Maybe a fix for the issue <@592004585506340885> described: reserve the first byte for default keys.\n\n- The protocol always builds default keys with `0x00` as the first byte: `default_key(B) = 0x00 ‖ sha256(B ‖ DOMAIN)[1:]`.\n- The contract rejects any registration whose first byte is `0x00`.\n\nA registered key can then never equal someone's default key, so nobody can claim your `sha256(B ‖ DOMAIN)` and redirect your deposit.\n\n**Maybe with an example this is clearer (with 4-byte keys for readability):**\n\n1. Bob deposits with BLS key B shortly before the fork. Its default key is `00 3C 91 E2`.\n2. Mallory tries to register `00 3C 91 E2` for her own validator. Rejected: first byte is 00.\n3. Mallory registers `7A 3C 91 E2` instead (the raw hash). Accepted, but useless: it isn't Bob's key.\n4. At the fork, Bob's deposit looks up `00 3C 91 E2`. No validator has it, so a new validator is created with Bob's credentials.\n\nAs a bonus, byte 0 can later serve as a scheme version byte (`0x01 = leanXMSS`, …).\n\nWhat do you think? Maybe I missed something",
+    "created_at": "2026-11-13T12:02:56.408000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Post-Quantum",
+    "parent": "pq-cl",
+    "content": "I actually [pushed a commit](https://github.com/ethereum/consensus-specs/commit/90219afdc7c1478b374455756f7bf79393912b70) yesterday to fix this issue. This is what led me to discover the other (bigger) problem.",
+    "created_at": "2026-11-13T13:02:43.310000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "pq-cl",
+    "content": "we're having separate conversations about the same thing...this is the issue with threads. I believe we should avoid proof of posession if it's not needed. But if we are going to have it anyway, then this solves this issue at least.",
+    "created_at": "2026-11-13T13:31:04.337000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "pq-cl",
+    "content": "<@755590043632140352> Does this resolve the problem without proof of possession, or not at all?",
+    "created_at": "2026-11-13T13:44:05.498000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "pq-cl",
+    "content": "I had dismissed that message as LLM, but yes, we can use (and we already do for BLS) similar tricks. We would need to make sure that an actual XMSS pubkey cannot start with 00 or just not accept those keys.  There are other ways to fix this like not hashing and just keeping the BLS key split up between the the new pubkey and half the VRF, this one we did discuss in Mumbai and ditched it as a hack",
+    "created_at": "2026-11-13T13:49:11.362000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "pq-cl",
+    "content": "Ok, I was thinking that examples and line breaks help people keep track of things, I find it flattering that the content made it through your formatting filter in the end 🙂 For the problem of the beginning of the pukey, you have two solutions. Either you just don't accept such keys and so if the first byte is 00, you just ask to regenerate (1/256 chances), or you can have another rule in complement which is 00 for the default keys and if you want to register instead you must start with 01 so in any case, they will be different!",
+    "created_at": "2026-11-13T14:07:35.907000+00:00",
+    "attachments": []
+  }
+]

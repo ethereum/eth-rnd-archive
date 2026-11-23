@@ -1,0 +1,168 @@
+[
+  {
+    "author": "ethdreamer",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "lighthouse docker image with the latest spec changes: `ethdreamer/lighthouse:5820`",
+    "created_at": "2026-11-18T02:00:50.588000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ethdreamer",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "i think this could be mitigated pretty easily:\n\n1. Don't dedup envelopes by block root\n2. Keep early envelopes in a small FIFO queue that evicts the oldest entry when full, instead of rejecting new arrivals.\n3. Allow each peer at most one queued envelope per slot\n\nAn honest envelope only lands in this queue in the uncommon case where it overtakes its block. With evict-oldest, junk that was parked in advance is the first thing pushed out, so an attacker can only displace the real envelope by delivering a full queue of new junk after the real one arrives and before its block does. Normally the block comes first and that window doesn't exist. With one entry per peer, junk that's already parked can't be refreshed, so only peers with no entry in the queue can push the real envelope out. The attacker needs at least as many spare peers on the victim as the queue has slots, on top of whatever is holding the queue full, all sending inside a window they can't see which usually doesn't exist at all.",
+    "created_at": "2026-11-18T02:49:40.850000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "<@592004585506340885> could we hijack today or friday’s  small part of the PQ breakout to discuss which solution we wanna do for this? As we have acde this week I doubt we gonna have time to discuss this on the acd and acdt might be a bit too far out in case we wanna potentially schedule hoodi after the ACDE decision",
+    "created_at": "2026-11-18T10:38:58.772000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tbenr",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "We lose peer info in teku but we can definitely mitigate",
+    "created_at": "2026-11-18T11:27:07.278000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "I think it should be discussed at ACDT on Monday. But maybe at the end, if there's time.",
+    "created_at": "2026-11-18T13:49:16.595000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "raxhvl",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "i think the ask is fairly small: the bid has to bind the payload using a hash *native* to CL so it can verify. The hashing mechanism we use does NOT matter. \n\n**option 1** (#5770, EL block hash in the CL) works, but:\n\n- it comes with RLP overhead\n- we’ll have to replicate the hashing byte for byte as in EL to match `block_hash`, \n  if we risk rejecting payload is valid, i.e. a consensus split. for eg: the empty tx list edge case in #5770.\n- every future payload change that impact hash has to land on both CL and EL at once,\n- and like justin pointed, ties CL to EL only fork.\n\n**option 2** (another way of doing #5770: ask the EL over the engine API) avoids the RLP and hashing logic in the CL, but trades it for a network round trip and an EL dependency on the gossip path.\n\n**option 3** (#5820) use `HRT(payload)`\n\n**re: sig vs HRT perf (see table)**\n\nToday, the signature already does `hash_tree_root(envelope)` under the hood, which contains `hash_tree_root(payload)`, so the hashing cost is paid either way. dropping the sig **saves exactly one BLS verify, ~1.3–2.2ms** per envelope depending on the machine. the number does not matter; we’ll do **one less thing per slot.**\n\nit cleans up stuff we arguably should’ve dropped earlier: the signed envelope wrapper + sign/verify helpers (incl. the self-build pubkey branch), `envelope.builder_index` + its match checks, the (`block_root`, `builder_index`) gossip key, and the `seen.execution_payloads` cache. its a divine bonus.\n\nit sucks that #5820 changes the bid this late. But #5770 adds more burden, while #5820 removes some existing ones, plus is more performant. That makes it the right thing to do.",
+    "created_at": "2026-11-18T14:11:48.242000+00:00",
+    "attachments": [
+      {
+        "type": "image/png",
+        "origin_name": "image.png",
+        "content": "622f84a80683b67a08b81e6c41c563907b48d2c2fcac0cbd37d73d55cfeea80d"
+      }
+    ]
+  },
+  {
+    "author": "potuz",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "Did anyone find a solution to my cache invalidation problem above?",
+    "created_at": "2026-11-18T15:28:29.193000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "wemeetagain",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "see ethdreamer comment above",
+    "created_at": "2026-11-18T15:30:01.264000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "yeah a FIFO is just fillable since these are random peers, not registered validators",
+    "created_at": "2026-11-18T15:40:54.086000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "or builders",
+    "created_at": "2026-11-18T15:40:57.947000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ethdreamer",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "Yes",
+    "created_at": "2026-11-18T16:53:38.835000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ethdreamer",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "here",
+    "created_at": "2026-11-18T16:53:46.760000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ethdreamer",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "At least as many as the size of the queue (lighthouse has 16). And they can only even have a *chance* of causing an issue if the payload propagates before the block, which is something they can't force. So a successful fill delays the victim's payload by a round trip in the rare slot where the envelope beat the block.",
+    "created_at": "2026-11-18T17:10:45.727000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ethdreamer",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "There are other messages on gossip with the same issue by the way:\n* Attestations and aggregates naming an unknown block or payload, plus payload attestations\n* Data columns naming an unknown block\n* Light client optimistic updates with an unknown parent\n\nand these can be done whenever.. not just in rare cases where an envelope propagates before a block",
+    "created_at": "2026-11-18T17:11:29.243000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "The payload propagates before the block quite often. There are two scenarios when this always happens: if the proposer self builds (this case is fine) and if the builder gets the block and broadcast both early.  \n\nBut most importantly, an attacker does not need to wait for this situation, it can force it himself",
+    "created_at": "2026-11-18T17:29:33.238000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "In the current scheme the attacker has to be staked, with this it can be anyone",
+    "created_at": "2026-11-18T17:30:18.032000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ethdreamer",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "how can you force this?",
+    "created_at": "2026-11-18T17:37:32.181000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ethdreamer",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "And how is this different than data collums?",
+    "created_at": "2026-11-18T17:46:37.363000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "Data columns are more of a problem and we were dropping that cache because of this",
+    "created_at": "2026-11-18T17:50:00.988000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "general",
+    "parent": "consensus-dev",
+    "content": "we do request them early",
+    "created_at": "2026-11-18T17:50:16.457000+00:00",
+    "attachments": []
+  }
+]

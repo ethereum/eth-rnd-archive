@@ -1,0 +1,170 @@
+[
+  {
+    "author": "nero_eth",
+    "category": "Testing",
+    "parent": "",
+    "content": "yeah happy with that too. My feeling is we can resolve the issue on the EL by checking with clients executed that long and fixing it but the EL-only change won't help with potentially more >6s execution blocks in the future.",
+    "created_at": "2026-11-09T02:50:27.380000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "",
+    "content": "A node is optimistic when it's *head* is optimistic.\n\nIn this scenario the majority of attesters of slot `N` must have supported `(B_0, pending)` that is built atop of `(B_{-1}, full)` so they have managed to execute `P_{-1}` before attesting in slot `N`; otherwise, at the start of slot `N+1` `(B_0, pending)` wouldn't be the head. \n\nAFAICS, we have two conditions: majority of attesters supporting `(B_{-1}, full)` and proposer of slot `N+1` not managing to execute `P_{-1}` during more than 12s. Which suggests that the minority is struggling with processing payloads and `N+1` proposer belongs to that minority. Then if that proposer builds its block atop of `(B_{-1}, pending)` with a payload atop of `parent(P_{-1})`, how would this be helpful to the network?\n\nIt seems to me that I don't fully understand the situation and the problem we are trying to solve. Keen to chat about it to know more.",
+    "created_at": "2026-11-09T07:45:33.373000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "We need to retry whatever Toni was doing and check if lodestar was sending payloads to the EL before syncing the CL block or if this is bad handling on the EL. I don't believe you can trigger an optimistic status without an actual CL reorg",
+    "created_at": "2026-11-09T10:02:06.816000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "So my suspicion is that N+1 built on empty and the EL returns syncing for the second payload instead of executing in parallel",
+    "created_at": "2026-11-09T10:04:02.598000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "In this situation, the proposer of N+2 has as head N+1 full but it's optimistic",
+    "created_at": "2026-11-09T10:05:54.869000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "And it should be able to build on top of N+1/empty instead of missing the block",
+    "created_at": "2026-11-09T10:06:24.025000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "Oh I realized I never described the situation: N comes canonical. The payload for N doesn't come. N+1 is built in N empty and both payloads arrive together",
+    "created_at": "2026-11-09T10:08:20.996000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "The EL takes long to execute N and returns syncing for N+1. This is what I suspect it's happening",
+    "created_at": "2026-11-09T10:08:58.334000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "",
+    "content": "In this case EL shouldn't respond `SYNCING` but I also believe we don't have the spec that says what exactly EL should do in this case. Parallel execution would be great but EL devs should tell us if it's even possible to have. If not then the priority should be after the canonical payload, in this case after `N+1` and if `N` is being executed its execution should be cancelled. Proposer of `N+2` should attempt to execute `N+1` and build a block atop of it. How to enforce that prioritization is also not clear to me",
+    "created_at": "2026-11-09T11:17:14.691000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "Hmm, I definitely don't like this. If we start cancelling executions then this looks like a DOS waiting to happen. If I manage to land a crafted tx that would make all proposers try to reorg the previous payload and all executions being cancelled, this is worse than the ex-ante reorg. This is more or less what NC wanted, which I think it's dangerous and will break the chain. \n\nWhat we should focus is in a) get clients to actually behave as in the benches or fix the benches so that we can handle execution in actually 6 seconds and b) get the CL to actually propose in case the EL is locked (this is the spec behavior but it's not clear all CLs handle that situation) and c) allow the CL to propose on top of their latest valid head even if optimistic under some scenarios.",
+    "created_at": "2026-11-09T11:39:53.075000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "",
+    "content": "If EL simply cancels and discards the payload and then CL reorgs back to that payload then it will become optimistic as EL will be fetching it from p2p and executing. If CL stays on the branch where this payload doesn't exist then it probably be fine. Turning a lot of nodes optimistic doesn't sound good, i agree.\n\nMaybe rescheduling payload validation and making the non-canonical payload to be validated after the canonical one regardless of the order that those payload has been sent to the CL. But that can bring us back to the situation with many nodes go optimistic.\n\n(a) I agree with\n(b) I guess EL won't be able to build locally, so this is going to be an empty payload block?\n(c) We should be careful with specifying those scenarios, ideally even avoid that. Each block proposed by an optimistic node is potentially a new fork which in unhealthy network can make things even worse. \"Have seen the parent, but its execution takes ages\" is different to \"Haven't seen the parent\" case. And again, this brings us back to (b): how the block is going to be built if local EL is bricked? Will builders offer the right bid in this case?",
+    "created_at": "2026-11-09T11:58:42.913000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "b) it should be empty or externally built. \nc) I agree, but I think that as long as your finalized checkpoint epoch is current epoch - 1 then that should be more than fine and safe.",
+    "created_at": "2026-11-09T13:44:08.134000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "",
+    "content": "How the payload would be built in the (c) case? By an external builder?",
+    "created_at": "2026-11-09T13:45:18.860000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "no, in c you can request the EL to give you a payload on top of the parent which is valid",
+    "created_at": "2026-11-09T13:52:28.842000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "the external builder is fine as well, as long as you produce on top of a known valid parent is fine",
+    "created_at": "2026-11-09T13:52:45.654000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "",
+    "content": "If you EL is bricked or is `SYNCING` (or both) i am not sure it can produce a valid payload",
+    "created_at": "2026-11-09T13:53:11.208000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "I think SYNCING in all these cases the EL should be fine to build a payload, at least if the SYNCING reply is from `notify_newPayload` not from FCU.  If the EL is bricked then that's not a problem and we by default will attempt to propose. The problem is the SYNCING return.",
+    "created_at": "2026-11-09T13:54:16.328000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "",
+    "content": "`SYNCING` with finality from 2 epochs ago is also a real syncing case, i think a validator shouldn't propose in this case. So, i'd advocate for a more strict set of rules, but before that it would be great to understand what exact sequence brings CL/EL to that faulty state. Let's discuss it next ACDT",
+    "created_at": "2026-11-09T14:32:52.181000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "",
+    "content": "btw, ELs that doesn't execute non-canonical payloads and return `ACCEPTED` instead can be trapped into executing several heavy payloads in a row if adversary manages to do a reorg to that heavy branch that wasn't canonical before",
+    "created_at": "2026-11-09T14:51:18.634000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "> SYNCING with finality from 2 epochs ago is also a real syncing case, \nNo it's not,  if your current state's finality is from 2 epochs ago then there are exactly 32 validators than can be actually SYNCING at this time and be chosen to be a proposer. If it does happen that one of those validators is chosen to propose and they do on top of their previous head they'll propose a weak block. For anyone of the other 1M validators, it would be a valid block that is based on a valid head.",
+    "created_at": "2026-11-09T18:34:37.516000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "We can also specify that the head is from the last 2 slots or whatever, making it 2 validators the edge case, but it' s overkill and likely to introduce edge cases",
+    "created_at": "2026-11-09T18:35:37.879000+00:00",
+    "attachments": []
+  }
+]

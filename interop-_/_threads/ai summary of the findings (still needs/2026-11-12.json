@@ -1,0 +1,112 @@
+[
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "",
+    "created_at": "2026-11-12T07:27:10.689000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "> The 30 s engine timeout answers -32603 without cancelling the task, so a stale fork choice can be applied later.\n> \n> Cancel the queued or running task when the response times out.\n\nI am not sure it makes sense to cancel payload execution, it might even make things worse in the case when that payload is canonical and a node has to process it.\n\nIf after processing a stale `fcU` engine is still capable of processing  another `newPayload + fcU` from CL, processing the stale calls doesn't look too dangerous to me.\n\nOne thing that might be outdated in that case is the payload build process.",
+    "created_at": "2026-11-12T07:27:12.459000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "> Can return an empty payload as a success when the 800 ms build-wait expires.\n> \n> Return an error or SYNCING rather than presenting an empty payload as a successful build.\n\nI am not sure `SYNCING` should be used in all such cases. What is the exact cause of returning an empty payload? If the root cause is that a node is syncing then response to the `fcU` should be `SYNCING`, yes",
+    "created_at": "2026-11-12T07:28:29.034000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "> Add a job timeout, and allow more than one in-flight engine call so a long newPayload cannot head-of-line block fcU and getPayload.\n\nI am wondering how different ELs handle new engine requests if there is a request that is being processed already",
+    "created_at": "2026-11-12T07:34:43.122000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "> Allows engine_getPayloadV6 only 300 ms under Gloas (gloasGetPayloadTimeout = 300 * time.Millisecond).\n> \n> Raise the timeout to match real build times.\n\nThis is totally fine to have 300ms for `getPayload` call as EL must respond with a payload it has at the time of receiving that call. 300ms should be pretty much enough to finalize the build process and respond back",
+    "created_at": "2026-11-12T07:36:43.830000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Thanks a lot for that summary!",
+    "created_at": "2026-11-12T07:42:55.331000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "It looks like on geth and ethrex a build can start while still executing the latest payload. Not on other clients that block and wait for execution to finish. This seems wrong as this would mean no block is built for too-late submitted payloads.\n\n---\n\nThanks for the feedback, let me post an updated version based on it:",
+    "created_at": "2026-11-12T07:53:28.628000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "updated file",
+    "created_at": "2026-11-12T07:54:31.131000+00:00",
+    "attachments": [
+      {
+        "type": "text/markdown; charset=utf-8",
+        "origin_name": "findings.md",
+        "content": "b98795a16beaf1246b2022bbd2510cbc02e2325723aa3f2a2cf36affea03e8e0"
+      }
+    ]
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I am wondering if we should update Engine API spec with mechanisms allowing the network to cope with cases when payload execution leaks into the next slot. Decisions on this and understanding whether it is possible to spec out and what exactly to spec out would be a great outcome of our deep technical discussion",
+    "created_at": "2026-11-12T08:01:26.691000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "> \"What is the exact cause of returning an empty payload?\" There is no evidence it happens. Row withdrawn.\nLOL",
+    "created_at": "2026-11-12T08:03:35.971000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "> serialise fcU behind newPayload\n\nBtw, this makes sense if `fcU` would have `head=P` while `newPayload` is processing that `P`. But that must not happen unless CL is buggy, CL must never send `fcU(head=P)` until it gets any response from `newPayload(P)`. So, *not serializing* these two makes sense.\n\nAnd not serializing these two calls also withdraws a problem with the stale `fcU` call",
+    "created_at": "2026-11-12T08:06:15.517000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "you're right. this is then also a false positive, and if we accept that ELs trust their CL, then it's fine to do it one way or the other.",
+    "created_at": "2026-11-12T08:38:10.368000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ahshum",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "> Skips proposal preparation when the EL looks unhealthy — `node.isSynced(head) and head.executionValid` with a silent `else: nil`, no hysteresis.\nIt is in spec to skip proposal due to optimistic sync (<https://github.com/ethereum/consensus-specs/blob/v1.7.0-beta.4/specs/bellatrix/optimistic-sync.md>).\n- <https://github.com/status-im/nimbus-eth2/issues/9203>\n- <https://github.com/status-im/nimbus-eth2/pull/9220>\n\nOr when EL is unhealthy, proposal should build on EMPTY instead? It would require spec changes I believe.",
+    "created_at": "2026-11-12T13:53:45.023000+00:00",
+    "attachments": []
+  }
+]

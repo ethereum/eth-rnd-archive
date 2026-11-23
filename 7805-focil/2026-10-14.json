@@ -1,0 +1,290 @@
+[
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Hey! I'm on mobile but happy to provide answers.\n\n- Skip it.\n- Before.\n- Ignore it.\n- It's trusted; the EL takes what the CL sends. The max size is 128 KiB.\n- Full validity check. EELS is the source of the truth at the moment. FYI, I opened a PR that updates the EIP a few days ago: https://github.com/ethereum/EIPs/pull/12470",
+    "created_at": "2026-10-14T01:44:07.502000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m0_ox",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Thank you. This was my assumption but wanted to double check 👌🏽",
+    "created_at": "2026-10-14T04:48:00.359000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "junsong_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Hi all, Prysm is ready for `focil-devnet-1`. Readiness means:\n- Prysm is now able to sync from genesis/checkpoint of `focil-devnet-1` network.\n- Prysm is now able to interop locally with Kurtosis with other clients' `focil-devnet-1` images.\n\nOne notable thing is that we're based on `v1.7.0-beta.4`  (which will be the base for `heze-devnet-2`) which includes few unhappy paths handling. But I think it's OK because Prysm works well for most of the happy path.\n\nWhat should I prepare to participate the devnet lately? Do I have to create a branch named `focil-devnet-1` in Prysm?",
+    "created_at": "2026-10-14T10:54:38.918000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "the [validator.md#L124-L137](https://github.com/ethereum/consensus-specs/blob/v1.7.0-beta.4/specs/heze/validator.md?plain=1#L124-L137) says that the `bid.inclusion_list_bits` must satisfy the IL we have observed even if not timely (`only_timely=False`), is that intentional or was that done by accident since it aligns with the fact that a proposer should ideally use a superset of ILs observed, whether timely or not",
+    "created_at": "2026-10-14T13:48:45.581000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m0_ox",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "I can make changes to the spec to skip blob entries per your answer 3, but looks like reth and besu merged the opposite ([here](https://github.com/paradigmxyz/reth/pull/27643) and [here](https://github.com/besu-eth/besu/pull/11553), respectively). Also [your open EIPs PR](https://github.com/ethereum/EIPs/pull/12470/changes#diff-e7912d1776e2bf26b36d4eacd54665b119fd30689246bfeb5569e3f68be2be3eR96) still checks blob gas.\n\nJust double checking before a new tests release 👀",
+    "created_at": "2026-10-14T15:07:21.629000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "It's intentional.",
+    "created_at": "2026-10-14T15:14:26.920000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "It should just ignore blob transactions. That part of my PR is wrong, I'll fix it.\n\nIn [my initial EELS PR, it ignored type 3 transactions](https://github.com/ethereum/execution-specs/pull/1928/files#diff-74fa24b5baaff0111dce07e4c323945a3fb5869a3dd24b72857179eae91fbe97R1227-R1229). I have no idea why it's removed.",
+    "created_at": "2026-10-14T15:16:41.005000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "so a proposer should not pick these bids when it's time to build the block?",
+    "created_at": "2026-10-14T15:17:02.833000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Yeah, though bid's bitlist is not used in forkchoice yet. I wanted to explore other options than just reorging a block with non-superset bitlist so we can have more productive discussion on IL bitlist, but have been working on other stuff.",
+    "created_at": "2026-10-14T15:23:01.880000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "the problem is that the current spec allows two griefing attacks\n- (1) an IL committee member can release a IL after the deadline, right before the proposer picks the bid, which means no builder can satisfy the conditions. this could even be abused by a builder, they can produce a very low bid, that satisfies it, while all other bids don't, and if proposer enforces this rule, you can very cheaply win a slot\n- (2) a builder can gossip a very high bid early into the previous slot (even before IL deadline) and which blocks all lower bids from propagating but the builder bid will not be picked by the proposer, essentially crowding out all other bids for free",
+    "created_at": "2026-10-14T15:27:07.252000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "- Sounds valid. Should the spec just mention that a proposer should try their best to cover attesters' IL views?\n- I don't follow (2).",
+    "created_at": "2026-10-14T15:34:14.148000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "- (1) yes that would solve it\n- (2) a builder can just send a bid in the previous slot before the IL deadline with empty `inclusion_list_bits` and a very high bid value, due to `[IGNORE] This is the highest value bid seen for the slot and parent` nodes will ignore any further bids, but at selection time, the proposer will not pick the bid since it doesn't satisfy their view of ILs, so essentially a builder can outcrowd all other bids for free and force local build",
+    "created_at": "2026-10-14T15:50:50.991000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Maybe I misread but it seems it's changed from very low bid to very high bid? Regardless, changing that part of the spec to let clients to do their best attempt to cover attesters' IL views will solve the issue.\n\nLet me know how it sounds. I can open a PR, if you're good with this fix.",
+    "created_at": "2026-10-14T15:55:31.324000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "so for (2), I think the easiest fix is to drop bids that arrive before the IL deadline, I found these issues during review yesterday, see https://github.com/ChainSafe/lodestar/pull/10381 for how a fix can look like, I have a spec pr on my repo but it's not reviewed at all",
+    "created_at": "2026-10-14T15:57:42.530000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Maybe it is. But it reduces bid's acceptance window quite significantly, i.e. from 2 slots to the remaining slot time after the IL deadline. What would be its ramification?",
+    "created_at": "2026-10-14T16:02:56.793000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "it's not useful to submit bids that early in the previous slot",
+    "created_at": "2026-10-14T16:03:32.347000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "I don't think we ever did this on the devnet, like lodestar builder submit bids to p2p ~50-100ms before the slot start",
+    "created_at": "2026-10-14T16:04:16.679000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "I think we need to socialize this with more people. How about opening two PRs? I can work on (1), could you take (2)?",
+    "created_at": "2026-10-14T16:06:54.042000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "let's do that",
+    "created_at": "2026-10-14T16:24:24.732000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Opened: https://github.com/ethereum/consensus-specs/pull/5740",
+    "created_at": "2026-10-14T17:24:07.837000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "> a builder can just send a bid in the previous slot before the IL deadline with empty `inclusion_list_bits` and a very high bid value\n\nI believe this bid will be dropped by this condition: `# [IGNORE] The bid's inclusion list bits is inclusive`.",
+    "created_at": "2026-10-14T17:34:38.662000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "you can sent a bid at the start of slot N-1 with an empty bit list and every node will accept it because there are no ILs yet",
+    "created_at": "2026-10-14T17:39:06.480000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "not sure this is sufficient, opened https://github.com/ethereum/consensus-specs/pull/5741",
+    "created_at": "2026-10-14T17:48:41.315000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Right, bids made before the IL deadline are not guaranteed that they have considered all timely ILs. In this regard, it seems makes sense to accept bids only after the IL deadline. But it makes it impossible to propagate bids when all ILs are broadcast earlier to the deadline. I think this is the trade-off.",
+    "created_at": "2026-10-14T17:49:15.499000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "curious to hear others thoughts on this but it isn't really a trade-off in my opinion, no builder is gonna broadcast bids before 9 seconds in the previous slot, those bids will not be competitive anyways",
+    "created_at": "2026-10-14T17:50:51.295000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "To be clear, I view each of those two attacks requires its own solution. Mine tackles (1).",
+    "created_at": "2026-10-14T18:05:48.849000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "yeah but I realized you can't solve (2) without solving (1), however you can solve (1) without (2)",
+    "created_at": "2026-10-14T18:11:04.002000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Which I disagree. As I said earlier, bitlist enforcement is just not included in the spec yet.",
+    "created_at": "2026-10-14T18:16:18.391000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "the problem is if proposer wrongly apply `inclusion_list_bits` check during bid selection it still allows these griefing attacks",
+    "created_at": "2026-10-14T18:17:50.867000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "probably the simplest and likely best approach is to just remove `inclusion_list_bits` again, I am still confused about the purpose of this 😅",
+    "created_at": "2026-10-14T18:18:24.416000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Which scenario do you have in your mind?",
+    "created_at": "2026-10-14T18:19:03.118000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Yeah, we'll get back to this soon.",
+    "created_at": "2026-10-14T18:19:36.939000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "I described it in my pr",
+    "created_at": "2026-10-14T18:22:15.011000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "When there is no bid that comprises the late IL, a proposer can choose a bid with the most inclusive bid. That's what the best effort can do.",
+    "created_at": "2026-10-14T18:25:32.295000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "I do think my pr is complete, but can be rebased on top of your pr",
+    "created_at": "2026-10-14T18:27:26.261000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "I believe setting `only_timely=True` brings another problem. It's just two different PRs to two different problems. One for gossip and the other for bid selection.",
+    "created_at": "2026-10-14T18:30:57.783000+00:00",
+    "attachments": []
+  }
+]

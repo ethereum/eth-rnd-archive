@@ -1,0 +1,154 @@
+[
+  {
+    "author": "jtraglia",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Just pushed [this commit](https://github.com/ethereum/consensus-specs/commit/4af3dd8ca0508b895aa9544e1f2abcaea4bd61dd). What do you think? Is 2**30 leaves enough? 😄",
+    "created_at": "2026-11-13T00:50:00.992000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Hmm <@755590043632140352> so I've run into a problem with the current registrations design around the the PQ fork. Each validator that doesn't register gets the XMSS key `sha256(B + LEGACY_XMSS_PUBKEY_DOMAIN)`, where `B` is its BLS pubkey, and anyone can compute that key. An attacker who sees a new deposit for `B` before the fork can register that key for one of their own validators. After the fork, the deposit is treated as a top-up to the attacker's validator.",
+    "created_at": "2026-11-13T02:45:20.212000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "For validators, we could filter out registrations that collide with pending deposits. This wouldn't really work for builders as their queue is on the EL, but maybe that doesn't matter. Or we could just check for proof of possession so that an attacker couldn't register an XMSS pubkey they don't control.",
+    "created_at": "2026-11-13T02:49:58.761000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "arnetheduck",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "One thing discussed was whether we need to store and reference block signatures for the purpose of sync - in the current protocol (BLS), the proposer signature is not part of the merkle tree of its descendants and therefor has to be verified separately - this is both costly and annoying, specially when signatures start growing in size. \n\nOne use case for keeping the signature around is that it still has utility during sync, ie when a client is catching up with the network - however, I'm thinking we could actually skip this as well and entirely remove _proposer_ signatures from the sync protocol based on the observation that the _next_ block will contain (many) validator signatures pointing to this block .. an equally safe (or safer really) syncing algorithm then becomes:\n\n* download a range of blocks\n* use signatures from block N+1 (or more) to verify that validators voted for block N, to replace the proposer signature check\n* keep one block in quarantine while waiting for the next range to arrive\n\nan optimistic version of this can simply import the block and let fork choice deal with it - the point being that the proposer signature is actually mostly only useful during initial _propagation_ and later replaced by more robust mechanisms (chorum)\n\nthoughts / temperature check before this becomes a spec PR?",
+    "created_at": "2026-11-13T06:34:03.073000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tcoratger",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Interesting; I think there are a few questions here that need clarification:\n\n- How many votes are required? A single vote in N+1 is not enough; a weight threshold must be established.\n- What happens if N+1 is empty or contains no votes for N—for instance, following missed slots? In such cases, we would need to look further ahead, right? I assume that’s why you mentioned \"or more\"?\n- How can a double proposal be detected? If block signatures are no longer being stored, there must still be a way to prove that a proposer signed two blocks for the same slot—an action that is subject to slashing.",
+    "created_at": "2026-11-13T09:32:13.630000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Repeated validator pubkeys",
+    "created_at": "2026-11-13T10:16:38.615000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Is this a problem to remove signatures from the ByRange request and keep them for the ByRoot requests? And make ByRoot eligible only to query over non-finalized subtree?",
+    "created_at": "2026-11-13T10:53:59.816000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "arnetheduck",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "ByRoot is only non-finalized already",
+    "created_at": "2026-11-13T11:35:56.267000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "arnetheduck",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "* it doesn't greatly matter how many votes, ie 1 is enough because it means that someone committed to the block (history)\n* ditto - we can extend the logic to an N+M window, but it'll eventually get there\n* slashers have to keep signatures and observe the gossip network to collect them\n\nthe key observation here is that the \"worst thing\" that can happen is that someone sends you a set of blocks that ends up not leading anywhere - since you're (presumably) syncing from multiple peers at the same time, fork choice will sort out the right history to follow - there's no \"urgency\" here as there is with gossip",
+    "created_at": "2026-11-13T11:58:27.557000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "<@592004585506340885> did you just add proof of possession to the specs for pre registration? I think we want to avoid it if possible but even if we were to do this there shouldn't be a specially named constant for the leaf. That's a genetic message signing that should be part of the reserved space instead. There are multiple places were we would need to sign that you own a validator, we shouldn't make leaves for each one",
+    "created_at": "2026-11-13T12:05:58.747000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "arnetheduck",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "also, notably, the security model for syncing doesn't greatly change either - in either case, you need one honest peer that sends you valid blocks - during syncing, a malicious peer can make you waste some bandwidth, at worst (of which you have plenty while syncing since you're not participating in gossip)",
+    "created_at": "2026-11-13T12:11:24.827000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Proof of possession",
+    "created_at": "2026-11-13T12:36:24.892000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "<@592004585506340885> what do you think about scheduling a few, say three breakouts next week? I feel we'd be much more productive sync as we were in Mumbai, just make them open ended and we get a PoC working spec so that we can at least start coding?",
+    "created_at": "2026-11-13T14:48:27.854000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Yep that would be great. I’ll handle that.",
+    "created_at": "2026-11-13T15:04:47.161000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "terencechain",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Yep that would be great. I’ll handle",
+    "created_at": "2026-11-13T15:15:25.207000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "<@363800010518822915> <@592004585506340885> <@755590043632140352> <@1257246783503994940> <@449019668296892420> <@425572898787426305> <@439032863904628745> and other CL devs.\n\nOne thing that would help unblock leanVM related work and I imagine your mental models, is to come to agreement on performance and hardware expectations.\n\nOpening thread with numbers and for discussion",
+    "created_at": "2026-11-13T17:04:42.052000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "<@439032863904628745> \n\ncreating a thread on your comment re attester requirements here:  https://discord.com/channels/595666850260713488/1570846883927167077/1570858486261227521",
+    "created_at": "2026-11-13T17:53:23.170000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "kevaundray",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Reducing committees vs Reducing subnets",
+    "created_at": "2026-11-13T20:47:34.488000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Thanks to <@119818938845495298> we have PQ-CL breakout calls now 🙂 \n* Every Tuesday, Wednesday, & Friday at 14:00 UTC (eth o'clock).\n* Allocated 2 hours, but no worries if you have to drop out.\n* The first agenda: https://github.com/ethereum/pm/issues/2304",
+    "created_at": "2026-11-13T21:42:36.378000+00:00",
+    "attachments": []
+  }
+]

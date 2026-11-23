@@ -1,0 +1,74 @@
+[
+  {
+    "author": "gaxanh",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Agreed, this is undesirable in the current state of affairs. However, most transaction relaying protocols, including ERC-4337, rely on this opcode. If these products are to be blamed for relying on a suboptimal practice, then the network itself should also bear responsibility for failing to provide better solutions in the past. Therefore, we need a solution that addresses these shortcomings.",
+    "created_at": "2026-10-24T00:18:17.245000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "draganrakita",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "There are consequences on relying on suboptimal practices, it is not a blame, but reality",
+    "created_at": "2026-10-24T00:32:03.694000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "draganrakita",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Gas observability is really bad imo, and we should remove (replace) it from evm, but this is task for later.",
+    "created_at": "2026-10-24T00:33:00.853000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "draganrakita",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "And my last line, ossifying gas means ossifying evm progress on big blocks, this is why both gas and code observability introduce breaking changes.",
+    "created_at": "2026-10-24T00:35:57.354000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "gaxanh",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "That makes sense, but it would break a large number of existing contracts in the short term, which is not what we want. If even a widely adopted standard like ERC-4337 cannot avoid this issue, migrating entire protocols would be extremely difficult. It would be better to avoid breaking changes for now while educating developers to stop relying on these patterns, at least until a native solution fully addresses the underlying issue.",
+    "created_at": "2026-10-24T01:13:23.296000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lukaszrozmej",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "My attempt:\n- Required to do: https://github.com/ethereum/EIPs/pull/12581\n- Recommended to add: https://github.com/ethereum/EIPs/pull/12582\n- Hegota frames update: https://github.com/ethereum/EIPs/pull/12583\n- Post-Glamsterdam scaling option: https://github.com/ethereum/EIPs/pull/12584",
+    "created_at": "2026-10-24T10:28:36.644000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "milonite",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "is there any \"official\" plan on how to tackle this? What's the core devs opinion/post-mortem/response?",
+    "created_at": "2026-10-24T10:37:53.290000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "gaxanh",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "I think one issue that needs to be addressed comprehensively is the separation between the actual state growth that is committed to the block and the amount of state gas charged to a transaction.\n\nFor example, a single transaction may create multiple duplicate contracts. Under the current specification, all of them are charged for within the transaction and accounted for in the block, even though the net state growth may be much smaller. Similarly, an ephemeral contract that is created and then destroyed via SELFDESTRUCT contributes no net state growth, yet its creation is still accounted for in the block.\n\nIf we want to unlock network scalability, we should at least accurately reflect the resources actually consumed at the block level, rather than overcounting them as the current design does. This is particularly true for state resources.\n\nOne consequence is that transactions exhibiting these patterns may still pay higher fees individually, but they would not create equivalent congestion at the block level. This, in turn, could help stabilize the network's base fee while incentivizing these patterns to manage state more efficiently.\n\nThis seems like the lowest-cost implementation path to avoid disproportionately penalizing design patterns that are already state-efficient under the new protocol. I hope the core devs will consider this.",
+    "created_at": "2026-10-24T12:19:30.291000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "gaxanh",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "A transaction that creates an ephemeral account still pays the full 183,600 gas per account, plus the code deposit cost, if any. However, these costs are excluded from block-level accounting. This is analogous to a duplicate contract deployment, which still pays the full code deposit cost, while that cost is not recorded at the block level.\n\nThis is entirely feasible with the current block access list, where each transaction included in the block contributes its own access list. The access list is checked against the net state before being added to the block. We also track 0 → x → 0 transitions across transactions being included in the block. This effectively refunds the cost when one transaction creates state that is subsequently cleared by the next transaction, making the mechanism similar to a BSTORE operation.\n\nIn addition, we maintain a set of code hashes per account to deduplicate contract creations. The net state cost recorded by the network would only account for state that persists in the block.\n\nI think this could be incorporated into Glamsterdam without any fundamental issues.",
+    "created_at": "2026-10-24T13:04:03.614000+00:00",
+    "attachments": []
+  }
+]

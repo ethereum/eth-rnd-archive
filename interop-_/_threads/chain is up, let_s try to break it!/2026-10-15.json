@@ -1,0 +1,614 @@
+[
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Nice.",
+    "created_at": "2026-10-15T07:40:25.236000+00:00",
+    "attachments": [
+      {
+        "type": "image/png",
+        "origin_name": "image.png",
+        "content": "516c76217f4da7cdbdccc11d8f4923ee7fe0492d474cf30b5737fa2e71b5a8c8"
+      }
+    ]
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "is it enough?",
+    "created_at": "2026-10-15T07:42:42.548000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Yes, I believe this is quite a lot actually.",
+    "created_at": "2026-10-15T07:58:46.855000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "This would cost ~$40m on mainnet.",
+    "created_at": "2026-10-15T07:59:14.942000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "20 invalid signatures is not a lot",
+    "created_at": "2026-10-15T10:03:46.903000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I'll add a few more",
+    "created_at": "2026-10-15T10:06:03.649000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "",
+    "created_at": "2026-10-15T11:08:27.552000+00:00",
+    "attachments": [
+      {
+        "type": "image/png",
+        "origin_name": "Screenshot_2026-10-15_at_13.08.24.png",
+        "content": "53af4ff1c05b30e4713b19ee1fab563952ff5904044144b6344fcb203f49bad6"
+      }
+    ]
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "better?",
+    "created_at": "2026-10-15T11:08:28.370000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@1467247836117860547> which client will survive this?",
+    "created_at": "2026-10-15T11:27:11.466000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Image commits moved overnight but none of the diffs touch deposits. Now pulling the live `pending_deposits` queue from a Lodestar node to measure the spray.\n\nFork is epoch 225, 13:00 UTC. The queue is 32,151 deposits, 24,438 of them builder-prefix. Next I'm checking every signature locally with Lodestar's own BLS so I know the real invalid count.\n\n@nflaig Most likely all six survive, since no client runs the spec's quadratic loop. Teku takes the hit, Nimbus a smaller one. The cost figures are estimates from reading each client's code plus one measurement on my box (about 1.4 ms per deposit sig check with Lodestar's BLS). I didn't run any client.\n\n**What's in the queue now:** 32,151 pending deposits. Fork is epoch 225, 13:00 UTC.\n- 24,438 are builder deposits, and 4,206 of those have bad sigs (about every 4th one).\n- 7,710 of the 7,713 0x01/0x02 deposits have bad sigs. They all sit on 3 pubkeys that also have builder deposits mixed in: 4,227+1,373, 3,008+994 and 450+451.\n- Run literally, the spec's `is_pending_validator` re-checks every earlier bad 0x01 deposit each time one of those builder deposits comes up. That's about 4.37M signature checks at the fork, roughly 100 minutes.\n- Every client tracks per-pubkey results instead, so they need about 32k checks at most, and none if the cache is already filled. @jtraglia the spec as written goes quadratic on this shape, which may be worth a note or a memoized version.\n\n**Per client:**\n- **Lighthouse, Prysm, Grandine:** they pre-verify everything that matters, including the bad 0x01s, and cache failures too. At the fork it's under a second of cache lookups. If a node restarts right before the fork with nothing cached, it does about 32k checks once, roughly 30–50 s.\n- **Lodestar:** under a second at the fork when the cache is filled. Two caveats:\n  - The pre-verify runs on the main thread. Nearly every batch of 32 contains a bad sig and falls back to one-by-one checks, so it blocks about 2.4 s per slot for about 25 slots,",
+    "created_at": "2026-10-15T11:39:16.354000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "starting 12:47.\n  - States loaded from bytes start with a new, empty cache, for example a checkpoint state reloaded from disk. If one of those crosses the fork it pays about 45 s inline every time.\n- **Nimbus:** only builder deposits are cached as blocks come in. The 7.7k bad 0x01s get checked at the first upgrade, about 10–15 s on the main thread. A node restarted after the deposits landed pays about 35–50 s. Later upgrades reuse the cache.\n- **Teku:** no cache at all. Each state upgrade across the fork does about 30k checks inline, an estimated 30–45 s each. That includes block import, checkpoint states and duty lookups. I expect missed slots around the fork, but the work grows linearly rather than quadratically, so it should recover.",
+    "created_at": "2026-10-15T11:39:17.973000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I think teku is gonna get hit hard 😅",
+    "created_at": "2026-10-15T11:42:34.528000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@680234424037670912> <@504202741933932544> are praying now lol",
+    "created_at": "2026-10-15T11:54:50.554000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "https://dora.glamsterdam-devnet-12.ethpandaops.io/slot/0x8226baf230e940cec5ab5203a4cbee6ecb65891c66bf72dd6a29af7729001595",
+    "created_at": "2026-10-15T13:07:11.805000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "build on last fulu block?",
+    "created_at": "2026-10-15T13:07:21.171000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Seems that the transition was fine? Except those two teku slots.",
+    "created_at": "2026-10-15T13:08:40.553000+00:00",
+    "attachments": [
+      {
+        "type": "image/png",
+        "origin_name": "image.png",
+        "content": "e3839b1d6fe0cd9e141e2530cdfd99599b7c0601cde32c0e3743e93a1f90d72a"
+      }
+    ]
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I think teku took around 20 slots to catch up",
+    "created_at": "2026-10-15T13:09:08.733000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "grandine proposed in time in slot 0 h/t",
+    "created_at": "2026-10-15T13:09:37.606000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Yep I was about to say the same. 7219-7200=19.",
+    "created_at": "2026-10-15T13:09:38.842000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Not bad. I'm impressed with everyone.",
+    "created_at": "2026-10-15T13:10:08.372000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "https://klipy.com/gifs/office-theoffice-1",
+    "created_at": "2026-10-15T13:10:46.526000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@1467247836117860547> how did we do?",
+    "created_at": "2026-10-15T13:11:06.778000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "wonder if I would have restarted all clients how would they have behaved 😄",
+    "created_at": "2026-10-15T13:12:16.582000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "we can run one more test",
+    "created_at": "2026-10-15T13:12:23.070000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "resatrt an hour before the fork",
+    "created_at": "2026-10-15T13:12:36.887000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Nah that's unrealistic imo 🙂",
+    "created_at": "2026-10-15T13:13:17.233000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "No need to raise the bar that high 😄",
+    "created_at": "2026-10-15T13:13:33.305000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "we pre-verify 2 epochs ahead, so doesn't matter if you do that for lodestar at least",
+    "created_at": "2026-10-15T13:14:08.539000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "",
+    "created_at": "2026-10-15T13:17:01.949000+00:00",
+    "attachments": [
+      {
+        "type": "image/png",
+        "origin_name": "Screenshot_2026-10-15_at_15.16.57.png",
+        "content": "4edfa2c20688622aa9f82200a2710c83eaef305771e51c02dddcf6ce484179a4"
+      }
+    ]
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Both Lodestar nodes went through the fork and proposed fine in epoch 225. Pulling the pre-verify and onboarding metrics to see whether the fork hit the cache.\n\nDora is rate-limiting me, so I'm getting the slot data from the Lodestar node's beacon API directly.\n\nLodestar had no misses through the fork itself, but `lodestar-erigon-1` missed slot 7259 (13:11:48 UTC, epoch 226). Checking that node's logs for why.\n\n@nflaig The fork itself went cleanly on both Lodestar nodes. But about 12 minutes later both started freezing their main thread for up to ~20s at a time, and I don't know why yet.\n\n**At the fork (same on both nodes):**\n- **Pre-verify:** ran 57–60 times over epochs 223–224, about 51s of CPU in total. The heaviest runs took 2–3s each. It cached 32,125 of the 32,151 deposits. The valid/invalid counts match my offline check exactly: 20,232 valid and 4,206 invalid builder sigs, and 3 valid and 7,684 invalid validator sigs.\n- **Onboarding at the fork:** ran once and took 0.62s on one node and 0.58s on the other. All 30,645 sig checks came from the cache and none were verified inline. The result was 20,205 builders onboarded, 1,403 top-ups, 3,229 dropped and 7,314 left in the queue, which matches my spec simulation.\n- **Duties:** Lodestar missed no proposals in epochs 223–225, and neither node had a single late slot tick all day before 13:11.\n\n**After the fork:**\n- **lodestar-erigon-1:** the main thread kept blocking from 13:11:48 to 13:18:42 and the node fell up to 16 slots behind head. It missed 7259 and 7269 (block production failed with `engine=pending` because the cutoff timer fired late), and published 7281 about 28s late. The stalls started on its own proposal slot.\n- **lodestar-ethrex-1:** same pattern from 13:18:40 to 13:20:10, with an event-loop lag max of 14s. Both nodes also skipped a slot tick around 13:20:45 and 13:21:01.\n- **Not onboarding:** each node still shows exactly one onboarding run, regen metrics are quiet, and no states were reloaded.",
+    "created_at": "2026-10-15T13:23:49.120000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Something else changed after the fork. 20k builders now in the registry is the obvious suspect, but I haven't confirmed it.\n- **My part:** while pulling slot data I fetched about 290 full blocks one after another over REST from lodestar-erigon-1, from 13:13:15 to 13:18:43. That didn't start its stall, which began at 13:11:48, and ethrex stalled without any traffic from me. But it may have made erigon's stall longer, since the stall ended right when my loop did.\n\nWant me to dig into the stall? I'd start with a CPU profile on one of the nodes while it's happening.",
+    "created_at": "2026-10-15T13:23:49.811000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "seems like lodekeeper is dosing the lodestar nodes via api 😄",
+    "created_at": "2026-10-15T13:33:07.528000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "",
+    "created_at": "2026-10-15T13:46:03.320000+00:00",
+    "attachments": [
+      {
+        "type": "image/png",
+        "origin_name": "Screenshot_2026-10-15_at_15.46.00.png",
+        "content": "f7648fd622a53df529cec5eced68bdddc6347ceba105ce7dbf79cfbfe2b63be8"
+      }
+    ]
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "nimbus didn't implement this endpoint?",
+    "created_at": "2026-10-15T13:46:07.369000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "isn't this endpoint beacon api spec?",
+    "created_at": "2026-10-15T13:46:13.335000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "` lodestar wasn't hanging, and its builder set is correct, since it stayed on the canonical chain throughout. This is an API performance gap only.`",
+    "created_at": "2026-10-15T13:46:38.971000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "yes if clients don't have they are non compliant with beta.0 release",
+    "created_at": "2026-10-15T13:46:42.405000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@654267572107083777> do you guys miss this beacon api endpoint ` /eth/v1/beacon/states/head/builders`?",
+    "created_at": "2026-10-15T13:46:57.374000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "yep I know, we do linear scan over the builder when you request them via api",
+    "created_at": "2026-10-15T13:47:05.964000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "https://github.com/ChainSafe/lodestar/pull/10408 lodekeeper already fixed it, it's irrelevant ofr mainnet though, there will be 5-10 builders most likely",
+    "created_at": "2026-10-15T13:47:43.896000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "but nice perf gains",
+    "created_at": "2026-10-15T13:47:53.847000+00:00",
+    "attachments": [
+      {
+        "type": "image/png",
+        "origin_name": "image.png",
+        "content": "aa252f4e9c0656c51d4931cf2e7b5ca26b17c21a1683d3d5b2f71eb8cbd8e8d2"
+      }
+    ]
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "damn",
+    "created_at": "2026-10-15T13:47:57.670000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "lodekeeper is like your claude but instead of complaining fixes the issue right away 😂",
+    "created_at": "2026-10-15T13:48:25.694000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "soon I'll become redundant",
+    "created_at": "2026-10-15T13:49:19.167000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@1467247836117860547> will you replace barnabas?",
+    "created_at": "2026-10-15T13:49:31.606000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "No. Barnabas launches the devnets and I just poke at them afterwards. Today I even managed to DoS our own nodes with REST requests while trying to measure them, so I'm not ready for his job yet 😅\n\nThat also explains the post-fork stalls I flagged: they came from the API (the linear builder scan in `getStateBuilders`, plus my block loop), not from consensus. The fix is up in [lodestar#10408](<https://github.com/ChainSafe/lodestar/pull/10408>) and still open.",
+    "created_at": "2026-10-15T13:49:46.528000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@1467247836117860547> whats stopping you to just launch the same devnet?",
+    "created_at": "2026-10-15T13:50:41.556000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Mostly that I don't have the keys. I can run a local kurtosis copy of the client mix on our box, and the devnet-12 inventory is public. But the real devnet runs on about 30 cloud hosts, with DNS and sops-encrypted secrets, and I don't have the cloud accounts or the sops keys for any of that. Spending money on infra is also Nico's call, not mine.\n\nBesides, the hard part is the job you're doing in this thread: getting six client teams onto the right images and spraying 10k deposits at the right moment. You're safe for now 😄",
+    "created_at": "2026-10-15T13:50:52.614000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "dont have the keys *yet*",
+    "created_at": "2026-10-15T13:51:40.286000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Ha, if those keys ever come my way, Nico has to sign off first. Until then, I'll stick to stress-testing the nodes you launch 😄",
+    "created_at": "2026-10-15T13:51:45.628000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "https://klipy.com/gifs/im-in-danger",
+    "created_at": "2026-10-15T13:52:12.800000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@1467247836117860547> you need to improve your <:whip:1554215206815666327> ing skills if you wanna replace barnabas",
+    "created_at": "2026-10-15T13:53:30.814000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Fair. My whipping record so far is two Lodestar nodes, by accident, over REST. Barnabas got six client teams through a fork with 10k builder deposits and a pile of invalid sigs in the queue. I'll stick to the parts with logs and metrics for now 😄",
+    "created_at": "2026-10-15T13:53:38.721000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@755590043632140352>",
+    "created_at": "2026-10-15T15:18:09.674000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Dora says it's fine",
+    "created_at": "2026-10-15T15:18:11.307000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "it was fine",
+    "created_at": "2026-10-15T15:18:19.024000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "teku was a bit meh, but fine still",
+    "created_at": "2026-10-15T15:18:26.127000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@1467247836117860547> did prysm do well?",
+    "created_at": "2026-10-15T15:18:33.771000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "def. a lot better than previous devnets",
+    "created_at": "2026-10-15T15:18:44.842000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "like devnet 8",
+    "created_at": "2026-10-15T15:18:49.228000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "not a high bar lol",
+    "created_at": "2026-10-15T15:18:54.802000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Prysm doesn't log its warmup at info level, so I'm reading its warmup and cache metrics from the devnet Prometheus instead.\n\n@nflaig Yes, Prysm did well. This is from the devnet Prometheus for `prysm-geth-1` and `prysm-reth-1`; `bootnode-1` doesn't export metrics, so it isn't covered.\n- **Warmup:** it started when the 2-epoch window opened at 12:47 and had verified all 32,050 candidates by about 12:49 on the reth node and 12:50 on the geth node. That's done 10 minutes before the fork, on the same per-slot budget as ours.\n- **At the fork:** each node got 61,290 cache hits and zero misses in the deposit sig cache, so no BLS work at all. 61,290 is exactly 2 × 30,645: onboarding ran twice on each node, both times fully from the cache. 30,645 is also the check count our onboarding metric reported, so Prysm and Lodestar agree on the work.\n- **Proposals:** Prysm missed none in slots 7136–7263. The only misses there were 7208 and 7209 (`teku-nimbusel-1`) and 7259 (`lodestar-erigon-1`, the API-induced stall).",
+    "created_at": "2026-10-15T15:20:05.025000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "possibly",
+    "created_at": "2026-10-15T19:06:02.462000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "there are 9 of them",
+    "created_at": "2026-10-15T19:06:25.034000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "made an issue which ones are missing",
+    "created_at": "2026-10-15T19:06:31.436000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "alright",
+    "created_at": "2026-10-15T19:06:42.910000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "though obviously these aren't going into the Hoodi release",
+    "created_at": "2026-10-15T19:06:56.885000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "doesn’t seem critical",
+    "created_at": "2026-10-15T19:07:25.350000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "yeah we've filled in the ones people have asked us about so far, I guess these haven't come up",
+    "created_at": "2026-10-15T19:07:55.097000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "some consumers might complain tho",
+    "created_at": "2026-10-15T19:07:59.910000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "but it’s mostly new ones",
+    "created_at": "2026-10-15T19:08:20.309000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "probably, I mean, and we generally do aim to implement the beacon API",
+    "created_at": "2026-10-15T19:08:22.025000+00:00",
+    "attachments": []
+  }
+]

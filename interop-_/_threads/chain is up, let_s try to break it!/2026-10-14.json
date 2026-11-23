@@ -1,0 +1,186 @@
+[
+  {
+    "author": "pk910",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "",
+    "created_at": "2026-10-14T16:36:50.301000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "pk910",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@586161934425128960> I see that you've already submitted all the invalid deposits.  I'm doing the 10k valid early onboarding deposits now.  that will take half an hour to an hour.\nDo you wanna spray in the invalid sigs again?    last time they were mixed with the valid ones,  which made batching really hard.",
+    "created_at": "2026-10-14T16:36:51.209000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "no I didn't do anything",
+    "created_at": "2026-10-14T16:37:06.136000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "maybe <@412614104222531604> ?",
+    "created_at": "2026-10-14T16:37:11.265000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "yeah it was me",
+    "created_at": "2026-10-14T16:38:01.775000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I’m afk tho now",
+    "created_at": "2026-10-14T16:38:09.956000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "pk910",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "do it again,  now   pls 🙂",
+    "created_at": "2026-10-14T16:38:11.114000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "fam time",
+    "created_at": "2026-10-14T16:38:13.374000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "I will dm you how to \"spray\" them 😄",
+    "created_at": "2026-10-14T16:38:15.176000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Do we know if all clients _should_ support lots of onboarded deposits?",
+    "created_at": "2026-10-14T16:43:49.515000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "they can stay on fulu otherwise",
+    "created_at": "2026-10-14T16:44:10.298000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@1467247836117860547> can probably chekc whether each client supports a deposit pre-verification cache on their devnet-12 images",
+    "created_at": "2026-10-14T16:46:29.322000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "pk910",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "ah well,  my claude does not allow me executing the gists..  looks like the valid deposits also ran through way faster this time..\nso both, the invalid ones and 10k valid ones are on chain now,   but in their own continuous ranges",
+    "created_at": "2026-10-14T16:49:32.783000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "it's say the fork is in 20h, we have plenty of time",
+    "created_at": "2026-10-14T16:50:50.453000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Adding the backlog entry first, then pulling the images.\n\nPulling the exact CL image commits on devnet-12 from Dora, then I'll check each client's source for the pre-fork deposit sig cache.\n\nLighthouse, Lodestar and Grandine are done. Checking Teku's signature helper now, then Prysm and Nimbus.\n\nResults are in for all six. One last check on whether Teku has caching work open upstream.\n\n@nflaig Five of the six CL images on devnet-12 have the pre-fork deposit sig cache. Teku doesn't. I checked the exact commits the nodes report in Dora. The spec note asking for this is from [consensus-specs#5227](<https://github.com/ethereum/consensus-specs/pull/5227>).\n- **Lighthouse `8e0aeef`: yes.** `OnboardBuildersCache` is an LRU with 262k entries. It's seeded from the head state at startup, updated on every block import, and `upgrade_to_gloas` reads it, verifying inline on a miss.\n- **Lodestar `32db66b`: yes.** `BuilderDepositSignatureCache` gets filled in `prepareNextSlot` during the 2 epochs before the fork. Each run handles up to 10k deposits within about 20% of a slot. It skips epoch-transition slots and slots right before we propose.\n- **Prysm `1b67dd8`: yes.** `IsValidDepositSignature` goes through `cache.DepositSignature` (cap 2^19). `runGloasDepositWarmup` fills it starting 2 epochs before the fork, with a 2s per slot budget.\n- **Grandine `d940f70a`: yes.** A `CacheDepositSignaturesTask` runs on each block, and the cache is seeded at startup. It holds 65,536 entries and keeps the tail. Anything left over is verified in parallel at the fork.\n- **Nimbus `e53a78`: partial.** It caches signatures of builder-credential deposit requests as it processes each block, in memory only. Nothing seeds the cache from the state's `pending_deposits`. So a node that restarts or checkpoint-syncs after the deposits land will verify all of them inline at the fork.\n- **Teku `115ab40018`: no.** `GloasStateUpgrade.onboardBuildersFromPendingDeposits` calls `isValidDepositSignature` inline with",
+    "created_at": "2026-10-14T16:50:55.164000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "the plain verifier, so every state upgrade across the fork re-verifies the whole set. It also verifies every validator deposit for a new pubkey in the queue, not just the ones a builder deposit needs. Teku master is 1 commit ahead of the image and that commit is unrelated. I found no caching PR in their recent PRs.\n\nSo Teku is the one to watch at epoch 225. Nimbus should be fine as long as its nodes don't restart between the deposits landing and the fork.",
+    "created_at": "2026-10-14T16:50:56.048000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "can't you use opus 4.8 to run the scripts?",
+    "created_at": "2026-10-14T16:52:19.365000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Hey <@1467247836117860547> just to double check, this support is in their \"master\" branches?",
+    "created_at": "2026-10-14T16:52:27.341000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "@jtraglia Yes. Every image commit is already merged into that client's main dev branch, so none of them are feature branches:\n- Lighthouse, Prysm, Grandine and Nimbus are running exactly the tip of `unstable`/`develop`.\n- Lodestar is 2 commits behind `unstable` and Teku is 1 behind `master`. Those newer commits don't touch deposits, so the answer is the same for Teku: still no cache.\n\nOne caveat: Lighthouse's and Nimbus's `stable` branches don't have it yet. The devnet commits are 260 and 57 commits ahead of `stable`, so it hasn't shipped in a release for those two. I didn't check release status for the other four.",
+    "created_at": "2026-10-14T16:53:04.072000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "pk910",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "opus went completely weird and started converting the stuff to assertoor playbooks..\nmaybe I shouldn't have started it in context of the assertoor repo 😄\ndoing it manually now..   getting claude to do something in a ~7min time frame is tricky 😄",
+    "created_at": "2026-10-14T16:54:00.211000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "<@808969530608451584> which version of lighthouse/nimbus are we using in devnet-12?",
+    "created_at": "2026-10-14T16:54:57.489000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "lodekeeper",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "Jumping in since I already pulled this from Dora's client list:\n- Lighthouse runs `ethpandaops/lighthouse:unstable`. The nodes report `v8.3.0-rc.0-8e0aeef`, which is the current tip of `unstable`.\n- Nimbus runs `ethpandaops/nimbus-eth2:unstable`. The nodes report `v26.10.0-e53a78`, also the current tip of `unstable`.\n\nBoth images come from the devnet-12 `images.yaml` and there are no per-host overrides. pk910 can correct me if any nodes got re-pinned by hand.",
+    "created_at": "2026-10-14T16:55:08.939000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "barnabasbusa",
+    "category": "Testing",
+    "parent": "interop-🌃",
+    "content": "we using latest trunks",
+    "created_at": "2026-10-14T17:32:27.299000+00:00",
+    "attachments": []
+  }
+]

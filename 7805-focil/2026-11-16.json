@@ -1,0 +1,130 @@
+[
+  {
+    "author": "nc1234",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "> but equivocating ILs are enforced with the one that a builder chooses.\nI think both equivocating ILs should not be enforced. If enforced, some attesters who haven't seen the other equivocating ILs would need to fetch the missing equivicating IL. Whereas if we un-enforce, all we need are two headers.\n\nHow about we mix 1 and 2 together? So IL roots in the bid, then anyone that sees equivocation can broadcast `InclusionListEquivocation`, then builder puts that `InclusionListEquivocation` into their payload envelope, attesters un-enforce the equivocator's ILs. Proposer does no aggregation, it just validates proofs from the topic like everyone else. Cost is one extra gossip topic, and I believe size is ~5 KiB with leanXMSS when one happens.",
+    "created_at": "2026-11-16T08:18:29.779000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nc1234",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Regarding the forged IL roots in the bid, when attesters are doing IL checks on the payload, they dont need to attempt to fetch the missing ILs with the forged roots, because envelope contains `InclusionListEquivocation`. So no need to have some aggregated IL signatures in the bid.",
+    "created_at": "2026-11-16T08:21:14.482000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Yeah, this is what I described and the main push back was that it's more complex than just including two includer-signed commitments in the block to prove the equivocation (accepting that equivocations travel the whole network).\nI'm with you, and would support having equivocation proofs + a gossip topic for them + proposers include equivocations in their blocks.",
+    "created_at": "2026-11-16T09:30:03.103000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "It feels like everyone agrees that we may want the proposer to prove the equivocation (instead of being forced to obey both lists). And then the question is, have equivocations travel the whole network vs intercept them, create a equivocation proof, and send that over the wire to the proposer.",
+    "created_at": "2026-11-16T09:32:02.505000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "> If enforced, some attesters who haven't seen the other equivocating ILs would need to fetch the missing equivicating IL.\n\nNot necessarily. Even without all this, attesters don't have to fetch missing ILs. As a second thought, clients maybe prefer to fetch missing ILs to minimize wrong attestations.",
+    "created_at": "2026-11-16T12:25:13.238000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "When builders put `InclusionListEquivocation` in their envelopes, what do we gain by adding the extra gossip topic? If it's to reduce bandwidth, I think we can just allow 1 IL per includer because everyone will learn about any equivocation from an envelope.",
+    "created_at": "2026-11-16T12:26:00.531000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "It's for reducing bandwidth and work for builders. And you cannot just allow 1 IL per includer as there could be situations in which the proposer only sees one but many attesters see a second one. You'd need to allow 2 per member to guarantee everyone has a proof of equivocation (incl the proposer) in case of one.",
+    "created_at": "2026-11-16T12:36:24.411000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Builders can also detect equivocations as long as we propagate 2 ILs per includer. When we put equivocation proof in the envelope, this is mainly for reducing bandwidth.\n\nI think we should be prudent when we increase complexity. Before ILs get signed by some hash-based signature, transactions take up a dominant part of IL size. Once it's signed by leanXMSS, it takes less but still ~80% and IL size is ~10 kB. In the far future that we'd have 8288, it would be still 8 KiB when the STARK proof is 300 kB. But the equivocation proof doesn't need any STARK proof, right? Two leanXMSS signatures are enough. So maybe it's not strictly necessary while still being helpful before 8288 but we'd probably want it after?",
+    "created_at": "2026-11-16T13:05:03.359000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "By the way, FOCIL breakout #46 is tomorrow. Please add agenda to the [GitHub issue](https://github.com/ethereum/pm/issues/2289)!",
+    "created_at": "2026-11-16T13:07:54.003000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nc1234",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "With 1 IL per includer and no topic, only a builder that happened to see both ILs can call out the equivocator. So we need either 2 ILs per includer or the topic. I'm fine keeping 2 ILs for now and revisiting the topic with 8288.\n\nThen the change is just 1) IL roots in the bid 2) `InclusionListEquivocation` in the envelope, attesters un-enforce the equivocator. Also The envelope proof is not mainly about bandwidth. It gives every attester the same evidence, so a late second IL can't split their views.",
+    "created_at": "2026-11-16T13:43:32.620000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "I agree, this is my understanding, too.",
+    "created_at": "2026-11-16T13:44:37.332000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "so, equ. proof inside block - yes\nequivocation proofs (instead of propagating 2 ILs per includer) - tbd\n8288 aggregation vs include 2 sigs over txs_roots - tbd",
+    "created_at": "2026-11-16T13:51:32.129000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "What was the last part again?",
+    "created_at": "2026-11-16T13:54:26.187000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "if we wanna make use of the 8288 aggregation vs just including 2 xmss sigs as the proof",
+    "created_at": "2026-11-16T14:00:50.187000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jih2nn",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "To be clear, all are TBD 🙂 We'll discuss these in the upcoming breakouts before making any decisions.",
+    "created_at": "2026-11-16T14:03:51.712000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "ankushindaniil",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "<@725415098331430932> replied to you on 12663 with a recent roots idea, would love your take when you have a moment: https://github.com/ethereum/EIPs/pull/12663#issuecomment-6921955276",
+    "created_at": "2026-11-16T19:47:27.830000+00:00",
+    "attachments": []
+  }
+]

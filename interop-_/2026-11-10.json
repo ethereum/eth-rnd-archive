@@ -1,0 +1,114 @@
+[
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "",
+    "content": "That's an interesting point. If we have a majority locked on executing a payload for more than a slot we are fucked up as they can't even attest. If that's the minority then the chance of missing a proposal is proportional to the fraction of struggling minority and might be low. I would not even care about a few empty slots in this case and not even overcomplicate.\n\nIn general, if SYNCING is a response of the EL because it is locked on block execution, it's a bug. Fixing a bug of EL by changing CL behavior doesn't sound right to me. I honestly don't want to discuss this anymore until we get more details.",
+    "created_at": "2026-11-10T04:20:20.327000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nc1234",
+    "category": "Testing",
+    "parent": "",
+    "content": "Ok I let AI dug into what actually happened in devnet8, looks like `SYNCING` is due to lodestar bug. potuz's two original points is still valid, just not manifested by lodestar. AI output:\n```\nPulled the Lodestar logs and the engine API snooper from the devnet-8 boxes for slot 611037. Short version: that was not an EL returning SYNCING, and no Lodestar node went optimistic.\n\nToni's payload arrived at t=8.6 s and the PTC voted it not present (0/450), so fork choice already had it EMPTY. Then every EL except erigon rejected it as INVALID. Geth's reason: \"access list hash mismatch\". Rejection took 0.6 s (ethrex) to 7.5 s (besu). The engine call sequence on lodestar-geth-1 was strictly serial: newPayload(P_611037) INVALID, fcU(parent) VALID, newPayload(P_611037) again INVALID \"links to previously rejected block\", fcU VALID, newPayload(P_611040) VALID.\n\nThe \"SYNCED -> SYNCING\" Nero saw is a Lodestar artefact: we map an INVALID newPayload answer into our \"execution client is syncing\" state and log it that way. It does not affect duties and nothing was optimistic. We logged it twice per node because we re-fetched and re-sent the same rejected envelope ~12 s later. Both are Lodestar bugs, we will fix them. The 2 nodes that did not flip are our erigon pairs, which were already optimistic before and after.\n\nOne thing that does support Potuz's point (1): the 611038 proposer (grandine-besu-2) built on EMPTY but its block only landed at t=4.1 s, exactly when besu finished rejecting the payload, so it looks like it waited on a busy EL. And 611039 (nimbus-reth-2) was missed outright, no idea why from our side.\n\nSo for the reproduction: this run shows the invalid-payload path, not the slow-valid-payload path. To test the SYNCING case you need a heavy payload that is valid.\n```",
+    "created_at": "2026-11-10T08:11:56.420000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "Is Besu consistently taking that long to find the payload was INVALID? This is Toni's attack of grinding a very large payload that consumers more gas on both the BAL and the txs in parallel but you need sync different threads to find out? Is this how ethrex finds out quickly that it's invalid or did the ethrex node get the payload earlier?",
+    "created_at": "2026-11-10T10:10:28.683000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "",
+    "content": "I have a related Q: has 0s cutoff for `is_payload_verified` for attesters been considered?",
+    "created_at": "2026-11-10T10:48:01.379000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "daniellehrner",
+    "category": "Testing",
+    "parent": "",
+    "content": "I just checked and this was caused by a bug that is fixed on our `main` branch already. We were executing the invalid block twice, once with parallelization and another time sequentially. That is a fallback from our optimistic parallelization that we already do on mainnet, but with BALs that does not make sense and we deactivated that. Without the 2nd run we should have processed this block in 2 - 3s.",
+    "created_at": "2026-11-10T11:02:32.297000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "yes it has, I think that's very dangerous. If you craft a tx in the mempool that takes 6 seconds to execute you can kill the chain, you could also grief builders by this, for substantial amount of money.",
+    "created_at": "2026-11-10T11:04:15.187000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "",
+    "content": "how big the difference is comparing to 3s cut off? It could be a 9 seconds transaction instead. Won't builder notice that a payload takes too much time to be executed during the build process?",
+    "created_at": "2026-11-10T11:07:05.647000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "the 3s cuttoff is not a problem though: the proposer of the next slot will have taken the payload.",
+    "created_at": "2026-11-10T11:07:53.397000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "",
+    "content": "If payload takes more than 9s to be executed then attesters vote for empty block, the difference with the 6s payload is just 3 additional seconds, right?",
+    "created_at": "2026-11-10T11:10:59.700000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "Today it would be about 12 seconds: from beacon block arrival until the next beacon block arrival.",
+    "created_at": "2026-11-10T11:22:48.118000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "",
+    "content": "the cutoff doesn't mean that the payload execution should be cancelled, it only means that attesters vote for full only if the payload has been validated at the start of the slot",
+    "created_at": "2026-11-10T11:22:55.425000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Testing",
+    "parent": "",
+    "content": "But the most important aspect of this to me is the fact that by sending long executing payloads today, the builder grieves itself. But in Gloas the builder grieves the next proposer/builder.",
+    "created_at": "2026-11-10T11:23:42.530000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "",
+    "content": "i think 0s cutoff for payload validation in the attesters view could protect next slot proposer. but that might be complicated to introduce",
+    "created_at": "2026-11-10T11:26:11.641000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "m.kalinin",
+    "category": "Testing",
+    "parent": "",
+    "content": "Getting back to `SYNCING`. Let's consider the following scenario: `P_1 <- P_2` are canonical payloads from consecutive slots. If `P_1` execution lasts beyond the point when `P_2` is received then `newPayload(P_2)` can return `SYNCING`.\n\nAfter that, if `P_1` hasn't been verified at the attestation deadline, it will be reorged as attesters would vote against it. If it has been verified before the attestation deadline, then `fcU(P_2)` must never return `SYNCING` even if `P_2` execution takes ages.",
+    "created_at": "2026-11-10T12:02:50.448000+00:00",
+    "attachments": []
+  }
+]

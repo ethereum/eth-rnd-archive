@@ -1,0 +1,386 @@
+[
+  {
+    "author": "george_avs",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Hi folks! While preparing for Gloas, we found a potential issue with deposit routing during builder onboarding at the fork boundary. It could affect liquid staking protocols. Could you take a look?\n\nIssue: https://github.com/ethereum/consensus-specs/issues/5735\nPossible fix: https://github.com/ethereum/consensus-specs/pull/5736\n\n<@755590043632140352> <@592004585506340885>, you're probably the right people for this 🙏",
+    "created_at": "2026-10-12T17:13:37.805000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "what's the difference of this vs. current mainnet? (ie. what you are trying to solve via EIP-8205)",
+    "created_at": "2026-10-12T17:45:27.755000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "george_avs",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Today, front-running creates a validator with the operator’s withdrawal credentials. Some protocols use a validator beacon proof to recover funds from the operator’s collateral.\n\nThe new case happens during the one-time Gloas activation. If a builder deposit and the protocol’s validator deposit for the same key are both pending, with the builder deposit first, both can fund the builder. No validator is created, so the usual recovery proof is unavailable.\n\nEIP-8205 addresses deposit front-running more broadly. This fix preserves existing app-layer protections during the fork transition.",
+    "created_at": "2026-10-12T18:04:04.079000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I haven't thought much about this as I'm OOO, but could you give me some more detail? For example, for a protocol that waits to see a valid validator deposit for about 1 ETH, and no builder deposit before in the pending queue for the same key, then they are fine to deposit. This affects therefore protocols that don't require any predeposit for any value from the operator itself right?",
+    "created_at": "2026-10-12T18:30:13.791000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "So are we talking about losing 32 vs losing 31ETH per such a deposit?",
+    "created_at": "2026-10-12T18:32:38.962000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "assuming the colateral is about 1ETH... so my question is, how do protocols prevent frontrunning today, from the description it seems that they can't, that they can only recover whatever the collateral is",
+    "created_at": "2026-10-12T18:33:50.413000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "george_avs",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Yes, the sequence you describe avoids this particular routing issue. An existing validator also prevents it. The important part is having a valid validator deposit ahead of the builder deposit, rather than who pays for it.\n\nThe case I mean is a protocol that funds the initial 1 ETH itself, with collateral covering the operator:\n1. The protocol sends 1 ETH with 0x02 credentials. It expects either to prove correct credentials and continue funding, or to prove wrong credentials and claim compensation from the collateral.\n2. The operator front-runs this with a valid 0xB0 deposit for the same new key.\n3. Both deposits are still pending when Gloas activates. Both amounts go to the builder, and no validator is created.\n\nWhile no validator exists, neither proof is available, blocking the normal compensation path. In some protocol designs, the missing validator can also block accounting updates or some funds (staged 31 ETH in Lido PDG).\n\nThe routing difference is what seems unexpected: before and after the transition, valid 0x02 deposits follow the validator path. During the transition, this one funds a builder instead. Since EIP-8282 allows the same key in both registries, I would expect the 0xB0 deposit to create a builder and the 0x02 deposit to create a validator.",
+    "created_at": "2026-10-12T18:39:17.580000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "> The protocol sends 1 ETH with 0x02 credentials. It expects either to prove correct credentials and continue funding, or to prove wrong credentials and claim compensation from the collateral.\nHow does this change? you can't prove either without a validator already in the state",
+    "created_at": "2026-10-12T18:43:19.565000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "oh are we talking **only** about the 1ETH recover mechanism?",
+    "created_at": "2026-10-12T18:44:39.429000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "george_avs",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "You will have a validator with the attacker's WCs in the state, so you can prove that they are wrong",
+    "created_at": "2026-10-12T18:45:34.855000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "george_avs",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "yep",
+    "created_at": "2026-10-12T18:45:37.807000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "george_avs",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "But in some protocols (like Lido PDG), this can also lock 31 ETH on the contract until it is verified that the validator is indeed in the registry with the correct WCs",
+    "created_at": "2026-10-12T18:47:52.804000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "But that lock will continue working exactly the same isn't it? Those 31 ETH are \"safe\" in a way right?",
+    "created_at": "2026-10-12T18:52:22.658000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "So, generic, low-value comment: there is _no way to safely test this in the time remaining_",
+    "created_at": "2026-10-12T18:54:11.241000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "it is too late",
+    "created_at": "2026-10-12T18:54:18.845000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "george_avs",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Yeah, they are not stolen, just locked/frozen on the contract level to ensure there will always be 32 ETH available to activate the validator and fully withdraw it once it in the registry",
+    "created_at": "2026-10-12T18:54:24.871000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Ok so the issue is that 1ETH that also becomes locked until either a governance action or some master keys recover it, is my reading right?",
+    "created_at": "2026-10-12T18:57:52.592000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Cause the operator also can't prove that a valid validator exists to claim their collateral",
+    "created_at": "2026-10-12T18:58:19.374000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Is my understanding of the problem correct?",
+    "created_at": "2026-10-12T18:58:47.302000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "but in this case you have a builder with the attacker's WCs in the state, can't you prove that too?",
+    "created_at": "2026-10-12T19:00:13.515000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "My understanding is that this is not what the current contract does",
+    "created_at": "2026-10-12T19:00:45.427000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "They will need to change the contract to prove this",
+    "created_at": "2026-10-12T19:00:57.704000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "And for a one time thing it may be cheaper to just avoid sending 1ETH deposits once the pending queue is longer than the expected fork",
+    "created_at": "2026-10-12T19:02:11.330000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "george_avs",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I can’t give a precise impact assessment for every protocol. I found two other potentially affected ones besides Lido https://github.com/ethereum/consensus-specs/issues/5735#issuecomment-6128720290. This is preliminary research, and there may be more.\n\nMore generally, I see this as an unexpected routing behavior: a valid deposit intended to create a validator can instead become a builder top-up during the fork transition, without creating a validator. I would not treat that only as a narrow recovery issue for a few protocols.\n\nFor Lido, I think we can mitigate the risk through monitoring, pausing new deposits before the fork if needed. Any affected deposits already in the queue would need separate recovery, including resolving the protocol’s state and accounting. But I can’t assume other protocols have equivalent recovery options or that the impact would be minor for them.",
+    "created_at": "2026-10-12T19:04:55.865000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "generic comment the 2nd: during devnets is the time to spot these things, and especially not after the first testnet has already forked, for future forks. Yes, it means following devnets",
+    "created_at": "2026-10-12T19:06:27.484000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "you don't need to follow devnet for this, it's been in the spec since 8 months https://github.com/ethereum/consensus-specs/pull/4817 and there is a test vector `test_fork_builder_deposit_followed_by_non_builder_credentials` that asserts the current behavior",
+    "created_at": "2026-10-12T19:09:23.358000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "george_avs",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "This came up today during an AI scan. Unfortunately, we missed it during our last spec reviews",
+    "created_at": "2026-10-12T19:09:38.534000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I mean, following during the devnet period, but yeah, reasonable, not literally following devnets. There's just typically, every fork, this explosion of interest just as it becomes tricky to modify anything",
+    "created_at": "2026-10-12T19:11:46.562000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "george_avs",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "EIP-8282 allows a builder and a validator to share the same public key. A builder with the operator’s withdrawal address can therefore exist alongside a validator with the protocol’s correct credentials. The builder proof alone does not show that the protocol’s deposit went to the builder, or that the validator is missing.",
+    "created_at": "2026-10-12T19:13:55.783000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I'm also OOO and have only skimmed the issue, but what you're describing is very intentional:\n> once a pending deposit registers a builder, later deposits for the same public key top up that builder regardless of their withdrawal credentials. A validator deposit is then removed from the validator queue and added to the builder's balance.",
+    "created_at": "2026-10-12T20:28:31.227000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Yes, everything you describe is intentional.",
+    "created_at": "2026-10-12T20:30:31.513000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "And like others have said, it's too late to change this.",
+    "created_at": "2026-10-12T20:30:41.526000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "But I do see how this complicates things for you 🫤",
+    "created_at": "2026-10-12T20:50:58.515000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "george_avs",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Could you explain the rationale behind this choice? Before and after the fork, a valid 0x02 deposit creates or tops up a validator. But during fork activation, an earlier 0xB0 deposit for the same key can make it fund a builder instead.\n\nThis difference seems surprising, especially since EIP-8282 allows the same key in both registries. Is there a specific scenario that this routing is intended to support?",
+    "created_at": "2026-10-12T20:58:26.969000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "george_avs",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Thanks, I appreciate that. I’m less concerned about Lido specifically. This is not our main deposit flow, and I expect we can manage the fork with the current spec.\n\nMy concern is broader - the temporary change in deposit routing at the fork. It changes the behavior that existing applications may rely on, which is why I’m questioning the rationale and backward compatibility of this choice.\n\nThe examples above show how this can affect protections in delegated staking protocols. It could also affect other applications that rely on deposit processing, such as explorers or deposit indexers, though those are just hypothetical examples.",
+    "created_at": "2026-10-12T21:20:17.660000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jtraglia",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "It mimics the behavior of validators today; for top-ups, the withdrawal credential prefix and withdrawal address are ignored. Like you mentioned, the builder onboarding function was designed pre-8282 when builders/validators couldn't have the same pubkey & that influenced it quite a bit. Post-8282 it could have been done differently, like your proposal, but we just kept the same behavior. Your PR actually looks pretty reasonable but I am concerned with changing this logic this late into the upgrade cycle. I'll defer this to client teams. cc <@&1417820113981145228>",
+    "created_at": "2026-10-12T21:39:43.539000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "as you said, I believe after 8282 we could have allowed this, but also from protocol perspective no good reason to do so",
+    "created_at": "2026-10-12T21:44:59.316000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "<@565595741477928990> you accept contributions? https://github.com/nflaig/core/pull/1",
+    "created_at": "2026-10-12T21:45:11.394000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "gkoumout",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Yep, so it essentially mimics the behavior of validators today, which has a flaw  (deposit  front run) which is a tech debt remaining over the years. This is why EIP-8205 requests to fix this. It's a very good example of how leaving such things un-resolved creates more and more issues as time passes",
+    "created_at": "2026-10-12T21:46:39.106000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "the spec change for this is very simple but our deposit cache to pre-verify signatures is very complex and re-testing it would be a massive effort at least from my pov, I am not sure, maybe the change doesn't affect it but we would need to analyse if this opens up new attack vectors",
+    "created_at": "2026-10-12T21:49:45.965000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Yeah, I think I've already indicated my preference here. To be pointed. Nimbus is, right now, today, putting together its Hoodi release (which will need some internal testing etc), and a change of this magnitude just invalidates a lot of that testing, So it was never part of a devnet, it wasn't part of Sepolia, it can't practically be part of Hoodi either (one can dispute this point, I realize, but it's extremely tight and high-risk, especially because of yes, the precaching which is there to support the .... basically still pointless predeposits of builders because apparently two epochs without P2P bids is inconceivable. But ok.)\n\nSo the proposal here is to literally test the first time live, in mainnet\n\nNo",
+    "created_at": "2026-10-12T21:54:51.678000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I'd say fix it in Hegotá except by then it will be irrelevant because it's a one-off quirk of the ePBS transition",
+    "created_at": "2026-10-12T21:56:12.307000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I don't get this, can't you proof against the post-fork state that it went to the builder?",
+    "created_at": "2026-10-12T21:59:22.466000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "gkoumout",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "can you explain the precise scenario you mean? Coz if I understand well, this \"went to the builder\" looks valid protocol-wise, but I might be missing the full scenario you are thinking about",
+    "created_at": "2026-10-12T22:14:53.086000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "gkoumout",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "Let's at least inlcude EIP-8205 in Hegota and make sure that those frontrun issues would disappear from the protocol; any such feature would then adapt this logic instead of inheriting new front-run attack vectors",
+    "created_at": "2026-10-12T22:16:31.877000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nflaig",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "it's likely mostly me not understanding how your contracts work, was just thinking why https://github.com/nflaig/core/pull/1 doesn't work",
+    "created_at": "2026-10-12T22:26:55.273000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "potuz",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "I'm sympathetic to the issue and I believe it's a real issue that may affect some teams in unexpected ways if they're not aware of it and if they can't take preventive measures like simply not sending deposits right before the fork. I confess I haven't analyzed the fix since removing the pre variation cache at this stage scares the hell out of me (in fact I believe we haven't even tested that cache enough times and I'm already scared of it being exploited at the fork). \n\nSo I think this simply boils down to a simple question of whether we want to go back to the drawing board over this, delay the fork and spend more time testing, or simply document the issue and contact possibly affected parties (it's a one time thing which is time bound). \n\nAlso no fix is \"simple\" at this stage. If people believe we should change this behavior I'm fine with it. What I'm not fine with is to propose a fix, merge it to the spec repo and then keep Hoodi's timeline. Whatever \"fix\" is proposed should come with the understanding that we're forking mainnet considerably later to analyze this. Fwiw all these issues keep appearing from what was considered a \"simple last time change\" that was to remove builders from the validator slice.",
+    "created_at": "2026-10-12T22:31:58.677000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "tersec",
+    "category": "Cross-layer",
+    "parent": "",
+    "content": "> a \"simple last time change\" that was to remove builders from the validator slice.\n\nyes, I mean, why",
+    "created_at": "2026-10-12T22:33:08.012000+00:00",
+    "attachments": []
+  }
+]

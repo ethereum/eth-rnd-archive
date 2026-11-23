@@ -1,0 +1,18 @@
+[
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "Thanks for the discussion!\n\nI agree with the direction: drop the eager walk over all reachable nodes, and only check the nodes that a get, insert, delete or branch collapse actually visits.\n\nI think most of this reduces to what we do in a very weird case, where:\n- The prover uses the correct parent state root.\n- The witness contains a subtree under that root with at least one invalid node (e.g. a path longer than 64 nibbles).\n- That node is never visited during execution or while computing the new state root.\n\nThis is the case where the eager walk rejects the block and the lazy check accepts it.\n\nOne could say:\n1. This would mean the prover found a way to forge a node under a hash in the real trie (i.e. broke keccak), and was also \"helpful\" (and dumb) enough to show it to the guest in a subtree that doesn't matter. So the golden question is: if we're handed proof that the hash function is broken, are we okay with saying the block is valid? With the proposal the answer is \"yes\", with the current spec is \"no\". Are both comfortable to switch to a \"yes\" in this situation?\n\n2. Fair point is, why would a malicious prover include that subtree at all? Only visited nodes are forced into the witness. Anything else is there because the prover chose to include it, so the eager walk can only catch what the attacker volunteers. OK, while fair point still doesn't fully answer what we think is important in case 1.\n\n3. Ultimately, if a prover can really forge MPT nodes, a stateless validator is screwed anyway. It can forge well-formed nodes on the paths that are visited (e.g. an account with a fake balance), and neither the eager nor the lazy check can detect that.\n\nSo it feels like we're trying to catch a prover smart enough to break keccak, but dumb enough to hand us the evidence, when it could simply give a valid alternative MPT with fake leaves (the fatal case we can't ever catch).",
+    "created_at": "2026-10-24T01:27:03.719000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Cross-layer",
+    "parent": "l1-zkevm-protocol",
+    "content": "So I would wait a bit on your explicit take on that 1. question, since sounds like the central one <@524738020033691659> <@628018527470616606> . Personally, I think accepting the block in that case seems to be fair, considering we're doomed anyway.\n\nAnd ofc, I agree on creating better test cases reg invalid branches since now this behavior should be covered (e.g. an invalid node on a visited path vs. off it, an embedded sibling that is not accessed but is invalid (very wierd but could be nice to cover), a collapsed sibling that is invalid). (Edit: not sure how messy is to create these cases and still be coherent with the parent state root -- but i can explore)\n\nI'll stop here to get your thoughts (happy to sketch whatever we agree on in a PR in execution-specs when we decide what to do).",
+    "created_at": "2026-10-24T01:27:05.838000+00:00",
+    "attachments": []
+  }
+]
