@@ -1,0 +1,234 @@
+[
+  {
+    "author": "nero_eth",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "There's currently some discussions happening here too:\nhttps://github.com/kevaundray/EIPs/pull/7\n\n> Wrt namings, sig_list == claim list, depencency frame == proof frame.\n\nI summarized the (preliminary) decisions as follows:\n\n1) proof frame vs sig list in favor of sig list\n2) scheme id vs address in favor of address\n3) segregation in 8141 in favor of yes\n\nThe design must work with leanSPHINCS and leanPCS (which it does - don't see any problem) and we're still discussion the best design/flow.\n\nFor sigs, we agree that:\n* it must cover everything fixed before the tx (sender, nonce, ..., which verifier and how many claims)\n* sigs/proofs and everything that comes out of it (proof witnesses, pcs claims, piop data) must not be signed (circular dependency)\n* tampering may only make the tx invalid, never change what it does (incl gas cost)",
+    "created_at": "2026-11-26T05:09:38.805000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "matkt0",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "I see PROOF frame on the devnet 3 tracker https://github.com/ethereum/execution-specs/issues/4069. Did we already decide to use PROOF frame and I missed it ?",
+    "created_at": "2026-11-26T06:37:06.085000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "<@680337202521440470> check my summary above - this will be settled by acdt on monday iiuc.",
+    "created_at": "2026-11-26T07:10:25.325000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "gurukamath",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "This was created based on the discussions of the PQTS call yesterday. It will come up for a decision in ACDT. I'll update the tracker with the other candidates",
+    "created_at": "2026-11-26T08:34:18.819000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "gurukamath",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Updated the tracker with the candidate designs under discussion. Included a summary of the different decision dimensions we need to navigate as we decide on a design\nhttps://github.com/ethereum/execution-specs/issues/4069",
+    "created_at": "2026-11-26T10:09:40.183000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "qu0b",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Great summary, thanks!",
+    "created_at": "2026-11-26T10:56:52.335000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "niard.eth",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Simulation data on the \"8 KB or 5 KB\" question (netsim model of EIP-8141/8288, 100–200 nodes; model output, not devnet):\n\n1. The network limits signature bytes per block; size decides how many tx fit. Without aggregation, today's link mix is clean up to ~4 MiB of signatures per block; orphans start at 6–8 MiB, and at half-speed links the limit is ~2 MiB. Kev's 2 MiB cap is ~2× inside that: 270 sigs/block at 7.7 KB, 474 at 4.4 KB\n\n2. No aggregation at 200 M gas: 27 PQ tx/s at 7.7 KB (22.5 with the 2 MiB cap), 46 at 4.4 KB (39.5). That's about mainnet's 23 tx/s today\n\n3. Aggregation as priced today (33 K gas per sig): ~212 PQ tx/s at 200 M for both sizes, gas-bound. Builder-only aggregation is enough; mempool aggregation added no capacity and ~20 % more home bandwidth. Either adds ~5–6 s median latency. Size still costs mempool bandwidth; permutations cost builder proving time (~2× from 289 to 515 perms) but don't bind\n\n4. When proving and bandwidth bind. At 33 K gas per sig, gas binds first: ~212 sig/s at 200 M, ~350 at 300 M. Next come:\n- proving: one builder prover keeps up with ~460 sig/s at 515 perms and ~900 at 289. It binds once gas allows more: gas limits of ~400 M (7.7 KB set) or ~700 M (4.4 KB set), or sooner if the per-sig gas is cut. Each extra prover server adds the same again.\n- bandwidth: raw sigs gossiped to every node break our modelled network around ~1,700–2,300 sig/s, more than 10× today's gas bound. Going beyond needs raw sigs to stop reaching every node\n\n5. leanPCS/PIOP: PCS openings are ~300 KB each, so this only works once a block proof exists. H* without aggregation just needs to keep the door open",
+    "created_at": "2026-11-26T15:32:59.116000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "niard.eth",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "First conclusions:** size and permutations matter early and late; only the middle period is forgiving.**\n- Early (no aggregation): throughput is ~1/size; permutations set hardware-wallet signing time.\n- Middle (aggregation, gas-bound): neither moves TPS; they cost mempool bandwidth and prover hardware.\n- End game (thousands of tps): permutations set the prover fleet size, size sets network ingress, both ~linearly.\n- The set is fixed once for all phases, so one small in both bytes and permutations (~4.4 KB / ~290 perms vs today's 7.7 KB / 515) wins early and late....",
+    "created_at": "2026-11-26T15:33:04.927000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "niard.eth",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "My gut feeling is that : in ANY case we should optimise as much as we can for permutation at a given sig size. Which is currently not the case as our default takes somewhat MPC friendly parameters over the optimised one (at detriment of current and future network performance). Then we should also consider optimising size as much as possible (especially if we consider a likeliness of Q day / AI day during the non aggregation period). All of this can be done in the regular signature scheme without exotic optimisation (but we should also consider the exotic optimisation and bench the difference between \"network optimised\" without exotic scheme modification vs \"network optimised\" with exotic scheme modification",
+    "created_at": "2026-11-26T15:38:30.856000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "niard.eth",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "TLDR : no point wasting much more time on non \"network optimised\" variants IMO",
+    "created_at": "2026-11-26T15:39:07.337000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "niard.eth",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "---",
+    "created_at": "2026-11-26T15:39:38.360000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "niard.eth",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "<@427491045308235776> in your PR  does claim_witnesses count toward EIP-7934's 8 MiB, and what is the verifier address?",
+    "created_at": "2026-11-26T15:39:48.434000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "misilva73",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "<@1219940276223606846> , do you have a report/repo with this analysis?",
+    "created_at": "2026-11-26T15:40:27.495000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "niard.eth",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Yes, spoiler it's a claude unleashed on top of <@857052906495017000> network sim",
+    "created_at": "2026-11-26T15:41:19.462000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "niard.eth",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "will share asap just need some cleaning",
+    "created_at": "2026-11-26T15:41:30.682000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "matteoxyz3",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Is there anywhere to see this infamous 5kb parameter set?",
+    "created_at": "2026-11-26T15:53:36.470000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "niard.eth",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Just run a sweep that **optimise for the network needs** at a given signing budget and you find them",
+    "created_at": "2026-11-26T16:01:06.127000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "matteoxyz3",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Yeah whatever, but is this a specific parameter set that I can read somewhere?",
+    "created_at": "2026-11-26T16:02:50.133000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "niard.eth",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "eg. h = 26 d = 1 a = 9 k = 20  w = 4 l = 64 swn = 122     > sig size 4,6 KB",
+    "created_at": "2026-11-26T16:02:50.953000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "matteoxyz3",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "So this is a set with a 2^26 budget right?",
+    "created_at": "2026-11-26T16:05:44.637000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "matteoxyz3",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "This is like 67M signature per keys, many people already discarded that because they consider it small",
+    "created_at": "2026-11-26T16:06:57.338000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "matteoxyz3",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Saying that a 2^26 lifetime sig is smaller than one with a 2^30 budget is pretty obvious",
+    "created_at": "2026-11-26T16:07:23.257000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "matteoxyz3",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "But we are comparing apples and oranges",
+    "created_at": "2026-11-26T16:07:30.226000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "niard.eth",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "full tree on this one it's a 119 M sig lifetime. About lifetime : after a lot of research, IMO anything above 2^24 is more than fine. I've spent enough time and energy debating this, we should be focusing on **saving the ship** rather than **a convenience feature** for the 0.0001% percentile of use (I don't even think there is a single nounce at 120M...) client teams can take the lifetime decision, I'll just output the network optimised regular and network optimised exotic and hopefully we can call it a day",
+    "created_at": "2026-11-26T16:20:59.107000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "niard.eth",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "in the meanwhile what we can do is try to find more exotic improvements : sig.golf v2 (we're running out of time we would need to launch one in the next few weeks to have ~1 months of competition) AND try to benchmark the exotic improvement in all the scenarios so we fully understand what we are leaving on the table by staying in the regular scheme",
+    "created_at": "2026-11-26T16:25:32.588000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "matteoxyz3",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Interesting takes! Thanks for sharing the 2^26 set",
+    "created_at": "2026-11-26T16:32:47.723000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "gurukamath",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Frames Decision Making on ACDT#105",
+    "created_at": "2026-11-26T16:52:06.964000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "jsign",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Wrote a short doc with the current status of the EIP-8483 work (PQ registration system contracts): https://hackmd.io/@jsign/eip-8483-workstream-status\nAttempts to be short/concrete, and help anyone ramp-up in knowing status, where things are, open questions, next steps, etc.",
+    "created_at": "2026-11-26T17:20:58.456000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "Post-Quantum",
+    "parent": "",
+    "content": "Fwiw, the 2mib is a dos vector. There's a pr by kev which includes pricing it with  standard data + against the data floor, which resolves size issues. It can then go to 8mib, in theory.",
+    "created_at": "2026-11-26T18:36:58.642000+00:00",
+    "attachments": []
+  }
+]
