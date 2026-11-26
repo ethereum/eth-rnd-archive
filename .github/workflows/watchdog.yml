@@ -1,0 +1,42 @@
+name: Sync watchdog
+
+on:
+  schedule:
+    - cron: "47 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  watchdog:
+    runs-on: [self-hosted-ghr, size-s-x64]
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      MAX_AGE: 7200
+    steps:
+      - name: Re-enable sync workflow
+        run: |
+          STATE=$(gh api "repos/${GH_REPO}/actions/workflows/sync.yml" --jq '.state')
+          echo "sync.yml state: ${STATE}"
+          if [ "$STATE" != "active" ]; then
+            gh workflow enable sync.yml
+            echo "::warning::sync.yml was ${STATE}, re-enabled"
+          fi
+      - name: Dispatch sync if stale
+        run: |
+          RUNS=$(gh api "repos/${GH_REPO}/actions/workflows/sync.yml/runs?per_page=30")
+          ACTIVE=$(jq '[.workflow_runs[] | select(.status != "completed")] | length' <<<"$RUNS")
+          if [ "$ACTIVE" -gt 0 ]; then
+            echo "${ACTIVE} sync run(s) active or queued"
+            exit 0
+          fi
+          LAST=$(jq -r '[.workflow_runs[] | select(.conclusion == "success")][0].updated_at // "1970-01-01T00:00:00Z"' <<<"$RUNS")
+          AGE=$(( $(date +%s) - $(date -d "$LAST" +%s) ))
+          echo "last successful sync: ${LAST} (${AGE}s ago)"
+          if [ "$AGE" -gt "$MAX_AGE" ]; then
+            gh workflow run sync.yml --ref master
+            echo "::warning::sync stale for ${AGE}s, dispatched a new run"
+          fi
