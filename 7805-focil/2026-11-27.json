@@ -14,5 +14,597 @@
     "content": "focil needs a rule that when IL transactions could still fit into the block wrt gas but not wrt to size, then the builder should be able to ignore them without punishment.\nFor that, the block builder, as well as the attesters, need to check:\n* would have including that tx impacted the final rlp(block) such that it exceeded 8mib? (it's not just checking a tx against the current block size as including a transaction could impact the final rlp encoding)\n* would have including that tx impacted the final ssz(payload) limit? For that, the block builder (and attesters) must check the ssz size (incl BAL and deposit requests) the payload would have had if the ignored IL txs (that would have been includable wrt gas) were included and accept the block it would otherwise exceed the limit.",
     "created_at": "2026-11-27T08:00:39.988000+00:00",
     "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "ok I looked into it, thanks for flagging this <@425274498732916736> and <@1126229231572094976>  🙏\n\nDefinitely agree we need a fix, and also that a max gas limit isn't the way to go. My proposal would be to basically to treat bytes the way we already treat gas: if adding T would push the block too close to the size limit, the builder can skip it without being penalised.\n\nSo it would look like: skip T if payload_size(B) + len(T) + 4 > 8 MiB − 4 KiB, where payload_size =vΣ(len(tx)+4) + len(BAL) + Σlen(requests)\n\nThat handles the 8 MiB EL limit directly, and the 2 MiB gap up to the 10 MiB CL limit leaves room for whatever T itself adds to the BAL/requests. And that means no executing omitted txs, no SSZ on the EL side, and no Engine API changes.\n\nIf that sounds good to everyone, here's what I'd do next:\n1. merge #12470, which already has the 8037 check and the rule cleanup\n2. I'll open a follow-up 7805 PR with the size rule\n3. for #4041, keep the tests but swap the block re-encoding for this payload_size check (run after the BAL/requests are built), and add withdrawal, BAL-heavy and deposit test cases\n\nwdyt?",
+    "created_at": "2026-11-27T10:36:47.136000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "chfast",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "The `payload_size(B) + len(T) + 4 > 8 MiB − 4 KiB` is pretty shaky too me. I'm guessing this is tight upper bound. IF we want minimal fix, this is ok. But I don't want minimal fix personally, rather full block size limit fix as <@792404665068158998> suggested.",
+    "created_at": "2026-11-27T10:41:24.605000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "happy to go for the full fix as well, that would be a new EIP replacing 7934's RLP check with a limit on the full payload (txs + BAL + requests), metered per tx like gas\n\nthe main dependency is 8279 making Hegota I guess?",
+    "created_at": "2026-11-27T10:47:57.929000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "feels like merging #12470 needs to be done either way as a good first step",
+    "created_at": "2026-11-27T10:48:56.494000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": ">  payload_size(B) + len(T) + 4 > 8 MiB − 4 KiB\nThis works for the EL limit of 8MiB but 4 kib of buffer feels random?\n\nFor the CL's 10mib, you would need to execute the tx to know the deposit requests and the BAL, and you'd also have to put everything into ssz.",
+    "created_at": "2026-11-27T10:49:43.808000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "ah no it's not random the it's the stuff in rlp(block) that payload_size doesn't count: header (~750 B) + up to 16 withdrawals (~800 B) + list prefixes, ~1.5 KB worst case,rounded up (could be an exact constant if we want it to be)",
+    "created_at": "2026-11-27T10:51:02.417000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "for 10 MiB you don't need to execute T or do any SSZ. B's own BAL and requests are already known, and the envelope size is just those bytes plus a fixed overhead, so whatever T would add fits in the 2 MiB gap, since gas limits it to ~1.2 MiB",
+    "created_at": "2026-11-27T10:52:05.196000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "BAL and requests aren't known when building",
+    "created_at": "2026-11-27T10:52:54.888000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "You, as a builder, get a tx (on the IL) that risks pushing the payload size above 10 mib and you have to execute it, produce a ssz payload and measure its size, just to check if that txs if fair to ignore, although it's on an IL",
+    "created_at": "2026-11-27T10:53:58.297000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "they're not final mid-build but they are by the time the builder commits: it already needs the final BAL + requests for the header/bid",
+    "created_at": "2026-11-27T10:55:01.787000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "so it builds as usual, finalizes the block, checks the size rule on its final block, appends an IL txn that still fits and re finalizes its block, exactly the same as for the gas loop",
+    "created_at": "2026-11-27T10:55:49.149000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Flow for the attesters that changes now:\n\nsituation is, attesters see a block that doesn't contain all txs from the IL.\n\nnow:\n1) revert back to pre-withdrawals state\n2) try append tx\n2.1) if it works -> don't attest\n2.2) if it doesn't -> attest\n3) continue with (2)\n\nnow with the size rule:\n1) revert back to pre-withdrawals state\n2) try append tx\n2.1) if it works -> also check size\n2.1.1) seal block, bal and deposit requests\n2.1.2) convert them to ssz payload\n2.1.3) if txs fits into payload -> attest\n2.2) if it doesn't -> attest\n3) continue with (2)",
+    "created_at": "2026-11-27T11:03:05.106000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "no no attesters never seal B+T, the check only uses the block they already executed",
+    "created_at": "2026-11-27T11:04:15.812000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "but to check the payload size, the block must be sealed first",
+    "created_at": "2026-11-27T11:04:50.378000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "so it would be something like:\n1. execute B as usual and you have B's BAL - requests, compute payload size(B) once\n2. for each missing IL tx: same validity checks as today\n3. if valid, one extra comparison: payload_size(B) + len(T) + 4 > limit → excused T's own BAL/deposit bytes never get computed, the 2 MiB gap covers them",
+    "created_at": "2026-11-27T11:05:44.322000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "the block attesters check is already sealed it's the published payload",
+    "created_at": "2026-11-27T11:06:36.848000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "this works on the EL, not great but acceptable",
+    "created_at": "2026-11-27T11:06:44.620000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "but not on the CL",
+    "created_at": "2026-11-27T11:06:48.005000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "all the fields that are \"CL\" in my [blog post](https://ethresear.ch/t/whats-a-block-and-how-big-can-it-get/26281) would need to be derived to do the 10mib check",
+    "created_at": "2026-11-27T11:07:45.500000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "It's quite easy to get a block that is within the 8mib EL limit but above the 10mib CL limit.",
+    "created_at": "2026-11-27T11:08:25.503000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "right so on the CL it holds but only if one tx can't add more than ~2 MiB of BAL/requests, I think with today's prices that's 1.2MiB worst case at 300M but nothing enforces it so yeah we'd need 8279 and then that would fix it no?",
+    "created_at": "2026-11-27T11:09:07.308000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "why not great 😅",
+    "created_at": "2026-11-27T11:09:49.519000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "we're dealing with different worst-case blocks here. E.g. the worst-case pushing for the 8mib limit on the EL is a very different block from the worst-case pushing for 10mib on the CL.\nE.g. trying to max the CL block means putting a lot of gas into state access (which leaves no static data like calldata or 7702 auths), but it helps maxxing the payload size since both the txs and the bal are in it.",
+    "created_at": "2026-11-27T11:10:50.100000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "because it's anther size limit we have to keep track of. Today's 7934 is already bad enough to deal with",
+    "created_at": "2026-11-27T11:11:22.943000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "ah I mean sure but it works",
+    "created_at": "2026-11-27T11:11:48.958000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "but it's acceptable for the EL. I don't see how we best fix this on the CL though",
+    "created_at": "2026-11-27T11:11:50.820000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "having BALs and payload separate would have helped (the max-gas-limit cap could be way more relaxed",
+    "created_at": "2026-11-27T11:12:48.518000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "e.g. one could protect the EL with your 4kib rule and the CL needs a max gas limit cap (which i don't like because we hit it so fast - while avg/median blocks are far from even getting close)",
+    "created_at": "2026-11-27T11:13:31.548000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "for the CL, maybe add something like a second check which would be: skip T if the payload + T + the most T could add to BAL/code would go over 10 MiB?",
+    "created_at": "2026-11-27T11:13:45.739000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "that max comes from T.gas, but I think with 8279 it gets a lot simpler",
+    "created_at": "2026-11-27T11:14:14.912000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "yeah, i thought about that too but then you could be overly strict and allow for too many skips",
+    "created_at": "2026-11-27T11:14:23.188000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "do we assume 8279 or not?",
+    "created_at": "2026-11-27T11:14:59.103000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "yeah with 8279 it's better but i wouldn't bet on it",
+    "created_at": "2026-11-27T11:15:00.981000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "yeah it's conservative but I'd rather be conservative in that case I guess",
+    "created_at": "2026-11-27T11:15:20.784000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "but I actually don't think it adds any extra skip",
+    "created_at": "2026-11-27T11:15:42.300000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "because the 8 MiB check always kicks in first, the CL one is just a backstop",
+    "created_at": "2026-11-27T11:16:07.252000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "a tx that has 1m gas limit that fits into the block but 1m all spent on data would push the payload over 10 mib",
+    "created_at": "2026-11-27T11:16:22.660000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "and actually  you only get skips once the payload is ~8 MiB, which you can't reach below~260M gas",
+    "created_at": "2026-11-27T11:16:32.100000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "the 8mib wouldn't kick in first as the data is actually mostly in the bal+requests",
+    "created_at": "2026-11-27T11:16:48.455000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "wait but 1M gas only buys ~17 KB of BAL/deposits/code no?",
+    "created_at": "2026-11-27T11:17:22.439000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "e.g. you'd build txs that are 7.9 mib in size and the rest goes into the bal + requests",
+    "created_at": "2026-11-27T11:17:27.858000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "and calldata's already counted in len(T)  (max 8 KiB in an IL anyway), so T is only required while the payload is under ~8 MiB, so worst case you hit ~8.02 so way under 10",
+    "created_at": "2026-11-27T11:17:54.101000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "that's already covered",
+    "created_at": "2026-11-27T11:18:29.551000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "payload_size counts BAL + requests too, not just txs, so that block is already ~9.9 MiB which is over the threshold",
+    "created_at": "2026-11-27T11:18:45.603000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "it could be above 10mib, not 9.9",
+    "created_at": "2026-11-27T11:19:20.406000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "no because then B can't be gossiped at all",
+    "created_at": "2026-11-27T11:19:45.536000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "that's sort of the existing 8 vs 10 MiB gap but it's not something caused by FOCIL",
+    "created_at": "2026-11-27T11:20:14.185000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "FOCIL just has to never force you over basically and it doesn't because payload_size is already >8 MiB there so every IL tx is skippable",
+    "created_at": "2026-11-27T11:20:52.529000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "but fixing the gap itself is what <@425274498732916736> meant by full fix",
+    "created_at": "2026-11-27T11:21:10.096000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "how would building work then?\nyou'd build a block from local tx that is e.g. 7mib in size on the EL, and the bal+requests are 2.98mib, the final ssz encoded size would be 9.9mib (0.01 from encoding overhead). \nThe block used 150/200M gas\nNow, there's a tx on the IL that is 16.7M gas big, 200 bytes rlp encoded, and contributes 0.2 MiB to the bal.",
+    "created_at": "2026-11-27T11:23:43.763000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "builder finalizes as usual: payload_size ≈ 9.9 MiB > 8 MiB, so the IL tx is skippable",
+    "created_at": "2026-11-27T11:25:06.381000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "attesters get the same 9.9 from the payload (also per your post you can't hit 9.9 MiB at 150M gas anyway, max is ~4.6)",
+    "created_at": "2026-11-27T11:25:24.380000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "builder wouldn't know the payload size, only the size of txs, bal and requests",
+    "created_at": "2026-11-27T11:25:43.456000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "builder would need a way to prove that adding IL txs would have caused the payload to exceed 10mib",
+    "created_at": "2026-11-27T11:26:17.354000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "wait but that's all payload_size is: Σ(len(tx)+4) + len(BAL) + Σlen(requests)\nyou don't need SSZ, the envelope is just that plus a small fixed overhead the margins already cover",
+    "created_at": "2026-11-27T11:26:37.621000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "yeah, you can probably skip the ssz encoding by having some buffer for encoding overhead",
+    "created_at": "2026-11-27T11:27:29.474000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "and no you don't need a proof it's not a counterfactual: attesters just check the payload_size(B) + len(T) + 4 >8 MiB - 4 Kib on the payload they got \n\nthat's the same exact thing as gas we don't prove T would have overflowed right, we just compare remaining gas to T.gas",
+    "created_at": "2026-11-27T11:28:26.988000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "yeah exactly",
+    "created_at": "2026-11-27T11:30:08.184000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "nor sure i get the formula.\nYou take the payload and check if any txs would push it above 8mib? That's again the EL check",
+    "created_at": "2026-11-27T11:30:32.365000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "no no it's not the EL check",
+    "created_at": "2026-11-27T11:31:33.808000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "payload_size + len(T) + bal(T) + req(T) > 10 mib is the check needed",
+    "created_at": "2026-11-27T11:32:01.507000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "payload_size counts BAL + requests as well so it's basically the CL payload size just check agaisnt 8Mib instead of 10",
+    "created_at": "2026-11-27T11:32:04.483000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "ah, so you wanna be stricter here and enforce the EL limit on the CL?",
+    "created_at": "2026-11-27T11:32:53.135000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "yes exactly",
+    "created_at": "2026-11-27T11:33:03.609000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "we just use an upper bound from T.gas instead, a bit more conservative, but no execution and with 8279 it's just min(T.gas, 2^24)/64",
+    "created_at": "2026-11-27T11:33:30.885000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "yeah, this might work but have to think about it, and what it means.",
+    "created_at": "2026-11-27T11:34:14.827000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "nero_eth",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "The only thing left are the EL header fields that aren't in the payload but in the EL block. But yeah, for those a fixed buffer is good enough",
+    "created_at": "2026-11-27T11:34:49.537000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "makes sense, I'll write it up properly",
+    "created_at": "2026-11-27T11:35:04.270000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "we should merge #12470 in the meantime imo",
+    "created_at": "2026-11-27T11:35:44.584000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "chfast",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "Does 8279 full bound block size by gas limit?",
+    "created_at": "2026-11-27T11:38:39.625000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "iiuc close but not exactly: I think it meters tx content + BAL bytes at 64 gas/byte",
+    "created_at": "2026-11-27T11:40:15.827000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "so those are < G/64 but RLP/BAL indices aren't metered (13% over in the worst case accodring to the EIP)",
+    "created_at": "2026-11-27T11:40:57.816000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "and deposist requests aren't covered without #12686",
+    "created_at": "2026-11-27T11:41:23.738000+00:00",
+    "attachments": []
+  },
+  {
+    "author": "soispoke",
+    "category": "EIP-development",
+    "parent": "",
+    "content": "so with 8131 + 8279 + #12686 you get size ≤ ~1.15·G/64 + constant and then it's fully gas-bounded",
+    "created_at": "2026-11-27T11:41:47.788000+00:00",
+    "attachments": []
   }
 ]
